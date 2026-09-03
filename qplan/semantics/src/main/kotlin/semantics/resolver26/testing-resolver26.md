@@ -156,8 +156,6 @@ Audit both generated features and activated behavior. Track attempted and comple
 
 When a case fails, first replay its exact profile, seed, coordinate, and thread count. Then replay at one and several worker counts, classify the failure as resolver, generator, oracle, campaign, or resource-envelope behavior, and reduce a real Resolver26 defect to a deterministic regression before changing the implementation.
 
-Do not import Resolver25 architecture or implementation into Resolver26 while diagnosing tests. Resolver25 is useful only as a source of testing lessons; its execution model is intentionally different.
-
 ## Improving The Corpus
 
 Future million-case collections should spend cases according to information gained. Useful extensions include novelty-guided retention of rare structural fingerprints, pairwise or higher-order feature-interaction matrices, extra budget for rare activated signatures, and suppression of semantically duplicate generated cases.

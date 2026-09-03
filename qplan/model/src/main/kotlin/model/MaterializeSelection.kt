@@ -48,9 +48,6 @@ sealed interface MaterializeSelection {
             require(responseKey.isNotEmpty()) {
                 "A materialize selection requires a non-empty response key"
             }
-            require(key !is ObjectEngineResult.VariableKey) {
-                "Construction-only provider markers cannot be materialize selections"
-            }
             val fieldOwner = key.field.containingDef
             require(possibleTypes.all { it in fieldOwner.possibleObjectTypes }) {
                 "Materialize selection possible types must be contained by ${fieldOwner.name}"

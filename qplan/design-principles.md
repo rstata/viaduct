@@ -48,6 +48,16 @@ A correct final union is weaker. A late cache hit, widened result, or second mat
 
 One-shot designs must therefore bound all contributors before application, conservatively include bounded alternatives, assign late demand a distinct occurrence, or reject the shape. Post-application widening cannot repair an under-supplied selective producer.
 
+## Choose Ungrounded-Key Semantics Explicitly
+
+Argument-bearing fields whose keys are not yet grounded admit three coherent execution policies:
+
+1. Hold execution until every key that could coalesce has grounded, preserving true one-shot execution. This requires a sound and potentially onerous cycle-exclusion rule so dependency cycles cannot deadlock; an attempted Resolver26 variant using this policy deadlocked often enough that it was abandoned.
+2. Speculatively add successor demand to resolver instances that future grounded keys might join. This makes supplied demand and work timing-sensitive, producing a nondeterministic developer experience, so qplan rejects this policy.
+3. Coalesce by symbolic argument values and variable-instance identity before grounding. Distinct symbolic keys may later ground to equal arguments and invoke the same field resolver more than once. Resolver26 deliberately chooses this policy.
+
+These policies must not be blended accidentally. In particular, symbolic identity is not an incomplete approximation of eventual grounded-key identity, and speculative widening is not a substitute for proving one-shot closure.
+
 ## Attribute Demand To Its Owner
 
 Demand must be projected through the producer that owns the requested output. Traversal through passive fields remains within the current producer; traversal stops at resolver-bearing boundaries and attributes successor work to the successor resolver.
@@ -66,9 +76,9 @@ Duplicate claims, duplicate writers, repeated lifecycle transitions, undeclared 
 
 `FromArgument` values are available from the defining resolver occurrence. `FromObjectField` values require reading a resolved provider path and can reveal an exact consumer key only later.
 
-Provider paths are compiled and validated before semantic reasoning, but provider evaluation occurs at runtime in Resolver25 and Resolver26. Provider containment and branch ordering are domain restrictions; they are not themselves an execution algorithm.
+Provider paths are compiled and validated before semantic reasoning, but provider evaluation occurs at runtime in Resolver26. Provider containment and branch ordering are domain restrictions; they are not themselves an execution algorithm.
 
-Substitution precedes exact-key grouping in Resolver01 through Resolver25, so Resolver25 merges selections that become the same ground key before launch. Resolver26 retains symbolic keys: selections with the same field and variable instances coalesce, while keys containing different variable instances remain distinct even when those variables bind to equal values.
+Substitution precedes exact-key grouping in Resolver01 through Resolver23. Resolver26 retains symbolic keys: selections with the same field and variable instances coalesce, while keys containing different variable instances remain distinct even when those variables bind to equal values.
 
 ## Structured Concurrency Owns Request Lifetime
 
@@ -85,8 +95,6 @@ Resolver08 holds that semantic capability roughly constant while replacing recur
 Resolver23 adds structured suspension and promise installation without path-variable identity. It is the clean coroutine comparison.
 
 Resolver10 is useful as a negative lesson rather than a maintained implementation. Readiness rescanning, persistent late-demand acceptance, and complete-output retention added substantial machinery and could mask an incomplete producing application. Do not recreate that architecture to solve a local Resolver26 problem.
-
-Resolver25 remains a useful alternate experiment because it merges late-equal grounded keys. Its current activation protocol is not a general planning solution and should not be imported into Resolver26 by default.
 
 ## Validate Independent Properties Independently
 

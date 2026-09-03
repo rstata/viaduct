@@ -11,13 +11,13 @@ Follow the current explicit prompt and [`handoff.md`](./handoff.md) before this 
 3. [`design-principles.md`](./design-principles.md) for durable semantic constraints.
 4. [`resolver-versions.md`](./resolver-versions.md) for comparison and reduction roles.
 5. [`semantics/testing-contracts.md`](./semantics/testing-contracts.md) for test capabilities and replay.
-6. The local resolver design document when changing Resolver25 or Resolver26.
+6. The local Resolver26 design document when changing Resolver26.
 
 ## Use The Resolver Grid
 
 The maintained older resolvers are a reduction and comparison grid. Start with Resolver03 when a failure concerns demand closure, exact application count, passive deepening, argument grounding, or completed-result correctness without `FromObjectField`. Move to Resolver08 when explicit work ordering or publication may matter, then to Resolver23 when promise installation, suspension, or structured scope ownership may matter.
 
-Use Resolver01/06/21 to remove nonempty object fragments and Resolver02/07/22 to retain object fragments and `FromArgument` without selective-output pressure. Compare Resolver25 and Resolver26 directly only when behavior depends on runtime object-field variables, late equality, or their different resolver-instance identities.
+Use Resolver01/06/21 to remove nonempty object fragments and Resolver02/07/22 to retain object fragments and `FromArgument` without selective-output pressure. Use Resolver26 when behavior depends on runtime from-field variables or symbolic resolver-instance identity.
 
 Resolver10 is a source of warnings, not a debugging baseline: readiness rescanning, persistent late-demand acceptance, and complete-output retention can obscure the producer-completeness question.
 

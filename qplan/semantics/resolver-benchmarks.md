@@ -1,12 +1,12 @@
 # Resolver Benchmarks
 
-Resolver25 and Resolver26 implement the current benchmark profile: selective node and field resolvers, resolver object fragments, `FromArgument` and `FromObjectField` variables, and no query fragments.
+Resolver26 implements the current benchmark profile: selective node and field resolvers, resolver object fragments, `FromArgument` and `FromObjectField` variables, and no query fragments.
 
 See [`resolver-profiling.md`](./resolver-profiling.md) for the narrow JFR targets, recording inspection commands, and the performance log.
 
 ## Running And Reporting
 
-Run `./gradlew :semantics:resolver25FullBenchmark --console=plain` or `./gradlew :semantics:resolver26FullBenchmark --console=plain` for the full workflow. Use the corresponding `resolver25OverheadBenchmark` or `resolver26OverheadBenchmark` task for the fixed-corpus overhead benchmark.
+Run `./gradlew :semantics:resolver26FullBenchmark --console=plain` for the full workflow. Use `resolver26OverheadBenchmark` for the fixed-corpus overhead benchmark.
 
 Run `./gradlew :semantics:correctResolutionBenchmark --console=plain` for the isolated correctness-judgment benchmark.
 
@@ -16,11 +16,11 @@ After every run, report each measured iteration, the final JMH score and error, 
 
 ## Full Benchmark
 
-`resolver25FullBenchmark` and `resolver26FullBenchmark` run the complete generated property-testing workflow. One JMH operation generates and validates 100 schemas by two registries by five queries, for 1,000 resolver calls. Generation, world assembly, resolution-witness capture, resolution, and post-resolution validation are all timed.
+`resolver26FullBenchmark` runs the complete generated property-testing workflow. One JMH operation generates and validates 100 schemas by two registries by five queries, for 1,000 resolver calls. Generation, world assembly, resolution-witness capture, resolution, and post-resolution validation are all timed.
 
 ## Overhead Benchmark
 
-`resolver25OverheadBenchmark` and `resolver26OverheadBenchmark` load one checked-in schema, registry, and ordered batch of 100 exact query sources. Before each measured invocation, JMH setup parses the fixed query batch against those shared static objects, creates fresh request-local `Assumptions` for every resolution, and stores the prepared calls in an array. JMH excludes that setup; the measured method iterates the array, invokes the resolver, and consumes each result. Each resolver invocation obtains its canonical Query source through `ResolverRegistry.createRootQueryInput()` inside the measured call.
+`resolver26OverheadBenchmark` loads one checked-in schema, registry, and ordered batch of 100 exact query sources. Before each measured invocation, JMH setup parses the fixed query batch against those shared static objects, creates fresh request-local `Assumptions` for every resolution, and stores the prepared calls in an array. JMH excludes that setup; the measured method iterates the array, invokes the resolver, and consumes each result. Each resolver invocation obtains its canonical Query source through `ResolverRegistry.createRootQueryInput()` inside the measured call.
 
 Control the repetition count with `-PresolverBenchmarkLoopCount=M`. One overhead JMH operation contains exactly `100 * M` resolver calls.
 

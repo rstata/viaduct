@@ -825,8 +825,7 @@ class GeneratorTest {
                 (ResolverFromFieldProviderPathLength to 1..1) +
                 (ResolverFromFieldVariableUseDepth to 1..1) +
                 (ResolverFromFieldVariableOwnerLimit to 4) +
-                (ResolverFromFieldVariableOwnerUseWeight to 1.0) +
-                (ResolverVariablesOnQueryFieldsOnly to true)
+                (ResolverFromFieldVariableOwnerUseWeight to 1.0)
         val random = RandomSource.seeded(86424L)
         var ownerDependencies = 0
 

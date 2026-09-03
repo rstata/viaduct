@@ -14,15 +14,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-enum class LateAncestorDemandPolicy {
-    RETAIN_OPEN_VARIABLE_BOUNDARY,
-    CONTRIBUTE_PASSIVE_PREDECESSORS,
-}
-
 interface LateObjectPathDemandResolverContract : ResolverContract {
-    val lateAncestorDemandPolicy: LateAncestorDemandPolicy
-    val retainsSymbolicObjectKeys: Boolean
-
     @Test
     fun `disjoint successor demand is closed before one selective producer application`() {
         var fooApplications = 0
@@ -283,15 +275,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
 
         assertEquals(7, resolved.getCell(lateKey).get())
         assertEquals(1, parentApplications)
-        assertEquals(
-            when (lateAncestorDemandPolicy) {
-                LateAncestorDemandPolicy.RETAIN_OPEN_VARIABLE_BOUNDARY ->
-                    setOf("source", "computed")
-                LateAncestorDemandPolicy.CONTRIBUTE_PASSIVE_PREDECESSORS ->
-                    setOf("source")
-            },
-            parentDemandFields,
-        )
+        assertEquals(setOf("source"), parentDemandFields)
         testWorld.applicationArguments.assertArguments(
             world.schema.requireObjectField("Payload", "computed"),
             mapOf("value" to 7),
@@ -347,7 +331,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
     }
 
     @Test
-    fun `late equal child call follows the configured identity policy`() {
+    fun `late equal child calls retain their symbolic identities`() {
         var parentApplications = 0
         var childApplications = 0
         val testWorld =
@@ -396,10 +380,9 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
 
         assertEquals(1, resolved.getCell(outerKey).get())
         assertEquals(1, parentApplications)
-        val expectedChildApplications = if (retainsSymbolicObjectKeys) 2 else 1
-        assertEquals(expectedChildApplications, childApplications)
+        assertEquals(2, childApplications)
         assertEquals(
-            expectedChildApplications,
+            2,
             parent.keys.count { groundKey -> groundKey.field.name == "child" },
         )
     }

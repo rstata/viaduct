@@ -81,12 +81,12 @@ If changing the small modern cohort is acceptable, restrict `FromObjectField` to
 
 This admits 8 of the 11 declarations unchanged. The remaining three declarations represent only two unique nested values: `listing.location.countryCode` and `stayListing.supplyListing.location.defaultAddress.market`. Two direct helper fields on `DemandStayListingPdpPresentationContainer` would bring the entire modern production sample into the restricted contract.
 
-This is a materially smaller problem than generalized runtime path traversal. The provider resolver occurrence is known at the owner OER, so resolution does not need to discover descendant provider instances or carry markers through a dynamically published subtree. The existing late-equality problem for variable-bearing consumer keys still requires grounding and merging before one-shot selective launch.
+This is a materially smaller problem than generalized runtime path traversal. The provider resolver occurrence is known at the owner OER, so resolution does not need to discover descendant provider instances through a dynamically published subtree. Resolver26 retains symbolic consumer keys through grounding, so distinct symbolic keys may invoke the same grounded arguments separately.
 
-If application changes are not acceptable, the next-smallest contract adds argument-free traversal through singular concrete node-backed objects. That covers all 11 declarations, but preserves the dynamic descendant-provider problem that makes Resolver25 substantially harder.
+If application changes are not acceptable, the next-smallest contract adds argument-free traversal through singular concrete node-backed objects. That covers all 11 declarations, but preserves the dynamic descendant-provider problem and its runtime occurrence-specific traversal.
 
 ## Relevance To Qplan
 
 The census supports keeping direct sibling providers, singular nested object paths, scalar-list terminals, and already-ground provider arguments visible in model tests. It provides no evidence that list traversal, provider chains, alias-sensitive identity, or late-bound provider arguments are required by the observed modern cohort.
 
-These observations constrain representative fixtures; they do not define Resolver25 or Resolver26 architecture. Current resolver behavior is documented in each resolver's `design.md`, and the aligned carrier boundary is recorded in [`handoff.md`](./handoff.md).
+These observations constrain representative fixtures; they do not define Resolver26 architecture. Current resolver behavior is documented in [`semantics/resolver26/design.md`](./semantics/src/main/kotlin/semantics/resolver26/design.md), and the aligned carrier boundary is recorded in [`handoff.md`](./handoff.md).

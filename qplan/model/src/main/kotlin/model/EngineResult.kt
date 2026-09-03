@@ -178,33 +178,6 @@ sealed interface ObjectEngineResult {
     }
 
     /**
-     * A selection-only key marking one component of an instantiated path-variable's provider path.
-     *
-     * The marker remains distinct from [ObjectKey] even when [field] belongs to a concrete object
-     * type. [model.mergeWithVariables] is the explicit boundary that converts it to a ground key
-     * and reports a binding when the path terminates at this component.
-     */
-    sealed interface VariableKey : Key {
-        val variableDefinedByThisKey: Arguments.Variable
-
-        companion object {
-            fun of(
-                key: Key,
-                variableDefinedByThisKey: Arguments.Variable,
-            ): VariableKey {
-                require(variableDefinedByThisKey.isInstantiated) {
-                    "A provider-path key must define an instantiated variable"
-                }
-                return VariableKeyImpl(
-                    field = key.field,
-                    arguments = key.arguments,
-                    variableDefinedByThisKey = variableDefinedByThisKey,
-                )
-            }
-        }
-    }
-
-    /**
      * A key whose field belongs to a concrete object type.
      *
      * Every instance carries a [ViaductSchema.ObjectField] and [Arguments]. An object key may select
@@ -858,12 +831,6 @@ private data class KeyImpl(
     override val field: ViaductSchema.Field,
     override val arguments: Arguments,
 ) : ObjectEngineResult.Key
-
-private data class VariableKeyImpl(
-    override val field: ViaductSchema.Field,
-    override val arguments: Arguments,
-    override val variableDefinedByThisKey: Arguments.Variable,
-) : ObjectEngineResult.VariableKey
 
 private data class ObjectKeyImpl(
     override val field: ViaductSchema.ObjectField,

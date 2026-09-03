@@ -20,7 +20,7 @@
   },
   "doubles" : {
     "aliasWeight" : 0.2,
-    "duplicateSelectionWeight" : 0.1,
+    "duplicateSelectionWeight" : 0.2,
     "errorValueWeight" : 0.08,
     "explicitFieldResolverWeight" : 0.8,
     "fieldArgumentWeight" : 0.65,
@@ -51,13 +51,13 @@
     "sometimesPassiveFieldWeight" : 0.25
   },
   "formatVersion" : 4,
-  "id" : "resolver26-balanced-large-deep-low-duplicates",
+  "id" : "resolver26-balanced-standard",
   "integers" : {
     "maxInputTypeDepth" : 2,
     "maxOutputListDepth" : 1,
-    "maxSelectionDepth" : 6,
-    "minimumSelectionDepth" : 4,
-    "resolverFragmentDepth" : 5,
+    "maxSelectionDepth" : 4,
+    "minimumSelectionDepth" : 2,
+    "resolverFragmentDepth" : 3,
     "resolverFromFieldVariableOwnerLimit" : 4
   },
   "ranges" : {
@@ -78,20 +78,20 @@
       "minimum" : 0
     },
     "listValueSize" : {
-      "maximum" : 1,
-      "minimum" : 1
+      "maximum" : 2,
+      "minimum" : 0
     },
     "nestedQueryFieldCount" : {
       "maximum" : 3,
       "minimum" : 1
     },
     "objectFieldCount" : {
-      "maximum" : 10,
-      "minimum" : 6
+      "maximum" : 6,
+      "minimum" : 4
     },
     "queryFieldCount" : {
-      "maximum" : 14,
-      "minimum" : 10
+      "maximum" : 8,
+      "minimum" : 6
     },
     "resolverFragmentLongTailSelectionCount" : {
       "maximum" : 0,
@@ -114,12 +114,12 @@
       "minimum" : 1
     },
     "rootQueryFieldCount" : {
-      "maximum" : 12,
-      "minimum" : 8
+      "maximum" : 6,
+      "minimum" : 4
     },
     "schemaObjectCount" : {
-      "maximum" : 12,
-      "minimum" : 8
+      "maximum" : 7,
+      "minimum" : 5
     }
   }
 }

@@ -22,6 +22,8 @@ These findings come from production investigation, focused counterexamples, or f
 
 The central consequence is producer-specific: every producer-owned value later consumed from one resolver-bearing occurrence must be covered by the demand supplied to that occurrence's producing application. A correct final union, cache hit, widened result, or second materialization is weaker evidence.
 
+Ungrounded argument-bearing fields force one of three policies. Execution can wait for every potentially coalescing key to ground, which provides true one-shot behavior but requires cycle exclusion strong enough to prevent deadlock. Execution can speculatively widen successor demand for keys that may later coalesce, but this makes supplied demand timing-sensitive and was rejected as a poor developer experience. Or execution can coalesce by symbolic values and variable-instance identity, accepting that distinct symbolic keys may later ground equally and invoke the same resolver more than once. Resolver26 uses the third policy; the first remains a possible design only if its progress rule can be made tractable.
+
 ## Correctness Obligations
 
 ### Producer Completeness
@@ -57,7 +59,7 @@ Correct aggregation does not require global barriers across unrelated object or 
 | Area | Current status | Durable concern |
 | --- | --- | --- |
 | Converging demand | Modeled and tested in qplan | Independently reached selections can require unequal demand from one producer. |
-| Runtime `FromObjectField` providers | Modeled by Resolver25 and Resolver26; active qplan compatibility constraint | Structural paths are known before execution, but values and exact consumer keys appear only after provider cells complete. |
+| Runtime `FromObjectField` providers | Modeled by Resolver26; active qplan compatibility constraint | Structural paths are known before execution, but values and exact consumer keys appear only after provider cells complete. |
 | Query re-entry and ancestor or `@parent` targets | Backlogged compatibility constraint | Targets outside ordinary descendant traversal require occurrence-specific scope and ancestry identity. |
 | Abstract recursion and cycle backedges | Partly modeled; broader production compatibility remains backlogged | Concrete alternatives can be lazy, and legal recursion requires guarded dependencies plus exact ancestor context. |
 | Lists and repeated IDs | Modeled and active | Every list position is an independent result occurrence even when IDs, coordinates, or values repeat. |

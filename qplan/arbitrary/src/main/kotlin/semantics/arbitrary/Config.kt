@@ -128,7 +128,6 @@ object ResolverFromFieldVariableUseDepth :
 object ResolverFromFieldPassiveUseWeight : ConfigKey<Double>("resolverFromFieldPassiveUseWeight", ConfigValueType.DOUBLE, 0.0, ::weight)
 object ResolverFromFieldVariableOwnerUseWeight : ConfigKey<Double>("resolverFromFieldVariableOwnerUseWeight", ConfigValueType.DOUBLE, 0.0, ::weight)
 object ResolverFromFieldProviderArgumentVariableWeight : ConfigKey<Double>("resolverFromFieldProviderArgumentVariableWeight", ConfigValueType.DOUBLE, 0.0, ::weight)
-object ResolverVariablesOnQueryFieldsOnly : ConfigKey<Boolean>("resolverVariablesOnQueryFieldsOnly", ConfigValueType.BOOLEAN, false, { null })
 object ResolverVariablesOnNonQueryFieldsOnly : ConfigKey<Boolean>("resolverVariablesOnNonQueryFieldsOnly", ConfigValueType.BOOLEAN, false, { null })
 object ResolverFromFieldVariableOwnerLimit :
     ConfigKey<Int>("resolverFromFieldVariableOwnerLimit", ConfigValueType.INTEGER, Int.MAX_VALUE, ::positive)
@@ -202,7 +201,6 @@ internal object ConfigKeys {
             ResolverFromFieldPassiveUseWeight,
             ResolverFromFieldVariableOwnerUseWeight,
             ResolverFromFieldProviderArgumentVariableWeight,
-            ResolverVariablesOnQueryFieldsOnly,
             ResolverVariablesOnNonQueryFieldsOnly,
             ResolverFromFieldVariableOwnerLimit,
         )

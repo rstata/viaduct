@@ -15,19 +15,19 @@
     "resolverQueryFragmentsEnabled" : true,
     "resolverVariableSingletonCoercionEnabled" : true,
     "resolverVariablesEnabled" : true,
-    "resolverVariablesOnNonQueryFieldsOnly" : false,
+    "resolverVariablesOnNonQueryFieldsOnly" : true,
     "unionsEnabled" : true
   },
   "doubles" : {
     "aliasWeight" : 0.2,
-    "duplicateSelectionWeight" : 0.1,
+    "duplicateSelectionWeight" : 0.2,
     "errorValueWeight" : 0.08,
-    "explicitFieldResolverWeight" : 0.8,
+    "explicitFieldResolverWeight" : 0.5,
     "fieldArgumentWeight" : 0.65,
     "implementationArgumentDefaultWeight" : 0.3,
     "inputListTypeWeight" : 0.2,
     "inputObjectTypeWeight" : 0.25,
-    "listTypeWeight" : 0.25,
+    "listTypeWeight" : 0.65,
     "nestedQueryScalarFieldWeight" : 0.0,
     "nodeObjectWeight" : 0.2,
     "nullValueWeight" : 0.15,
@@ -41,23 +41,23 @@
     "resolverFragmentLongTailWeight" : 0.0,
     "resolverFragmentWeight" : 0.8,
     "resolverFromArgumentNestedPathWeight" : 0.5,
-    "resolverFromFieldPassiveUseWeight" : 0.25,
-    "resolverFromFieldProviderArgumentVariableWeight" : 0.0,
+    "resolverFromFieldPassiveUseWeight" : 1.0,
+    "resolverFromFieldProviderArgumentVariableWeight" : 1.0,
     "resolverFromFieldVariableOwnerUseWeight" : 0.25,
     "resolverLiteralVariableConvergenceWeight" : 0.2,
     "resolverNestedProviderPathWeight" : 0.5,
     "resolverQueryFragmentWeight" : 0.1,
-    "resolverVariableWeight" : 0.65,
+    "resolverVariableWeight" : 0.9,
     "sometimesPassiveFieldWeight" : 0.25
   },
   "formatVersion" : 4,
-  "id" : "resolver26-balanced-large-deep-low-duplicates",
+  "id" : "resolver26-descendant-variables-standard",
   "integers" : {
     "maxInputTypeDepth" : 2,
     "maxOutputListDepth" : 1,
-    "maxSelectionDepth" : 6,
-    "minimumSelectionDepth" : 4,
-    "resolverFragmentDepth" : 5,
+    "maxSelectionDepth" : 4,
+    "minimumSelectionDepth" : 2,
+    "resolverFragmentDepth" : 3,
     "resolverFromFieldVariableOwnerLimit" : 4
   },
   "ranges" : {
@@ -78,7 +78,7 @@
       "minimum" : 0
     },
     "listValueSize" : {
-      "maximum" : 1,
+      "maximum" : 2,
       "minimum" : 1
     },
     "nestedQueryFieldCount" : {
@@ -86,12 +86,12 @@
       "minimum" : 1
     },
     "objectFieldCount" : {
-      "maximum" : 10,
-      "minimum" : 6
+      "maximum" : 6,
+      "minimum" : 4
     },
     "queryFieldCount" : {
-      "maximum" : 14,
-      "minimum" : 10
+      "maximum" : 8,
+      "minimum" : 6
     },
     "resolverFragmentLongTailSelectionCount" : {
       "maximum" : 0,
@@ -106,20 +106,20 @@
       "minimum" : 1
     },
     "resolverFromFieldVariableUseDepth" : {
-      "maximum" : 3,
-      "minimum" : 1
+      "maximum" : 4,
+      "minimum" : 2
     },
     "resolverVariableCount" : {
       "maximum" : 3,
       "minimum" : 1
     },
     "rootQueryFieldCount" : {
-      "maximum" : 12,
-      "minimum" : 8
+      "maximum" : 6,
+      "minimum" : 4
     },
     "schemaObjectCount" : {
-      "maximum" : 12,
-      "minimum" : 8
+      "maximum" : 7,
+      "minimum" : 5
     }
   }
 }

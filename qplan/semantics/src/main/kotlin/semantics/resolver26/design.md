@@ -10,7 +10,7 @@ The exercise assumes every field resolver completes normally, including with res
 
 Every OER is a map whose keys compare by canonical field and argument expression. Ground keys with equal values coalesce. Symbolic keys coalesce when they contain equal variable instances in equal expression positions. A variable-bearing resolver-fragment selection retains that symbolic `ObjectKey` as its permanent cell identity; completing its bindings makes the key contextually grounded but never rekeys the cell.
 
-Registry variables are templates. Instantiating a resolver fragment replaces all uses of each template with one variable instance identified by the concrete resolver path. Equal uses of that instance therefore coalesce within an OER, including duplicate selections and aliases that project the same canonical key. Different variable names, defining fields, or resolver paths remain distinct even when their completed bindings have equal values.
+Registry variables are templates. Instantiating a resolver fragment replaces all uses of each template with one variable instance identified by the concrete resolver path. Equal uses of that instance therefore coalesce within an OER, including duplicate selections and aliases that project the same canonical key. Different variable names, defining fields, or resolver paths remain distinct even when their completed bindings have equal values, so the same grounded field arguments may be invoked more than once.
 
 Keys need no child-occurrence localization. Each object and list element owns a distinct OER, so the same symbolic key can be reused in multiple containing objects without conflating their cells. A nested resolver receives its own concrete path when its fragment is instantiated.
 

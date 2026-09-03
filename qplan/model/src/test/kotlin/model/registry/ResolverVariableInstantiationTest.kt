@@ -16,8 +16,6 @@ import model.testing.fromObjectField
 import model.testing.testRoot
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
@@ -170,17 +168,6 @@ class ResolverVariableInstantiationTest {
                 .collect(testWorld.schema.requireQueryTypeDef())
                 .responseKeys(),
         )
-        assertTrue(
-            objectFragment.materializeSelections.all { selection ->
-                selection.key !is ObjectEngineResult.VariableKey
-            },
-        )
-        assertEquals(
-            1,
-            objectFragment.constructionSelections
-                .filter { selection -> selection.key is ObjectEngineResult.VariableKey }
-                .size,
-        )
         val definition = objectFragment.pathVariableDefinitions.single()
         val resolverOccurrenceId =
             ResolverOccurrenceId.at(testWorld.schema.testRoot(), sitePath)
@@ -198,190 +185,11 @@ class ResolverVariableInstantiationTest {
             setOf(seed, definition.variable),
             objectFragment.constructionSelections.instantiatedVariables(),
         )
-        val marker =
-            objectFragment.constructionSelections
-                .filter { selection -> selection.key is ObjectEngineResult.VariableKey }
-                .single()
-        assertEquals(
-            definition.variable,
-            assertIs<ObjectEngineResult.VariableKey>(marker.key).variableDefinedByThisKey,
-        )
         assertEquals(
             objectFragment.pathVariableDefinitions,
             resolver
                 .instantiatedFieldPathVariableDefinitions(resolverOccurrenceId)
                 .filter { definition -> definition.providerFragment == ProviderFragment.OBJECT },
         )
-    }
-
-    @Test
-    fun `marks every component of a nested provider path`() {
-        val fragment =
-            """
-            fragment Provider on Query {
-              box { value }
-              consume(value: ${'$'}value)
-            }
-            """.trimIndent()
-        val testWorld =
-            TestWorld.fromSDL(
-                schemaSDL =
-                    """
-                    type Box {
-                      value: Int
-                    }
-
-                    type Query {
-                      result: Int
-                      box: Box
-                      consume(value: Int): Int
-                    }
-                    """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val result = schema.requireObjectField("Query", "result")
-                    mapOf(
-                        result to
-                            fieldResolverOf(schema.fragmentFrom(fragment)) { _, _ ->
-                                1
-                            },
-                        schema.requireObjectField("Query", "box") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                null
-                            },
-                        schema.requireObjectField("Query", "consume") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                1
-                            },
-                    )
-                },
-                variableProviders = { schema ->
-                    val result = schema.requireObjectField("Query", "result")
-                    mapOf(
-                        Arguments.Variable.of(result, "value") to
-                            schema.fromObjectField(fragment, listOf("box", "value")),
-                    )
-                },
-            )
-        val resolver =
-            testWorld.resolverRegistry.resolver(
-                testWorld.schema.requireObjectField("Query", "result"),
-            )
-        val resultKey =
-            ObjectEngineResult.GroundKey.of(
-                testWorld.schema.requireObjectField("Query", "result"),
-                emptyMap(),
-            )
-        val objectFragment =
-            resolver.instantiateFragmentsAt(
-                testWorld.schema.testRoot(),
-                listOf(resultKey),
-            ).objectFragment
-        val definition = objectFragment.pathVariableDefinitions.single()
-        val markedBox =
-            objectFragment.constructionSelections
-                .filter { selection ->
-                    selection.key is ObjectEngineResult.VariableKey &&
-                        selection.key.field.name == "box"
-                }
-                .single()
-        val markedValue = markedBox.subselections.single()
-
-        assertEquals(
-            definition.variable,
-            assertIs<ObjectEngineResult.VariableKey>(markedBox.key).variableDefinedByThisKey,
-        )
-        assertEquals(
-            definition.variable,
-            assertIs<ObjectEngineResult.VariableKey>(markedValue.key).variableDefinedByThisKey,
-        )
-    }
-
-    @Test
-    fun `does not mark a repeated prefix that lacks the provider suffix`() {
-        val fragment =
-            """
-            fragment Provider on Query {
-              container {
-                box { other }
-              }
-              provider: container {
-                complete: box { value }
-              }
-              consume(value: ${'$'}value)
-            }
-            """.trimIndent()
-        val testWorld =
-            TestWorld.fromSDL(
-                schemaSDL =
-                    """
-                    type Box {
-                      value: Int
-                      other: Int
-                    }
-
-                    type Container {
-                      box: Box
-                    }
-
-                    type Query {
-                      result: Int
-                      container: Container
-                      consume(value: Int): Int
-                    }
-                    """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val result = schema.requireObjectField("Query", "result")
-                    mapOf(
-                        result to
-                            fieldResolverOf(schema.fragmentFrom(fragment)) { _, _ ->
-                                1
-                            },
-                        schema.requireObjectField("Query", "container") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                null
-                            },
-                        schema.requireObjectField("Query", "consume") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                1
-                            },
-                    )
-                },
-                variableProviders = { schema ->
-                    val result = schema.requireObjectField("Query", "result")
-                    mapOf(
-                        Arguments.Variable.of(result, "value") to
-                            schema.fromObjectField(
-                                fragment,
-                                listOf("provider", "complete", "value"),
-                            ),
-                    )
-                },
-            )
-        val resolver =
-            testWorld.resolverRegistry.resolver(
-                testWorld.schema.requireObjectField("Query", "result"),
-            )
-        val resultKey =
-            ObjectEngineResult.GroundKey.of(
-                testWorld.schema.requireObjectField("Query", "result"),
-                emptyMap(),
-            )
-        val markedContainer =
-            resolver
-                .instantiateFragmentsAt(testWorld.schema.testRoot(), listOf(resultKey))
-                .objectFragment
-                .constructionSelections
-                .filter { selection ->
-                    selection.key is ObjectEngineResult.VariableKey &&
-                        selection.key.field.name == "container"
-                }.single()
-        val markedBoxes =
-            markedContainer.subselections.filter { selection ->
-                selection.key is ObjectEngineResult.VariableKey &&
-                    selection.key.field.name == "box"
-            }
-
-        val markedBox = markedBoxes.single()
-        assertEquals("value", markedBox.subselections.single().key.field.name)
     }
 }

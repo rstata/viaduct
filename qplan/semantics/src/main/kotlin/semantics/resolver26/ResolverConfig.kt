@@ -15,6 +15,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.CoroutineContext
+import model.ObjectEngineResult
+import semantics.shared.ResolverObserver
 
 internal const val RESOLVER26_THREAD_COUNT_PROPERTY = "resolver26.thread.count"
 internal const val RESOLVER26_THREAD_COUNT_ENVIRONMENT = "RESOLVER26_THREAD_COUNT"
@@ -31,6 +33,27 @@ internal data class Resolver26ApplicationObservation(
 )
 
 internal typealias Resolver26ApplicationObserver = (Resolver26ApplicationObservation) -> Unit
+
+internal interface Resolver26Observer : ResolverObserver {
+    fun onResolverApplication(observation: Resolver26ApplicationObservation)
+}
+
+internal fun ResolverObserver.withResolver26Applications(
+    applicationObserver: Resolver26ApplicationObserver,
+): Resolver26Observer {
+    val delegate = this
+    return object : Resolver26Observer {
+        override fun onQueryFragmentResult(
+            resolverOccurrenceId: ResolverOccurrenceId,
+            result: ObjectEngineResult,
+        ) = delegate.onQueryFragmentResult(resolverOccurrenceId, result)
+
+        override fun onResolverApplication(observation: Resolver26ApplicationObservation) {
+            (delegate as? Resolver26Observer)?.onResolverApplication(observation)
+            applicationObserver(observation)
+        }
+    }
+}
 
 // Returns the positive externally configured worker count, defaulting to one.
 internal fun configuredResolver26ThreadCount(): Int {

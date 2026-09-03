@@ -2,10 +2,9 @@ package semantics.contract
 
 import model.requireQueryTypeDef
 import model.requireObjectField
-import model.EngineResult
 import model.ObjectEngineResult
 import viaduct.graphql.schema.ViaductSchema
-import model.instantiateBindings
+import semantics.shared.instantiateBindings
 import model.merge
 import model.objectOf
 import model.operationSelectionsFrom
@@ -165,8 +164,9 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                 """query { result(seed: 1, other: 1) }""",
             )
 
-        val resolved =
-            resolveAndValidate(world, selections)
+        val resolution =
+            resolveAndValidateObserved(world, world.objectOf("Query"), selections)
+        val resolved = resolution.result
 
         assertEquals(8, resolved.getCell(resultKey).get())
         assertEquals(
@@ -177,7 +177,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
             suppliedDemandFields.groupingBy { fields -> fields }.eachCount(),
         )
         assertTrue(
-            context(world) {
+            context(resolution.operation) {
                 resolved.correctResolution(
                     selections
                         .merge(world.schema.requireQueryTypeDef())

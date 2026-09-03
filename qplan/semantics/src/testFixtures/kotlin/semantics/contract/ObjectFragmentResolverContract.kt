@@ -6,7 +6,6 @@ import viaduct.engine.api.EngineObjectData
 import java.util.concurrent.ConcurrentHashMap
 import model.Arguments
 import model.Assumptions
-import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
@@ -547,7 +546,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                 selectiveResolvers = false,
             )
         val expected =
-            context(completeWorld) {
+            context(semantics.shared.OperationContext(completeWorld)) {
                 resolveWithResolver01(selections)
             }
         val result = resolveAndValidate(world, selections)

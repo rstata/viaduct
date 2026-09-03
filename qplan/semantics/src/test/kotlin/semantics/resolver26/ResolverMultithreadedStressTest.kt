@@ -4,12 +4,10 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
-import model.EngineResult
 import model.ObjectEngineResult
 import model.ResolverOccurrenceId
 import model.Fragment
 import model.fragmentFrom
-import model.objectOf
 import org.junit.jupiter.api.Test
 import semantics.arbitrary.ResolverTestRun
 import semantics.arbitrary.TestCaseCount
@@ -23,6 +21,8 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.CoroutineContext
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import semantics.shared.OperationContext
+import semantics.shared.RecordingResolverObserver
 
 class ResolverMultithreadedStressTest {
     @Test
@@ -198,10 +198,12 @@ private suspend fun runResolver26MultithreadedStress(
             val world: Assumptions =
                 testWorld.newAssumptions(selectiveResolvers = true)
             val fragment: Fragment = world.fragmentFrom(testCase.query.source)
+            val operation =
+                OperationContext(world, resolverObserver = RecordingResolverObserver())
             val appliedResolverOccurrences =
                 ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
             val result: ObjectEngineResult =
-                context(world) {
+                context(operation) {
                     resolve(
                         selections = fragment.subselections,
                         coroutineContext = dispatcher,
@@ -212,11 +214,11 @@ private suspend fun runResolver26MultithreadedStress(
                 }
             // Resolution has quiesced; all post-resolution oracle work remains serial here.
             assertTrue(
-                context(world) {
+                context(operation) {
                     result.correctResolution(fragment)
                 },
             )
-            context(world) {
+            context(operation) {
                 result.validateFromFieldBindings(appliedResolverOccurrences)
             }
             completedCases += 1

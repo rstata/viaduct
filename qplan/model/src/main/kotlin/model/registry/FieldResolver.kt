@@ -9,15 +9,11 @@ import model.EngineErrorDataReadException
 import model.EngineOutputData
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
-import model.ObjectSelectionForest
 import model.Arguments
 import model.PathComponent
 import model.ResolverOccurrenceId
-import model.Selection
 import model.SelectionForest
-import model.applicableGroundSelections
 import model.arg
-import model.concatenateSelectionForests
 import model.engineObjectDataOf
 import model.instantiateVariables
 import model.materializeSelectionForestOf
@@ -203,17 +199,6 @@ class FieldResolver private constructor(
             pathVariableDefinitions = fragmentPathDefinitions,
         )
     }
-
-    /** Returns this resolver's object fragment grounded at exact occurrence [path]. */
-    context(world: Assumptions)
-    fun objectFragmentAt(
-        root: ObjectEngineResult,
-        path: List<PathComponent>,
-    ): ObjectSelectionForest =
-        instantiateFragmentsAt(root, path)
-            .objectFragment
-            .constructionSelections
-            .applicableGroundSelections(field.containingDef)
 
     /** Applies this field resolver to the supplied output demand. */
     context(world: Assumptions)

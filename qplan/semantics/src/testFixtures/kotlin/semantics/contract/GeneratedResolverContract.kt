@@ -36,9 +36,9 @@ import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.SometimesPassiveFieldWeight
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
-import semantics.arbitrary.registeredResolverOccurrenceCounts
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import semantics.shared.ResolverObservations
 
 /**
  * Generated contract for user-declared resolvers with empty object fragments and no variables.
@@ -95,7 +95,7 @@ interface SometimesPassiveGeneratedResolverContract : GeneratedCaseAssertionPoli
                             assertions = assertions,
                         )
                     val occurrenceCounts =
-                        context(observation.ordinary.world) {
+                        context(observation.ordinary.operation) {
                             observation.ordinary.result.registeredResolverOccurrenceCounts(
                                 observation.ordinary.world.resolverRegistry,
                             )
@@ -363,7 +363,9 @@ interface QueryFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy 
                         }
                     queryValueWitnesses +=
                         observation.executions.sumOf { execution ->
-                            execution.world.queryValues.size
+                            (execution.operation.resolverObserver as ResolverObservations)
+                                .allQueryFragmentResults()
+                                .size
                         }
                 }
 

@@ -7,7 +7,7 @@ import model.ObjectEngineResult
 import model.PathComponent
 import semantics.arbitrary.ArbitraryRegistry
 import semantics.arbitrary.FieldCoordinate
-import semantics.arbitrary.RegisteredResolverOccurrence
+import semantics.contract.RegisteredResolverOccurrence
 import semantics.arbitrary.ResolutionWitness
 import semantics.arbitrary.ResolverApplicationRecord
 

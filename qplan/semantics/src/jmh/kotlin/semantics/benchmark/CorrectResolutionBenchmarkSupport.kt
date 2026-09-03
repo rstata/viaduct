@@ -1,10 +1,9 @@
 package semantics.benchmark
 
-import model.Assumptions
 import model.ObjectEngineResult
 import model.ObjectSelectionForest
 import model.fragmentFrom
-import model.instantiateBindings
+import semantics.shared.instantiateBindings
 import model.merge
 import model.objectOf
 import model.requireQueryTypeDef
@@ -12,6 +11,8 @@ import org.openjdk.jmh.infra.Blackhole
 import semantics.arbitrary.ResolverBenchmarkCorpus
 import semantics.arbitrary.resolverBenchmarkOverheadQueryConfig
 import semantics.correctresolution.correctResolution
+import semantics.shared.OperationContext
+import semantics.shared.RecordingResolverObserver
 
 internal const val DEFAULT_CORRECT_RESOLUTION_INPUT_COUNT = 50
 internal const val DEFAULT_CORRECT_RESOLUTION_LOOP_COUNT = 1
@@ -50,23 +51,25 @@ internal class CorrectResolutionBenchmarkSupport(
             queries
                 .map { query ->
                     val world = testWorld.newAssumptions(selectiveResolvers = true)
+                    val operation =
+                        OperationContext(world, resolverObserver = RecordingResolverObserver())
                     val fragment = world.fragmentFrom(query.source)
                     val result =
                         subject.resolve(
-                            world = world,
+                            operation = operation,
                             root = world.objectOf("Query"),
                             selections = fragment.subselections,
                         )
                     val selections: ObjectSelectionForest =
-                        context(world) {
+                        context(operation) {
                             fragment.subselections
                                 .merge(world.schema.requireQueryTypeDef())
                                 .instantiateBindings()
                         }
-                    check(context(world) { result.correctResolution(selections) }) {
+                    check(context(operation) { result.correctResolution(selections) }) {
                         "Prepared correct-resolution benchmark input is not a correct resolution"
                     }
-                    PreparedCorrectResolution(world, result, selections)
+                    PreparedCorrectResolution(operation, result, selections)
                 }.toTypedArray()
     }
 
@@ -83,7 +86,7 @@ internal class CorrectResolutionBenchmarkSupport(
         repeat(loopCount) {
             preparedInputs.forEach { prepared ->
                 blackhole.consume(
-                    context(prepared.world) {
+                    context(prepared.operation) {
                         prepared.result.correctResolution(prepared.selections)
                     },
                 )
@@ -93,7 +96,7 @@ internal class CorrectResolutionBenchmarkSupport(
     }
 
     private data class PreparedCorrectResolution(
-        val world: Assumptions,
+        val operation: OperationContext,
         val result: ObjectEngineResult,
         val selections: ObjectSelectionForest,
     )

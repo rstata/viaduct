@@ -2,7 +2,6 @@ package semantics.resolver26
 
 import viaduct.graphql.schema.ViaductSchema
 
-import model.Assumptions
 import model.EngineErrorData
 import model.EngineOutputData
 import model.EngineResult
@@ -23,7 +22,7 @@ import model.toEngineResult
 import viaduct.engine.api.EngineObjectData
 
 // Builds one passive result value, launching an orchestration lifecycle for every object it creates.
-context(world: Assumptions, support: Resolver26Support)
+context(operation: Resolver26OperationContext)
 internal fun EngineOutputData?.resolvePassiveValues(
     root: ObjectEngineResult,
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
@@ -66,7 +65,7 @@ internal fun EngineOutputData?.resolvePassiveValues(
 }
 
 // Creates one mutable OER and enters its orchestration lifecycle before descending into children.
-context(world: Assumptions, support: Resolver26Support)
+context(operation: Resolver26OperationContext)
 private fun EngineObjectData.Sync.resolvePassiveObjectValues(
     root: ObjectEngineResult,
     path: List<PathComponent>,
@@ -80,8 +79,7 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
         )
     val orchestration =
         ObjectOrchestrationTask(
-            world = world,
-            support = support,
+            operation = operation,
             root = root,
             path = path,
             source = this,
@@ -101,7 +99,7 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
 }
 
 // Copies every passive field returned by the resolver and orchestrates its value recursively.
-context(world: Assumptions, support: Resolver26Support)
+context(operation: Resolver26OperationContext)
 private fun EngineObjectData.Sync.materializePassiveFields(
     root: ObjectEngineResult,
     target: ObjectEngineResult,
@@ -110,7 +108,7 @@ private fun EngineObjectData.Sync.materializePassiveFields(
     closedDemand: ObjectSelectionForest,
 ) {
     val invocationDemandByKey = invocationDemand.merge(schemaType).byKey()
-    if (world.selectiveResolvers) {
+    if (operation.selectiveResolvers) {
         val selectedFieldNames =
             invocationDemandByKey.keys
                 .mapTo(linkedSetOf()) { key -> key.field.name }

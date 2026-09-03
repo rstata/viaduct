@@ -3,7 +3,6 @@ package semantics.contract
 import model.requireQueryTypeDef
 import viaduct.engine.api.EngineObjectData
 import model.Assumptions
-import model.EngineResult
 import model.ObjectEngineResult
 import model.SelectionForest
 import model.merge
@@ -16,6 +15,7 @@ import semantics.correctresolution.correctResolution
 import semantics.correctresolution.isClosedUnderResolverDemand
 import semantics.correctresolution.rootedAndWellTyped
 import kotlin.test.assertTrue
+import semantics.shared.OperationContext
 
 /**
  * Post-test policy requiring every contract result to satisfy the complete correctness judgment.
@@ -28,7 +28,7 @@ interface CorrectResolutionPostTestPolicy : ResolverContract {
 }
 
 private data class PendingResolutionValidation(
-    val world: Assumptions,
+    val operation: OperationContext,
     val selections: SelectionForest,
     val result: ObjectEngineResult,
 )
@@ -48,14 +48,16 @@ private object ContractPostTestState {
         pending.remove()
         validations.forEach { validation ->
             assertTrue(
-                context(validation.world) {
+                context(validation.operation) {
                     validation.result.correctResolution(
                         validation.selections
-                            .merge(validation.world.schema.requireQueryTypeDef()),
+                            .merge(validation.operation.schema.requireQueryTypeDef()),
                     )
                 },
-                context(validation.world) {
-                    "rooted=${validation.result.rootedAndWellTyped()}, " +
+                context(validation.operation) {
+                    "rooted=${context(validation.operation.world) {
+                        validation.result.rootedAndWellTyped()
+                    }}, " +
                         "selections=" +
                         validation.result.conformsToSelections(
                             validation.selections,
@@ -74,18 +76,24 @@ internal fun ResolverContract.resolveAndValidate(
     world: Assumptions,
     root: EngineObjectData.Sync,
     selections: SelectionForest,
-): ObjectEngineResult {
-    val result = resolve(world, root, selections)
+): ObjectEngineResult = resolveAndValidateObserved(world, root, selections).result
+
+internal fun ResolverContract.resolveAndValidateObserved(
+    world: Assumptions,
+    root: EngineObjectData.Sync,
+    selections: SelectionForest,
+): ResolverResolutionObservation {
+    val observation = observeResolution(world, root, selections)
     if (this is CorrectResolutionPostTestPolicy) {
         ContractPostTestState.record(
             PendingResolutionValidation(
-                world = world,
+                operation = observation.operation,
                 selections = selections,
-                result = result,
+                result = observation.result,
             ),
         )
     }
-    return result
+    return observation
 }
 
 internal fun ResolverContract.resolveAndValidate(
@@ -106,6 +114,23 @@ internal fun ResolverContract.resolveAndValidate(
 ): ObjectEngineResult =
     resolveAndValidate(
         world = world,
+        selections =
+            world.operationSelectionsFrom(
+                documentSource = documentSource,
+                variables = variables,
+                operationName = operationName,
+            ),
+    )
+
+internal fun ResolverContract.resolveAndValidateObserved(
+    world: Assumptions,
+    documentSource: String,
+    variables: Map<String, Any?> = emptyMap(),
+    operationName: String? = null,
+): ResolverResolutionObservation =
+    resolveAndValidateObserved(
+        world = world,
+        root = world.objectOf("Query"),
         selections =
             world.operationSelectionsFrom(
                 documentSource = documentSource,

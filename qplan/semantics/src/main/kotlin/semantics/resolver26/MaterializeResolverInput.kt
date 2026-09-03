@@ -2,8 +2,6 @@ package semantics.resolver26
 
 import viaduct.graphql.schema.ViaductSchema
 
-import model.Assumptions
-import model.EngineErrorData
 import model.EngineOutputData
 import model.EngineOutputListData
 import model.EngineObjectDataEntry
@@ -13,16 +11,17 @@ import model.ListEngineResult
 import model.MaterializeSelectionForest
 import model.ObjectEngineResult
 import model.ObjectMaterializeSelection
-import model.fetchGroundedArguments
+import semantics.shared.fetchGroundedArguments
 import model.outputType
 import model.PathComponent
 import model.materializedEngineObjectDataOf
 import model.toEngineOutputData
 import semantics.shared.CycleChecker
+import semantics.shared.OperationContext
 import viaduct.engine.api.EngineObjectData
 
 // Returns a resolver-visible input object collected by GraphQL response key.
-context(world: Assumptions, cycleChecker: CycleChecker)
+context(operation: OperationContext, cycleChecker: CycleChecker)
 internal suspend fun ObjectEngineResult.materializeResolverInput(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
@@ -35,7 +34,7 @@ internal suspend fun ObjectEngineResult.materializeResolverInput(
     )
 
 // Materializes selected OER values at their exact stored paths.
-context(world: Assumptions, cycleChecker: CycleChecker)
+context(operation: OperationContext, cycleChecker: CycleChecker)
 private suspend fun ObjectEngineResult.materializeSelectedObject(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
@@ -69,7 +68,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObject(
 }
 
 // Awaits every argument binding but preserves the selection's symbolic OER-cell identity.
-context(world: Assumptions)
+context(operation: OperationContext)
 private suspend fun ObjectMaterializeSelection.materializedObjectKey(
 ): ObjectEngineResult.ObjectKey {
     key.fetchGroundedArguments()
@@ -77,7 +76,7 @@ private suspend fun ObjectMaterializeSelection.materializedObjectKey(
 }
 
 // Recursively materializes one selected engine result while preserving null, error, and list shape.
-context(world: Assumptions, cycleChecker: CycleChecker)
+context(operation: OperationContext, cycleChecker: CycleChecker)
 private suspend fun EngineResult?.materializeSelectedValue(
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     selections: MaterializeSelectionForest,

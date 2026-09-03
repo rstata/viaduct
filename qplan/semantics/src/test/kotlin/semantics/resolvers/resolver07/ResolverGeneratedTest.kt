@@ -4,8 +4,7 @@ import semantics.resolvers.resolver07.resolve
 
 import viaduct.engine.api.EngineObjectData
 
-import model.Assumptions
-import model.EngineResult
+import semantics.shared.OperationContext
 import model.ObjectEngineResult
 import model.SelectionForest
 import semantics.contract.EmptyObjectFragmentGeneratedResolverContract
@@ -28,11 +27,11 @@ class ResolverGeneratedTest :
         get() = false
 
     override fun resolve(
-        world: Assumptions,
+        operation: OperationContext,
         root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult =
-        context(world) {
+        context(operation) {
             resolve(selections)
         }
 }

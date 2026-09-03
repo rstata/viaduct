@@ -8,12 +8,11 @@ import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
-import model.Fragment
 import model.PathComponent
 import model.ResolverOccurrenceId
 import model.SelectionForest
 import model.fragmentFrom
-import model.instantiateBindings
+import semantics.shared.instantiateBindings
 import model.merge
 import model.objectOf
 import model.requireQueryTypeDef
@@ -32,6 +31,8 @@ import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.Locale
 import kotlin.math.ceil
+import semantics.shared.OperationContext
+import semantics.shared.RecordingResolverObserver
 
 internal const val DEFAULT_OVERHEAD_LOOP_COUNT = 1
 
@@ -45,7 +46,7 @@ private const val REPORT_FILE_PROPERTY = "resolverBenchmarkReportFile"
 
 internal fun interface ResolverBenchmarkSubject {
     fun resolve(
-        world: Assumptions,
+        operation: OperationContext,
         root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult
@@ -53,7 +54,7 @@ internal fun interface ResolverBenchmarkSubject {
 
 internal fun interface ObservedResolverBenchmarkSubject {
     fun resolve(
-        world: Assumptions,
+        operation: OperationContext,
         root: EngineObjectData.Sync,
         selections: SelectionForest,
         applicationObserver: (ResolverBenchmarkApplicationObservation) -> Unit,
@@ -95,7 +96,7 @@ internal class CurrentProfileBenchmarkSupport(
                 val selections = parsedQueries[index % parsedQueries.size]
                 val world = testWorld.newAssumptions(selectiveResolvers = true)
                 PreparedResolution(
-                    world = world,
+                    operation = OperationContext(world),
                     root = world.objectOf("Query"),
                     selections = selections,
                 )
@@ -109,7 +110,7 @@ internal class CurrentProfileBenchmarkSupport(
         overheadCases.forEach { prepared ->
             blackhole.consume(
                 subject.resolve(
-                    world = prepared.world,
+                    operation = prepared.operation,
                     root = prepared.root,
                     selections = prepared.selections,
                 ),
@@ -124,6 +125,7 @@ internal class CurrentProfileBenchmarkSupport(
         val samples =
             querySources.map { source ->
                 val world = testWorld.newAssumptions(selectiveResolvers = true)
+                val operation = OperationContext(world)
                 val selections = world.fragmentFrom(source).subselections
                 corpus.registry.clearResolutionWitness()
                 val applicationObservations =
@@ -132,7 +134,7 @@ internal class CurrentProfileBenchmarkSupport(
                     )
                 val result =
                     observedSubject.resolve(
-                        world = world,
+                        operation = operation,
                         root = world.objectOf("Query"),
                         selections = selections,
                         applicationObserver = applicationObservations::add,
@@ -242,13 +244,15 @@ internal class CurrentProfileBenchmarkSupport(
                 ) { testWorld, testCase ->
                     check(testCase.query.selectionDepth >= 4)
                     val world = testWorld.newAssumptions(selectiveResolvers = true)
+                    val operation =
+                        OperationContext(world, resolverObserver = RecordingResolverObserver())
                     val fragment = world.fragmentFrom(testCase.query.source)
                     testCase.registry.clearResolutionWitness()
                     val appliedResolverOccurrences =
                         ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
                     val result =
                         observedSubject.resolve(
-                            world = world,
+                            operation = operation,
                             root = world.objectOf("Query"),
                             selections = fragment.subselections,
                             applicationObserver = { application ->
@@ -257,12 +261,12 @@ internal class CurrentProfileBenchmarkSupport(
                         )
                     val witness = testCase.registry.resolutionWitness()
                     check(
-                        context(world) {
+                        context(operation) {
                             result.registeredResolverApplicationIdentityCounts()
                         } == witness.applicationIdentityCounts(),
                     )
                     check(
-                        context(world) {
+                        context(operation) {
                             result.correctResolution(
                                 fragment.subselections
                                     .merge(world.schema.requireQueryTypeDef())
@@ -270,7 +274,7 @@ internal class CurrentProfileBenchmarkSupport(
                             )
                         },
                     )
-                    context(world) {
+                    context(operation) {
                         result.validateFromFieldBindings(appliedResolverOccurrences)
                     }
                     verifiedCases += 1
@@ -281,7 +285,7 @@ internal class CurrentProfileBenchmarkSupport(
         }
 
     private data class PreparedResolution(
-        val world: Assumptions,
+        val operation: OperationContext,
         val root: EngineObjectData.Sync,
         val selections: SelectionForest,
     )

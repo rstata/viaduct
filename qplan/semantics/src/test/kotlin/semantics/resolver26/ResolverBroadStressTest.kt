@@ -2,15 +2,13 @@ package semantics.resolver26
 
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
-import model.EngineResult
 import model.ObjectEngineResult
 import model.Fragment
 import model.fragmentFrom
-import model.objectOf
 import org.junit.jupiter.api.Test
 import semantics.arbitrary.Config
 import semantics.arbitrary.FieldCoordinate
-import semantics.arbitrary.RegisteredResolverOccurrence
+import semantics.contract.RegisteredResolverOccurrence
 import semantics.arbitrary.ResolutionOccurrenceApplicationLog
 import semantics.arbitrary.ResolutionWitness
 import semantics.arbitrary.ResolverFromQueryFieldVariablesEnabled
@@ -21,7 +19,7 @@ import semantics.arbitrary.SometimesPassiveFieldWeight
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.configuredResolverTestExecution
 import semantics.arbitrary.executeResolverTestCases
-import semantics.arbitrary.registeredResolverOccurrences
+import semantics.contract.registeredResolverOccurrences
 import semantics.contract.registeredResolverOccurrenceApplicationIdentityCounts
 import semantics.contract.registeredResolverOccurrenceApplicationIdentityCountsFor
 import semantics.contract.registeredResolverOccurrenceApplicationKeyCounts
@@ -29,6 +27,8 @@ import semantics.contract.validateFromFieldBindings
 import semantics.correctresolution.correctResolution
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import semantics.shared.OperationContext
+import semantics.shared.RecordingResolverObserver
 
 /**
  * Unfiltered Resolver26 stress: every generated registry/query product is resolved and validated.
@@ -172,11 +172,13 @@ internal suspend fun runResolver26BroadStress(
                 val world: Assumptions =
                     testWorld.newAssumptions(selectiveResolvers = true)
                 val fragment: Fragment = world.fragmentFrom(testCase.query.source)
+                val operation =
+                    OperationContext(world, resolverObserver = RecordingResolverObserver())
                 testCase.registry.clearResolutionWitness()
                 val occurrenceLog = ResolutionOccurrenceApplicationLog()
                 resolutionCalls += 1
                 val result: ObjectEngineResult =
-                    context(world) {
+                    context(operation) {
                         resolveObserved(fragment.subselections) { application ->
                             occurrenceLog.record(
                                 resolverOccurrenceId = application.resolverOccurrenceId,
@@ -202,8 +204,8 @@ internal suspend fun runResolver26BroadStress(
                     "Resolver26 occurrence instrumentation missed an application",
                 )
                 val occurrences: List<RegisteredResolverOccurrence> =
-                    context(world) {
-                        result.registeredResolverOccurrences(world.resolverRegistry)
+                    context(operation) {
+                        result.registeredResolverOccurrences(operation.resolverRegistry)
                     }
                 observedSignatures +=
                     resolver26StructuralSignatures(
@@ -246,7 +248,7 @@ internal suspend fun runResolver26BroadStress(
                 val observedOccurrenceCounts = occurrenceWitness.applicationIdentityCounts()
                 if (config[SometimesPassiveFieldWeight] > 0.0) {
                     val expectedOccurrenceKeyCounts =
-                        context(world) {
+                        context(operation) {
                             result.registeredResolverOccurrenceApplicationKeyCounts()
                         }
                     occurrenceWitness.applicationKeyCounts().forEach { (key, count) ->
@@ -259,7 +261,7 @@ internal suspend fun runResolver26BroadStress(
                         )
                     }
                     val expectedObservedIdentities =
-                        context(world) {
+                        context(operation) {
                             result.registeredResolverOccurrenceApplicationIdentityCountsFor(
                                 occurrenceWitness.applications
                                     .map { application -> application.resolverOccurrenceId }
@@ -272,7 +274,7 @@ internal suspend fun runResolver26BroadStress(
                             occurrenceWitness.applications.size
                 } else {
                     val expectedOccurrenceCounts =
-                        context(world) {
+                        context(operation) {
                             result.registeredResolverOccurrenceApplicationIdentityCounts()
                         }
                     assertEquals(
@@ -281,11 +283,11 @@ internal suspend fun runResolver26BroadStress(
                     )
                 }
                 assertTrue(
-                    context(world) {
+                    context(operation) {
                         result.correctResolution(fragment)
                     },
                 )
-                context(world) {
+                context(operation) {
                     result.validateFromFieldBindings(
                         occurrenceWitness.applications
                             .map { application -> application.resolverOccurrenceId }

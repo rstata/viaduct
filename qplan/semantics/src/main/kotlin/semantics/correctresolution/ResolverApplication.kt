@@ -2,7 +2,6 @@ package semantics.correctresolution
 
 import kotlinx.coroutines.runBlocking
 import model.Arguments
-import model.Assumptions
 import model.EngineOutputData
 import model.EngineResult
 import model.ListEngineResult
@@ -14,10 +13,12 @@ import model.concatenateSelectionForests
 import model.engineObjectDataOf
 import model.merge
 import model.requireQueryTypeDef
-import model.groundedArguments
+import semantics.shared.groundedArguments
 import model.selectionForestOf
 import semantics.shared.CycleChecker
 import semantics.shared.materialize
+import semantics.shared.OperationContext
+import semantics.shared.ResolverObservations
 import viaduct.engine.api.EngineObjectData
 import java.util.IdentityHashMap
 
@@ -58,7 +59,7 @@ private class CachedResolverApplication(
  * field belongs to its standard resolver.
  */
 context(
-    world: Assumptions,
+    operation: OperationContext,
     resolverApplicationCache: ResolverApplicationCache,
 )
 internal fun ObjectEngineResult.reapplyResolver(
@@ -67,7 +68,7 @@ internal fun ObjectEngineResult.reapplyResolver(
 ): ReappliedResolver? =
     resolverApplicationCache.getOrPut(this, key) {
         val arguments = key.groundedArguments() as? Arguments.Resolved ?: return@getOrPut null
-        val resolver = world.resolverRegistry.resolver(key.field)
+        val resolver = operation.resolverRegistry.resolver(key.field)
         val coordinate = path + key
         val fragments =
             resolver.fragmentsSatisfiedBy(
@@ -78,7 +79,7 @@ internal fun ObjectEngineResult.reapplyResolver(
         val objectFragment = fragments.objectFragment
         val input: EngineObjectData.Sync =
             runBlocking {
-                context(CycleChecker.createNOP()) {
+                context(operation, CycleChecker.createNOP()) {
                     materialize(
                         selections = objectFragment.materializeSelections,
                         reader = coordinate,
@@ -94,19 +95,21 @@ internal fun ObjectEngineResult.reapplyResolver(
         val queryFragment = fragments.queryFragment
         val queryValue =
             if (queryFragment.constructionSelections.isEmpty()) {
-                engineObjectDataOf(world.schema.requireQueryTypeDef())
+                engineObjectDataOf(operation.schema.requireQueryTypeDef())
             } else {
                 val queryResult =
-                    world.queryValues[resolverOccurrenceId]
+                    (operation.resolverObserver as? ResolverObservations)
+                        ?.queryFragmentResults(resolverOccurrenceId)
+                        ?.singleOrNull()
                         ?: return@getOrPut null
                 val querySelections =
                     queryFragment.constructionSelections
-                        .merge(world.schema.requireQueryTypeDef())
+                        .merge(operation.schema.requireQueryTypeDef())
                 if (!queryResult.correctResolution(querySelections)) {
                     return@getOrPut null
                 }
                 runBlocking {
-                    context(CycleChecker.createNOP()) {
+                    context(operation, CycleChecker.createNOP()) {
                         queryResult.materialize(
                             selections = queryFragment.materializeSelections,
                             reader = coordinate,
@@ -115,12 +118,14 @@ internal fun ObjectEngineResult.reapplyResolver(
                 }
             }
         ReappliedResolver(
-            resolver.evaluateRelation(
-                input = input,
-                queryValue = queryValue,
-                arguments = resolverArguments,
-                selections = getCell(key).getValue().get().completedOutputDemand(),
-            ),
+            context(operation.world) {
+                resolver.evaluateRelation(
+                    input = input,
+                    queryValue = queryValue,
+                    arguments = resolverArguments,
+                    selections = getCell(key).getValue().get().completedOutputDemand(),
+                )
+            },
         )
     }
 

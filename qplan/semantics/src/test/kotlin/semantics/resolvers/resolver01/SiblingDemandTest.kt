@@ -1,4 +1,4 @@
-package model.registry
+package semantics.resolvers.resolver01
 
 import viaduct.graphql.schema.ViaductSchema
 
@@ -16,6 +16,7 @@ import model.selectionForestOf
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.testRoot
+import semantics.shared.OperationContext
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -28,7 +29,7 @@ class SiblingDemandTest {
         val schema = world.schema
 
         assertTrue(
-            context(world) {
+            context(OperationContext(world)) {
                 schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
                     schema.key(schema.requireQueryTypeDef(), "sibling", mapOf("input" to 1)),
                     schema.testRoot(),
@@ -36,7 +37,7 @@ class SiblingDemandTest {
             },
         )
         assertFalse(
-            context(world) {
+            context(OperationContext(world)) {
                 schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
                     schema.key(schema.requireQueryTypeDef(), "other"),
                     schema.testRoot(),
@@ -44,7 +45,7 @@ class SiblingDemandTest {
             },
         )
         assertFalse(
-            context(world) {
+            context(OperationContext(world)) {
                 schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
                     schema.key(schema.requireQueryTypeDef(), "sibling", mapOf("input" to 2)),
                     schema.testRoot(),
@@ -59,7 +60,7 @@ class SiblingDemandTest {
         val schema = world.schema
 
         assertFalse(
-            context(world) {
+            context(OperationContext(world)) {
                 schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
                     schema.key(schema.requireQueryTypeDef(), "other"),
                     schema.testRoot(),
@@ -74,7 +75,7 @@ class SiblingDemandTest {
         val schema = world.schema
 
         assertFailsWith<IllegalArgumentException> {
-            context(world) {
+            context(OperationContext(world)) {
                 schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
                     schema.key(
                         schema.requireType("Payload") as ViaductSchema.Object,

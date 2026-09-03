@@ -13,17 +13,18 @@ import model.VariableBinding
 import model.registry.VariableDefinition
 import model.schemaType
 import viaduct.engine.api.EngineObjectData
+import semantics.shared.OperationContext
 
 /** Installs and launches the work associated with one object-result occurrence. */
 internal class ObjectOrchestrationTask(
-    internal val world: Assumptions,
-    internal val support: Resolver26Support,
+    internal val operation: Resolver26OperationContext,
     internal val root: ObjectEngineResult,
     internal val path: List<PathComponent>,
     internal val source: EngineObjectData.Sync,
     internal val target: ObjectEngineResult,
     private val initialDemand: SelectionForest,
 ) {
+    internal val world: Assumptions = operation.world
     private val closedDemand = AtomicReference<CloseInputDemandResult?>(null)
     private val launched = AtomicBoolean(false)
 
@@ -47,10 +48,10 @@ internal class ObjectOrchestrationTask(
         require(closedDemand.compareAndSet(null, closed)) {
             "Resolver26 orchestration task at $path was prepared twice"
         }
-        context(world) {
+        context(operation) {
             declareBindings(closed)
         }
-        support.markBindingsDeclared(target)
+        operation.markBindingsDeclared(target)
         return closed.demand
     }
 
@@ -69,7 +70,7 @@ internal class ObjectOrchestrationTask(
         validatePassiveFields(closed)
 
         if (closed.expansions.isNotEmpty()) {
-            support.requestScope.launch {
+            operation.requestScope.launch {
                 this@ObjectOrchestrationTask.launchBindingsAndResolvers(closed)
                 target.freeze()
             }
@@ -96,7 +97,7 @@ internal class ObjectOrchestrationTask(
 
 // Adds every binding introduced by the closed demand to the world's binding domain.
 // Grounded argument bindings receive values immediately; open and provider bindings remain pending.
-context(world: Assumptions)
+context(operation: OperationContext)
 private fun declareBindings(closed: CloseInputDemandResult) {
     check(!closed.bindingDeclarationStarted) {
         "Resolver26 closed demand attempted to declare its bindings twice"
@@ -108,12 +109,12 @@ private fun declareBindings(closed: CloseInputDemandResult) {
             when (val definition = variableDefinition.definition) {
                 is VariableDefinition.FromArgument ->
                     if (expansion.ownerKey is ObjectEngineResult.GroundKey) {
-                        world.bindVariable(
+                        operation.variableBindingsState.bindVariable(
                             variableId,
                             bindingFor(expansion.ownerKey.arguments, definition),
                         )
                     } else {
-                        world.declareBinding(variableId)
+                        operation.variableBindingsState.declareBinding(variableId)
                     }
 
                 is VariableDefinition.FromField -> Unit
@@ -121,12 +122,16 @@ private fun declareBindings(closed: CloseInputDemandResult) {
         }
     }
     closed.objectProviderReads.forEach { read ->
-        world.declareBinding(requireNotNull(read.definition.variable.instanceId))
+        operation.variableBindingsState.declareBinding(
+            requireNotNull(read.definition.variable.instanceId),
+        )
     }
     closed.expansions.values
         .flatMap { expansion -> expansion.fragments.queryFragment.pathVariableDefinitions }
         .forEach { definition ->
-            world.declareBinding(requireNotNull(definition.variable.instanceId))
+            operation.variableBindingsState.declareBinding(
+                requireNotNull(definition.variable.instanceId),
+            )
         }
 }
 

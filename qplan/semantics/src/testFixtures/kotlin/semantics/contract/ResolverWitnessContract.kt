@@ -69,15 +69,16 @@ interface ResolverWitnessContract : ResolverContract {
                 val registry = testCase.registry
                 val fragment = world.fragmentFrom(testCase.query.source)
                 registry.clearResolutionWitness()
-                val result =
-                    resolve(
+                val resolution =
+                    observeResolution(
                         world,
                         world.objectOf("Query"),
                         fragment.subselections,
                     )
+                val result = resolution.result
                 val witness = registry.resolutionWitness()
                 val expectedApplications =
-                    context(world) {
+                    context(resolution.operation) {
                         result.registeredResolverApplicationIdentityCounts()
                     }
                 assertEquals(expectedApplications, witness.applicationIdentityCounts())
@@ -97,11 +98,11 @@ interface ResolverWitnessContract : ResolverContract {
                         unrelatedApplications.map { application -> application.key.field },
                 )
                 assertTrue(
-                    context(world) {
+                    context(resolution.operation) {
                         result.correctResolution(fragment)
                     },
-                    context(world) {
-                        "rooted=${result.rootedAndWellTyped()}, " +
+                    context(resolution.operation) {
+                        "rooted=${context(world) { result.rootedAndWellTyped() }}, " +
                             "selections=" +
                             "${result.conformsToSelections(fragment.subselections)}, " +
                             "closed=${result.isClosedUnderResolverDemand()}, " +
@@ -156,11 +157,11 @@ interface ResolverWitnessContract : ResolverContract {
                     permutedWorld.fragmentFrom(testCase.query.permutationEquivalentSource)
                 registry.clearResolutionWitness()
                 val permutedResult =
-                    resolve(
+                    observeResolution(
                         permutedWorld,
                         permutedWorld.objectOf("Query"),
                         permuted.subselections,
-                    )
+                    ).result
                 val permutedWitness = registry.resolutionWitness()
                 assertTrue(result.sameCompletedResultAs(permutedResult))
                 assertEquals(

@@ -10,6 +10,8 @@ import model.testing.TestWorld
 import semantics.contract.validateFromFieldBindings
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
+import semantics.shared.OperationContext
+import semantics.shared.RecordingResolverObserver
 
 class ResolverFromFieldBindingOracleTest {
     @Test
@@ -18,7 +20,7 @@ class ResolverFromFieldBindingOracleTest {
         fixture.bind(fixture.definitions.first())
 
         assertFailsWith<AssertionError> {
-            context(fixture.world) {
+            context(fixture.operation) {
                 fixture.result.validateFromFieldBindings(setOf(fixture.occurrenceId))
             }
         }
@@ -29,7 +31,7 @@ class ResolverFromFieldBindingOracleTest {
         val fixture = bindingFixture()
 
         assertFailsWith<AssertionError> {
-            context(fixture.world) {
+            context(fixture.operation) {
                 fixture.result.validateFromFieldBindings(setOf(fixture.occurrenceId))
             }
         }
@@ -39,7 +41,7 @@ class ResolverFromFieldBindingOracleTest {
     fun `a passive occurrence requires no object-path bindings`() {
         val fixture = bindingFixture()
 
-        context(fixture.world) {
+        context(fixture.operation) {
             fixture.result.validateFromFieldBindings(emptySet())
         }
     }
@@ -50,7 +52,7 @@ class ResolverFromFieldBindingOracleTest {
         fixture.bind(fixture.definitions.first())
 
         assertFailsWith<AssertionError> {
-            context(fixture.world) {
+            context(fixture.operation) {
                 fixture.result.validateFromFieldBindings(emptySet())
             }
         }
@@ -60,19 +62,23 @@ class ResolverFromFieldBindingOracleTest {
     fun `object-path bindings in a query-fragment root are validated`() {
         val testWorld = bindingWorld()
         val world = testWorld.assumptions
+        val operation = OperationContext(world, resolverObserver = RecordingResolverObserver())
         val primaryResult = world.engineResultOf("Query")
         val queryResult = completedBindingResult(world)
-        val queryFixture = bindingFixture(world, queryResult)
+        val queryFixture = bindingFixture(operation, queryResult)
         queryFixture.definitions.forEach { definition ->
-            world.bindVariable(
+            operation.variableBindingsState.bindVariable(
                 requireNotNull(definition.variable.instanceId),
                 -1,
             )
         }
-        world.queryValues[ResolverOccurrenceId.at(primaryResult, emptyList())] = queryResult
+        operation.resolverObserver.onQueryFragmentResult(
+            ResolverOccurrenceId.at(primaryResult, emptyList()),
+            queryResult,
+        )
 
         assertFailsWith<AssertionError> {
-            context(world) {
+            context(operation) {
                 primaryResult.validateFromFieldBindings(setOf(queryFixture.occurrenceId))
             }
         }
@@ -81,7 +87,7 @@ class ResolverFromFieldBindingOracleTest {
 }
 
 private data class BindingFixture(
-    val world: Assumptions,
+    val operation: OperationContext,
     val result: ObjectEngineResult,
     val occurrenceId: ResolverOccurrenceId,
     val definitions: List<InstantiatedFieldPathDefinition>,
@@ -94,19 +100,26 @@ private data class BindingFixture(
                 "second" -> 13
                 else -> error("Unexpected provider field $providerField")
             }
-        world.bindVariable(requireNotNull(definition.variable.instanceId), value)
+        operation.variableBindingsState.bindVariable(
+            requireNotNull(definition.variable.instanceId),
+            value,
+        )
     }
 }
 
 private fun bindingFixture(): BindingFixture {
     val world = bindingWorld().assumptions
-    return bindingFixture(world, completedBindingResult(world))
+    return bindingFixture(
+        OperationContext(world, resolverObserver = RecordingResolverObserver()),
+        completedBindingResult(world),
+    )
 }
 
 private fun bindingFixture(
-    world: Assumptions,
+    operation: OperationContext,
     result: ObjectEngineResult,
 ): BindingFixture {
+    val world = operation.world
     val resultField = world.schema.requireObjectField("Query", "result")
     val resultKey = ObjectEngineResult.GroundKey.of(resultField, emptyMap())
     val occurrenceId = ResolverOccurrenceId.at(result, listOf(resultKey))
@@ -117,7 +130,7 @@ private fun bindingFixture(
             .objectFragment
             .pathVariableDefinitions
     return BindingFixture(
-        world = world,
+        operation = operation,
         result = result,
         occurrenceId = occurrenceId,
         definitions = definitions,

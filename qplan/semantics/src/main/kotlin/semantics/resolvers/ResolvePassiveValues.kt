@@ -3,7 +3,6 @@ package semantics.resolvers
 import viaduct.graphql.schema.ViaductSchema
 
 import model.Arguments
-import model.Assumptions
 import model.EngineErrorData
 import model.EngineOutputData
 import model.EngineResult
@@ -16,12 +15,13 @@ import model.outputValue
 import model.PathComponent
 import model.SelectionForest
 import viaduct.engine.api.EngineObjectData
-import model.applicableGroundSelections
+import semantics.shared.applicableGroundSelections
 import model.invariants.conformsToOutputSchemaType
 import model.schemaType
 import model.requireField
 import model.selectionForestOf
 import model.toEngineResult
+import semantics.shared.OperationContext
 
 /**
  * An eagerly materialized result tree and its root object occurrences requiring resolver work.
@@ -46,7 +46,7 @@ internal class PassiveObjectOccurrence(
  * Selective worlds still require every present field to be included in [invocationDemand].
  * [constructionDemand] determines whether each root object occurrence requires orchestration.
  */
-context(world: Assumptions)
+context(operation: OperationContext)
 internal fun EngineOutputData?.resolvePassiveValues(
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     path: List<PathComponent>,
@@ -96,7 +96,7 @@ internal fun EngineOutputData?.resolvePassiveValues(
     }
 }
 
-context(world: Assumptions)
+context(operation: OperationContext)
 private fun EngineObjectData.Sync.resolvePassiveObjectValues(
     constructionDemand: SelectionForest,
     invocationDemand: SelectionForest,
@@ -106,7 +106,7 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
         constructionDemand.applicableGroundSelections(schemaType).byGroundKey()
     val invocationDemandByKey =
         invocationDemand.applicableGroundSelections(schemaType).byGroundKey()
-    if (world.selectiveResolvers) {
+    if (operation.selectiveResolvers) {
         val selectedFieldNames =
             invocationDemandByKey.keys.mapTo(linkedSetOf()) { key -> key.field.name }
         val unselectedKeys = getSelections().toSet() - selectedFieldNames
@@ -169,7 +169,7 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
     )
 }
 
-context(world: Assumptions)
+context(operation: OperationContext)
 private fun EngineOutputData?.hasUnresolvedDemand(
     selections: SelectionForest,
 ): Boolean =
@@ -179,7 +179,7 @@ private fun EngineOutputData?.hasUnresolvedDemand(
         else -> false
     }
 
-context(world: Assumptions)
+context(operation: OperationContext)
 private fun EngineObjectData.Sync.hasUnresolvedDemand(
     selections: SelectionForest,
 ): Boolean =
@@ -201,7 +201,7 @@ private fun EngineObjectData.Sync.hasUnresolvedDemand(
 /**
  * Returns demanded, already-materialized child object occurrences at this exact object.
  */
-context(world: Assumptions)
+context(operation: OperationContext)
 internal fun EngineObjectData.Sync.materializedChildOccurrences(
     path: List<PathComponent>,
     selections: ObjectSelectionForest,

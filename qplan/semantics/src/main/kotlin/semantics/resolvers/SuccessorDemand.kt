@@ -1,28 +1,22 @@
-package model.registry
+package semantics.resolvers
 
-import viaduct.graphql.schema.ViaductSchema
-
-import model.ObjectEngineResult
-import model.Assumptions
-import model.EngineInputData
 import model.Arguments
+import model.EngineInputData
+import model.ObjectEngineResult
 import model.Selection
 import model.SelectionForest
-import model.concatenateSelectionForests
 import model.flatMapToSelectionForest
-import model.instantiateBindings
 import model.objectKey
 import model.requireField
 import model.selectionForestOf
 import model.substituteTemplates
+import model.registry.FieldResolver
+import model.registry.VariableDefinition
+import semantics.shared.instantiateBindings
+import semantics.shared.OperationContext
 
-/**
- * Extends this output demand with every encountered successor resolver's transitive input demand.
- *
- * Each predecessor demand is rooted at its successor occurrence's containing object. Recursing
- * through subselections preserves the selection-occurrence nesting path and concrete-type guards.
- */
-context(world: Assumptions)
+/** Extends this demand with every encountered successor resolver's transitive input demand. */
+context(operation: OperationContext)
 fun SelectionForest.successorDemand(): SelectionForest =
     flatMap { selection ->
         val nestedDemand = selection.subselections.successorDemand()
@@ -44,10 +38,10 @@ fun SelectionForest.successorDemand(): SelectionForest =
                             ),
                     )
                 val arguments = key.arguments
-                if (arguments !is Arguments.Resolved || key.field !in world.resolverRegistry) {
+                if (arguments !is Arguments.Resolved || key.field !in operation.resolverRegistry) {
                     selectionForestOf()
                 } else {
-                    world.resolverRegistry
+                    operation.resolverRegistry
                         .resolver(key.field)
                         .objectFragmentWithFromArguments(arguments)
                         .successorDemand()
@@ -56,14 +50,8 @@ fun SelectionForest.successorDemand(): SelectionForest =
         selectionForestOf(rootedSelection) + resolverInputDemand
     }
 
-/**
- * Extends this output demand with the paths needed to find every successor resolver boundary.
- *
- * Unlike [successorDemand], this operation assumes that passive traversal copies the complete
- * finite resolver output. It therefore omits passive input leaves while retaining resolver
- * selections, their passive ancestor paths, and transitive successor boundaries.
- */
-context(world: Assumptions)
+/** Extends this demand with the paths needed to find every successor resolver boundary. */
+context(operation: OperationContext)
 fun SelectionForest.successorBoundaryDemand(): SelectionForest =
     flatMap { selection ->
         val requested =
@@ -76,7 +64,7 @@ fun SelectionForest.successorBoundaryDemand(): SelectionForest =
         selectionForestOf(requested) + selection.successorInputBoundaries()
     }
 
-context(world: Assumptions)
+context(operation: OperationContext)
 private fun Selection.successorInputBoundaries(): SelectionForest =
     possibleTypes.flatMapToSelectionForest { possibleType ->
         val specializedKey = objectKey(possibleType)
@@ -89,10 +77,10 @@ private fun Selection.successorInputBoundaries(): SelectionForest =
                     ),
             )
         val arguments = key.arguments
-        if (arguments !is Arguments.Resolved || key.field !in world.resolverRegistry) {
+        if (arguments !is Arguments.Resolved || key.field !in operation.resolverRegistry) {
             selectionForestOf()
         } else {
-            world.resolverRegistry
+            operation.resolverRegistry
                 .resolver(key.field)
                 .objectFragmentWithFromArguments(arguments)
                 .boundarySkeleton()
@@ -100,14 +88,14 @@ private fun Selection.successorInputBoundaries(): SelectionForest =
         }
     }
 
-context(world: Assumptions)
+context(operation: OperationContext)
 private fun SelectionForest.boundarySkeleton(): SelectionForest =
     flatMap { selection ->
         val nested = selection.subselections.boundarySkeleton()
         val isResolverBoundary =
             selection.possibleTypes.any { possibleType ->
                 val field = possibleType.requireField(selection.key.field.name)
-                field in world.resolverRegistry
+                field in operation.resolverRegistry
             }
 
         if (isResolverBoundary || !nested.isEmpty()) {
@@ -129,8 +117,7 @@ private fun FieldResolver.objectFragmentWithFromArguments(
     val bindings =
         variables.mapNotNull { (variable, definition) ->
             (definition as? VariableDefinition.FromArgument)?.let {
-                variable to
-                    definition.read(arguments)
+                variable to definition.read(arguments)
             }
         }.toMap()
     return objectFragment.substitute(bindings)

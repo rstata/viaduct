@@ -2,7 +2,6 @@ package semantics.resolver26
 
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import model.Assumptions
 import model.EngineInputData
 import model.EngineInputListData
 import model.EngineResult
@@ -12,7 +11,7 @@ import model.ObjectEngineResult
 import model.PathComponent
 import model.Selection
 import model.VariableBinding
-import model.fetchGroundedArguments
+import semantics.shared.fetchGroundedArguments
 import model.objectKey
 import model.outputType
 import model.registry.InstantiatedFieldPathDefinition
@@ -21,18 +20,16 @@ import model.toEngineSimpleData
 import viaduct.graphql.schema.ViaductSchema
 
 // Traverses a provider path through OER promises and returns its terminal input-compatible value.
-context(world: Assumptions)
+context(operation: Resolver26OperationContext)
 internal suspend fun ObjectEngineResult.readProvider(
     definition: InstantiatedFieldPathDefinition,
     reader: List<PathComponent>,
-    support: Resolver26Support,
-): VariableBinding = readProvider(definition.path, reader, support)
+): VariableBinding = readProvider(definition.path, reader)
 
 // Reads and completes all provider bindings rooted in this result.
-context(world: Assumptions)
+context(operation: Resolver26OperationContext)
 internal suspend fun ObjectEngineResult.completeProviderBindings(
     reads: List<ProviderDefinitionRead>,
-    support: Resolver26Support,
 ) {
     coroutineScope {
         reads.forEach { read ->
@@ -41,9 +38,8 @@ internal suspend fun ObjectEngineResult.completeProviderBindings(
                     readProvider(
                         definition = read.definition,
                         reader = read.readerPath,
-                        support = support,
                     )
-                world.completeBinding(
+                operation.variableBindingsState.completeBinding(
                     requireNotNull(read.definition.variable.instanceId),
                     binding,
                 )
@@ -52,15 +48,14 @@ internal suspend fun ObjectEngineResult.completeProviderBindings(
     }
 }
 
-context(world: Assumptions)
+context(operation: Resolver26OperationContext)
 private suspend fun ObjectEngineResult.readProvider(
     path: List<ObjectEngineResult.Key>,
     reader: List<PathComponent>,
-    support: Resolver26Support,
 ): VariableBinding {
     var current = this
     path.forEachIndexed { index, openKey ->
-        support.awaitBindingsDeclared(current)
+        operation.awaitBindingsDeclared(current)
         val specializedKey =
             Selection.of(
                 key = openKey,
@@ -70,7 +65,7 @@ private suspend fun ObjectEngineResult.readProvider(
         val objectKey = specializedKey
         objectKey.fetchGroundedArguments()
         val cell = current.reserveCell(objectKey)
-        support.cycleCheck(reader, cell)
+        operation.cycleCheck(reader, cell)
         val value = cell.reserveValue().await()
         if (index == path.lastIndex) {
             return value.toProviderBinding(objectKey.field.outputType)

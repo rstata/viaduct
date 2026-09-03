@@ -3,7 +3,6 @@ package semantics.correctresolution
 import viaduct.graphql.schema.ViaductSchema
 
 import model.Arguments
-import model.Assumptions
 import model.EngineErrorData
 import model.EngineOutputData
 import model.EngineResult
@@ -14,8 +13,8 @@ import model.outputType
 import model.outputValue
 import model.PathComponent
 import model.VariableBinding
-import model.isContextuallyGrounded
-import model.groundedArguments
+import semantics.shared.groundedArguments
+import semantics.shared.isContextuallyGrounded
 import model.schemaType
 import viaduct.engine.api.EngineObjectData
 import model.toEngineOutputData
@@ -23,6 +22,7 @@ import model.usedVariables
 import model.registry.FieldResolver
 import model.registry.ResolverFragments
 import model.registry.VariableDefinition
+import semantics.shared.OperationContext
 
 /**
  * Whether every value agrees with the resolver output that owns its exact occurrence.
@@ -34,11 +34,11 @@ import model.registry.VariableDefinition
  * This predicate assumes [isClosedUnderResolverDemand] has established that every resolver input
  * value is present. It observes cell values but never access-acceptance results.
  */
-context(world: Assumptions)
+context(operation: OperationContext)
 fun ObjectEngineResult.conformsToResolvers(): Boolean =
     conformsToResolvers(ResolverApplicationCache(this))
 
-context(world: Assumptions)
+context(operation: OperationContext)
 internal fun ObjectEngineResult.conformsToResolvers(
     resolverApplicationCache: ResolverApplicationCache,
 ): Boolean =
@@ -50,7 +50,7 @@ internal fun ObjectEngineResult.conformsToResolvers(
     }
 
 context(
-    world: Assumptions,
+    operation: OperationContext,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun ObjectEngineResult.objectConformsToResolvers(
@@ -75,7 +75,7 @@ private fun ObjectEngineResult.objectConformsToResolvers(
                         path = path + key,
                     )
 
-            key.field in world.resolverRegistry ->
+            key.field in operation.resolverRegistry ->
                 reapplyResolver(key, path)
                     ?.let { application ->
                         value.engineResultConformsToResolverValue(
@@ -92,7 +92,7 @@ private fun ObjectEngineResult.objectConformsToResolvers(
         }
     }
 
-context(world: Assumptions)
+context(operation: OperationContext)
 internal fun FieldResolver.fragmentsSatisfiedBy(
     root: ObjectEngineResult,
     result: ObjectEngineResult,
@@ -111,16 +111,18 @@ internal fun FieldResolver.fragmentsSatisfiedBy(
             arguments = arguments,
         ) &&
             constructionSelections.usedVariables().all { variable ->
-                variable.instanceId?.let(world::isBound) == true
+                variable.instanceId?.let(operation.variableBindingsState::isBound) == true
             } &&
-            result.conformsToSelectionsAt(
-                selections = constructionSelections,
-                path = path.dropLast(1),
-            )
+            context(operation.world) {
+                result.conformsToSelectionsAt(
+                    selections = constructionSelections,
+                    path = path.dropLast(1),
+                )
+            }
     }
 }
 
-context(world: Assumptions)
+context(operation: OperationContext)
 private fun FieldResolver.fromArgumentBindingsAgree(
     fragments: ResolverFragments,
     arguments: Arguments.Resolved,
@@ -135,13 +137,14 @@ private fun FieldResolver.fromArgumentBindingsAgree(
             val definition = variableDefinition.definition
             if (definition !is VariableDefinition.FromArgument) return@all true
             val instanceId = requireNotNull(variableDefinition.variable.instanceId)
-            world.isBound(instanceId) &&
-                world.getBinding(instanceId) == VariableBinding.of(definition.read(arguments))
+            operation.variableBindingsState.isBound(instanceId) &&
+                operation.variableBindingsState.getBinding(instanceId) ==
+                VariableBinding.of(definition.read(arguments))
         }
 }
 
 context(
-    world: Assumptions,
+    operation: OperationContext,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun EngineResult?.engineResultConformsToResolvers(
@@ -167,7 +170,7 @@ private fun EngineResult?.engineResultConformsToResolvers(
     }
 
 context(
-    world: Assumptions,
+    operation: OperationContext,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun EngineResult?.engineResultConformsToResolverValue(
@@ -203,7 +206,7 @@ private fun EngineResult?.engineResultConformsToResolverValue(
     }
 
 context(
-    world: Assumptions,
+    operation: OperationContext,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun ObjectEngineResult.objectFieldsConformToResolverValue(

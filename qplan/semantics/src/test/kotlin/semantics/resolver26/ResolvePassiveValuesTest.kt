@@ -23,7 +23,7 @@ import model.requireType
 import model.selectionForestOf
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
-import semantics.shared.CycleChecker
+import semantics.shared.OperationContext
 import viaduct.graphql.schema.ViaductSchema
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -356,13 +356,15 @@ class ResolvePassiveValuesTest {
     ): EngineResult? =
         runBlocking(resolver26CoroutineContext()) {
             coroutineScope {
-                val support =
-                    Resolver26Support(
+                val baseOperation = OperationContext(world)
+                val operation =
+                    Resolver26OperationContext(
+                        base = baseOperation,
                         requestScope = this,
-                        applicationObserver = {},
-                        cycleChecker = CycleChecker.create(),
+                        resolverObserver =
+                            baseOperation.resolverObserver.withResolver26Applications {},
                     )
-                context(world, support) {
+                context(operation) {
                     value.resolvePassiveValues(
                         root =
                             ObjectEngineResult.of(

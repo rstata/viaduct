@@ -242,7 +242,7 @@ private fun ArgumentExpression?.instantiateVariables(
         else -> this
     }
 
-internal fun Arguments.substituteTemplates(
+fun Arguments.substituteTemplates(
     expectedField: ViaductSchema.Field,
     bindings: Map<Arguments.Variable, EngineInputData?>,
 ): Arguments {

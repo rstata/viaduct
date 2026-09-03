@@ -4,11 +4,12 @@ import model.requireQueryTypeDef
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
-import model.Assumptions
 import viaduct.graphql.schema.ViaductSchema
 import model.SelectionForest
 import model.fragmentFrom
-import model.instantiateBindings
+import semantics.shared.instantiateBindings
+import semantics.shared.OperationContext
+import semantics.shared.RecordingResolverObserver
 import model.merge
 import model.objectOf
 import semantics.arbitrary.Config
@@ -62,9 +63,11 @@ interface ListPassiveDeepeningGeneratedResolverContract : ResolverContract {
                 val testWorld = registry.world(batch.schema)
                 batch.queries.forEach { query ->
                     val world = testWorld.newAssumptions(selectiveResolvers)
+                    val operation =
+                        OperationContext(world, resolverObserver = RecordingResolverObserver())
                     val fragment = world.fragmentFrom(query.source)
                     listDeepeningCases +=
-                        context(world) {
+                        context(operation) {
                             countListPassiveDeepening(
                                 fragment.subselections,
                                 world.schema.requireQueryTypeDef(),
@@ -73,20 +76,20 @@ interface ListPassiveDeepeningGeneratedResolverContract : ResolverContract {
                     registry.clearResolutionWitness()
                     val result =
                         resolve(
-                            world = world,
+                            operation = operation,
                             root = world.objectOf("Query"),
                             selections = fragment.subselections,
                         )
                     val witness = registry.resolutionWitness()
 
                     assertEquals(
-                        context(world) {
+                        context(operation) {
                             result.registeredResolverApplicationIdentityCounts()
                         },
                         witness.applicationIdentityCounts(),
                     )
                     assertTrue(
-                        context(world) {
+                        context(operation) {
                             result.correctResolution(fragment)
                         },
                     )
@@ -100,7 +103,7 @@ interface ListPassiveDeepeningGeneratedResolverContract : ResolverContract {
     }
 }
 
-context(world: Assumptions)
+context(operation: OperationContext)
 private fun countListPassiveDeepening(
     selections: SelectionForest,
     type: ViaductSchema.Object,
@@ -111,9 +114,9 @@ private fun countListPassiveDeepening(
 
     incoming.byGroundKey().forEach { (selectedKey, _) ->
         val field = selectedKey.field
-        if (field !in world.resolverRegistry) return@forEach
+        if (field !in operation.resolverRegistry) return@forEach
 
-        world.resolverRegistry
+        operation.resolverRegistry
             .resolver(field)
             .objectFragment
             .merge(type)
@@ -124,7 +127,7 @@ private fun countListPassiveDeepening(
                 val passiveType = passiveField.type.baseTypeDef as? ViaductSchema.CompositeTypeDef
                     ?: return@forEach
                 if (
-                    passiveField in world.resolverRegistry ||
+                    passiveField in operation.resolverRegistry ||
                     !passiveField.type.isList
                 ) {
                     return@forEach
@@ -153,7 +156,7 @@ private fun countListPassiveDeepening(
     return count
 }
 
-context(world: Assumptions)
+context(operation: OperationContext)
 private fun hasMissingDemand(
     required: SelectionForest,
     selected: SelectionForest,

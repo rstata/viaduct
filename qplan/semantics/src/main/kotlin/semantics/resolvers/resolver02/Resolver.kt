@@ -1,26 +1,27 @@
 package semantics.resolvers.resolver02
 
-import model.Assumptions
-import model.EngineResult
 import model.ObjectEngineResult
 import model.SelectionForest
-import model.registry.successorBoundaryDemand
 import semantics.resolvers.resolver01.DepthFirstResolve
+import semantics.resolvers.successorBoundaryDemand
+import semantics.shared.OperationContext
 
 /**
  * Resolves [selections] with non-selective resolver applications. Results may contain more OER
  * nodes than are strictly necessary to resolve the query.
  */
-context(world: Assumptions)
+context(operation: OperationContext)
 fun resolve(selections: SelectionForest): ObjectEngineResult {
-    require(!world.selectiveResolvers) {
+    require(!operation.selectiveResolvers) {
         "Resolver02 requires non-selective resolvers"
     }
-    val source = world.resolverRegistry.createRootQueryInput()
+    val source = operation.resolverRegistry.createRootQueryInput()
     return DepthFirstResolve(
-        world = world,
+        operation = operation,
         complete = { completedSelections ->
-            completedSelections.successorBoundaryDemand()
+            context(operation.world) {
+                completedSelections.successorBoundaryDemand()
+            }
         },
     ).resolve(source, selections)
 }

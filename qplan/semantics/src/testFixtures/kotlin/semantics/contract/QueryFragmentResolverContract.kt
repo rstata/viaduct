@@ -6,9 +6,9 @@ import model.ObjectEngineResult
 import model.ResolverOccurrenceId
 import model.emptyFragmentOf
 import model.fragmentFrom
-import model.isContextuallyGrounded
+import semantics.shared.isContextuallyGrounded
 import model.requireObjectField
-import model.groundedArguments
+import semantics.shared.groundedArguments
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromArgument
@@ -17,6 +17,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotSame
 import kotlin.test.assertTrue
+import semantics.shared.ResolverObservations
 
 /** Contract for independently resolved Query-rooted field-resolver fragments. */
 interface QueryFragmentResolverContract : ResolverContract {
@@ -131,8 +132,8 @@ interface QueryFragmentResolverContract : ResolverContract {
         val secondKey =
             world.schema.contractKey("Query", "consumer", mapOf("value" to 3))
 
-        val result =
-            resolveAndValidate(
+        val resolution =
+            resolveAndValidateObserved(
                 world,
                 """
                 query {
@@ -141,6 +142,8 @@ interface QueryFragmentResolverContract : ResolverContract {
                 }
                 """.trimIndent(),
             )
+        val result = resolution.result
+        val observations = resolution.operation.resolverObserver as ResolverObservations
 
         assertEquals(2, result.getCell(firstKey).get())
         assertEquals(3, result.getCell(secondKey).get())
@@ -148,9 +151,13 @@ interface QueryFragmentResolverContract : ResolverContract {
         assertEquals(2, sourceApplications.get())
 
         val firstQueryResult =
-            world.queryValues.getValue(ResolverOccurrenceId.at(result, listOf(firstKey)))
+            observations
+                .queryFragmentResults(ResolverOccurrenceId.at(result, listOf(firstKey)))
+                .single()
         val secondQueryResult =
-            world.queryValues.getValue(ResolverOccurrenceId.at(result, listOf(secondKey)))
+            observations
+                .queryFragmentResults(ResolverOccurrenceId.at(result, listOf(secondKey)))
+                .single()
         assertNotSame(firstQueryResult, secondQueryResult)
         listOf(firstQueryResult to 2, secondQueryResult to 3).forEach {
                 (queryResult, expectedValue) ->
@@ -166,10 +173,10 @@ interface QueryFragmentResolverContract : ResolverContract {
             } else {
                     assertFalse(actualKey is ObjectEngineResult.GroundKey)
                     assertEquals(expectedKey.field, actualKey.field)
-                    assertTrue(context(world) { actualKey.isContextuallyGrounded() })
+                    assertTrue(context(resolution.operation) { actualKey.isContextuallyGrounded() })
                     assertEquals(
                         expectedKey.arguments,
-                        context(world) { actualKey.groundedArguments() },
+                        context(resolution.operation) { actualKey.groundedArguments() },
                     )
             }
         }
@@ -223,16 +230,21 @@ interface QueryFragmentResolverContract : ResolverContract {
         val middleKey = world.schema.contractKey("Query", "middle")
         val baseKey = world.schema.contractKey("Query", "base")
 
-        val resolved = resolveAndValidate(world, "query { result }")
+        val resolution = resolveAndValidateObserved(world, "query { result }")
+        val resolved = resolution.result
+        val observations = resolution.operation.resolverObserver as ResolverObservations
 
         assertEquals(4, resolved.getCell(resultKey).get())
         val middleResult =
-            world.queryValues.getValue(ResolverOccurrenceId.at(resolved, listOf(resultKey)))
+            observations
+                .queryFragmentResults(ResolverOccurrenceId.at(resolved, listOf(resultKey)))
+                .single()
         assertEquals(setOf(middleKey), middleResult.keys)
         assertEquals(
             setOf(baseKey),
-            world.queryValues
-                .getValue(ResolverOccurrenceId.at(middleResult, listOf(middleKey)))
+            observations
+                .queryFragmentResults(ResolverOccurrenceId.at(middleResult, listOf(middleKey)))
+                .single()
                 .keys,
         )
     }

@@ -4,9 +4,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import model.ObjectEngineResult
 import model.ObjectSelection
-import model.PathComponent
-import model.fetchBindings
-import model.fetchGroundedArguments
+import semantics.shared.fetchGroundedArguments
 import model.requireQueryTypeDef
 import model.registry.VariableDefinition
 import model.usedVariables
@@ -26,15 +24,14 @@ import semantics.correctresolution.argumentsContainErrorValue
 internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
     closed: CloseInputDemandResult,
 ) {
-    context(world, support) {
+    context(operation) {
         closed.expansions.values.forEach { expansion ->
-            support.declareQueryValue(expansion.resolverOccurrenceId)
+            operation.queryValuesState.declare(expansion.resolverOccurrenceId)
         }
         coroutineScope {
             launch {
                 target.completeProviderBindings(
                     reads = closed.objectProviderReads,
-                    support = support,
                 )
             }
             val demandByKey = closed.demand.byKey()
@@ -45,13 +42,13 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
                             objectKey is ObjectEngineResult.GroundKey &&
                             objectKey.arguments.argumentsContainErrorValue()
                         ) {
-                            model.engineObjectDataOf(world.schema.requireQueryTypeDef())
+                            model.engineObjectDataOf(operation.schema.requireQueryTypeDef())
                         } else {
                             expansion.fragments.queryFragment.resolveQueryFragment(
                                 coordinate = path + objectKey,
                             )
                         }
-                    support.completeQueryValue(
+                    operation.queryValuesState.complete(
                         expansion.resolverOccurrenceId,
                         queryValue,
                     )
@@ -72,7 +69,7 @@ private suspend fun ObjectOrchestrationTask.installAndLaunchFieldResolver(
     selection: ObjectSelection,
     expansion: ResolverExpansion,
 ) {
-    context(world, support) {
+    context(operation) {
         val variableArgumentCount = selection.key.arguments.variableArgumentNames().size
         val variableResolverOccurrenceIds =
             selection.key.arguments
@@ -82,7 +79,7 @@ private suspend fun ObjectOrchestrationTask.installAndLaunchFieldResolver(
                 }
         val objectKey = selection.key
         val groundedArguments = objectKey.fetchGroundedArguments()
-        check(objectKey.field in world.resolverRegistry) {
+        check(objectKey.field in operation.resolverRegistry) {
             "Resolver26 attempted to install passive key $objectKey"
         }
         check(!source.isPresent(objectKey.field.name)) {
@@ -92,14 +89,13 @@ private suspend fun ObjectOrchestrationTask.installAndLaunchFieldResolver(
 
         val cell = target.reserveCell(objectKey)
         cell.createValuePromise()
-        support.registerWriter(
+        operation.registerWriter(
             cell = cell,
             writer = path + objectKey,
         )
         val fieldResolverTask =
             FieldResolverTask(
-                world = world,
-                support = support,
+                operation = operation,
                 root = root,
                 path = path,
                 selection = selection,
@@ -112,7 +108,7 @@ private suspend fun ObjectOrchestrationTask.installAndLaunchFieldResolver(
                 variableArgumentCount = variableArgumentCount,
                 variableResolverOccurrenceIds = variableResolverOccurrenceIds,
             )
-        support.requestScope.launch {
+        operation.requestScope.launch {
             fieldResolverTask.run()
         }
     }
@@ -131,7 +127,7 @@ private fun ObjectOrchestrationTask.completeFromArgumentBindings(
         }
         val definition =
             variableDefinition.definition as VariableDefinition.FromArgument
-        world.completeBinding(
+        operation.variableBindingsState.completeBinding(
             requireNotNull(variableDefinition.variable.instanceId),
             bindingFor(groundedArguments, definition),
         )

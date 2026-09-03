@@ -110,7 +110,7 @@ For a failure reporting concrete `S`, `R`, and `Q`, replay that coordinate:
 
 ```shell
 ./gradlew :semantics:resolverPropertyReplay \
-  -PresolverPropertyClass=semantics.resolver02.ResolverGeneratedTest \
+  -PresolverPropertyClass=semantics.resolvers.resolver02.ResolverGeneratedTest \
   -PresolverPropertyProfile=node \
   -PresolverPropertySeed=424242 \
   -PresolverPropertyCase=2:2:1
@@ -122,7 +122,7 @@ For an aggregate `S=all R=all Q=all` failure, replay the full profile:
 
 ```shell
 ./gradlew :semantics:resolverPropertyReplay \
-  -PresolverPropertyClass=semantics.resolver02.ResolverGeneratedTest \
+  -PresolverPropertyClass=semantics.resolvers.resolver02.ResolverGeneratedTest \
   -PresolverPropertyProfile=node \
   -PresolverPropertySeed=424242 \
   -PresolverPropertyCase=all
@@ -136,7 +136,7 @@ For cross-profile debugging, run the concrete class with only the seed:
 
 ```shell
 ./gradlew :semantics:test \
-  --tests 'semantics.resolver02.ResolverGeneratedTest' \
+  --tests 'semantics.resolvers.resolver02.ResolverGeneratedTest' \
   -PresolverPropertySeed=424242
 ```
 

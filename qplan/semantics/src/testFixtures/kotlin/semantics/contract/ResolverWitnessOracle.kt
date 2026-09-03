@@ -9,7 +9,7 @@ import model.ResolverOccurrenceId
 import model.registry.FieldResolver
 import model.registry.ResolverFragment
 import model.usedVariables
-import semantics.ResolverSupport
+import semantics.shared.CycleChecker
 import semantics.arbitrary.ResolverApplicationIdentity
 import semantics.arbitrary.ResolverOccurrenceApplicationKey
 import semantics.arbitrary.ResolverOccurrenceApplicationIdentity
@@ -18,7 +18,7 @@ import semantics.arbitrary.forEachRegisteredResolverOccurrence
 import semantics.arbitrary.resolutionFingerprint
 import semantics.correctresolution.conformsToSelections
 import semantics.correctresolution.conformsToSelectionsAt
-import semantics.materialize
+import semantics.shared.materialize
 
 /**
  * Expected deterministic resolver applications reconstructed from every request-local Query root.
@@ -31,7 +31,7 @@ context(world: Assumptions)
 fun EngineResult?.registeredResolverApplicationIdentityCounts():
     Map<ResolverApplicationIdentity, Int> {
     val counts = linkedMapOf<ResolverApplicationIdentity, Int>()
-    context(ResolverSupport.noCycleChecking { selections -> selections }) {
+    context(CycleChecker.createNOP()) {
         requestQueryRoots().forEach { root ->
             root.forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
                 val resolver = world.resolverRegistry.resolver(cell.field)
@@ -85,7 +85,7 @@ private fun EngineResult?.reconstructResolverOccurrenceApplicationIdentityCounts
     includedOccurrences: Set<ResolverOccurrenceId>?,
 ): Map<ResolverOccurrenceApplicationIdentity, Int> {
     val counts = linkedMapOf<ResolverOccurrenceApplicationIdentity, Int>()
-    context(ResolverSupport.noCycleChecking { selections -> selections }) {
+    context(CycleChecker.createNOP()) {
         requestQueryRoots().forEach { root ->
             root.forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
                 val resolverOccurrenceId = ResolverOccurrenceId.at(root, cell.occurrencePath)

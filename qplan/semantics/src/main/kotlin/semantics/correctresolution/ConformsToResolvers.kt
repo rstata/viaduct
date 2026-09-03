@@ -23,7 +23,6 @@ import model.usedVariables
 import model.registry.FieldResolver
 import model.registry.ResolverFragments
 import model.registry.VariableDefinition
-import semantics.ResolverSupport
 
 /**
  * Whether every value agrees with the resolver output that owns its exact occurrence.
@@ -43,10 +42,7 @@ context(world: Assumptions)
 internal fun ObjectEngineResult.conformsToResolvers(
     resolverApplicationCache: ResolverApplicationCache,
 ): Boolean =
-    context(
-        ResolverSupport.noCycleChecking { selections -> selections },
-        resolverApplicationCache,
-    ) {
+    context(resolverApplicationCache) {
         objectConformsToResolvers(
             path = emptyList(),
             source = null,
@@ -55,7 +51,6 @@ internal fun ObjectEngineResult.conformsToResolvers(
 
 context(
     world: Assumptions,
-    resolverSupport: ResolverSupport,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun ObjectEngineResult.objectConformsToResolvers(
@@ -147,7 +142,6 @@ private fun FieldResolver.fromArgumentBindingsAgree(
 
 context(
     world: Assumptions,
-    resolverSupport: ResolverSupport,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun EngineResult?.engineResultConformsToResolvers(
@@ -174,7 +168,6 @@ private fun EngineResult?.engineResultConformsToResolvers(
 
 context(
     world: Assumptions,
-    resolverSupport: ResolverSupport,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun EngineResult?.engineResultConformsToResolverValue(
@@ -211,7 +204,6 @@ private fun EngineResult?.engineResultConformsToResolverValue(
 
 context(
     world: Assumptions,
-    resolverSupport: ResolverSupport,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun ObjectEngineResult.objectFieldsConformToResolverValue(

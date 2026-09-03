@@ -5,15 +5,15 @@ import kotlinx.coroutines.CoroutineScope
 import model.ObjectEngineResult
 import model.Promise
 import model.ResolverOccurrenceId
-import semantics.ResolverSupport
+import semantics.shared.CycleChecker
 import viaduct.engine.api.EngineObjectData
 
 /** Owns request lifetime without using task completion as cross-task readiness. */
 internal class Resolver26Support(
     internal val requestScope: CoroutineScope,
     private val applicationObserver: Resolver26ApplicationObserver,
-    resolverSupport: ResolverSupport,
-) : ResolverSupport by resolverSupport {
+    cycleChecker: CycleChecker,
+) : CycleChecker by cycleChecker {
     private val bindingsDeclaredByObject =
         ConcurrentHashMap<ObjectEngineResult, Promise<Unit>>()
     private val queryValues =

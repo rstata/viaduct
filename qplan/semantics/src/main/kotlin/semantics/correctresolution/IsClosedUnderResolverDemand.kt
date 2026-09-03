@@ -13,7 +13,6 @@ import model.groundedArguments
 import model.outputValue
 import model.schemaType
 import model.usedVariables
-import semantics.ResolverSupport
 import viaduct.engine.api.EngineObjectData
 
 /**
@@ -34,10 +33,7 @@ context(world: Assumptions)
 internal fun ObjectEngineResult.isClosedUnderResolverDemand(
     resolverApplicationCache: ResolverApplicationCache,
 ): Boolean =
-    context(
-        ResolverSupport.noCycleChecking { selections -> selections },
-        resolverApplicationCache,
-    ) {
+    context(resolverApplicationCache) {
         objectIsClosedUnderResolverDemand(
             path = emptyList(),
             source = null,
@@ -46,7 +42,6 @@ internal fun ObjectEngineResult.isClosedUnderResolverDemand(
 
 context(
     world: Assumptions,
-    resolverSupport: ResolverSupport,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
@@ -130,7 +125,6 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
 
 context(
     world: Assumptions,
-    resolverSupport: ResolverSupport,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
@@ -160,7 +154,6 @@ private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
 
 context(
     world: Assumptions,
-    resolverSupport: ResolverSupport,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun EngineResult?.engineResultIsClosedUnderResolverDemand(

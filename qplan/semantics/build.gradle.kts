@@ -379,6 +379,13 @@ val stressResolverNames =
         "resolver26",
     )
 
+fun resolverStressTestClass(resolverName: String): String =
+    if (resolverName == "resolver26") {
+        "semantics.resolver26.ResolverStressTest"
+    } else {
+        "semantics.resolvers.$resolverName.ResolverStressTest"
+    }
+
 val configuredResolver26ThreadCount =
     providers
         .gradleProperty("resolver26ThreadCount")
@@ -406,7 +413,7 @@ tasks.test {
     maxHeapSize = "2g"
     filter {
         stressResolverNames.forEach { resolverName ->
-            excludeTestsMatching("semantics.$resolverName.ResolverStressTest")
+            excludeTestsMatching(resolverStressTestClass(resolverName))
         }
         excludeTestsMatching("semantics.resolver26.ResolverBroadStressTest")
         excludeTestsMatching("semantics.resolver26.ResolverBroadStressCampaignTest")
@@ -625,7 +632,7 @@ fun registerResolverStressTask(resolverName: String) {
         classpath = sourceSets["test"].runtimeClasspath
         useJUnitPlatform()
         filter {
-            includeTestsMatching("semantics.$resolverName.ResolverStressTest")
+            includeTestsMatching(resolverStressTestClass(resolverName))
         }
         outputs.upToDateWhen { false }
         testLogging {

@@ -2,7 +2,7 @@
 
 ## Scope
 
-These modules prove finite, occurrence-scoped construction properties for `semantics.resolver01` through `semantics.resolver03`. One `ResolverCore` instance denotes one concrete OER object occurrence. Its keys are specialized to that occurrence's runtime object type and retain exact argument tuples. Recursive objects and list elements are separate instances, so structurally equal values and repeated node IDs are not coalesced. The modules model the primary result OER only; nonempty resolver Query fragments and the occurrence-specific Query OERs retained in `Assumptions.queryValues` are outside this baseline.
+These modules prove finite, occurrence-scoped construction properties for `semantics.resolvers.resolver01` through `semantics.resolvers.resolver03`. One `ResolverCore` instance denotes one concrete OER object occurrence. Its keys are specialized to that occurrence's runtime object type and retain exact argument tuples. Recursive objects and list elements are separate instances, so structurally equal values and repeated node IDs are not coalesced. The modules model the primary result OER only; nonempty resolver Query fragments and the occurrence-specific Query OERs retained in `Assumptions.queryValues` are outside this baseline.
 
 The proof is factored at the same boundaries as the Kotlin model:
 

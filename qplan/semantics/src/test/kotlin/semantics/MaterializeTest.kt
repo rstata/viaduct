@@ -24,6 +24,9 @@ import model.fragmentFrom
 import viaduct.graphql.schema.graphqljava.gjDef
 import model.materializeSelectionForestOf
 import model.testing.TestWorld
+import semantics.shared.CycleChecker
+import semantics.shared.ResolverReadCycleException
+import semantics.shared.materialize
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -35,8 +38,7 @@ import kotlin.test.assertSame
 import viaduct.engine.api.EngineObjectData
 
 class MaterializeTest {
-    private val resolverSupport =
-        ResolverSupport.noCycleChecking { selections -> selections }
+    private val cycleChecker = CycleChecker.createNOP()
 
     @Test
     fun `materialization awaits a present deferred value`() =
@@ -65,7 +67,7 @@ class MaterializeTest {
             val promise = result.reserveCell(field).createValuePromise()
             val materialized =
                 async(start = CoroutineStart.UNDISPATCHED) {
-                    context(world, resolverSupport) {
+                    context(world, cycleChecker) {
                         result.materialize(
                             selections = selections,
                             reader = emptyList(),
@@ -99,7 +101,7 @@ class MaterializeTest {
 
         assertFailsWith<NoSuchElementException> {
             runBlocking {
-                context(world, resolverSupport) {
+                context(world, cycleChecker) {
                     result.materialize(
                         selections = selections,
                         reader = emptyList(),
@@ -143,11 +145,8 @@ class MaterializeTest {
             world
                 .fragmentFrom("fragment ignored on Query { child { value } }")
                 .materializeSelections
-        val cycleCheckingSupport =
-            ResolverSupport.cycleChecking { completedSelections ->
-                completedSelections
-            }
-        cycleCheckingSupport.registerWriter(
+        val cycleChecker = CycleChecker.create()
+        cycleChecker.registerWriter(
             cell = valueCell,
             writer = reader,
         )
@@ -155,7 +154,7 @@ class MaterializeTest {
         val failure =
             assertFailsWith<ResolverReadCycleException> {
                 runBlocking {
-                    context(world, cycleCheckingSupport) {
+                    context(world, cycleChecker) {
                         result.materialize(
                             selections = selections,
                             reader = reader,
@@ -252,7 +251,7 @@ class MaterializeTest {
                     .materializeSelections
 
             val materialized =
-                context(world, resolverSupport) {
+                context(world, cycleChecker) {
                     parentResult.materialize(selections, emptyList())
                 }
 
@@ -313,7 +312,7 @@ class MaterializeTest {
                 )
 
             val materialized =
-                context(world, resolverSupport) {
+                context(world, cycleChecker) {
                     result.materialize(selections, emptyList())
                 }
 

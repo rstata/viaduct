@@ -19,7 +19,7 @@ import model.selectionForestOf
 import model.toEngineInputListData
 import model.toEngineSimpleData
 import semantics.arbitrary.forEachRegisteredResolverOccurrence
-import semantics.findStoredKey
+import semantics.shared.findStoredKey
 import viaduct.graphql.schema.ViaductSchema
 import viaduct.utils.collections.BitVector
 import kotlin.test.assertEquals

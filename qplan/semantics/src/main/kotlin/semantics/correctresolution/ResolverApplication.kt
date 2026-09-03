@@ -16,8 +16,8 @@ import model.merge
 import model.requireQueryTypeDef
 import model.groundedArguments
 import model.selectionForestOf
-import semantics.ResolverSupport
-import semantics.materialize
+import semantics.shared.CycleChecker
+import semantics.shared.materialize
 import viaduct.engine.api.EngineObjectData
 import java.util.IdentityHashMap
 
@@ -59,7 +59,6 @@ private class CachedResolverApplication(
  */
 context(
     world: Assumptions,
-    resolverSupport: ResolverSupport,
     resolverApplicationCache: ResolverApplicationCache,
 )
 internal fun ObjectEngineResult.reapplyResolver(
@@ -79,10 +78,12 @@ internal fun ObjectEngineResult.reapplyResolver(
         val objectFragment = fragments.objectFragment
         val input: EngineObjectData.Sync =
             runBlocking {
-                materialize(
-                    selections = objectFragment.materializeSelections,
-                    reader = coordinate,
-                )
+                context(CycleChecker.createNOP()) {
+                    materialize(
+                        selections = objectFragment.materializeSelections,
+                        reader = coordinate,
+                    )
+                }
             }
         val resolverArguments =
             Arguments.Resolved.of(
@@ -105,10 +106,12 @@ internal fun ObjectEngineResult.reapplyResolver(
                     return@getOrPut null
                 }
                 runBlocking {
-                    queryResult.materialize(
-                        selections = queryFragment.materializeSelections,
-                        reader = coordinate,
-                    )
+                    context(CycleChecker.createNOP()) {
+                        queryResult.materialize(
+                            selections = queryFragment.materializeSelections,
+                            reader = coordinate,
+                        )
+                    }
                 }
             }
         ReappliedResolver(

@@ -18,11 +18,11 @@ import model.outputType
 import model.PathComponent
 import model.materializedEngineObjectDataOf
 import model.toEngineOutputData
-import semantics.ResolverSupport
+import semantics.shared.CycleChecker
 import viaduct.engine.api.EngineObjectData
 
 // Returns a resolver-visible input object collected by GraphQL response key.
-context(world: Assumptions, resolverSupport: ResolverSupport)
+context(world: Assumptions, cycleChecker: CycleChecker)
 internal suspend fun ObjectEngineResult.materializeResolverInput(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
@@ -35,7 +35,7 @@ internal suspend fun ObjectEngineResult.materializeResolverInput(
     )
 
 // Materializes selected OER values at their exact stored paths.
-context(world: Assumptions, resolverSupport: ResolverSupport)
+context(world: Assumptions, cycleChecker: CycleChecker)
 private suspend fun ObjectEngineResult.materializeSelectedObject(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
@@ -46,7 +46,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObject(
     selections.collect(type).byResponseKey().forEach { (responseKey, selection) ->
         val storedKey = selection.materializedObjectKey()
         val cell = reserveCell(storedKey)
-        resolverSupport.cycleCheck(reader, cell)
+        cycleChecker.cycleCheck(reader, cell)
         val selectedValue: EngineOutputData? =
             cell
                 .reserveValue()
@@ -77,7 +77,7 @@ private suspend fun ObjectMaterializeSelection.materializedObjectKey(
 }
 
 // Recursively materializes one selected engine result while preserving null, error, and list shape.
-context(world: Assumptions, resolverSupport: ResolverSupport)
+context(world: Assumptions, cycleChecker: CycleChecker)
 private suspend fun EngineResult?.materializeSelectedValue(
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     selections: MaterializeSelectionForest,

@@ -9,7 +9,7 @@ import model.ObjectSelectionForest
 import model.PathComponent
 import model.SelectionForest
 import model.merge
-import semantics.findStoredKey
+import semantics.shared.findStoredKey
 
 /**
  * Whether this result contains every value required by [selections].

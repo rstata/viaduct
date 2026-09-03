@@ -19,7 +19,7 @@ import model.sameCompletedResultAs
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import org.junit.jupiter.api.Test
-import semantics.resolver01.resolve as resolveWithResolver01
+import semantics.resolvers.resolver01.resolve as resolveWithResolver01
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue

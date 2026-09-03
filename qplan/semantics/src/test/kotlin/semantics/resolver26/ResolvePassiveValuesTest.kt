@@ -23,7 +23,7 @@ import model.requireType
 import model.selectionForestOf
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
-import semantics.ResolverSupport
+import semantics.shared.CycleChecker
 import viaduct.graphql.schema.ViaductSchema
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -360,7 +360,7 @@ class ResolvePassiveValuesTest {
                     Resolver26Support(
                         requestScope = this,
                         applicationObserver = {},
-                        resolverSupport = ResolverSupport.cycleChecking(),
+                        cycleChecker = CycleChecker.create(),
                     )
                 context(world, support) {
                     value.resolvePassiveValues(

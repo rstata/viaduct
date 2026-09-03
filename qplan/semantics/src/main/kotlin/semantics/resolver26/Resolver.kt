@@ -8,7 +8,7 @@ import model.Assumptions
 import model.ObjectEngineResult
 import model.SelectionForest
 import model.schemaType
-import semantics.ResolverSupport
+import semantics.shared.CycleChecker
 
 /**
  * Resolves selective demand once per object-local symbolic key.
@@ -58,7 +58,7 @@ internal fun resolve(
                     Resolver26Support(
                         requestScope = this,
                         applicationObserver = applicationObserver,
-                        resolverSupport = ResolverSupport.cycleChecking(),
+                        cycleChecker = CycleChecker.create(),
                     )
                 val orchestration =
                     ObjectOrchestrationTask(

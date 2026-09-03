@@ -1926,7 +1926,6 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: MechAdapt")
         @Test
         fun `embedded materialization preserves ancestor argument variables across child plans`() {
             MockTenantModuleBootstrapper(
@@ -1941,26 +1940,21 @@ class SelectiveFieldResolversExecutionTest {
                         MockFieldUnbatchedResolverExecutor(
                             isSelective = true,
                             resolverId = resolverId,
-                            unbatchedResolveFn = { _, _, _, sels, _ ->
-                                val barSelections = sels!!.selectionSetForField("Foo", "bar")
-                                createEngineObjectData(
-                                    "Foo",
-                                    mapOf(
-                                        "bar" to createEngineObjectData(
-                                            "Bar",
-                                            buildMap {
-                                                if (barSelections.containsField("Bar", "y")) {
-                                                    val id = sels
-                                                        .argumentsOfSelection("Foo", "bar")
-                                                        ?.get("y") as Int
-                                                    put("y", id)
-                                                }
-                                            },
-                                        ),
-                                    ),
-                                )
+                            unbatchedResolveFn = { _, _, _, _, _ ->
+                                createEngineObjectData("Foo")
                             },
                         )
+                    }
+                }
+
+                field("Foo" to "bar") {
+                    resolver {
+                        fn { args, _, _, _, _ ->
+                            createEngineObjectData(
+                                "Bar",
+                                mapOf("y" to args.getAs<Int>("y")),
+                            )
+                        }
                     }
                 }
 

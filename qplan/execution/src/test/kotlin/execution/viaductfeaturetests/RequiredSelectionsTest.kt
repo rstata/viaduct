@@ -1102,7 +1102,6 @@ class RequiredSelectionsTest {
         assertEquals(setOf("a", "b"), detailsSelections)
     }
 
-    @Disabled("TODO: Abstract NodeLower")
     @Test
     fun `object rss node selection ignores nested fragment on other implementation`() {
         // Query.foo's object RSS reads Query.node with a selection whose outer fragment is on Bar,
@@ -1151,6 +1150,15 @@ class RequiredSelectionsTest {
             }
 
             type("Foo") {
+                nodeUnbatchedExecutor { id, _, _ ->
+                    createEngineObjectData(
+                        objectType,
+                        mapOf("id" to id)
+                    )
+                }
+            }
+
+            type("Bar") {
                 nodeUnbatchedExecutor { id, _, _ ->
                     createEngineObjectData(
                         objectType,

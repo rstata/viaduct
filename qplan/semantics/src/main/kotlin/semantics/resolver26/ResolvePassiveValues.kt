@@ -77,20 +77,22 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
             type = schemaType,
             mutable = true,
         )
+    val occurrence =
+        OEROccurrenceContext(
+            root = root,
+            path = path,
+            target = target,
+        )
     val orchestration =
         ObjectOrchestrationTask(
             operation = operation,
-            root = root,
-            path = path,
+            occurrence = occurrence,
             source = this,
-            target = target,
             initialDemand = constructionDemand,
         )
     val closedDemand = orchestration.prepare()
     materializePassiveFields(
-        root = root,
-        target = target,
-        path = path,
+        occurrence = occurrence,
         invocationDemand = invocationDemand,
         closedDemand = closedDemand,
     )
@@ -101,9 +103,7 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
 // Copies every passive field returned by the resolver and orchestrates its value recursively.
 context(operation: Resolver26OperationContext)
 private fun EngineObjectData.Sync.materializePassiveFields(
-    root: ObjectEngineResult,
-    target: ObjectEngineResult,
-    path: List<PathComponent>,
+    occurrence: OEROccurrenceContext,
     invocationDemand: SelectionForest,
     closedDemand: ObjectSelectionForest,
 ) {
@@ -150,13 +150,13 @@ private fun EngineObjectData.Sync.materializePassiveFields(
             val value =
                 outputValue(key.field.name)
                     .resolvePassiveValues(
-                        root = root,
+                        root = occurrence.root,
                         expectedType = key.field.outputType,
-                        path = path + key,
+                        path = occurrence.coordinate(key),
                         invocationDemand = childInvocationDemand,
                         constructionDemand = childConstructionDemand,
                     )
-            target.reserveCell(key).also { cell ->
+            occurrence.target.reserveCell(key).also { cell ->
                 cell.setValue(value)
                 cell.setAccessResult(true)
             }

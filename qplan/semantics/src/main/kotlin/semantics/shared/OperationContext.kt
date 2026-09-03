@@ -2,7 +2,7 @@ package semantics.shared
 
 import model.Assumptions
 
-/** Shared configuration, mutable state, and observation boundary for one resolution operation. */
+/** Structurally immutable bundle of stable references for one semantics operation. */
 open class OperationContext(
     val world: Assumptions,
     val variableBindingsState: VariableBindingsState = VariableBindingsState(),

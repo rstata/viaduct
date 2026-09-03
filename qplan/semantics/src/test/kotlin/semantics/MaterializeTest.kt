@@ -22,7 +22,7 @@ import model.fragmentFrom
 import viaduct.graphql.schema.graphqljava.gjDef
 import model.materializeSelectionForestOf
 import model.testing.TestWorld
-import semantics.shared.CycleChecker
+import semantics.shared.CycleCheckState
 import semantics.shared.ResolverReadCycleException
 import semantics.shared.materialize
 import semantics.shared.OperationContext
@@ -37,7 +37,7 @@ import kotlin.test.assertSame
 import viaduct.engine.api.EngineObjectData
 
 class MaterializeTest {
-    private val cycleChecker = CycleChecker.createNOP()
+    private val cycleChecker = CycleCheckState.createNOP()
 
     @Test
     fun `materialization awaits a present deferred value`() =
@@ -144,7 +144,7 @@ class MaterializeTest {
             world
                 .fragmentFrom("fragment ignored on Query { child { value } }")
                 .materializeSelections
-        val cycleChecker = CycleChecker.create()
+        val cycleChecker = CycleCheckState.create()
         cycleChecker.registerWriter(
             cell = valueCell,
             writer = reader,

@@ -25,7 +25,7 @@ import viaduct.engine.api.EngineObjectData
  * This operation is defined when this result contains every value promise selected by [selections]
  * and every applicable selection key is contextually grounded.
  */
-context(operation: OperationContext, cycleChecker: CycleChecker)
+context(operation: OperationContext, cycleChecker: CycleCheckState)
 internal suspend fun ObjectEngineResult.materialize(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
@@ -38,7 +38,7 @@ internal suspend fun ObjectEngineResult.materialize(
 }
 
 // Materializes a selection forest rooted at one exact OER path.
-context(operation: OperationContext, cycleChecker: CycleChecker)
+context(operation: OperationContext, cycleChecker: CycleCheckState)
 private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
@@ -80,7 +80,7 @@ private suspend fun ObjectMaterializeSelection.materializedSymbolicKey(
 }
 
 // Recursively materializes one selected result while retaining its exact stored path.
-context(operation: OperationContext, cycleChecker: CycleChecker)
+context(operation: OperationContext, cycleChecker: CycleCheckState)
 private suspend fun EngineResult?.materializeEngineResultValue(
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     selections: MaterializeSelectionForest,
@@ -108,7 +108,7 @@ private suspend fun EngineResult?.materializeEngineResultValue(
     }
 
 // Materializes each list element at a path containing its concrete list index.
-context(operation: OperationContext, cycleChecker: CycleChecker)
+context(operation: OperationContext, cycleChecker: CycleCheckState)
 private suspend fun ListEngineResult.materializeValues(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,

@@ -7,7 +7,6 @@ import model.Arguments
 import model.Assumptions
 import model.ObjectEngineResult
 import model.ObjectSelectionForest
-import model.PathComponent
 import model.SelectionForest
 import model.VariableBinding
 import model.registry.VariableDefinition
@@ -18,10 +17,8 @@ import semantics.shared.OperationContext
 /** Installs and launches the work associated with one object-result occurrence. */
 internal class ObjectOrchestrationTask(
     internal val operation: Resolver26OperationContext,
-    internal val root: ObjectEngineResult,
-    internal val path: List<PathComponent>,
+    internal val occurrence: OEROccurrenceContext,
     internal val source: EngineObjectData.Sync,
-    internal val target: ObjectEngineResult,
     private val initialDemand: SelectionForest,
 ) {
     internal val world: Assumptions = operation.world
@@ -33,25 +30,24 @@ internal class ObjectOrchestrationTask(
      * Returns the closed demand needed to materialize passive children before launch.
      */
     fun prepare(): ObjectSelectionForest {
-        require(source.schemaType == target.type) {
-            "Source type ${source.schemaType.name} does not match result type ${target.type.name}"
+        require(source.schemaType == occurrence.target.type) {
+            "Source type ${source.schemaType.name} does not match result type ${occurrence.target.type.name}"
         }
 
         val closed: CloseInputDemandResult =
             context(world) {
                 source.closeInputDemand(
-                    root = root,
-                    path = path,
+                    occurrence = occurrence,
                     initialDemand = initialDemand,
                 )
             }
         require(closedDemand.compareAndSet(null, closed)) {
-            "Resolver26 orchestration task at $path was prepared twice"
+            "Resolver26 orchestration task at ${occurrence.path} was prepared twice"
         }
         context(operation) {
             declareBindings(closed)
         }
-        operation.markBindingsDeclared(target)
+        operation.bindingDeclarationsState.markBindingsDeclared(occurrence.target)
         return closed.demand
     }
 
@@ -61,21 +57,21 @@ internal class ObjectOrchestrationTask(
      */
     fun launch() {
         require(launched.compareAndSet(false, true)) {
-            "Resolver26 orchestration task at $path was launched twice"
+            "Resolver26 orchestration task at ${occurrence.path} was launched twice"
         }
         val closed =
             requireNotNull(closedDemand.get()) {
-                "Resolver26 orchestration task at $path launched before preparation"
+                "Resolver26 orchestration task at ${occurrence.path} launched before preparation"
             }
         validatePassiveFields(closed)
 
         if (closed.expansions.isNotEmpty()) {
             operation.requestScope.launch {
                 this@ObjectOrchestrationTask.launchBindingsAndResolvers(closed)
-                target.freeze()
+                occurrence.target.freeze()
             }
         } else {
-            target.freeze()
+            occurrence.target.freeze()
         }
     }
 
@@ -85,7 +81,7 @@ internal class ObjectOrchestrationTask(
             if (objectKey !in closed.expansions) {
                 check(
                     objectKey is ObjectEngineResult.GroundKey &&
-                        target.isCellSet(objectKey),
+                        occurrence.target.isCellSet(objectKey),
                 ) {
                     "Resolver26 passive key $objectKey was not materialized by " +
                         "resolvePassiveValues"

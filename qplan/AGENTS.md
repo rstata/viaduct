@@ -6,7 +6,7 @@
 - [`research-evidence.md`](./research-evidence.md) - Use for the evidence, obligations, hard cases, prior art, acceptance cases, and provenance behind the design principles.
 - [`maintainer-guide.md`](./maintainer-guide.md) - Use for validation, replay, failure classification, debugging, documentation conventions, and investigation workflow.
 - [`resolver-versions.md`](./resolver-versions.md) - Use to understand the maintained resolver grid and choose a simpler comparison implementation.
-- [`context-params.md`](./context-params.md) - Read before changing model or semantics APIs that use the canonical `Assumptions` context parameter.
+- [`context-params.md`](./context-params.md) - Read before changing model or semantics APIs that use the canonical `Assumptions` or `OperationContext` context parameters.
 - [`model/guidelines.md`](./model/guidelines.md) - Read before changing semantic carriers, equality, factories, promises, keys, or result structures.
 - [`semantics/README.md`](./semantics/README.md) - Read before changing semantic transformations, resolver implementations, or correctness judgments.
 - [`semantics/testing-contracts.md`](./semantics/testing-contracts.md) - Read before changing or interpreting resolver tests and generated profiles.

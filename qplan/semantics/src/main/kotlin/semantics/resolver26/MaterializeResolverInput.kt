@@ -16,12 +16,12 @@ import model.outputType
 import model.PathComponent
 import model.materializedEngineObjectDataOf
 import model.toEngineOutputData
-import semantics.shared.CycleChecker
+import semantics.shared.CycleCheckState
 import semantics.shared.OperationContext
 import viaduct.engine.api.EngineObjectData
 
 // Returns a resolver-visible input object collected by GraphQL response key.
-context(operation: OperationContext, cycleChecker: CycleChecker)
+context(operation: OperationContext, cycleChecker: CycleCheckState)
 internal suspend fun ObjectEngineResult.materializeResolverInput(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
@@ -34,7 +34,7 @@ internal suspend fun ObjectEngineResult.materializeResolverInput(
     )
 
 // Materializes selected OER values at their exact stored paths.
-context(operation: OperationContext, cycleChecker: CycleChecker)
+context(operation: OperationContext, cycleChecker: CycleCheckState)
 private suspend fun ObjectEngineResult.materializeSelectedObject(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
@@ -76,7 +76,7 @@ private suspend fun ObjectMaterializeSelection.materializedObjectKey(
 }
 
 // Recursively materializes one selected engine result while preserving null, error, and list shape.
-context(operation: OperationContext, cycleChecker: CycleChecker)
+context(operation: OperationContext, cycleChecker: CycleCheckState)
 private suspend fun EngineResult?.materializeSelectedValue(
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     selections: MaterializeSelectionForest,

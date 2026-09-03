@@ -5,7 +5,13 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import model.ObjectEngineResult
 import model.ResolverOccurrenceId
 
-/** Receives semantically passive observations from one resolver operation. */
+/**
+ * Receives semantically passive observations from one resolver operation.
+ *
+ * Replacing a normally returning, non-mutating observer with [createNOP] preserves semantic
+ * resolution results. Because callbacks are synchronous, an observer may still affect failure or
+ * latency by throwing or blocking.
+ */
 interface ResolverObserver {
     fun onQueryFragmentResult(
         resolverOccurrenceId: ResolverOccurrenceId,

@@ -7,7 +7,8 @@ import viaduct.graphql.schema.ViaductSchema
  * The schema and field resolvers under which model values and operations are interpreted.
  *
  * Equality is undefined for assumptions. Exactly one value is fixed for a reasoning exercise, and
- * every schema definition referenced by its model values belongs to [schema]. Each assumptions
+ * every schema definition referenced by its model values belongs to [schema]. Each Assumptions
+ * value is configuration only; mutable interpretation state belongs to the semantics operation.
  */
 sealed interface Assumptions {
     val schema: ViaductSchema

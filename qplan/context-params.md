@@ -1,15 +1,17 @@
-# Context Parameters And `Assumptions`
+# Context Parameters, `Assumptions`, And `OperationContext`
 
-This project uses Kotlin context parameters to make the one `Assumptions` value for a reasoning world available to operations interpreted in that world:
+Qplan uses Kotlin context parameters at two distinct interpretation boundaries. Pure model operations use the one immutable `Assumptions` value for a reasoning world, while semantics operations use the `OperationContext` for one resolution or correctness operation.
+
+## Model Context
+
+Model operations that depend only on the schema and resolver configuration declare:
 
 ```kotlin
 context(world: Assumptions)
 fun ...
 ```
 
-Use the name `world` consistently. It mirrors the mathematical judgment `world |- predicate` and keeps claims, code, and tests readable.
-
-## Composition
+Use the name `world` consistently. It mirrors the mathematical judgment `world |- predicate` and makes it explicit that model interpretation depends only on configuration, not request-local mutable state.
 
 A function with an `Assumptions` context may directly call another function requiring the same context:
 
@@ -25,15 +27,45 @@ fun EngineObjectData.Sync.requireQueryRoot(): EngineObjectData.Sync {
 }
 ```
 
-The compiler supplies both calls from the existing context. No nested context block is needed.
+The compiler supplies both calls from the existing context. A context parameter is not an implicit receiver; qualify members as `world.schema`, `world.resolverRegistry`, and `world.selectiveResolvers`.
 
-## Access
+## Semantics Context
 
-A context parameter is not an implicit receiver. Qualify members as `world.schema`, `world.resolverRegistry`, `world.selectiveResolvers`, and `world.selectionsFrom(...)`.
+Resolver algorithms, result materialization, and correctness judgments that need operation-local state or observations declare:
 
-Prefer qualification when a body uses only a few world members.
+```kotlin
+context(operation: OperationContext)
+fun ...
+```
 
-For an assumption-heavy body that reads better with a receiver, use `run`:
+Use the name `operation` consistently. Access stable configuration through `operation.world` or the convenience properties `operation.schema`, `operation.resolverRegistry`, and `operation.selectiveResolvers`. Access mutable protocols through explicit state properties such as `operation.variableBindingsState`.
+
+When a semantics function calls a pure model operation, establish the model context explicitly from the operation:
+
+```kotlin
+context(operation: OperationContext)
+fun ObjectEngineResult.validate(): Boolean =
+    context(operation.world) {
+        rootedAndWellTyped()
+    }
+```
+
+Resolver-specific operation contexts may add stable request references and explicit state properties. They should remain structurally immutable bundles rather than service locators or owners of mutable storage.
+
+## Call Boundaries
+
+Context parameters are not global state. Establish the appropriate context at an outer call boundary:
+
+```kotlin
+val modelValue = context(world) { objectValue.snipToDemand(selections) }
+val resolution = context(OperationContext(world)) { resolve(selections) }
+```
+
+Inside a function with the same context type, call context-dependent operations directly. Add a nested `context(...)` block only when crossing from `OperationContext` to `operation.world`, supplying a separate state context such as `CycleCheckState`, or otherwise changing the available context values.
+
+## Receiver-Style Bodies
+
+For a body that reads many world members more clearly as a receiver, use `run` and declare the return type:
 
 ```kotlin
 context(world: Assumptions)
@@ -44,23 +76,6 @@ fun EngineObjectData.Sync.isQueryRoot(): Boolean = world.run {
 
 Use `run`, not `apply`, when returning a modeled result. `run` returns the lambda result; `apply` would return `world`.
 
-Declare the return type of a receiver-style expression body so an accidental scope-function change is caught by the compiler.
-
-## Call Boundaries
-
-Context parameters are not global state. Establish the world at an outer call boundary:
-
-```kotlin
-val result =
-    context(world) {
-        objectValue.snipToDemand(selectionForestOf())
-    }
-```
-
-Inside another `context(world: Assumptions)` function, call context-dependent operations directly.
-
 ## Validation
 
-[ContextParametersTest.kt](model/src/test/kotlin/model/ContextParametersTest.kt) exercises context establishment, composition, receiver-style bodies, and `snipToDemand` with real model values.
-
-Compilation is the primary evidence for context and receiver resolution. Runtime assertions verify that receiver-style functions return the modeled result rather than the `Assumptions` receiver.
+[`ContextParametersTest.kt`](./model/src/test/kotlin/model/ContextParametersTest.kt) exercises model-context establishment and composition. Semantics compilation and tests exercise operation-context composition, explicit state contexts, and crossings through `operation.world`.

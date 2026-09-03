@@ -5,13 +5,19 @@ The semantics project defines transformations, resolver algorithms, and correctn
 ## Principal Judgment
 
 ```kotlin
-context(world: Assumptions)
+context(operation: OperationContext)
 fun ObjectEngineResult.correctResolution(selections: ObjectSelectionForest): Boolean
 ```
 
 `correctResolution` judges the value slots of a completed primary Query OER extensionally. When a field resolver declares a nonempty Query-rooted fragment, the judgment also requires the independently resolved Query OER stored for that exact resolver occurrence to be correct and uses its materialized value when re-evaluating the resolver relation. Reapplication supplies the finite canonical demand reconstructed from the completed output occurrence; this is sufficient under the selective-function agreement law and is not a claim that the judgment recovered the algorithm's original supplied demand. Access-result slots are deliberately outside this judgment: access checks are future qplan work, and maintained resolver versions are not currently required to publish or agree on those slots even though some maintained resolvers populate them with `true`. It also does not establish resolver application count, supplied demand, execution order, provider binding, lifecycle ownership, or concurrency. Those properties require separate witnesses and tests. [`testing-contracts.md`](./testing-contracts.md#resolver-fixture-and-oracle-boundary) explains why the judgment reapplies resolver relations and how `FieldResolver.of` and `FieldResolver.ofSelective` define different test-oracle boundaries.
 
 ## Vocabulary
+
+A type with the suffix **Context** is a structurally immutable, scope-specific bundle of stable references that are commonly passed together. A context may refer to mutable state, but it does not expose mutable storage or define state transitions itself. `OperationContext` is the shared semantics boundary for one resolution operation; Resolver26 extends it with request-scope references and Resolver26-specific state.
+
+A type with the suffix **State** owns one mutable protocol. Its storage is private, and its methods expose the protocol's legal reads and transitions. `VariableBindingsState`, `CycleCheckState`, `BindingDeclarationsState`, and `QueryValuesState` keep mutation out of configuration and context types.
+
+A type with the suffix **Observer** is semantically passive instrumentation. Replacing a normally returning observer that does not mutate resolver inputs or state with its NOP implementation preserves resolution's semantic input/output behavior. A synchronous observer can still affect failure or latency by throwing or blocking, so the convention is not a claim that arbitrary observer implementations are operationally invisible.
 
 An **OER** is an `ObjectEngineResult`, always associated with one concrete GraphQL object type. An **LER** is a `ListEngineResult`, whose element cells preserve exact list positions. "OER tree" is convenient shorthand for the complete engine-result tree because active resolver work occurs at object occurrences; list containers and pre-domain scalar values remain explicit parts of the physical result.
 
@@ -35,7 +41,7 @@ Model fixture preparation accepts resolver selection documents that retain named
 
 `resolvers/resolver01/DepthFirstResolve.kt` contains the recursive monotonic constructor used by Resolver01-03. `resolvers/ResolvePassiveValues.kt` builds passive result structure shared by Resolver01-23, retains child OERs that require active work, and populates those children without replacing their published parents. The `resolvers` package contains the remaining operations shared by those maintained resolver families.
 
-`resolvers/resolver06/DepthFirstReactor.kt` expresses the Resolver06-08 progression as explicit orchestrator and slot-resolver work. `resolvers/resolver21/CoroutineResolve.kt` expresses Resolver21-23 through structured suspension and exact promises. The `shared` package contains result-reading and cycle-checking operations used across resolver and correctness boundaries. [`resolver-versions.md`](../resolver-versions.md) explains the capability grid and how to use it.
+`resolvers/resolver06/DepthFirstReactor.kt` expresses the Resolver06-08 progression as explicit orchestrator and slot-resolver work. `resolvers/resolver21/CoroutineResolve.kt` expresses Resolver21-23 through structured suspension and exact promises. The `shared` package contains the operation context, variable-binding and cycle-check state, observer boundaries, grounding, materialization, and other operations used across resolver and correctness boundaries. [`resolver-versions.md`](../resolver-versions.md) explains the capability grid and how to use it.
 
 Resolver26 is the self-contained advanced resolver with runtime from-field bindings. It supports both `FromObjectField` and `FromQueryField`; its current protocol is documented in [`resolver26/design.md`](./src/main/kotlin/semantics/resolver26/design.md).
 

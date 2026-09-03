@@ -32,8 +32,10 @@ internal data class Resolver26ApplicationObservation(
     val variableResolverOccurrenceIds: Set<ResolverOccurrenceId>,
 )
 
+/** Semantically passive Resolver26 application instrumentation. */
 internal typealias Resolver26ApplicationObserver = (Resolver26ApplicationObservation) -> Unit
 
+/** Resolver26's semantically passive extension of the shared observation boundary. */
 internal interface Resolver26Observer : ResolverObserver {
     fun onResolverApplication(observation: Resolver26ApplicationObservation)
 }

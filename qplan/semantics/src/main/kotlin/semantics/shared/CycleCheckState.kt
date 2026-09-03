@@ -5,7 +5,7 @@ import model.PathComponent
 import java.util.concurrent.ConcurrentHashMap
 
 /** Tracks exact resolver reads and rejects cycles in the resulting writer dependency graph. */
-interface CycleChecker {
+interface CycleCheckState {
     fun registerWriter(
         cell: EngineResultCell,
         writer: List<PathComponent>,
@@ -17,9 +17,9 @@ interface CycleChecker {
     )
 
     companion object {
-        fun create(): CycleChecker = CycleCheckerImpl()
+        fun create(): CycleCheckState = CycleCheckStateImpl()
 
-        fun createNOP(): CycleChecker = NOPCycleChecker
+        fun createNOP(): CycleCheckState = NOPCycleCheckState
     }
 }
 
@@ -29,7 +29,7 @@ internal class ResolverReadCycleException(
         "Resolver-read cycle: ${cycle.joinToString(separator = " -> ")}",
     )
 
-private object NOPCycleChecker : CycleChecker {
+private object NOPCycleCheckState : CycleCheckState {
     override fun registerWriter(
         cell: EngineResultCell,
         writer: List<PathComponent>,
@@ -41,7 +41,7 @@ private object NOPCycleChecker : CycleChecker {
     ) {}
 }
 
-private class CycleCheckerImpl : CycleChecker {
+private class CycleCheckStateImpl : CycleCheckState {
     private val writersByCell =
         ConcurrentHashMap<EngineResultCell, List<PathComponent>>()
     private val readersByCell =

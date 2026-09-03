@@ -24,9 +24,13 @@ One root `coroutineScope` owns the request. Every orchestration task and field-r
 
 Task completion is not a cross-task readiness protocol. Cross-task reads use OER value promises, binding promises, or an OER's bindings-declared signal. The dispatcher changes scheduling only; it does not change resolver, variable, path, or task identity.
 
+`Resolver26OperationContext` is the stable reference bundle for this scope. It extends the shared `OperationContext`, retains the request coroutine scope and Resolver26 observer, and exposes three independent mutable protocols as properties: `cycleChecker: CycleCheckState`, `bindingDeclarationsState: BindingDeclarationsState`, and `queryValuesState: QueryValuesState`. The context neither implements those protocols nor owns their mutable storage.
+
+`OEROccurrenceContext` bundles the root OER, exact root-relative path, and target OER that remain unchanged while Resolver26 orchestrates or resolves one object occurrence. Primary-operation and Query-fragment roots create self-rooted occurrences. Passive object materialization creates descendant occurrences at the exact field-and-list path where each new target is published. This is deliberately Resolver26-local: it captures a coherent task boundary here without requiring unrelated model or resolver APIs to unpack and transform the bundle.
+
 ## Synchronous Demand Closure
 
-`orchestrateObject` synchronously computes one final `ObjectSelectionForest` for its concrete OER.
+`ObjectOrchestrationTask.prepare` synchronously computes one final `ObjectSelectionForest` for its concrete OER.
 
 Closure repeatedly expands each newly seen resolver `ObjectKey` whose field is absent from the source EOD with that resolver's complete object fragment instantiated at the resolver path. A source-present argumentless field remains unexpanded and is materialized from the source even when the registry contains its standard resolver. Expansion does not await argument bindings. It records the resolver template, its fixed input demand, and one definition for each instantiated variable.
 
@@ -44,6 +48,8 @@ Each `FromObjectField` definition launches a provider reader that follows its co
 
 Before reading a provider component inside an OER, its reader awaits that OER's bindings-declared signal and every argument binding needed to make the component key contextually grounded. `ObjectOrchestrationTask.prepare` marks bindings declared immediately after synchronous demand closure declares every binding in the OER's binding domain, before recursively materializing passive children or launching local field work.
 
+`BindingDeclarationsState` owns these per-OER readiness signals. `VariableBindingsState` separately owns actual variable-instance bindings, and `QueryValuesState` owns the declared-then-completed Query input for each resolver occurrence. Declaration and completion are strict one-shot transitions; consumers never manufacture undeclared query values or variable bindings.
+
 Nested provider keys resolve their argument values against the owning resolver occurrence and use the original symbolic key for OER lookup. The separately resolved arguments are a readiness and invocation witness; they do not replace the key.
 
 Readers never insert undeclared binding promises.
@@ -59,6 +65,8 @@ After passive children have launched, the parent launch validates its materializ
 ## Active Installation And Freeze
 
 Each active selection awaits only its declared argument bindings and derives one `Arguments.Ground` value for invocation. Installation requires the original `ObjectEngineResult.ObjectKey` to be contextually grounded, completes any delayed `FromArgument` bindings used by either resolver fragment from the resolved argument tuple, reserves the target cell under that original key, claims the value promise, registers the writer, and launches one field-resolution task carrying cell identity and invocation arguments separately.
+
+Resolver26's `CycleCheckState` is explicit operation state. Installation registers each active cell's exact writer through `operation.cycleChecker`, and provider and resolver-input reads record their dependency through the same property. Other resolvers and correctness materialization may supply a separate state or the NOP implementation; `Resolver26OperationContext` does not masquerade as a cycle checker.
 
 `reserveCell` explicitly creates an unclaimed cell placeholder when needed. `Cell.createValuePromise` claims that placeholder for the writer. Strict claiming makes disagreement between readers and writers observable.
 
@@ -81,6 +89,8 @@ Parent publication does not wait for descendant orchestration to finish. Readers
 Query fragments reuse the defining resolver occurrence's variable bindings, retain their complete response-preserving symbolic selection tree, and use an ordinary `ObjectOrchestrationTask` rooted at an otherwise independent Query OER. Their orchestration starts alongside object-path provider readers and active field installation so a `FromQueryField` binding can ground the object fragment and a `FromObjectField` binding can ground the Query fragment without imposing an artificial fragment order. Query-provider readers complete their bindings as soon as their exact paths resolve; the owning field resolver separately awaits materialization of the complete Query input. A Query-only `FromArgument` use binds directly from the owning resolver arguments, while a binding used by both fragments is declared and completed only once. Materialization resolves arguments only to establish contextual grounding and invocation values. The OER is retained as a correctness witness under the owning resolver's exact result path.
 
 Argument errors complete the value slot with `ErrorEngineResult` without invoking the resolver. Successful values complete the value slot once. Resolver26 does not publish access-result slots: access-check execution and its validation are future work, and the `true` access results written by some earlier resolver experiments are not part of the current resolver contract.
+
+Resolver observations are semantically passive evidence. Resolver26 records Query-fragment results and application facts for validation, but replacing a normally returning, non-mutating observer with a NOP preserves semantic resolution results. Because callbacks are synchronous, an observer that throws or blocks can still change failure or latency and violates the intended instrumentation contract.
 
 ## Successor Demand
 

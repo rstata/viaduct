@@ -15,7 +15,7 @@ import model.merge
 import model.requireQueryTypeDef
 import semantics.shared.groundedArguments
 import model.selectionForestOf
-import semantics.shared.CycleChecker
+import semantics.shared.CycleCheckState
 import semantics.shared.materialize
 import semantics.shared.OperationContext
 import semantics.shared.ResolverObservations
@@ -79,7 +79,7 @@ internal fun ObjectEngineResult.reapplyResolver(
         val objectFragment = fragments.objectFragment
         val input: EngineObjectData.Sync =
             runBlocking {
-                context(operation, CycleChecker.createNOP()) {
+                context(operation, CycleCheckState.createNOP()) {
                     materialize(
                         selections = objectFragment.materializeSelections,
                         reader = coordinate,
@@ -109,7 +109,7 @@ internal fun ObjectEngineResult.reapplyResolver(
                     return@getOrPut null
                 }
                 runBlocking {
-                    context(operation, CycleChecker.createNOP()) {
+                    context(operation, CycleCheckState.createNOP()) {
                         queryResult.materialize(
                             selections = queryFragment.materializeSelections,
                             reader = coordinate,

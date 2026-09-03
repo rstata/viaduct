@@ -1,7 +1,6 @@
 package semantics.contract
 
 import model.Assumptions
-import model.EngineResult
 import model.ObjectEngineResult
 import model.Fragment
 import model.fragmentFrom
@@ -16,15 +15,19 @@ import semantics.correctresolution.conformsToResolvers
 import semantics.correctresolution.conformsToSelections
 import semantics.correctresolution.isClosedUnderResolverDemand
 import semantics.correctresolution.rootedAndWellTyped
+import semantics.shared.OperationContext
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /** One generated resolver execution and the request-local state needed to validate it. */
 data class GeneratedResolutionObservation(
-    val world: Assumptions,
+    val operation: OperationContext,
     val fragment: Fragment,
     val subject: ResolverResolutionObservation,
 ) {
+    val world: Assumptions
+        get() = operation.world
+
     val result: ObjectEngineResult
         get() = subject.result
 }
@@ -50,7 +53,7 @@ object GeneratedCaseAssertions {
     val correctResolution =
         GeneratedCaseAssertion { observation ->
             observation.executions.forEach { execution ->
-                context(execution.world) {
+                context(execution.operation) {
                     val correct = execution.result.correctResolution(execution.fragment)
                     if (!correct) {
                         fun diagnostic(
@@ -67,7 +70,9 @@ object GeneratedCaseAssertions {
 
                         listOf(
                             diagnostic("rootedAndWellTyped") {
-                                execution.result.rootedAndWellTyped()
+                                context(execution.world) {
+                                    execution.result.rootedAndWellTyped()
+                                }
                             },
                             diagnostic("conformsToSelections") {
                                 execution.result.conformsToSelections(
@@ -104,7 +109,7 @@ object GeneratedCaseAssertions {
     val exactOrdinaryApplicationCounts =
         GeneratedCaseAssertion { observation ->
             val expected =
-                context(observation.ordinary.world) {
+                context(observation.ordinary.operation) {
                     observation.ordinary.result.registeredResolverApplicationIdentityCounts()
                 }
             assertEquals(
@@ -118,7 +123,7 @@ object GeneratedCaseAssertions {
     val fromFieldBindings =
         GeneratedCaseAssertion { observation ->
             observation.executions.forEach { execution ->
-                context(execution.world) {
+                context(execution.operation) {
                     execution.result.validateFromFieldBindings(
                         requireNotNull(execution.subject.appliedResolverOccurrences) {
                             "From-field binding validation requires exact application " +
@@ -192,7 +197,7 @@ private fun ResolverContract.observeGeneratedResolution(
             fragment.subselections,
         )
     return GeneratedResolutionObservation(
-        world = world,
+        operation = subject.operation,
         fragment = fragment,
         subject = subject,
     )

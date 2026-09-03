@@ -1,6 +1,5 @@
 package semantics.correctresolution
 
-import model.Assumptions
 import model.EngineOutputData
 import model.EngineResult
 import model.ErrorEngineResult
@@ -8,12 +7,14 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Arguments
 import model.PathComponent
-import model.isContextuallyGrounded
-import model.groundedArguments
+import semantics.shared.groundedArguments
+import semantics.shared.isContextuallyGrounded
+import semantics.shared.objectFragmentAt
 import model.outputValue
 import model.schemaType
 import model.usedVariables
 import viaduct.engine.api.EngineObjectData
+import semantics.shared.OperationContext
 
 /**
  * Whether every standard registered resolver activated by this result has its required input.
@@ -25,11 +26,11 @@ import viaduct.engine.api.EngineObjectData
  *
  * This predicate observes cell-value presence and content, but never access-acceptance results.
  */
-context(world: Assumptions)
+context(operation: OperationContext)
 fun ObjectEngineResult.isClosedUnderResolverDemand(): Boolean =
     isClosedUnderResolverDemand(ResolverApplicationCache(this))
 
-context(world: Assumptions)
+context(operation: OperationContext)
 internal fun ObjectEngineResult.isClosedUnderResolverDemand(
     resolverApplicationCache: ResolverApplicationCache,
 ): Boolean =
@@ -41,14 +42,14 @@ internal fun ObjectEngineResult.isClosedUnderResolverDemand(
     }
 
 context(
-    world: Assumptions,
+    operation: OperationContext,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
     path: List<PathComponent>,
     source: EngineObjectData.Sync?,
 ): Boolean {
-    val registry = world.resolverRegistry
+    val registry = operation.resolverRegistry
 
     return keys.all { key ->
         if (!key.isContextuallyGrounded()) return@all false
@@ -80,23 +81,29 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
                                     .constructionSelections
                             if (
                                 instantiatedSelections.usedVariables().all { variable ->
-                                    variable.instanceId?.let(world::isBound) == true
+                                    variable.instanceId?.let(
+                                        operation.variableBindingsState::isBound,
+                                    ) == true
                                 }
                             ) {
-                                conformsToSelectionsAt(
-                                    selections = instantiatedSelections,
-                                    path = path,
-                                )
+                                context(operation.world) {
+                                    conformsToSelectionsAt(
+                                        selections = instantiatedSelections,
+                                        path = path,
+                                    )
+                                }
                             } else {
                                 val instantiatedFragment =
                                     resolver.objectFragmentAt(
                                         resolverApplicationCache.root,
                                         coordinate,
                                     )
-                                conformsToSelectionsAt(
-                                    instantiatedFragment,
-                                    path,
-                                )
+                                context(operation.world) {
+                                    conformsToSelectionsAt(
+                                        instantiatedFragment,
+                                        path,
+                                    )
+                                }
                             }
                         }
             }
@@ -124,7 +131,7 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
 }
 
 context(
-    world: Assumptions,
+    operation: OperationContext,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
@@ -153,7 +160,7 @@ private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
     }
 
 context(
-    world: Assumptions,
+    operation: OperationContext,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun EngineResult?.engineResultIsClosedUnderResolverDemand(

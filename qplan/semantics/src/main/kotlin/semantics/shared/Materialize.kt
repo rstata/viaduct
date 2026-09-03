@@ -2,8 +2,6 @@ package semantics.shared
 
 import viaduct.graphql.schema.ViaductSchema
 
-import model.Assumptions
-import model.EngineErrorData
 import model.EngineOutputData
 import model.EngineOutputListData
 import model.EngineObjectDataEntry
@@ -15,7 +13,6 @@ import model.ObjectEngineResult
 import model.outputType
 import model.ObjectMaterializeSelection
 import model.PathComponent
-import model.fetchGroundedArguments
 import model.materializedEngineObjectDataOf
 import model.toEngineOutputData
 import viaduct.engine.api.EngineObjectData
@@ -28,7 +25,7 @@ import viaduct.engine.api.EngineObjectData
  * This operation is defined when this result contains every value promise selected by [selections]
  * and every applicable selection key is contextually grounded.
  */
-context(world: Assumptions, cycleChecker: CycleChecker)
+context(operation: OperationContext, cycleChecker: CycleChecker)
 internal suspend fun ObjectEngineResult.materialize(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
@@ -41,7 +38,7 @@ internal suspend fun ObjectEngineResult.materialize(
 }
 
 // Materializes a selection forest rooted at one exact OER path.
-context(world: Assumptions, cycleChecker: CycleChecker)
+context(operation: OperationContext, cycleChecker: CycleChecker)
 private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,
@@ -75,7 +72,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
     )
 }
 
-context(world: Assumptions)
+context(operation: OperationContext)
 private suspend fun ObjectMaterializeSelection.materializedSymbolicKey(
 ): ObjectEngineResult.ObjectKey {
     key.fetchGroundedArguments()
@@ -83,7 +80,7 @@ private suspend fun ObjectMaterializeSelection.materializedSymbolicKey(
 }
 
 // Recursively materializes one selected result while retaining its exact stored path.
-context(world: Assumptions, cycleChecker: CycleChecker)
+context(operation: OperationContext, cycleChecker: CycleChecker)
 private suspend fun EngineResult?.materializeEngineResultValue(
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     selections: MaterializeSelectionForest,
@@ -111,7 +108,7 @@ private suspend fun EngineResult?.materializeEngineResultValue(
     }
 
 // Materializes each list element at a path containing its concrete list index.
-context(world: Assumptions, cycleChecker: CycleChecker)
+context(operation: OperationContext, cycleChecker: CycleChecker)
 private suspend fun ListEngineResult.materializeValues(
     selections: MaterializeSelectionForest,
     reader: List<PathComponent>,

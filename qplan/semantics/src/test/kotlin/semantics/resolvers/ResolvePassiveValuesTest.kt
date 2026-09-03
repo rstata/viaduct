@@ -3,8 +3,6 @@ package semantics.resolvers
 import model.requireType
 import model.requireField
 import model.requireObjectField
-import viaduct.engine.api.EngineObjectData
-import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
@@ -23,6 +21,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import semantics.shared.OperationContext
 
 class ResolvePassiveValuesTest {
     @Test
@@ -99,7 +98,7 @@ class ResolvePassiveValuesTest {
             ).subselections
 
         val resolved =
-            context(world) {
+            context(OperationContext(world)) {
                 value.resolvePassiveValues(
                     expectedType = world.schema.requireObjectField("Query", "user").outputType,
                     path = emptyList(),
@@ -182,7 +181,7 @@ class ResolvePassiveValuesTest {
             ).subselections
 
         val resolved =
-            context(world) {
+            context(OperationContext(world)) {
                 value.resolvePassiveValues(
                     expectedType = world.schema.requireObjectField("Query", "user").outputType,
                     path = emptyList(),
@@ -228,7 +227,7 @@ class ResolvePassiveValuesTest {
             ).subselections
 
         assertFailsWith<IllegalArgumentException> {
-            context(world) {
+            context(OperationContext(world)) {
                 value.resolvePassiveValues(
                     expectedType = world.schema.requireObjectField("Query", "user").outputType,
                     path = emptyList(),
@@ -275,7 +274,7 @@ class ResolvePassiveValuesTest {
             world.fragmentFrom("fragment ignored on Item { computed seed }").subselections
 
         val resolved =
-            context(world) {
+            context(OperationContext(world)) {
                 value.resolvePassiveValues(
                     expectedType = world.schema.requireObjectField("Query", "item").outputType,
                     path = emptyList(),
@@ -314,7 +313,7 @@ class ResolvePassiveValuesTest {
             world.fragmentFrom("fragment ignored on Item { computed seed }").subselections
 
         val resolved =
-            context(world) {
+            context(OperationContext(world)) {
                 value.resolvePassiveValues(
                     expectedType = world.schema.requireObjectField("Query", "item").outputType,
                     path = emptyList(),
@@ -357,7 +356,7 @@ class ResolvePassiveValuesTest {
             ).subselections
 
         val resolved =
-            context(world) {
+            context(OperationContext(world)) {
                 value.resolvePassiveValues(
                     expectedType = world.schema.requireObjectField("Query", "user").outputType,
                     path = emptyList(),
@@ -404,7 +403,7 @@ class ResolvePassiveValuesTest {
             ).subselections
 
         assertFailsWith<IllegalArgumentException> {
-            context(world) {
+            context(OperationContext(world)) {
                 value.resolvePassiveValues(
                     expectedType = world.schema.requireObjectField("Query", "item").outputType,
                     path = emptyList(),
@@ -487,7 +486,7 @@ class ResolvePassiveValuesTest {
                 rootPath + ListEngineResult.Index.of(1),
             )
         val passiveValuesResult =
-            context(world) {
+            context(OperationContext(world)) {
                 output.resolvePassiveValues(
                     expectedType = itemsField.outputType,
                     path = rootPath,

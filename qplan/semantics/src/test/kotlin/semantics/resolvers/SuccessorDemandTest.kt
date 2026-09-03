@@ -1,4 +1,4 @@
-package model.registry
+package semantics.resolvers
 
 import viaduct.graphql.schema.ViaductSchema
 
@@ -10,15 +10,13 @@ import model.ObjectEngineResult
 import model.EngineErrorData
 import model.emptyFragmentOf
 import model.fragmentFrom
-import model.instantiateBindings
 import model.merge
-import model.selectionForestOf
 import model.testing.TestWorld
-import model.testing.testRoot
 import model.testing.fieldResolverOf
+import semantics.shared.instantiateBindings
+import semantics.shared.OperationContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 
 class SuccessorDemandTest {
     @Test
@@ -84,18 +82,18 @@ class SuccessorDemandTest {
             ).subselections
 
         val full =
-            context(world) {
+            context(OperationContext(world)) {
                 selections.successorDemand().merge(schema.requireQueryTypeDef()).instantiateBindings()
             }[schema.key(schema.requireQueryTypeDef(), "root")]
                 .subselections
         val boundaries =
-            context(world) {
+            context(OperationContext(world)) {
                 selections.successorBoundaryDemand().merge(schema.requireQueryTypeDef()).instantiateBindings()
             }[schema.key(schema.requireQueryTypeDef(), "root")]
                 .subselections
         val rootType = schema.requireType("Root") as ViaductSchema.Object
-        val fullRoot = context(world) { full.merge(rootType).instantiateBindings() }
-        val boundaryRoot = context(world) { boundaries.merge(rootType).instantiateBindings() }
+        val fullRoot = context(OperationContext(world)) { full.merge(rootType).instantiateBindings() }
+        val boundaryRoot = context(OperationContext(world)) { boundaries.merge(rootType).instantiateBindings() }
 
         assertEquals(
             setOf("consumer", "source", "box"),
@@ -111,7 +109,7 @@ class SuccessorDemandTest {
         val boundaryBox = boundaryRoot[schema.key(rootType, "box")]
         assertEquals(
             setOf("passive", "computed", "V_A_typename"),
-            context(world) {
+            context(OperationContext(world)) {
                 fullBox.subselections
                     .merge(boxType)
                     .instantiateBindings()
@@ -121,7 +119,7 @@ class SuccessorDemandTest {
         )
         assertEquals(
             setOf("computed", "V_A_typename"),
-            context(world) {
+            context(OperationContext(world)) {
                 boundaryBox.subselections
                     .merge(boxType)
                     .instantiateBindings()

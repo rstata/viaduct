@@ -1,33 +1,34 @@
 package semantics.resolvers.resolver08
 
-import model.Assumptions
-import model.EngineResult
 import model.ObjectEngineResult
 import model.SelectionForest
-import model.registry.successorDemand
 import semantics.resolvers.resolver06.DepthFirstReactor
+import semantics.resolvers.successorDemand
+import semantics.shared.OperationContext
 
 /**
  * Resolves [selections] through a depth-first work queue with selective resolver applications.
  * Whether the results contain only the necessary OER nodes has not been proved.
  */
-context(world: Assumptions)
+context(operation: OperationContext)
 fun resolve(selections: SelectionForest): ObjectEngineResult =
     resolve(selections, onTaskStarted = {})
 
-context(world: Assumptions)
+context(operation: OperationContext)
 internal fun resolve(
     selections: SelectionForest,
     onTaskStarted: (DepthFirstReactor.Task) -> Unit,
 ): ObjectEngineResult {
-    require(world.selectiveResolvers) {
+    require(operation.selectiveResolvers) {
         "Resolver08 requires selective resolvers"
     }
-    val source = world.resolverRegistry.createRootQueryInput()
+    val source = operation.resolverRegistry.createRootQueryInput()
     return DepthFirstReactor(
-        world = world,
+        operation = operation,
         complete = { completedSelections ->
-            completedSelections.successorDemand()
+            context(operation.world) {
+                completedSelections.successorDemand()
+            }
         },
         source = source,
         selections = selections,

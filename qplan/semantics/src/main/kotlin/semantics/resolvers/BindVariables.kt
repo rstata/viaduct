@@ -4,10 +4,10 @@ import model.Arguments
 
 import model.ObjectEngineResult
 
-import model.Assumptions
 import model.PathComponent
 import model.ResolverOccurrenceId
 import model.registry.VariableDefinition
+import semantics.shared.OperationContext
 
 /**
  * Declares and immediately completes every argument-defined variable belonging to these resolver
@@ -17,16 +17,16 @@ import model.registry.VariableDefinition
  * of one resolver field define distinct variable instances. Every occurrence must be declared and
  * completed exactly once.
  */
-context(world: Assumptions)
+context(operation: OperationContext)
 internal fun Iterable<ObjectEngineResult.GroundKey>.bindFromArguments(
     root: ObjectEngineResult,
     path: List<PathComponent>,
 ) {
     forEach { key ->
-        if (key.field !in world.resolverRegistry) return@forEach
+        if (key.field !in operation.resolverRegistry) return@forEach
         val arguments = key.arguments as? Arguments.Resolved ?: return@forEach
 
-        world.resolverRegistry
+        operation.resolverRegistry
             .resolver(key.field)
             .variables
             .forEach { (variable, definition) ->
@@ -37,8 +37,8 @@ internal fun Iterable<ObjectEngineResult.GroundKey>.bindFromArguments(
                         )
                     val variableId = requireNotNull(instantiated.instanceId)
                     val value = definition.read(arguments)
-                    world.declareBinding(variableId)
-                    world.completeBinding(variableId, value)
+                    operation.variableBindingsState.declareBinding(variableId)
+                    operation.variableBindingsState.completeBinding(variableId, value)
                 }
             }
     }

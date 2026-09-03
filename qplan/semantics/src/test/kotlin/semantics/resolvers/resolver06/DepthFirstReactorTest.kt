@@ -1,12 +1,10 @@
 package semantics.resolvers.resolver06
 
+import semantics.shared.OperationContext
 import model.ObjectEngineResult
 import model.PathComponent
-import model.emptyFragmentOf
 import model.fragmentFrom
-import model.groundKey
 import model.merge
-import model.objectOf
 import model.schemaType
 import model.testing.TestWorld
 import org.junit.jupiter.api.Test
@@ -61,7 +59,7 @@ class DepthFirstReactorTest {
                 .subselections
         val reactor =
             DepthFirstReactor(
-                world = world,
+                operation = OperationContext(world),
                 complete = { demand -> demand },
                 source = world.resolverRegistry.createRootQueryInput(),
                 selections = selections,

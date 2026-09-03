@@ -10,6 +10,7 @@ import java.util.concurrent.CompletableFuture
 import model.Assumptions
 import model.selectionsFrom
 import semantics.resolver26.resolve
+import semantics.shared.OperationContext
 
 /**
  * Query execution boundary for the qplan GraphQL-Java harness.
@@ -39,7 +40,7 @@ class QPlanExecutionStrategy(
 
         // Field Resolution: Use resolver26 to compute an OER tree
         val root =
-            context(world) {
+            context(OperationContext(world)) {
                 resolve(selections)
             }
 

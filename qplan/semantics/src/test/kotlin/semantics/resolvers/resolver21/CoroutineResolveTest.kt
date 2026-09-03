@@ -11,7 +11,6 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
 import viaduct.graphql.schema.ViaductSchema
-import model.SelectionForest
 import model.UncompletedPromiseException
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -24,6 +23,7 @@ import model.testing.fieldResolverOf
 import semantics.contract.selectionValues
 import semantics.shared.CycleChecker
 import semantics.shared.ResolverReadCycleException
+import semantics.shared.OperationContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -76,7 +76,7 @@ class CoroutineResolveTest {
             }
         val resolver =
             CoroutineResolve(
-                world = world,
+                operation = OperationContext(world),
                 complete = { completedSelections ->
                     producerStarts += 1
                     assertEquals(expectedKeys, registeredKeys)
@@ -154,7 +154,7 @@ class CoroutineResolveTest {
             }
         val resolver =
             CoroutineResolve(
-                world = world,
+                operation = OperationContext(world),
                 complete = { completedSelections -> completedSelections },
                 cycleChecker = cycleChecker,
             )
@@ -215,7 +215,7 @@ class CoroutineResolveTest {
 
         val failure =
             assertFailsWith<ResolverReadCycleException> {
-                context(world) {
+                context(OperationContext(world)) {
                     resolve(selections)
                 }
             }
@@ -254,7 +254,7 @@ class CoroutineResolveTest {
 
         val thrown =
             assertFailsWith<IllegalStateException> {
-                context(world) {
+                context(OperationContext(world)) {
                     resolve(selections)
                 }
             }
@@ -296,7 +296,7 @@ class CoroutineResolveTest {
             world.fragmentFrom("fragment ignored on Query { items { value } }").subselections
 
         val result =
-            context(world) {
+            context(OperationContext(world)) {
                 resolve(selections)
             }
 

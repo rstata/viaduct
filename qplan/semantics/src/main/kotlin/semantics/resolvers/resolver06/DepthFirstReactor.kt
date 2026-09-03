@@ -16,16 +16,19 @@ import semantics.resolvers.materializedChildOccurrences
 import semantics.resolvers.resolveRetainedObjects
 import semantics.resolvers.resolver01.DepthFirstResolve
 import semantics.resolvers.resolver01.requireGroundKeys
+import semantics.shared.OperationContext
 import viaduct.engine.api.EngineObjectData
 
 /** A single-threaded work queue that preserves the recursive resolver's depth-first traversal. */
 internal class DepthFirstReactor(
-    private val world: Assumptions,
+    private val operation: OperationContext,
     private val complete: (SelectionForest) -> SelectionForest,
     source: EngineObjectData.Sync,
     selections: SelectionForest,
     private val onTaskStarted: (Task) -> Unit = {},
 ) {
+    private val world: Assumptions = operation.world
+
     sealed interface Task {
         val path: List<PathComponent>
     }
@@ -45,10 +48,10 @@ internal class DepthFirstReactor(
     ) : Task
 
     private val result =
-        context(world) {
+        context(operation, world) {
             ObjectEngineResult.of(source.schemaType, emptyMap(), mutable = true)
         }
-    private val depthFirstResolve = DepthFirstResolve(world, complete)
+    private val depthFirstResolve = DepthFirstResolve(operation, complete)
     private val tasks = PriorityQueue(depthFirstTaskComparator)
     private val launchedOrchestrators = mutableSetOf<List<PathComponent>>()
     private val startedOrchestrators = mutableSetOf<List<PathComponent>>()
@@ -131,7 +134,7 @@ internal class DepthFirstReactor(
         return result
     }
 
-    private fun SlotOrchestrator.execute() = context(world) {
+    private fun SlotOrchestrator.execute() = context(operation, world) {
         require(target.type == source.schemaType) {
             "Initial result type ${target.type.name} does not match ${source.schemaType}"
         }
@@ -170,7 +173,7 @@ internal class DepthFirstReactor(
         orchestratorResults += OrchestratorResult(path, target, closedDemand)
     }
 
-    private fun SlotResolver.execute() = context(world) {
+    private fun SlotResolver.execute() = context(operation, world) {
         depthFirstResolve
             .resolveKey(source, result, path, selection, target)
             ?.resolveRetainedObjects { passiveObjectOccurrence ->

@@ -4,13 +4,11 @@ import viaduct.graphql.schema.ViaductSchema
 
 import model.Arguments
 
-import model.Assumptions
 import model.EngineErrorData
 import model.EngineOutputData
 import model.EngineOutputListData
 import model.SelectionForest
 import model.engineObjectDataOf
-import model.instantiateBindings
 import model.merge
 import model.objectKey
 import model.outputValue
@@ -42,7 +40,6 @@ import viaduct.engine.api.EngineObjectData
  *
  * @throws IllegalArgumentException when a precondition is not met
  */
-context(world: Assumptions)
 internal fun EngineOutputData?.snipToDemand(demand: SelectionForest): EngineOutputData? =
     when (this) {
         null,
@@ -69,7 +66,6 @@ internal fun EngineOutputData?.snipToDemand(demand: SelectionForest): EngineOutp
         else -> throw ClassCastException("Unsupported engine output data: $this")
     }
 
-context(world: Assumptions)
 private fun EngineObjectData.Sync.snipObjectToDemand(
     demand: SelectionForest,
 ): EngineObjectData.Sync {
@@ -89,7 +85,6 @@ private fun EngineObjectData.Sync.snipObjectToDemand(
                     true
                 }
             }
-            .instantiateBindings()
             .byGroundKey()
             .map { (key, selection) ->
                 val concreteField = key.field

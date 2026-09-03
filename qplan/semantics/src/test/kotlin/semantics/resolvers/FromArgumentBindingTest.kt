@@ -15,6 +15,7 @@ import model.testing.fromArgument
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import semantics.shared.OperationContext
 
 class FromArgumentBindingTest {
     @Test
@@ -41,21 +42,25 @@ class FromArgumentBindingTest {
                 },
             )
         val world = testWorld.assumptions
+        val operation = OperationContext(world)
         val field = world.schema.requireObjectField("Query", "echo")
         val key = ObjectEngineResult.GroundKey.of(field, mapOf("value" to 1))
         val root = ObjectEngineResult.of(world.schema.requireQueryTypeDef(), values = emptyMap())
 
-        context(world) {
+        context(operation) {
             listOf(key).bindFromArguments(root, emptyList())
             val variable =
                 Arguments.Variable
                     .of(field, "value")
                     .instantiate(ResolverOccurrenceId.at(root, listOf(key)))
             val variableId = requireNotNull(variable.instanceId)
-            assertEquals(VariableBinding.of(1), world.getBinding(variableId))
             assertEquals(
                 VariableBinding.of(1),
-                runBlocking { world.fetchBinding(variableId) },
+                operation.variableBindingsState.getBinding(variableId),
+            )
+            assertEquals(
+                VariableBinding.of(1),
+                runBlocking { operation.variableBindingsState.fetchBinding(variableId) },
             )
             assertFailsWith<IllegalStateException> {
                 listOf(key).bindFromArguments(root, emptyList())

@@ -2,29 +2,25 @@ package model
 
 import viaduct.graphql.schema.ViaductSchema
 
-/**
- * Grounds this argument tuple under [world] for [expectedField].
- *
- * @throws IllegalStateException when a variable instance is unbound or a template is uninstantiated
- */
-context(world: Assumptions)
-internal fun Arguments.instantiateBindings(
+/** Grounds this argument tuple using [bindingFor] for each variable instance. */
+fun Arguments.groundWithBindings(
     expectedField: ViaductSchema.Field,
+    bindingFor: (Arguments.Variable) -> VariableBinding,
 ): Arguments.Ground {
     if (this == Arguments.Error) return Arguments.Error
     return groundedArguments(expectedField) { value, typeExpr ->
-        value.instantiateBindings(typeExpr)
+        value.groundWithBindings(typeExpr, bindingFor)
     }
 }
 
-/** Grounds this argument tuple for [expectedField], suspending for incomplete variable instances. */
-context(world: Assumptions)
-suspend fun Arguments.fetchBindings(
+/** Suspends while [bindingFor] supplies each variable instance, then grounds this argument tuple. */
+suspend fun Arguments.fetchGroundWithBindings(
     expectedField: ViaductSchema.Field,
+    bindingFor: suspend (Arguments.Variable) -> VariableBinding,
 ): Arguments.Ground {
     if (this == Arguments.Error) return Arguments.Error
     return groundedArguments(expectedField) { value, typeExpr ->
-        value.fetchBindings(typeExpr)
+        value.fetchGroundWithBindings(typeExpr, bindingFor)
     }
 }
 
@@ -43,16 +39,16 @@ private inline fun Arguments.groundedArguments(
     return argumentsOfGround(fields)
 }
 
-context(world: Assumptions)
-private fun ArgumentExpression?.instantiateBindings(
+private fun ArgumentExpression?.groundWithBindings(
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
+    bindingFor: (Arguments.Variable) -> VariableBinding,
 ): VariableBinding =
     when (this) {
         null -> VariableBinding.of(null)
         ArgumentResolutionError -> VariableBinding.Error
         is Arguments.Variable ->
             if (isInstantiated) {
-                world.getBinding(requireNotNull(instanceId)).coerceTo(expectedType)
+                bindingFor(this).coerceTo(expectedType)
             } else {
                 error("Variable template $this must be instantiated before it can be grounded")
             }
@@ -63,7 +59,7 @@ private fun ArgumentExpression?.instantiateBindings(
             }
             val grounded = mutableListOf<EngineInputData?>()
             forEach { value ->
-                when (val binding = value.instantiateBindings(elementType)) {
+                when (val binding = value.groundWithBindings(elementType, bindingFor)) {
                     VariableBinding.Error -> return VariableBinding.Error
                     is VariableBinding.Input -> grounded += binding.value
                 }
@@ -77,8 +73,8 @@ private fun ArgumentExpression?.instantiateBindings(
             }
             val grounded = linkedMapOf<String, EngineInputData?>()
             toStringKeyedArgumentMap().forEach { (name, value) ->
-            val fieldType = expectedObjectType.requireField(name).inputType
-                when (val binding = value.instantiateBindings(fieldType)) {
+                val fieldType = expectedObjectType.requireField(name).inputType
+                when (val binding = value.groundWithBindings(fieldType, bindingFor)) {
                     VariableBinding.Error -> return VariableBinding.Error
                     is VariableBinding.Input -> grounded[name] = binding.value
                 }
@@ -88,16 +84,16 @@ private fun ArgumentExpression?.instantiateBindings(
         else -> VariableBinding.of(toEngineInputData(expectedType, this))
     }
 
-context(world: Assumptions)
-private suspend fun ArgumentExpression?.fetchBindings(
+private suspend fun ArgumentExpression?.fetchGroundWithBindings(
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
+    bindingFor: suspend (Arguments.Variable) -> VariableBinding,
 ): VariableBinding {
     return when (this) {
         null -> VariableBinding.of(null)
         ArgumentResolutionError -> VariableBinding.Error
         is Arguments.Variable ->
             if (isInstantiated) {
-                world.fetchBinding(requireNotNull(instanceId)).coerceTo(expectedType)
+                bindingFor(this).coerceTo(expectedType)
             } else {
                 error("Variable template $this must be instantiated before it can be grounded")
             }
@@ -108,7 +104,7 @@ private suspend fun ArgumentExpression?.fetchBindings(
             }
             val grounded = mutableListOf<EngineInputData?>()
             for (value in this) {
-                when (val binding = value.fetchBindings(elementType)) {
+                when (val binding = value.fetchGroundWithBindings(elementType, bindingFor)) {
                     VariableBinding.Error -> return VariableBinding.Error
                     is VariableBinding.Input -> grounded += binding.value
                 }
@@ -122,8 +118,8 @@ private suspend fun ArgumentExpression?.fetchBindings(
             }
             val grounded = linkedMapOf<String, EngineInputData?>()
             for ((name, value) in toStringKeyedArgumentMap()) {
-            val fieldType = expectedObjectType.requireField(name).inputType
-                when (val binding = value.fetchBindings(fieldType)) {
+                val fieldType = expectedObjectType.requireField(name).inputType
+                when (val binding = value.fetchGroundWithBindings(fieldType, bindingFor)) {
                     VariableBinding.Error -> return VariableBinding.Error
                     is VariableBinding.Input -> grounded[name] = binding.value
                 }

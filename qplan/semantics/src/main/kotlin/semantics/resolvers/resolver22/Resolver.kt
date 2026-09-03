@@ -2,28 +2,29 @@ package semantics.resolvers.resolver22
 
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import model.Assumptions
-import model.EngineResult
 import model.ObjectEngineResult
 import model.SelectionForest
-import model.registry.successorBoundaryDemand
 import semantics.resolvers.resolver21.CoroutineResolve
+import semantics.resolvers.successorBoundaryDemand
+import semantics.shared.OperationContext
 
 /**
  * Resolves [selections] through structured coroutines with non-selective resolver applications.
  * Results may contain more OER nodes than are strictly necessary to resolve the query.
  */
-context(world: Assumptions)
+context(operation: OperationContext)
 fun resolve(selections: SelectionForest): ObjectEngineResult {
-    require(!world.selectiveResolvers) {
+    require(!operation.selectiveResolvers) {
         "Resolver22 requires non-selective resolvers"
     }
-    val source = world.resolverRegistry.createRootQueryInput()
+    val source = operation.resolverRegistry.createRootQueryInput()
     val resolver =
         CoroutineResolve(
-            world = world,
+            operation = operation,
             complete = { completedSelections ->
-                completedSelections.successorBoundaryDemand()
+                context(operation.world) {
+                    completedSelections.successorBoundaryDemand()
+                }
             },
         )
     return runBlocking {

@@ -2,25 +2,25 @@ package semantics.correctresolution
 
 import model.requireQueryTypeDef
 import model.Assumptions
-import model.EngineResult
 import model.ObjectEngineResult
 import model.Fragment
 import model.merge
+import semantics.shared.OperationContext
 
-context(world: Assumptions)
+context(operation: OperationContext)
 internal fun ObjectEngineResult.correctResolution(
     fragment: Fragment,
 ): Boolean =
-    fragment.nominalType == world.schema.requireQueryTypeDef() &&
+    fragment.nominalType == operation.schema.requireQueryTypeDef() &&
         correctResolution(
             fragment.subselections
-                .merge(world.schema.requireQueryTypeDef()),
+                .merge(operation.schema.requireQueryTypeDef()),
         )
 
 context(world: Assumptions)
 internal fun ObjectEngineResult.rootedAndWellTyped(fragment: Fragment): Boolean =
-    fragment.nominalType == world.schema.requireQueryTypeDef() && rootedAndWellTyped()
+    fragment.nominalType == world.schema.requireQueryTypeDef() && this.rootedAndWellTyped()
 
-context(world: Assumptions)
+context(operation: OperationContext)
 internal fun ObjectEngineResult.conformsToFragment(fragment: Fragment): Boolean =
     conformsToSelections(fragment.subselections)

@@ -2,12 +2,12 @@ package semantics.contract
 
 import model.requireQueryTypeDef
 import model.requireObjectField
-import model.EngineResult
 import model.ObjectEngineResult
 import viaduct.graphql.schema.ViaductSchema
-import model.instantiateBindings
+import semantics.shared.instantiateBindings
 import model.merge
 import model.operationSelectionsFrom
+import model.objectOf
 import model.testing.TestWorld
 import semantics.correctresolution.correctResolution
 import kotlin.test.Test
@@ -63,8 +63,9 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                 "query { foo { x y } }",
             )
 
-        val resolved =
-            resolveAndValidate(world, selections)
+        val resolution =
+            resolveAndValidateObserved(world, world.objectOf("Query"), selections)
+        val resolved = resolution.result
         val foo = resolved.getCell(fooKey).get() as ObjectEngineResult
 
         assertEquals(10, foo.getCell(xKey).get())
@@ -72,7 +73,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
         assertEquals(1, fooApplications)
         assertEquals(setOf("x", "y", "z", "w"), fooDemandFields)
         assertTrue(
-            context(world) {
+            context(resolution.operation) {
                 resolved.correctResolution(
                     selections
                         .merge(world.schema.requireQueryTypeDef())

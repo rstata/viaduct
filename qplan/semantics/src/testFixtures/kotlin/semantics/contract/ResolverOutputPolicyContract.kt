@@ -95,7 +95,11 @@ private fun ResolverContract.assertRejectsWorldMode(selectiveResolvers: Boolean)
     val selections = world.operationSelectionsFrom("query { __typename }")
 
     assertFailsWith<IllegalArgumentException> {
-        resolve(world, world.objectOf("Query"), selections)
+        resolve(
+            semantics.shared.OperationContext(world),
+            world.objectOf("Query"),
+            selections,
+        )
     }
 }
 

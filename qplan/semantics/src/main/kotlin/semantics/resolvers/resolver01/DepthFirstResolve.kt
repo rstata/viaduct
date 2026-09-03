@@ -3,7 +3,6 @@ package semantics.resolvers.resolver01
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineErrorData
-import model.EngineResult
 import model.ErrorEngineResult
 import model.ObjectEngineResult
 import model.outputType
@@ -15,7 +14,6 @@ import viaduct.engine.api.EngineObjectData
 import model.engineObjectDataOf
 import model.groundKey
 import model.requireQueryTypeDef
-import model.registry.demandsFromSibling
 import model.registry.ResolverFragment
 import model.schemaType
 import semantics.correctresolution.argumentsContainErrorValue
@@ -25,19 +23,22 @@ import semantics.resolvers.materializedChildOccurrences
 import semantics.resolvers.resolvePassiveValues
 import semantics.resolvers.resolveRetainedObjects
 import semantics.shared.CycleChecker
+import semantics.shared.OperationContext
 import semantics.shared.materialize
 
 /** The recursive, dependency-first resolution constructor shared by Resolver01-03 and 06-08. */
 internal class DepthFirstResolve(
-    private val world: Assumptions,
+    private val operation: OperationContext,
     private val complete: (SelectionForest) -> SelectionForest,
 ) {
+    private val world: Assumptions = operation.world
+
     fun resolve(
         source: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult {
         val result =
-            context(world) {
+            context(operation, world) {
                 ObjectEngineResult.of(source.schemaType, emptyMap(), mutable = true)
             }
         return orchestrateKeys(
@@ -56,7 +57,7 @@ internal class DepthFirstResolve(
         path: List<PathComponent>,
         selections: SelectionForest,
         resolved: ObjectEngineResult,
-    ): ObjectEngineResult = context(world) {
+    ): ObjectEngineResult = context(operation, world) {
         require(resolved.type == source.schemaType) {
             "Initial result type ${resolved.type.name} does not match ${source.schemaType}"
         }
@@ -97,7 +98,7 @@ internal class DepthFirstResolve(
         path: List<PathComponent>,
         keys: Set<ObjectEngineResult.GroundKey>,
         ordered: List<ObjectEngineResult.GroundKey> = emptyList(),
-    ): List<ObjectEngineResult.GroundKey> = context(world) {
+    ): List<ObjectEngineResult.GroundKey> = context(operation, world) {
         if (keys.isEmpty()) return@context ordered
 
         val ready =
@@ -123,7 +124,7 @@ internal class DepthFirstResolve(
         path: List<PathComponent>,
         consumer: ObjectEngineResult.GroundKey,
         unresolved: Set<ObjectEngineResult.GroundKey>,
-    ): Set<ObjectEngineResult.GroundKey> = context(world) {
+    ): Set<ObjectEngineResult.GroundKey> = context(operation, world) {
         if (consumer.arguments.argumentsContainErrorValue()) {
             return@context emptySet()
         }
@@ -146,7 +147,7 @@ internal class DepthFirstResolve(
         path: List<PathComponent>,
         fieldSelection: ObjectSelection,
         resolved: ObjectEngineResult,
-    ): ResolvePassiveValuesResult? = context(world) {
+    ): ResolvePassiveValuesResult? = context(operation, world) {
         val key = fieldSelection.groundKey()
         val cell = resolved.reserveCell(key)
         when (val arguments = key.arguments) {
@@ -172,7 +173,7 @@ internal class DepthFirstResolve(
                 val input =
                     runBlocking {
                         // Depth-first resolution guarantees this materialization does not block.
-                        context(CycleChecker.createNOP()) {
+                        context(operation, CycleChecker.createNOP()) {
                             resolved.materialize(
                                 selections = objectFragment.materializeSelections,
                                 reader = coordinate,
@@ -204,7 +205,7 @@ internal class DepthFirstResolve(
     private fun resolveQueryFragment(
         queryFragment: ResolverFragment,
         coordinate: List<PathComponent>,
-    ): EngineObjectData.Sync = context(world) {
+    ): EngineObjectData.Sync = context(operation, world) {
         if (queryFragment.constructionSelections.isEmpty()) {
             return@context engineObjectDataOf(world.schema.requireQueryTypeDef())
         }
@@ -223,9 +224,12 @@ internal class DepthFirstResolve(
             selections = queryFragment.constructionSelections,
             resolved = queryResult,
         )
-        world.queryValues[queryFragment.resolverOccurrenceId] = queryResult
+        operation.resolverObserver.onQueryFragmentResult(
+            queryFragment.resolverOccurrenceId,
+            queryResult,
+        )
         runBlocking {
-            context(CycleChecker.createNOP()) {
+            context(operation, CycleChecker.createNOP()) {
                 queryResult.materialize(
                     selections = queryFragment.materializeSelections,
                     reader = coordinate,

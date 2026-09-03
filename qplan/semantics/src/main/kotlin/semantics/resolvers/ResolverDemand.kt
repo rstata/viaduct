@@ -4,15 +4,15 @@ import viaduct.graphql.schema.ViaductSchema
 
 import model.ObjectEngineResult
 
-import model.Assumptions
 import model.ObjectSelectionForest
 import model.PathComponent
 import model.SelectionForest
-import model.applicableGroundSelections
+import semantics.shared.applicableGroundSelections
 import model.flatMapToSelectionForest
 import model.schemaType
 import semantics.correctresolution.argumentsContainErrorValue
 import viaduct.engine.api.EngineObjectData
+import semantics.shared.OperationContext
 
 /**
  * Returns the applicable demand closed under the direct object fragments of its resolver fields.
@@ -20,7 +20,7 @@ import viaduct.engine.api.EngineObjectData
  * Each closure step normalizes under existing bindings, binds variables defined by newly discovered
  * resolver occurrences, and instantiates their direct object fragments at their exact identities.
  */
-context(world: Assumptions)
+context(operation: OperationContext)
 fun ViaductSchema.Object.closeResolverDemand(
     root: ObjectEngineResult,
     path: List<PathComponent>,
@@ -34,7 +34,7 @@ fun ViaductSchema.Object.closeResolverDemand(
     )
 
 /** Closes demand only for standard resolvers whose fields are absent from this source object. */
-context(world: Assumptions)
+context(operation: OperationContext)
 fun EngineObjectData.Sync.closeResolverDemand(
     root: ObjectEngineResult,
     path: List<PathComponent>,
@@ -58,7 +58,7 @@ fun EngineObjectData.Sync.closeResolverDemand(
         },
     )
 
-context(world: Assumptions)
+context(operation: OperationContext)
 private fun ViaductSchema.Object.closeResolverDemand(
     root: ObjectEngineResult,
     path: List<PathComponent>,
@@ -71,7 +71,7 @@ private fun ViaductSchema.Object.closeResolverDemand(
         applicableSelections.groundKeys().filter { key ->
             key !in expanded &&
                 !key.arguments.argumentsContainErrorValue() &&
-                key.field in world.resolverRegistry &&
+                key.field in operation.resolverRegistry &&
                 expandResolver(key)
         }.toSet()
 
@@ -80,7 +80,7 @@ private fun ViaductSchema.Object.closeResolverDemand(
     unexpandedResolverKeys.bindFromArguments(root, path)
     val resolverDemand =
         unexpandedResolverKeys.flatMapToSelectionForest { key ->
-            world.resolverRegistry
+            operation.resolverRegistry
                 .resolver(key.field)
                 .instantiateFragmentsAt(root, path + key)
                 .objectFragment

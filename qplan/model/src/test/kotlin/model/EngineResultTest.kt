@@ -5,7 +5,6 @@ import viaduct.graphql.schema.ViaductSchema
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import model.testing.TestWorld
-import model.testing.testRoot
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
@@ -152,111 +151,6 @@ class EngineResultTest {
         }
         assertSame(firstValue, result.getCell(key).getValue().get())
     }
-
-    @Test
-    fun `symbolic object keys identify immutable and mutable cells without rekeying`() {
-        val world =
-            TestWorld.fromSDL(
-                """
-                type Query {
-                  source: Int
-                  consume(value: Int): Int
-                }
-                """.trimIndent(),
-            ).assumptions
-        val source = world.schema.requireObjectField("Query", "source")
-        val consume = world.schema.requireObjectField("Query", "consume")
-        val variable =
-            Arguments.Variable
-                .of(source, "value")
-                .instantiate(
-                    ResolverOccurrenceId.at(
-                        world.schema.testRoot(),
-                        listOf(ListEngineResult.Index.of(0)),
-                    ),
-                )
-        val arguments = Arguments.of(consume, mapOf("value" to variable))
-        val key = ObjectEngineResult.ObjectKey.of(consume, arguments)
-        val equalKey = ObjectEngineResult.ObjectKey.of(consume, arguments)
-        val initialHash = key.hashCode()
-        val immutable =
-            ObjectEngineResult.of(
-                world.schema.requireQueryTypeDef(),
-                mapOf(key to 11),
-            )
-        val mutable =
-            ObjectEngineResult.of(
-                world.schema.requireQueryTypeDef(),
-                mutable = true,
-            )
-
-        assertFalse(key is ObjectEngineResult.GroundKey)
-        assertFalse(context(world) { key.isContextuallyGrounded() })
-        assertEquals(listOf(key), listOf<PathComponent>(key).toSelectionPath())
-        assertEquals(11, immutable.getCell(equalKey).getValue().get())
-
-        mutable.reserveCell(key).setValue(12)
-        world.bindVariable(requireNotNull(variable.instanceId), 7)
-
-        assertTrue(context(world) { key.isContextuallyGrounded() })
-        assertEquals(initialHash, key.hashCode())
-        assertEquals(12, mutable.getCell(equalKey).getValue().get())
-        assertEquals(setOf(key), mutable.keys)
-    }
-
-    @Test
-    fun `fetching grounded arguments awaits every symbolic variable after an error`() =
-        runBlocking {
-            val world =
-                TestWorld.fromSDL(
-                    """
-                    input Filter {
-                      first: Int
-                      second: Int
-                    }
-
-                    type Query {
-                      source: Int
-                      consume(filter: Filter): Int
-                    }
-                    """.trimIndent(),
-                ).assumptions
-            val source = world.schema.requireObjectField("Query", "source")
-            val consume = world.schema.requireObjectField("Query", "consume")
-            val resolverOccurrenceId =
-                ResolverOccurrenceId.at(
-                    world.schema.testRoot(),
-                    listOf(ListEngineResult.Index.of(0)),
-                )
-            val errorVariable =
-                Arguments.Variable.of(source, "error").instantiate(resolverOccurrenceId)
-            val pendingVariable =
-                Arguments.Variable.of(source, "pending").instantiate(resolverOccurrenceId)
-            val key =
-                ObjectEngineResult.ObjectKey.of(
-                    consume,
-                    Arguments.of(
-                        consume,
-                        mapOf(
-                            "filter" to
-                                mapOf(
-                                    "first" to errorVariable,
-                                    "second" to pendingVariable,
-                                ),
-                        ),
-                    ),
-                )
-            world.bindVariable(requireNotNull(errorVariable.instanceId), VariableBinding.Error)
-            world.declareBinding(requireNotNull(pendingVariable.instanceId))
-
-            val grounded = async { context(world) { key.fetchGroundedArguments() } }
-
-            assertFalse(grounded.isCompleted)
-            assertFalse(context(world) { key.isContextuallyGrounded() })
-            world.completeBinding(requireNotNull(pendingVariable.instanceId), 2)
-            assertSame(Arguments.Error, grounded.await())
-            assertTrue(context(world) { key.isContextuallyGrounded() })
-        }
 
     @Test
     fun `object keys reuse stable snapshots between reservations`() {

@@ -2,16 +2,17 @@ package semantics.contract
 
 import viaduct.engine.api.EngineObjectData
 import model.Assumptions
-import model.EngineResult
 import model.ObjectEngineResult
 import model.ResolverOccurrenceId
 import viaduct.graphql.schema.ViaductSchema
-import model.requireField
 import model.SelectionForest
+import semantics.shared.OperationContext
+import semantics.shared.RecordingResolverObserver
 
 /** Subject-specific evidence retained alongside one resolution result. */
 interface ResolverResolutionObservation {
     val result: ObjectEngineResult
+    val operation: OperationContext
 
     /** Exact resolver applications when the subject exposes occurrence-aware instrumentation. */
     val appliedResolverOccurrences: Set<ResolverOccurrenceId>?
@@ -20,6 +21,7 @@ interface ResolverResolutionObservation {
 
 private data class ResultOnlyResolverResolutionObservation(
     override val result: ObjectEngineResult,
+    override val operation: OperationContext,
 ) : ResolverResolutionObservation
 
 /**
@@ -30,7 +32,7 @@ interface ResolverContract {
         get() = true
 
     fun resolve(
-        world: Assumptions,
+        operation: OperationContext,
         root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult
@@ -40,9 +42,15 @@ interface ResolverContract {
         root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ResolverResolutionObservation =
-        ResultOnlyResolverResolutionObservation(
-            resolve(world, root, selections),
-        )
+        OperationContext(
+            world = world,
+            resolverObserver = RecordingResolverObserver(),
+        ).let { operation ->
+            ResultOnlyResolverResolutionObservation(
+                result = resolve(operation, root, selections),
+                operation = operation,
+            )
+        }
 
     fun expectedPassiveResultFieldNames(vararg fieldNames: String): Set<String> =
         fieldNames.toSet()

@@ -2,8 +2,6 @@ package model
 
 import viaduct.graphql.schema.ViaductSchema
 
-import kotlinx.coroutines.async
-import kotlinx.coroutines.runBlocking
 import model.testing.TestWorld
 import model.testing.testRoot
 import kotlin.test.Test
@@ -13,7 +11,6 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
-import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -285,157 +282,6 @@ class AssumptionsTest {
     }
 
     @Test
-    fun `variable bindings distinguish undeclared incomplete and bound to null`(): Unit =
-        runBlocking {
-            val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-            val field = assumptions.schema.requireObjectField("Query", "node_V_A_node")
-            val variable = Arguments.Variable.of(field, "value").testInstance(emptyList())
-
-            assertFalse(assumptions.isBound(variable.testId))
-            assertFailsWith<IllegalStateException> {
-                assumptions.getBinding(variable.testId)
-            }
-
-            assumptions.declareBinding(variable.testId)
-            val fetched = async { assumptions.fetchBinding(variable.testId) }
-
-            assertFalse(assumptions.isBound(variable.testId))
-            assertFalse(fetched.isCompleted)
-            assertFailsWith<UncompletedPromiseException> {
-                assumptions.getBinding(variable.testId)
-            }
-
-            assumptions.completeBinding(variable.testId, null)
-
-            assertTrue(assumptions.isBound(variable.testId))
-            assertEquals(VariableBinding.of(null), assumptions.getBinding(variable.testId))
-            assertEquals(VariableBinding.of(null), fetched.await())
-            assertFalse(
-                assumptions.isBound(
-                    Arguments.Variable.of(field, "value")
-                        .testInstance(listOf(ListEngineResult.Index.of(0)))
-                        .testId,
-                ),
-            )
-        }
-
-    @Test
-    fun `variable bindings are written once`() {
-        val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-        val field = assumptions.schema.requireObjectField("Query", "node_V_A_node")
-        val variable = Arguments.Variable.of(field, "value").testInstance(emptyList())
-        val first = 1
-
-        assumptions.declareBinding(variable.testId)
-        assertFailsWith<IllegalStateException> {
-            assumptions.declareBinding(
-                Arguments.Variable.of(field, "value").testInstance(emptyList()).testId,
-            )
-        }
-        assumptions.completeBinding(variable.testId, first)
-        assertFailsWith<IllegalStateException> {
-            assumptions.completeBinding(variable.testId, 2)
-        }
-
-        assertEquals(VariableBinding.of(first), assumptions.getBinding(variable.testId))
-    }
-
-    @Test
-    fun `variables can be bound immediately exactly once`(): Unit =
-        runBlocking {
-            val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-            val field = assumptions.schema.requireObjectField("Query", "node_V_A_node")
-            val variable = Arguments.Variable.of(field, "value").testInstance(emptyList())
-            val value = 1
-
-            assumptions.bindVariable(variable.testId, value)
-
-            assertTrue(assumptions.isBound(variable.testId))
-            assertEquals(VariableBinding.of(value), assumptions.getBinding(variable.testId))
-            assertEquals(VariableBinding.of(value), assumptions.fetchBinding(variable.testId))
-            assertFailsWith<IllegalStateException> {
-                assumptions.bindVariable(variable.testId, 2)
-            }
-            assertFailsWith<IllegalStateException> {
-                assumptions.declareBinding(variable.testId)
-            }
-        }
-
-    @Test
-    fun `immediate binding rejects a previously declared variable`() {
-        val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-        val field = assumptions.schema.requireObjectField("Query", "node_V_A_node")
-        val variable = Arguments.Variable.of(field, "value").testInstance(emptyList())
-
-        assumptions.declareBinding(variable.testId)
-
-        assertFailsWith<IllegalStateException> {
-            assumptions.bindVariable(variable.testId, null)
-        }
-    }
-
-    @Test
-    fun `binding values are ground by type`() {
-        val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-        val field = assumptions.schema.requireObjectField("Query", "node_V_A_node")
-        val binding = Arguments.Variable.of(field, "binding").testInstance(emptyList())
-        val filter =
-            toEngineInputObjectData(
-                expectedType = assumptions.schema.requireType("Filter") as ViaductSchema.Input,
-                value = mapOf("limit" to 1),
-            )
-
-        assumptions.declareBinding(binding.testId)
-        assumptions.completeBinding(binding.testId, filter)
-
-        assertEquals(VariableBinding.of(filter), assumptions.getBinding(binding.testId))
-    }
-
-    @Test
-    fun `open arguments instantiate recursively from bindings`() {
-        val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-        val node = assumptions.schema.requireObjectField("Query", "node_V_A_node")
-        val variable = Arguments.Variable.of(node, "filter").testInstance(emptyList())
-        val filter =
-            toEngineInputObjectData(
-                expectedType = assumptions.schema.requireType("Filter") as ViaductSchema.Input,
-                value = mapOf("limit" to 3),
-            )
-        val arguments =
-            Arguments.of(
-                field = node,
-                fields = mapOf("filter" to variable),
-            )
-        assumptions.declareBinding(variable.testId)
-        assumptions.completeBinding(variable.testId, filter)
-
-        val instantiated =
-            context(assumptions) {
-                arguments.instantiateBindings(node)
-            }
-
-        val grounded = assertIs<Arguments.Resolved>(instantiated)
-        assertEquals(
-            filter,
-            grounded.fieldValues.getValue("filter"),
-        )
-    }
-
-    @Test
-    fun `argument instantiation preserves the argument error`() {
-        val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-        val node = assumptions.schema.requireObjectField("Query", "node_V_A_node")
-        val arguments = Arguments.of(node, mapOf("filter" to ArgumentResolutionError))
-
-        val instantiated =
-            context(assumptions) {
-                arguments.instantiateBindings(node)
-            }
-
-        assertSame(Arguments.Error, instantiated)
-    }
-
-    @Test
     fun `nested input errors become an argument error`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val node = schema.requireObjectField("Query", "node_V_A_node")
@@ -454,31 +300,6 @@ class AssumptionsTest {
 
             assertSame(Arguments.Error, arguments)
         }
-    }
-
-    @Test
-    fun `nested erroneous variable bindings become an argument error`() {
-        val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-        val node = assumptions.schema.requireObjectField("Query", "node_V_A_node")
-        val variable = Arguments.Variable.of(node, "tag").testInstance(emptyList())
-        val arguments =
-            Arguments.of(
-                node,
-                mapOf(
-                    "filter" to
-                        mapOf(
-                            "tags" to listOf(variable),
-                        ),
-                ),
-            )
-        assumptions.bindVariable(variable.testId, VariableBinding.Error)
-
-        val instantiated =
-            context(assumptions) {
-                arguments.instantiateBindings(node)
-            }
-
-        assertSame(Arguments.Error, instantiated)
     }
 
     @Test

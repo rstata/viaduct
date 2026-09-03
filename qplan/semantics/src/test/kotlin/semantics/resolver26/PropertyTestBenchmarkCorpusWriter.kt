@@ -16,6 +16,8 @@ import semantics.correctresolution.correctResolution
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
+import semantics.shared.OperationContext
+import semantics.shared.RecordingResolverObserver
 
 object PropertyTestBenchmarkCorpusWriter {
     private const val CAMPAIGN_ROUND = 46
@@ -50,11 +52,13 @@ object PropertyTestBenchmarkCorpusWriter {
                     val world: Assumptions =
                         testWorld.newAssumptions(selectiveResolvers = true)
                     val fragment: Fragment = world.fragmentFrom(testCase.query.source)
+                    val operation =
+                        OperationContext(world, resolverObserver = RecordingResolverObserver())
                     testCase.registry.clearResolutionWitness()
                     val appliedResolverOccurrences =
                         ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
                     val result: ObjectEngineResult =
-                        context(world) {
+                        context(operation) {
                             resolveObserved(fragment.subselections) { application ->
                                 appliedResolverOccurrences += application.resolverOccurrenceId
                             }
@@ -62,16 +66,16 @@ object PropertyTestBenchmarkCorpusWriter {
                     val witness: ResolutionWitness = testCase.registry.resolutionWitness()
                     check(witness.applications.size == EXPECTED_RESOLVER_APPLICATIONS)
                     check(
-                        context(world) {
+                        context(operation) {
                             result.registeredResolverApplicationIdentityCounts()
                         } == witness.applicationIdentityCounts(),
                     )
                     check(
-                        context(world) {
+                        context(operation) {
                             result.correctResolution(fragment)
                         },
                     )
-                    context(world) {
+                    context(operation) {
                         result.validateFromFieldBindings(appliedResolverOccurrences)
                     }
 

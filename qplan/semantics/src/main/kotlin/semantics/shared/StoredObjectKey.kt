@@ -1,9 +1,6 @@
 package semantics.shared
 
-import model.Assumptions
 import model.ObjectEngineResult
-import model.groundedArguments
-import model.isContextuallyGrounded
 
 /**
  * Finds the cell addressed by one contextually grounded selection key.
@@ -11,7 +8,7 @@ import model.isContextuallyGrounded
  * Symbolic identity wins when the result retains it. Older resolver families may instead store
  * the key's grounded projection.
  */
-context(world: Assumptions)
+context(operation: OperationContext)
 internal fun ObjectEngineResult.findStoredKey(
     candidate: ObjectEngineResult.ObjectKey,
 ): ObjectEngineResult.ObjectKey? {

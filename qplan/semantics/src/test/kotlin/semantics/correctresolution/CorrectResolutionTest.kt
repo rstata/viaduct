@@ -22,6 +22,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import semantics.shared.OperationContext
+import semantics.shared.RecordingResolverObserver
 
 class CorrectResolutionTest {
     @Test
@@ -60,6 +62,7 @@ class CorrectResolutionTest {
                 },
             )
         val world = testWorld.assumptions
+        val operation = OperationContext(world, resolverObserver = RecordingResolverObserver())
         val selections =
             world
                 .fragmentFrom(
@@ -71,10 +74,10 @@ class CorrectResolutionTest {
                     }
                     """.trimIndent(),
                 ).subselections
-        val result = context(world) { resolve(selections) }
+        val result = context(operation) { resolve(selections) }
         val querySelections = selections.merge(world.schema.requireQueryTypeDef())
 
-        assertTrue(context(world) { result.correctResolution(querySelections) })
+        assertTrue(context(operation) { result.correctResolution(querySelections) })
         assertEquals(listOf(setOf("name"), setOf("name")), observedFields)
     }
 
@@ -82,6 +85,7 @@ class CorrectResolutionTest {
     fun `selections must be rooted at Query`() {
         val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions
         val result = world.engineResultOf("Query")
+        val operation = OperationContext(world)
         val profileSelections =
             ObjectSelectionForest.of(
                 type = world.schema.requireType("Profile") as ViaductSchema.Object,
@@ -89,7 +93,7 @@ class CorrectResolutionTest {
             )
 
         assertFailsWith<IllegalArgumentException> {
-            context(world) {
+            context(operation) {
                 result.correctResolution(profileSelections)
             }
         }
@@ -146,20 +150,38 @@ class CorrectResolutionTest {
             world.engineResultOf("Query") {
                 "consumer" resolvesTo 7
             }
+        val occurrenceId = ResolverOccurrenceId.at(result, listOf(consumerKey))
+        val missingObservation = OperationContext(world)
 
-        assertFalse(context(world) { result.correctResolution(selections) })
+        assertFalse(context(missingObservation) { result.correctResolution(selections) })
 
-        world.queryValues[ResolverOccurrenceId.at(result, listOf(consumerKey))] =
+        val incorrectObservation =
+            OperationContext(world, resolverObserver = RecordingResolverObserver())
+        incorrectObservation.resolverObserver.onQueryFragmentResult(
+            occurrenceId,
             world.engineResultOf("Query") {
                 "source" resolvesTo 8
-            }
-        assertFalse(context(world) { result.correctResolution(selections) })
+            },
+        )
+        assertFalse(context(incorrectObservation) { result.correctResolution(selections) })
 
-        world.queryValues[ResolverOccurrenceId.at(result, listOf(consumerKey))] =
+        val correctObservation =
+            OperationContext(world, resolverObserver = RecordingResolverObserver())
+        correctObservation.resolverObserver.onQueryFragmentResult(
+            occurrenceId,
             world.engineResultOf("Query") {
                 "source" resolvesTo 7
-            }
-        assertTrue(context(world) { result.correctResolution(selections) })
+            },
+        )
+        assertTrue(context(correctObservation) { result.correctResolution(selections) })
+
+        correctObservation.resolverObserver.onQueryFragmentResult(
+            occurrenceId,
+            world.engineResultOf("Query") {
+                "source" resolvesTo 7
+            },
+        )
+        assertFalse(context(correctObservation) { result.correctResolution(selections) })
     }
 
     @Test
@@ -180,6 +202,7 @@ class CorrectResolutionTest {
                     }
                     """.trimIndent(),
             ).assumptions
+        val operation = OperationContext(world)
         val consumer = world.schema.requireObjectField("Query", "consumer")
         val source = world.schema.requireObjectField("Query", "source")
         val consumerKey =
@@ -194,7 +217,7 @@ class CorrectResolutionTest {
             )
         val occurrenceId = ResolverOccurrenceId.at(result, listOf(consumerKey))
         val variable = Arguments.Variable.of(consumer, "seed").instantiate(occurrenceId)
-        world.bindVariable(requireNotNull(variable.instanceId), 99)
+        operation.variableBindingsState.bindVariable(requireNotNull(variable.instanceId), 99)
         val symbolicSourceKey =
             ObjectEngineResult.ObjectKey.of(
                 field = source,
@@ -220,7 +243,7 @@ class CorrectResolutionTest {
                 ).subselections
                 .merge(world.schema.requireQueryTypeDef())
 
-        assertFalse(context(world) { result.correctResolution(selections) })
+        assertFalse(context(operation) { result.correctResolution(selections) })
     }
 
     private companion object {

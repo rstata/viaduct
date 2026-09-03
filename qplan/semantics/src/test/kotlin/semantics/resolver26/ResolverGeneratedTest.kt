@@ -5,7 +5,6 @@ import semantics.resolver26.resolve
 import viaduct.engine.api.EngineObjectData
 
 import model.Assumptions
-import model.EngineResult
 import model.ObjectEngineResult
 import model.ResolverOccurrenceId
 import model.SelectionForest
@@ -24,6 +23,8 @@ import semantics.contract.QueryFragmentGeneratedResolverContract
 import semantics.contract.ResolverResolutionObservation
 import semantics.contract.SometimesPassiveGeneratedResolverContract
 import java.util.concurrent.ConcurrentHashMap
+import semantics.shared.OperationContext
+import semantics.shared.RecordingResolverObserver
 
 class ResolverGeneratedTest :
     EmptyObjectFragmentGeneratedResolverContract,
@@ -55,11 +56,11 @@ class ResolverGeneratedTest :
             GeneratedCaseAssertions.fromFieldBindings
 
     override fun resolve(
-        world: Assumptions,
+        operation: OperationContext,
         root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult =
-        context(world) {
+        context(operation) {
             resolve(selections)
         }
 
@@ -68,16 +69,22 @@ class ResolverGeneratedTest :
         root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ResolverResolutionObservation {
+        val operation =
+            OperationContext(
+                world = world,
+                resolverObserver = RecordingResolverObserver(),
+            )
         val appliedResolverOccurrences =
             ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
         val result =
-            context(world) {
+            context(operation) {
                 resolveObserved(selections) { application ->
                     appliedResolverOccurrences += application.resolverOccurrenceId
                 }
             }
         return Resolver26ResolutionObservation(
             result = result,
+            operation = operation,
             appliedResolverOccurrences = appliedResolverOccurrences.toSet(),
         )
     }
@@ -85,5 +92,6 @@ class ResolverGeneratedTest :
 
 private data class Resolver26ResolutionObservation(
     override val result: ObjectEngineResult,
+    override val operation: OperationContext,
     override val appliedResolverOccurrences: Set<ResolverOccurrenceId>,
 ) : ResolverResolutionObservation

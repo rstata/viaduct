@@ -254,12 +254,14 @@ interface SometimesPassiveObjectPathResolverContract : ResolverContract {
             )
         val world = testWorld.assumptions
 
-        val resolved = resolveAndValidate(world, "query { item { computed } }")
+        val resolution =
+            resolveAndValidateObserved(world, "query { item { computed } }")
+        val resolved = resolution.result
         val item =
             assertIs<ObjectEngineResult>(
                 resolved.getCell(world.schema.contractKey("Query", "item")).get(),
             )
-        context(world) {
+        context(resolution.operation) {
             resolved.validateFromFieldBindings(emptySet())
         }
 

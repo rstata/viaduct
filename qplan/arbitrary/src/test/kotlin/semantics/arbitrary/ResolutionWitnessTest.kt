@@ -1,9 +1,14 @@
 package semantics.arbitrary
 
+import semantics.contract.RegisteredResolverOccurrence
+import semantics.contract.forEachRegisteredResolverOccurrence
+import semantics.contract.registeredResolverOccurrenceCounts
+import semantics.contract.registeredResolverOccurrences
+import semantics.shared.OperationContext
+
 import viaduct.graphql.schema.ViaductSchema
 
 import model.Arguments
-import model.EngineResult
 import model.EngineErrorData
 import model.ListEngineResult
 import model.ObjectEngineResult
@@ -299,16 +304,16 @@ class ResolutionWitnessTest {
                 computedTwoKey to 1,
                 baseKey to 3,
             ),
-            context(world.assumptions) {
+            context(OperationContext(world.assumptions)) {
                 result.registeredResolverOccurrenceCounts(world.resolverRegistry)
             },
         )
         val cells =
-            context(world.assumptions) {
+            context(OperationContext(world.assumptions)) {
                 result.registeredResolverOccurrences(world.resolverRegistry)
             }
         val streamedCells = mutableListOf<RegisteredResolverOccurrence>()
-        context(world.assumptions) {
+        context(OperationContext(world.assumptions)) {
             result.forEachRegisteredResolverOccurrence(
                 registry = world.resolverRegistry,
                 visitOccurrence = streamedCells::add,
@@ -389,7 +394,7 @@ class ResolutionWitnessTest {
             ResolutionWitnessBounds(maxFingerprintCharacters = 1)
 
         assertFailsWith<ResolutionWitnessBoundExceededException> {
-            context(world.assumptions) {
+            context(OperationContext(world.assumptions)) {
                 result.registeredResolverOccurrences(
                     registry = world.resolverRegistry,
                     bounds = fingerprintBounds,
@@ -397,7 +402,7 @@ class ResolutionWitnessTest {
             }
         }
         val streamedCells = mutableListOf<RegisteredResolverOccurrence>()
-        context(world.assumptions) {
+        context(OperationContext(world.assumptions)) {
             result.forEachRegisteredResolverOccurrence(
                 registry = world.resolverRegistry,
                 bounds = fingerprintBounds,
@@ -407,7 +412,7 @@ class ResolutionWitnessTest {
         assertEquals(2, streamedCells.size)
 
         assertFailsWith<ResolutionWitnessBoundExceededException> {
-            context(world.assumptions) {
+            context(OperationContext(world.assumptions)) {
                 result.forEachRegisteredResolverOccurrence(
                     registry = world.resolverRegistry,
                     bounds = ResolutionWitnessBounds(maxResultNodes = 1),
@@ -442,7 +447,7 @@ class ResolutionWitnessTest {
             mapOf(computedKey to 2),
             result
                 .let {
-                    context(world.assumptions) {
+                    context(OperationContext(world.assumptions)) {
                         it.registeredResolverOccurrenceCounts(world.resolverRegistry)
                     }
                 }

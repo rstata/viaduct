@@ -47,7 +47,8 @@ interface ObjectFragmentFromObjectPathResolverContract :
         val resultField = world.schema.requireObjectField("Query", "result")
         val resultKey = ObjectEngineResult.GroundKey.of(resultField, emptyMap())
         val resolver = world.resolverRegistry.resolver(resultField)
-        val resolved = resolveAndValidate(world, "query { result }")
+        val resolution = resolveAndValidateObserved(world, "query { result }")
+        val resolved = resolution.result
         val boundVariable =
             context(world) {
                 resolver
@@ -62,7 +63,9 @@ interface ObjectFragmentFromObjectPathResolverContract :
         assertEquals(14, resolved.getCell(resultKey).get())
         assertEquals(
             VariableBinding.of(7),
-            world.getBinding(requireNotNull(boundVariable.instanceId)),
+            resolution.operation.variableBindingsState.getBinding(
+                requireNotNull(boundVariable.instanceId),
+            ),
         )
     }
 
@@ -304,7 +307,8 @@ interface ObjectFragmentFromObjectPathResolverContract :
             val resultField = world.schema.requireObjectField("Query", "result")
             val resultKey = ObjectEngineResult.GroundKey.of(resultField, emptyMap())
             val resolver = world.resolverRegistry.resolver(resultField)
-            val resolved = resolveAndValidate(world, "query { result }")
+            val resolution = resolveAndValidateObserved(world, "query { result }")
+            val resolved = resolution.result
             val boundVariable =
                 context(world) {
                     resolver
@@ -328,7 +332,9 @@ interface ObjectFragmentFromObjectPathResolverContract :
                 } else {
                     VariableBinding.of(provided)
                 },
-                world.getBinding(requireNotNull(boundVariable.instanceId)),
+                resolution.operation.variableBindingsState.getBinding(
+                    requireNotNull(boundVariable.instanceId),
+                ),
             )
             assertEquals("consume", consumedKey)
             assertEquals(true, observedResultInput)

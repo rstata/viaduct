@@ -7,7 +7,6 @@ import model.EngineOutputData
 import model.EngineResult
 import model.EngineResultCell
 import model.ErrorEngineResult
-import model.MaterializeSelection
 import model.MaterializeSelectionForest
 import model.ObjectEngineResult
 import model.ObjectSelection
@@ -20,14 +19,12 @@ import model.requireQueryTypeDef
 import model.registry.FieldResolver
 import model.registry.ResolverFragment
 import model.schemaType
-import model.toMaterializeSelectionForest
 import semantics.correctresolution.argumentsContainErrorValue
 import viaduct.engine.api.EngineObjectData
 
 /** Invokes and publishes one already-installed field resolver instance. */
 internal class FieldResolverTask(
-    private val world: Assumptions,
-    private val support: Resolver26Support,
+    private val operation: Resolver26OperationContext,
     private val root: ObjectEngineResult,
     private val path: List<PathComponent>,
     private val selection: ObjectSelection,
@@ -42,8 +39,10 @@ internal class FieldResolverTask(
     private val variableArgumentCount: Int,
     private val variableResolverOccurrenceIds: Set<ResolverOccurrenceId>,
 ) {
+    private val world: Assumptions = operation.world
+
     suspend fun run() {
-        context(world, support) {
+        context(operation, world) {
             val objectKey = selection.key
             if (groundedArguments.argumentsContainErrorValue()) {
                 val errorResult = ErrorEngineResult.of(EngineErrorData.of())
@@ -62,9 +61,9 @@ internal class FieldResolverTask(
             val resolverArguments = groundedArguments as Arguments.Resolved
             val constructionDemand: SelectionForest = selection.subselections
             val invocationDemand: SelectionForest = constructionDemand.successorDemand()
-            val queryValue = support.fetchQueryValue(resolverOccurrenceId)
+            val queryValue = operation.queryValuesState.fetch(resolverOccurrenceId)
 
-            support.observeApplication(
+            operation.resolverObserver.onResolverApplication(
                 Resolver26ApplicationObservation(
                     occurrencePath = coordinate,
                     field = objectKey.field,
@@ -99,16 +98,16 @@ internal class FieldResolverTask(
     }
 }
 
-context(world: Assumptions, support: Resolver26Support)
+context(operation: Resolver26OperationContext)
 internal suspend fun ResolverFragment.resolveQueryFragment(
     coordinate: List<PathComponent>,
 ): EngineObjectData.Sync {
     if (constructionSelections.isEmpty()) {
-        return engineObjectDataOf(world.schema.requireQueryTypeDef())
+        return engineObjectDataOf(operation.schema.requireQueryTypeDef())
     }
 
     val symbolicSelections = materializeSelections
-    val source = world.resolverRegistry.createRootQueryInput()
+    val source = operation.resolverRegistry.createRootQueryInput()
     val queryResult =
         ObjectEngineResult.of(
             type = source.schemaType,
@@ -116,8 +115,7 @@ internal suspend fun ResolverFragment.resolveQueryFragment(
         )
     val orchestration =
         ObjectOrchestrationTask(
-            world = world,
-            support = support,
+            operation = operation,
             root = queryResult,
             path = emptyList(),
             source = source,
@@ -125,14 +123,13 @@ internal suspend fun ResolverFragment.resolveQueryFragment(
             initialDemand = symbolicSelections.constructionSelections(),
     )
     orchestration.prepare()
-    world.queryValues[resolverOccurrenceId] = queryResult
+    operation.resolverObserver.onQueryFragmentResult(resolverOccurrenceId, queryResult)
     orchestration.launch()
     queryResult.completeProviderBindings(
         reads =
             pathVariableDefinitions.map { definition ->
                 ProviderDefinitionRead(definition, coordinate)
             },
-        support = support,
     )
     return queryResult.materializeResolverInput(
         selections = symbolicSelections,

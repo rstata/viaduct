@@ -6,7 +6,7 @@ import model.Fragment
 import model.ObjectEngineResult
 import model.ResolverOccurrenceId
 import model.fragmentFrom
-import model.instantiateBindings
+import semantics.shared.instantiateBindings
 import model.merge
 import model.objectOf
 import model.requireQueryTypeDef
@@ -21,6 +21,8 @@ import jdk.jfr.Event
 import jdk.jfr.Label
 import jdk.jfr.Name
 import java.util.concurrent.ConcurrentHashMap
+import semantics.shared.OperationContext
+import semantics.shared.RecordingResolverObserver
 
 internal const val DEFAULT_PROPERTY_TEST_LOOP_COUNT = 1
 
@@ -95,13 +97,15 @@ internal class PropertyTestBenchmarkSupport(
                 } finally {
                     preparationEvent?.finish()
                 }
+                val operation =
+                    OperationContext(world, resolverObserver = RecordingResolverObserver())
                 corpus.registry.clearResolutionWitness()
                 val appliedResolverOccurrences =
                     ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
                 val result: ObjectEngineResult =
                     profilePhase(profilePhases, "Resolver26") {
                         subject.resolve(
-                            world = world,
+                            operation = operation,
                             root = world.objectOf("Query"),
                             selections = fragment.subselections,
                             applicationObserver = { application ->
@@ -119,14 +123,14 @@ internal class PropertyTestBenchmarkSupport(
                 }
                 profilePhase(profilePhases, "application identity oracle") {
                     check(
-                        context(world) {
+                        context(operation) {
                             result.registeredResolverApplicationIdentityCounts()
                         } == witness.applicationIdentityCounts(),
                     )
                 }
                 profilePhase(profilePhases, "correctResolution") {
                     check(
-                        context(world) {
+                        context(operation) {
                             result.correctResolution(
                                 fragment.subselections
                                     .merge(world.schema.requireQueryTypeDef())
@@ -136,7 +140,7 @@ internal class PropertyTestBenchmarkSupport(
                     )
                 }
                 profilePhase(profilePhases, "from-field binding oracle") {
-                    context(world) {
+                    context(operation) {
                         result.validateFromFieldBindings(appliedResolverOccurrences)
                     }
                 }

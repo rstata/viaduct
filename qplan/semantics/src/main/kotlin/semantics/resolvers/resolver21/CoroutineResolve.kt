@@ -7,7 +7,6 @@ import kotlinx.coroutines.launch
 import model.Arguments
 import model.Assumptions
 import model.EngineErrorData
-import model.EngineResult
 import model.EngineResultCell
 import model.ErrorEngineResult
 import model.ObjectEngineResult
@@ -20,24 +19,26 @@ import model.outputType
 import model.registry.ResolverFragment
 import model.requireQueryTypeDef
 import model.schemaType
-import semantics.correctresolution.argumentsContainErrorValue
 import semantics.resolvers.closeResolverDemand
 import semantics.resolvers.materializedChildOccurrences
 import semantics.resolvers.resolvePassiveValues
 import semantics.shared.CycleChecker
+import semantics.shared.OperationContext
 import semantics.shared.materialize
 import viaduct.engine.api.EngineObjectData
 
 /** Resolves one operation through a structured coroutine tree and exact value promises. */
 internal class CoroutineResolve(
-    private val world: Assumptions,
+    private val operation: OperationContext,
     private val complete: (SelectionForest) -> SelectionForest,
     private val cycleChecker: CycleChecker = CycleChecker.create(),
 ) {
+    private val world: Assumptions = operation.world
+
     suspend fun resolve(
         source: EngineObjectData.Sync,
         selections: SelectionForest,
-    ): ObjectEngineResult = context(world) {
+    ): ObjectEngineResult = context(operation, world) {
         val result =
             ObjectEngineResult.of(
                 type = source.schemaType,
@@ -63,7 +64,7 @@ internal class CoroutineResolve(
         source: EngineObjectData.Sync,
         selections: SelectionForest,
         target: ObjectEngineResult,
-    ): Unit = context(world) {
+    ): Unit = context(operation, world) {
         require(source.schemaType == target.type) {
             "Source type ${source.schemaType.name} does not match result type ${target.type.name}"
         }
@@ -111,7 +112,7 @@ internal class CoroutineResolve(
         selection: ObjectSelection,
         target: ObjectEngineResult,
         cell: EngineResultCell,
-    ): Unit = context(world) {
+    ): Unit = context(operation, world) {
         val key = selection.groundKey()
         val valuePromise = cell.getValue()
         when (val arguments = key.arguments) {
@@ -135,7 +136,7 @@ internal class CoroutineResolve(
                     val fragments = resolver.instantiateFragmentsAt(root, coordinate)
                     val objectFragment = fragments.objectFragment
                     val input =
-                        context(cycleChecker) {
+                        context(operation, cycleChecker) {
                             target.materialize(
                                 selections = objectFragment.materializeSelections,
                                 reader = coordinate,
@@ -175,7 +176,7 @@ internal class CoroutineResolve(
     private suspend fun CoroutineScope.resolveQueryFragment(
         queryFragment: ResolverFragment,
         coordinate: List<PathComponent>,
-    ): EngineObjectData.Sync = context(world) {
+    ): EngineObjectData.Sync = context(operation, world) {
         if (queryFragment.constructionSelections.isEmpty()) {
             return@context engineObjectDataOf(world.schema.requireQueryTypeDef())
         }
@@ -193,8 +194,11 @@ internal class CoroutineResolve(
             selections = queryFragment.constructionSelections,
             target = queryResult,
         )
-        world.queryValues[queryFragment.resolverOccurrenceId] = queryResult
-        context(cycleChecker) {
+        operation.resolverObserver.onQueryFragmentResult(
+            queryFragment.resolverOccurrenceId,
+            queryResult,
+        )
+        context(operation, cycleChecker) {
             queryResult.materialize(
                 selections = queryFragment.materializeSelections,
                 reader = coordinate,

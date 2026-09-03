@@ -4,14 +4,12 @@ import graphql.schema.GraphQLTypeUtil
 import model.requireQueryTypeDef
 import model.requireType
 import model.requireObjectField
-import model.Arguments
 import semantics.contract.selectionValues
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import model.EngineErrorData
 import model.EngineIDResult
-import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.MaterializeSelection
@@ -27,6 +25,7 @@ import model.testing.TestWorld
 import semantics.shared.CycleChecker
 import semantics.shared.ResolverReadCycleException
 import semantics.shared.materialize
+import semantics.shared.OperationContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -67,7 +66,7 @@ class MaterializeTest {
             val promise = result.reserveCell(field).createValuePromise()
             val materialized =
                 async(start = CoroutineStart.UNDISPATCHED) {
-                    context(world, cycleChecker) {
+                    context(OperationContext(world), cycleChecker) {
                         result.materialize(
                             selections = selections,
                             reader = emptyList(),
@@ -101,7 +100,7 @@ class MaterializeTest {
 
         assertFailsWith<NoSuchElementException> {
             runBlocking {
-                context(world, cycleChecker) {
+                context(OperationContext(world), cycleChecker) {
                     result.materialize(
                         selections = selections,
                         reader = emptyList(),
@@ -154,7 +153,7 @@ class MaterializeTest {
         val failure =
             assertFailsWith<ResolverReadCycleException> {
                 runBlocking {
-                    context(world, cycleChecker) {
+                    context(OperationContext(world), cycleChecker) {
                         result.materialize(
                             selections = selections,
                             reader = reader,
@@ -251,7 +250,7 @@ class MaterializeTest {
                     .materializeSelections
 
             val materialized =
-                context(world, cycleChecker) {
+                context(OperationContext(world), cycleChecker) {
                     parentResult.materialize(selections, emptyList())
                 }
 
@@ -312,7 +311,7 @@ class MaterializeTest {
                 )
 
             val materialized =
-                context(world, cycleChecker) {
+                context(OperationContext(world), cycleChecker) {
                     result.materialize(selections, emptyList())
                 }
 

@@ -2,8 +2,6 @@ package semantics.contract
 
 import model.requireField
 import viaduct.engine.api.EngineObjectData
-import model.Assumptions
-import model.EngineResult
 import model.ObjectEngineResult
 import model.SelectionForest
 import model.emptyFragmentOf
@@ -13,6 +11,7 @@ import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import semantics.shared.OperationContext
 
 sealed interface ResolverTaskObservation {
     val path: List<String>
@@ -33,7 +32,7 @@ sealed interface ResolverTaskObservation {
  */
 interface DepthFirstTaskOrderingContract : ResolverContract {
     fun resolveAndObserveTasks(
-        world: Assumptions,
+        operation: OperationContext,
         root: EngineObjectData.Sync,
         selections: SelectionForest,
         taskObserver: (ResolverTaskObservation) -> Unit,
@@ -99,7 +98,7 @@ interface DepthFirstTaskOrderingContract : ResolverContract {
         val taskTrace = mutableListOf<ResolverTaskObservation>()
 
         resolveAndObserveTasks(
-            world = world,
+            operation = OperationContext(world),
             root = world.objectOf("Query"),
             selections = selections,
             taskObserver = taskTrace::add,

@@ -4,11 +4,10 @@ import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import model.Assumptions
 import model.ObjectEngineResult
 import model.SelectionForest
 import model.schemaType
-import semantics.shared.CycleChecker
+import semantics.shared.OperationContext
 
 /**
  * Resolves selective demand once per object-local symbolic key.
@@ -17,7 +16,7 @@ import semantics.shared.CycleChecker
  * expressions identify their owning resolver occurrences, so equal uses of one variable instance
  * coalesce while variables owned by different resolver occurrences remain distinct.
  */
-context(world: Assumptions)
+context(operation: OperationContext)
 fun resolve(selections: SelectionForest): ObjectEngineResult =
     resolve(
         selections = selections,
@@ -25,7 +24,7 @@ fun resolve(selections: SelectionForest): ObjectEngineResult =
     )
 
 /** Includes validation instrumentation. */
-context(world: Assumptions)
+context(operation: OperationContext)
 internal fun resolveObserved(
     selections: SelectionForest,
     applicationObserver: Resolver26ApplicationObserver,
@@ -36,16 +35,16 @@ internal fun resolveObserved(
         applicationObserver = applicationObserver,
     )
 
-context(world: Assumptions)
+context(operation: OperationContext)
 internal fun resolve(
     selections: SelectionForest,
     coroutineContext: CoroutineContext,
     applicationObserver: Resolver26ApplicationObserver = {},
 ): ObjectEngineResult {
-    require(world.selectiveResolvers) {
+    require(operation.selectiveResolvers) {
         "Resolver26 requires selective resolvers"
     }
-    val source = world.resolverRegistry.createRootQueryInput()
+    val source = operation.resolverRegistry.createRootQueryInput()
     val result: ObjectEngineResult =
         ObjectEngineResult.of(
             type = source.schemaType,
@@ -54,16 +53,18 @@ internal fun resolve(
     return runBlocking(coroutineContext) {
         withTimeout(15_000) {
             coroutineScope {
-                val support =
-                    Resolver26Support(
+                val resolver26Operation =
+                    Resolver26OperationContext(
+                        base = operation,
                         requestScope = this,
-                        applicationObserver = applicationObserver,
-                        cycleChecker = CycleChecker.create(),
+                        resolverObserver =
+                            operation.resolverObserver.withResolver26Applications(
+                                applicationObserver,
+                            ),
                     )
                 val orchestration =
                     ObjectOrchestrationTask(
-                        world = world,
-                        support = support,
+                        operation = resolver26Operation,
                         root = result,
                         path = emptyList(),
                         source = source,

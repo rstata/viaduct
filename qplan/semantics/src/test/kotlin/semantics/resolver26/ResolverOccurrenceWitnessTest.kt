@@ -2,10 +2,8 @@ package semantics.resolver26
 
 import model.requireObjectField
 import semantics.contract.selectionValues
-import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
-import viaduct.graphql.schema.ViaductSchema
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
@@ -20,6 +18,9 @@ import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import semantics.shared.OperationContext
+import semantics.shared.RecordingResolverObserver
+import semantics.shared.ResolverObservations
 
 class ResolverOccurrenceWitnessTest {
     @Test
@@ -62,6 +63,7 @@ class ResolverOccurrenceWitnessTest {
                 },
             )
         val world = testWorld.assumptions
+        val operation = OperationContext(world, resolverObserver = RecordingResolverObserver())
         val fragment =
             world.fragmentFrom(
                 "fragment QueryResult on Query { first second }",
@@ -69,7 +71,7 @@ class ResolverOccurrenceWitnessTest {
         val log = ResolutionOccurrenceApplicationLog()
 
         val result =
-            context(world) {
+            context(operation) {
                 resolve(
                     selections = fragment.subselections,
                     coroutineContext = EmptyCoroutineContext,
@@ -91,21 +93,26 @@ class ResolverOccurrenceWitnessTest {
             }
         val witness = log.snapshot()
         val expected =
-            context(world) {
+            context(operation) {
                 result.registeredResolverOccurrenceApplicationIdentityCounts()
             }
 
         assertEquals(expected, witness.applicationIdentityCounts())
         assertEquals(4, expected.values.sum())
         assertEquals(
-            context(world) {
+            context(operation) {
                 result.registeredResolverApplicationIdentityCounts()
             },
             witness.applications
                 .groupingBy { application -> application.application.identity }
                 .eachCount(),
         )
-        assertEquals(2, world.queryValues.size)
+        assertEquals(
+            2,
+            (operation.resolverObserver as ResolverObservations)
+                .allQueryFragmentResults()
+                .size,
+        )
 
         val sourceApplications =
             witness.applications.filter { application ->
@@ -183,6 +190,7 @@ class ResolverOccurrenceWitnessTest {
                 },
             )
         val world = testWorld.assumptions
+        val operation = OperationContext(world, resolverObserver = RecordingResolverObserver())
         val fragment =
             world.fragmentFrom(
                 "fragment QueryResult on Query { items { computed } }",
@@ -190,7 +198,7 @@ class ResolverOccurrenceWitnessTest {
         val log = ResolutionOccurrenceApplicationLog()
 
         val result: ObjectEngineResult =
-            context(world) {
+            context(operation) {
                 resolve(
                     selections = fragment.subselections,
                     coroutineContext = EmptyCoroutineContext,
@@ -212,7 +220,7 @@ class ResolverOccurrenceWitnessTest {
             }
         val witness = log.snapshot()
         val expected =
-            context(world) {
+            context(operation) {
                 result.registeredResolverOccurrenceApplicationIdentityCounts()
             }
 

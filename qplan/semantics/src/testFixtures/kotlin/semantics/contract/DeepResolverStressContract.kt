@@ -143,12 +143,14 @@ interface DeepResolverStressContract : ResolverContract {
                     val world = testWorld.newAssumptions()
                     val fragment = world.fragmentFrom(testCase.query.source)
                     testCase.registry.clearResolutionWitness()
-                    val result =
-                        resolve(
+                    val resolution =
+                        observeResolution(
                             world,
                             world.objectOf("Query"),
                             fragment.subselections,
                         )
+                    val result = resolution.result
+                    val operation = resolution.operation
                     val witness = testCase.registry.resolutionWitness()
                     val activatedSourceResolvers =
                         witness.applications.mapTo(linkedSetOf()) { application ->
@@ -157,7 +159,7 @@ interface DeepResolverStressContract : ResolverContract {
                     if (sometimesPassiveCoverageRequired) {
                         // Source-owned registry fields have result occurrences but no application.
                         val resultOccurrenceCounts =
-                            context(world) {
+                            context(operation) {
                                 result
                                     .registeredResolverOccurrenceApplicationKeyCounts()
                                     .entries
@@ -175,14 +177,14 @@ interface DeepResolverStressContract : ResolverContract {
                             resultOccurrenceCounts.values.sum() - witness.applications.size
                     } else {
                         assertEquals(
-                            context(world) {
+                            context(operation) {
                                 result.registeredResolverApplicationIdentityCounts()
                             },
                             witness.applicationIdentityCounts(),
                         )
                     }
                     assertTrue(
-                        context(world) {
+                        context(operation) {
                             result.correctResolution(fragment)
                         },
                     )

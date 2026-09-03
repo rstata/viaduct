@@ -57,14 +57,15 @@ interface ResolverMutationContract : ResolverContract {
                     val ordinaryFragment =
                         ordinaryAssumptions.fragmentFrom(query.source)
                     registry.clearResolutionWitness()
-                    val ordinary =
-                        resolve(
+                    val ordinaryResolution =
+                        observeResolution(
                             ordinaryAssumptions,
                             ordinaryAssumptions.objectOf("Query"),
                             ordinaryFragment.subselections,
                         )
+                    val ordinary = ordinaryResolution.result
                     assertTrue(
-                        context(ordinaryAssumptions) {
+                        context(ordinaryResolution.operation) {
                             ordinary.correctResolution(
                                 ordinaryFragment,
                             )
@@ -84,7 +85,7 @@ interface ResolverMutationContract : ResolverContract {
                             val mutantResult =
                                 runCatching {
                                     val fragment = mutantAssumptions.fragmentFrom(query.source)
-                                    resolve(
+                                    observeResolution(
                                         mutantAssumptions,
                                         mutantAssumptions.objectOf("Query"),
                                         fragment.subselections,
@@ -96,11 +97,12 @@ interface ResolverMutationContract : ResolverContract {
                             }
                             val rejected =
                                 mutantResult.fold(
-                                    onSuccess = { result ->
+                                    onSuccess = { resolution ->
+                                        val result = resolution.result
                                         when (mutation) {
                                             ResolverProgramMutation.DUPLICATE_APPLICATION ->
                                                 witness.applicationIdentityCounts() !=
-                                                    context(mutantAssumptions) {
+                                                    context(resolution.operation) {
                                                         result
                                                             .registeredResolverApplicationIdentityCounts()
                                                     }

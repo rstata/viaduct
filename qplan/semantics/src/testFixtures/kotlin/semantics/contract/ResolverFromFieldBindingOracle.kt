@@ -1,6 +1,5 @@
 package semantics.contract
 
-import model.Assumptions
 import model.EngineInputData
 import model.EngineResult
 import model.ErrorEngineResult
@@ -18,11 +17,12 @@ import model.registry.ProviderFragment
 import model.selectionForestOf
 import model.toEngineInputListData
 import model.toEngineSimpleData
-import semantics.arbitrary.forEachRegisteredResolverOccurrence
 import semantics.shared.findStoredKey
 import viaduct.graphql.schema.ViaductSchema
 import viaduct.utils.collections.BitVector
 import kotlin.test.assertEquals
+import semantics.shared.OperationContext
+import semantics.shared.ResolverObservations
 
 /**
  * Independently validates from-field bindings across every request-local Query root.
@@ -30,13 +30,13 @@ import kotlin.test.assertEquals
  * An applied occurrence must have exactly all of its declared bindings and a passive occurrence
  * must have none.
  */
-context(world: Assumptions)
+context(operation: OperationContext)
 fun ObjectEngineResult.validateFromFieldBindings(
     appliedResolverOccurrences: Set<ResolverOccurrenceId>,
 ) {
     requestQueryRoots().forEach { root ->
-        root.forEachRegisteredResolverOccurrence(world.resolverRegistry) { cell ->
-            val resolver = world.resolverRegistry.resolver(cell.field)
+        root.forEachRegisteredResolverOccurrence(operation.resolverRegistry) { cell ->
+            val resolver = operation.resolverRegistry.resolver(cell.field)
             val definitions =
                 resolver.fieldPathDefinitions(
                     root = root,
@@ -51,7 +51,11 @@ fun ObjectEngineResult.validateFromFieldBindings(
                 definitions.mapTo(linkedSetOf()) { definition ->
                     requireNotNull(definition.variable.instanceId)
                 }
-            val actualBindingIds = requiredBindingIds.filterTo(linkedSetOf(), world::isBound)
+            val actualBindingIds =
+                requiredBindingIds.filterTo(
+                    linkedSetOf(),
+                    operation.variableBindingsState::isBound,
+                )
             when (appliedResolverOccurrences.contains(occurrenceId)) {
                 true ->
                     assertEquals(
@@ -75,7 +79,10 @@ fun ObjectEngineResult.validateFromFieldBindings(
                 val providerRoot =
                     when (definition.providerFragment) {
                         ProviderFragment.OBJECT -> cell.containingObject
-                        ProviderFragment.QUERY -> world.queryValues.getValue(occurrenceId)
+                        ProviderFragment.QUERY ->
+                            operation.resolverObservations()
+                                .queryFragmentResults(occurrenceId)
+                                .single()
                     }
                 val expected =
                     providerRoot.readCompletedProvider(
@@ -83,7 +90,9 @@ fun ObjectEngineResult.validateFromFieldBindings(
                     )
                 assertEquals(
                     expected,
-                    world.getBinding(requireNotNull(definition.variable.instanceId)),
+                    operation.variableBindingsState.getBinding(
+                        requireNotNull(definition.variable.instanceId),
+                    ),
                 )
             }
         }
@@ -96,14 +105,19 @@ internal fun FieldResolver.fieldPathDefinitions(
 ): List<InstantiatedFieldPathDefinition> =
     instantiatedFieldPathVariableDefinitions(ResolverOccurrenceId.at(root, path))
 
-context(world: Assumptions)
+context(operation: OperationContext)
 private fun ObjectEngineResult.requestQueryRoots(): List<ObjectEngineResult> =
     buildList {
         add(this@requestQueryRoots)
-        addAll(world.queryValues.values)
+        addAll(
+            operation.resolverObservations()
+                .allQueryFragmentResults()
+                .values
+                .flatten(),
+        )
     }
 
-context(world: Assumptions)
+context(operation: OperationContext)
 private fun ObjectEngineResult.readCompletedProvider(
     path: List<ObjectEngineResult.Key>,
 ): VariableBinding {
@@ -130,6 +144,10 @@ private fun ObjectEngineResult.readCompletedProvider(
     }
     error("Provider path must be nonempty")
 }
+
+private fun OperationContext.resolverObservations(): ResolverObservations =
+    resolverObserver as? ResolverObservations
+        ?: error("Resolver observations were not recorded for this operation")
 
 private fun EngineResult.toVariableBinding(
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,

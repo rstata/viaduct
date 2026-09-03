@@ -49,8 +49,8 @@ interface ObjectFragmentFromArgumentResolverContract :
                 mapOf("seed" to 7),
             )
         val secondKey = ObjectEngineResult.GroundKey.of(resultField, mapOf("seed" to 8))
-        val resolved =
-            resolveAndValidate(
+        val resolution =
+            resolveAndValidateObserved(
                 world,
                 """
                 query Resolve(${'$'}first: Int!, ${'$'}second: Int!) {
@@ -60,6 +60,7 @@ interface ObjectFragmentFromArgumentResolverContract :
                 """.trimIndent(),
                 variables = mapOf("first" to 7, "second" to 8),
             )
+        val resolved = resolution.result
 
         assertEquals(14, resolved.getCell(firstKey).get())
         assertEquals(16, resolved.getCell(secondKey).get())
@@ -83,7 +84,9 @@ interface ObjectFragmentFromArgumentResolverContract :
             variableInstances.forEach { boundVariable ->
                 assertEquals(
                     VariableBinding.of(expectedValue),
-                    world.getBinding(requireNotNull(boundVariable.instanceId)),
+                    resolution.operation.variableBindingsState.getBinding(
+                        requireNotNull(boundVariable.instanceId),
+                    ),
                 )
             }
         }

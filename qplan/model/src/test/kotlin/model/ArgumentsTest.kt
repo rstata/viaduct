@@ -1,6 +1,7 @@
 package model
 
 import kotlinx.coroutines.async
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import model.testing.TestWorld
 import model.testing.testRoot
@@ -231,11 +232,6 @@ class ArgumentsTest {
         assertNotEquals(first, literal)
         assertNotEquals(first, differentPositions)
 
-        world.declareBinding(requireNotNull(firstVariable.instanceId))
-        world.declareBinding(requireNotNull(secondVariable.instanceId))
-        world.completeBinding(requireNotNull(firstVariable.instanceId), 7)
-        world.completeBinding(requireNotNull(secondVariable.instanceId), 7)
-
         assertEquals(firstHash, first.hashCode())
         assertEquals(secondHash, second.hashCode())
         assertNotEquals(first, second)
@@ -345,11 +341,9 @@ class ArgumentsTest {
         val resolverOccurrenceId = ResolverOccurrenceId.at(world.schema.testRoot(), path)
         val instantiatedArguments = arguments.instantiateVariables(consume, resolverOccurrenceId)
         val variableInstance = template.instantiate(resolverOccurrenceId)
-        world.declareBinding(requireNotNull(variableInstance.instanceId))
-        world.completeBinding(requireNotNull(variableInstance.instanceId), 9)
         val grounded =
-            context(world) {
-                instantiatedArguments.instantiateBindings(consume)
+            instantiatedArguments.groundWithBindings(consume) {
+                VariableBinding.of(9)
             }
         val groundedArguments = assertIs<Arguments.Resolved>(grounded)
         val filter =
@@ -391,12 +385,9 @@ class ArgumentsTest {
                 consume,
                 mapOf("values" to template),
             ).instantiateVariables(consume, resolverOccurrenceId)
-        world.declareBinding(requireNotNull(variable.instanceId))
-        world.completeBinding(requireNotNull(variable.instanceId), 9)
-
         val grounded =
-            context(world) {
-                arguments.instantiateBindings(consume)
+            arguments.groundWithBindings(consume) {
+                VariableBinding.of(9)
             }
 
         val values =
@@ -425,10 +416,10 @@ class ArgumentsTest {
         val arguments =
             Arguments.of(consume, mapOf("values" to template))
                 .instantiateVariables(consume, resolverOccurrenceId)
-        world.declareBinding(requireNotNull(variable.instanceId))
-        world.completeBinding(requireNotNull(variable.instanceId), listOf(4, 5))
-
-        val grounded = context(world) { arguments.instantiateBindings(consume) }
+        val grounded =
+            arguments.groundWithBindings(consume) {
+                VariableBinding.of(listOf(4, 5))
+            }
 
         val values =
             assertIs<EngineInputListData>(
@@ -471,12 +462,9 @@ class ArgumentsTest {
                     mapOf("filter" to mapOf("value" to template)),
                 ).instantiateVariables(first, resolverOccurrenceId)
 
-        world.declareBinding(requireNotNull(variable.instanceId))
-        world.completeBinding(requireNotNull(variable.instanceId), 9)
-
         val grounded =
-            context(world) {
-                arguments.instantiateBindings(second)
+            arguments.groundWithBindings(second) {
+                VariableBinding.of(9)
             }
         val groundedArguments = assertIs<Arguments.Resolved>(grounded)
         val filter =
@@ -516,11 +504,6 @@ class ArgumentsTest {
         val secondOccurrence = ResolverOccurrenceId.at(world.schema.testRoot(), secondPath)
         val firstVariable = template.instantiate(firstOccurrence)
         val secondVariable = template.instantiate(secondOccurrence)
-        world.declareBinding(requireNotNull(firstVariable.instanceId))
-        world.declareBinding(requireNotNull(secondVariable.instanceId))
-        world.completeBinding(requireNotNull(firstVariable.instanceId), 9)
-        world.completeBinding(requireNotNull(secondVariable.instanceId), 9)
-
         fun symbolicKey(resolverOccurrenceId: ResolverOccurrenceId): ObjectEngineResult.ObjectKey =
             ObjectEngineResult.Key.of(
                 field = consume,
@@ -528,18 +511,13 @@ class ArgumentsTest {
             )
 
         fun ground(key: ObjectEngineResult.ObjectKey): ObjectEngineResult.GroundKey =
-            context(world) {
-                selectionForestOf(
-                    Selection.of(
-                        key = key,
-                        possibleTypes = setOf(world.schema.requireQueryTypeDef()),
-                        subselections = selectionForestOf(),
-                    ),
-                ).merge(world.schema.requireQueryTypeDef())
-                    .instantiateBindings()
-                    .groundKeys()
-                    .single()
-            }
+            ObjectEngineResult.GroundKey.of(
+                field = key.field,
+                arguments =
+                    key.arguments.groundWithBindings(key.field) {
+                        VariableBinding.of(9)
+                    },
+            )
 
         val firstOpen = symbolicKey(firstOccurrence)
         val equalFirstOpen = symbolicKey(firstOccurrence)
@@ -556,7 +534,7 @@ class ArgumentsTest {
                         possibleTypes = setOf(world.schema.requireQueryTypeDef()),
                         subselections = selectionForestOf(),
                     ),
-                ).applicableGroundSelections(world.schema.requireQueryTypeDef())
+                ).merge(world.schema.requireQueryTypeDef())
                     .groundKeys()
                     .single()
             }
@@ -661,17 +639,17 @@ class ArgumentsTest {
                 Arguments.Template
                     .of(consume, openArguments)
                     .instantiate(consume, resolverOccurrenceId)
-            world.declareBinding(requireNotNull(variable.instanceId))
+            val binding = CompletableDeferred<VariableBinding>()
 
             val fetched =
                 async {
-                    context(world) {
-                        arguments.fetchBindings(consume)
+                    arguments.fetchGroundWithBindings(consume) {
+                        binding.await()
                     }
                 }
 
             assertFalse(fetched.isCompleted)
-            world.completeBinding(requireNotNull(variable.instanceId), 9)
+            binding.complete(VariableBinding.of(9))
             val grounded = fetched.await()
             val groundedArguments = assertIs<Arguments.Resolved>(grounded)
             val filter =

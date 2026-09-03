@@ -156,56 +156,6 @@ fun SelectionForest.merge(type: ViaductSchema.Object): ObjectSelectionForest {
     return normalizedObjectSelectionForest(type, childrenByKey)
 }
 
-/**
- * Instantiates this normalized forest's current bindings and normalizes by the resulting exact key.
- *
- * Every result key is a [ObjectEngineResult.GroundKey]. Equal keys coalesce after substitution.
- *
- * @throws IllegalStateException when a key contains an unbound variable instance or a template
- */
-context(world: Assumptions)
-fun ObjectSelectionForest.instantiateBindings(): ObjectSelectionForest {
-    val childrenByKey =
-        buildMap<ObjectEngineResult.ObjectKey, MutableList<SelectionForest>> {
-            byKey().values.forEach { selection ->
-                val key =
-                    selection.key.ground(
-                        selection.key.arguments.instantiateBindings(selection.key.field),
-                    )
-                getOrPut(key, ::mutableListOf).add(selection.subselections)
-            }
-        }
-    return normalizedObjectSelectionForest(type, childrenByKey)
-}
-
-/**
- * Awaits this normalized forest's bindings and normalizes by the resulting exact key.
- *
- * Descendant selections remain open until materialization reaches their concrete parent OER.
- */
-context(world: Assumptions)
-suspend fun ObjectSelectionForest.fetchBindings(): ObjectSelectionForest {
-    val childrenByKey =
-        buildMap<ObjectEngineResult.ObjectKey, MutableList<SelectionForest>> {
-            byKey().values.forEach { selection ->
-                val key =
-                    selection.key.ground(
-                        selection.key.arguments.fetchBindings(selection.key.field),
-                    )
-                getOrPut(key, ::mutableListOf).add(selection.subselections)
-            }
-        }
-    return normalizedObjectSelectionForest(type, childrenByKey)
-}
-
-private fun ObjectEngineResult.ObjectKey.ground(
-    arguments: Arguments.Ground,
-): ObjectEngineResult.GroundKey =
-    ObjectEngineResult.GroundKey.of(
-        field = field,
-        arguments = arguments,
-    )
-
 private fun normalizedObjectSelectionForest(
     type: ViaductSchema.Object,
     childrenByKey: Map<ObjectEngineResult.ObjectKey, List<SelectionForest>>,
@@ -227,17 +177,6 @@ private fun normalizedObjectSelectionForest(
         }
     return ObjectSelectionForestImpl(type, selectionsByKey)
 }
-
-/**
- * Returns the selections applicable to concrete parent [type] with exact top-level keys.
- *
- * Descendant selections remain unspecialized until their concrete runtime parent is known.
- */
-context(world: Assumptions)
-fun SelectionForest.applicableGroundSelections(
-    type: ViaductSchema.Object,
-): ObjectSelectionForest =
-    merge(type).instantiateBindings()
 
 /** Returns this selection's ground key. */
 fun ObjectSelection.groundKey(): ObjectEngineResult.GroundKey =

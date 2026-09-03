@@ -8,10 +8,8 @@ import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Fragment
-import model.PathComponent
 import model.ResolverOccurrenceId
 import model.fragmentFrom
-import model.objectOf
 import semantics.arbitrary.ArbitraryQuery
 import semantics.arbitrary.ArbitraryRegistry
 import semantics.arbitrary.ArbitrarySchema
@@ -27,6 +25,7 @@ import semantics.arbitrary.resolverBenchmarkCorpusSearchConfig
 import semantics.arbitrary.resolverBenchmarkOverheadQueryConfig
 import semantics.resolver26.Resolver26ApplicationObservation
 import semantics.resolver26.resolveObserved
+import semantics.shared.OperationContext
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Collections
@@ -142,7 +141,7 @@ object ResolverBenchmarkCorpusSearch {
                 mutableListOf<Resolver26ApplicationObservation>(),
             )
         val result =
-            context(world) {
+            context(OperationContext(world)) {
                 resolveObserved(fragment.subselections) { observation ->
                     applicationObservations += observation
                 }

@@ -1,12 +1,11 @@
 package semantics.contract
 
 import model.requireField
-import model.ObjectEngineResult
 import viaduct.graphql.schema.ViaductSchema
 import model.SelectionForest
 import model.emptyFragmentOf
 import model.fragmentFrom
-import model.instantiateBindings
+import semantics.shared.instantiateBindings
 import model.merge
 import model.objectOf
 import model.requireType
@@ -68,16 +67,17 @@ interface ResolverSelectiveDemandWitnessContract : ResolverContract {
         val fragment = world.fragmentFrom("fragment ignored on Query { item { computed } }")
         val itemType = world.schema.requireType("Item") as ViaductSchema.Object
 
-        val result =
-            resolve(
+        val resolution =
+            observeResolution(
                 world,
                 world.objectOf("Query"),
                 fragment.subselections,
             )
+        val result = resolution.result
 
         assertEquals(
             setOf("base", "computed"),
-            context(world) {
+            context(resolution.operation) {
                 requireNotNull(producerDemand)
                     .merge(itemType)
                     .instantiateBindings()
@@ -86,7 +86,7 @@ interface ResolverSelectiveDemandWitnessContract : ResolverContract {
             },
         )
         assertTrue(
-            context(world) {
+            context(resolution.operation) {
                 result.correctResolution(fragment)
             },
         )

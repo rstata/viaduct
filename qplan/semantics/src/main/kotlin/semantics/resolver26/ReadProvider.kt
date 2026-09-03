@@ -55,7 +55,7 @@ private suspend fun ObjectEngineResult.readProvider(
 ): VariableBinding {
     var current = this
     path.forEachIndexed { index, openKey ->
-        operation.awaitBindingsDeclared(current)
+        operation.bindingDeclarationsState.awaitBindingsDeclared(current)
         val specializedKey =
             Selection.of(
                 key = openKey,
@@ -65,7 +65,7 @@ private suspend fun ObjectEngineResult.readProvider(
         val objectKey = specializedKey
         objectKey.fetchGroundedArguments()
         val cell = current.reserveCell(objectKey)
-        operation.cycleCheck(reader, cell)
+        operation.cycleChecker.cycleCheck(reader, cell)
         val value = cell.reserveValue().await()
         if (index == path.lastIndex) {
             return value.toProviderBinding(objectKey.field.outputType)

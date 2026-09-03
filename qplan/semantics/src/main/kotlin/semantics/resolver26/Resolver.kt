@@ -65,10 +65,13 @@ internal fun resolve(
                 val orchestration =
                     ObjectOrchestrationTask(
                         operation = resolver26Operation,
-                        root = result,
-                        path = emptyList(),
+                        occurrence =
+                            OEROccurrenceContext(
+                                root = result,
+                                path = emptyList(),
+                                target = result,
+                            ),
                         source = source,
-                        target = result,
                         initialDemand = selections,
                     )
                 orchestration.prepare()

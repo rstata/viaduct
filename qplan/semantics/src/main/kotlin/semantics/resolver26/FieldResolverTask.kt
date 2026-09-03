@@ -25,14 +25,12 @@ import viaduct.engine.api.EngineObjectData
 /** Invokes and publishes one already-installed field resolver instance. */
 internal class FieldResolverTask(
     private val operation: Resolver26OperationContext,
-    private val root: ObjectEngineResult,
-    private val path: List<PathComponent>,
+    private val occurrence: OEROccurrenceContext,
     private val selection: ObjectSelection,
     private val groundedArguments: Arguments.Ground,
     private val resolver: FieldResolver,
     private val resolverOccurrenceId: ResolverOccurrenceId,
     private val inputMaterializeSelections: MaterializeSelectionForest,
-    private val target: ObjectEngineResult,
     private val cell: EngineResultCell,
 
     // The following arguments are passed for instrumentation-purposes only
@@ -42,7 +40,7 @@ internal class FieldResolverTask(
     private val world: Assumptions = operation.world
 
     suspend fun run() {
-        context(operation, world) {
+        context(operation, world, operation.cycleChecker) {
             val objectKey = selection.key
             if (groundedArguments.argumentsContainErrorValue()) {
                 val errorResult = ErrorEngineResult.of(EngineErrorData.of())
@@ -50,12 +48,12 @@ internal class FieldResolverTask(
                 return
             }
 
-            val coordinate = path + objectKey
+            val coordinate = occurrence.coordinate(objectKey)
             val input: EngineObjectData.Sync =
-                target.materializeResolverInput(
+                occurrence.target.materializeResolverInput(
                     selections = inputMaterializeSelections,
                     reader = coordinate,
-                    resultPath = path,
+                    resultPath = occurrence.path,
                 )
 
             val resolverArguments = groundedArguments as Arguments.Resolved
@@ -86,7 +84,7 @@ internal class FieldResolverTask(
 
             val passiveValue: EngineResult? =
                 fieldValue.resolvePassiveValues(
-                    root = root,
+                    root = occurrence.root,
                     expectedType = objectKey.field.outputType,
                     path = coordinate,
                     invocationDemand = invocationDemand,
@@ -116,10 +114,13 @@ internal suspend fun ResolverFragment.resolveQueryFragment(
     val orchestration =
         ObjectOrchestrationTask(
             operation = operation,
-            root = queryResult,
-            path = emptyList(),
+            occurrence =
+                OEROccurrenceContext(
+                    root = queryResult,
+                    path = emptyList(),
+                    target = queryResult,
+                ),
             source = source,
-            target = queryResult,
             initialDemand = symbolicSelections.constructionSelections(),
     )
     orchestration.prepare()
@@ -131,9 +132,11 @@ internal suspend fun ResolverFragment.resolveQueryFragment(
                 ProviderDefinitionRead(definition, coordinate)
             },
     )
-    return queryResult.materializeResolverInput(
-        selections = symbolicSelections,
-        reader = coordinate,
-        resultPath = emptyList(),
-    )
+    return context(operation.cycleChecker) {
+        queryResult.materializeResolverInput(
+            selections = symbolicSelections,
+            reader = coordinate,
+            resultPath = emptyList(),
+        )
+    }
 }

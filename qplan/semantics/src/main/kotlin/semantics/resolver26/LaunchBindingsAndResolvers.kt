@@ -30,7 +30,7 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
         }
         coroutineScope {
             launch {
-                target.completeProviderBindings(
+                occurrence.target.completeProviderBindings(
                     reads = closed.objectProviderReads,
                 )
             }
@@ -45,7 +45,7 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
                             model.engineObjectDataOf(operation.schema.requireQueryTypeDef())
                         } else {
                             expansion.fragments.queryFragment.resolveQueryFragment(
-                                coordinate = path + objectKey,
+                                coordinate = occurrence.coordinate(objectKey),
                             )
                         }
                     operation.queryValuesState.complete(
@@ -87,23 +87,21 @@ private suspend fun ObjectOrchestrationTask.installAndLaunchFieldResolver(
         }
         completeFromArgumentBindings(expansion, groundedArguments)
 
-        val cell = target.reserveCell(objectKey)
+        val cell = occurrence.target.reserveCell(objectKey)
         cell.createValuePromise()
-        operation.registerWriter(
+        operation.cycleChecker.registerWriter(
             cell = cell,
-            writer = path + objectKey,
+            writer = occurrence.coordinate(objectKey),
         )
         val fieldResolverTask =
             FieldResolverTask(
                 operation = operation,
-                root = root,
-                path = path,
+                occurrence = occurrence,
                 selection = selection,
                 groundedArguments = groundedArguments,
                 resolver = expansion.resolver,
                 resolverOccurrenceId = expansion.resolverOccurrenceId,
                 inputMaterializeSelections = expansion.inputMaterializeSelections,
-                target = target,
                 cell = cell,
                 variableArgumentCount = variableArgumentCount,
                 variableResolverOccurrenceIds = variableResolverOccurrenceIds,

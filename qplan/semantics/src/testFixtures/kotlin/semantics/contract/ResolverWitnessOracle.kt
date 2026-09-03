@@ -8,7 +8,7 @@ import model.ResolverOccurrenceId
 import model.registry.FieldResolver
 import model.registry.ResolverFragment
 import model.usedVariables
-import semantics.shared.CycleChecker
+import semantics.shared.CycleCheckState
 import semantics.arbitrary.ResolverApplicationIdentity
 import semantics.arbitrary.ResolverOccurrenceApplicationKey
 import semantics.arbitrary.ResolverOccurrenceApplicationIdentity
@@ -29,7 +29,7 @@ context(operation: OperationContext)
 fun EngineResult?.registeredResolverApplicationIdentityCounts():
     Map<ResolverApplicationIdentity, Int> {
     val counts = linkedMapOf<ResolverApplicationIdentity, Int>()
-    context(operation, CycleChecker.createNOP()) {
+    context(operation, CycleCheckState.createNOP()) {
         requestQueryRoots().forEach { root ->
             root.forEachRegisteredResolverOccurrence(operation.resolverRegistry) { cell ->
                 val resolver = operation.resolverRegistry.resolver(cell.field)
@@ -83,7 +83,7 @@ private fun EngineResult?.reconstructResolverOccurrenceApplicationIdentityCounts
     includedOccurrences: Set<ResolverOccurrenceId>?,
 ): Map<ResolverOccurrenceApplicationIdentity, Int> {
     val counts = linkedMapOf<ResolverOccurrenceApplicationIdentity, Int>()
-    context(operation, CycleChecker.createNOP()) {
+    context(operation, CycleCheckState.createNOP()) {
         requestQueryRoots().forEach { root ->
             root.forEachRegisteredResolverOccurrence(operation.resolverRegistry) { cell ->
                 val resolverOccurrenceId = ResolverOccurrenceId.at(root, cell.occurrencePath)

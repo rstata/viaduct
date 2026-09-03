@@ -15,7 +15,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-class CycleCheckerTest {
+class CycleCheckStateTest {
     @Test
     fun `acyclic reads are retained without failure`() {
         val fixture = Fixture()
@@ -189,7 +189,7 @@ class CycleCheckerTest {
     @Test
     fun `NOP cycle checker ignores writer registration and cycle checks`() {
         val fixture = Fixture()
-        val checker = CycleChecker.createNOP()
+        val checker = CycleCheckState.createNOP()
 
         checker.registerWriter(
             cell = fixture.cell("first"),
@@ -214,7 +214,7 @@ class CycleCheckerTest {
                     """.trimIndent(),
                 ).assumptions
         val target = ObjectEngineResult.of(world.schema.requireQueryTypeDef(), mutable = true)
-        val checker = CycleChecker.create()
+        val checker = CycleCheckState.create()
 
         fun key(name: String): ObjectEngineResult.GroundKey =
             ObjectEngineResult.GroundKey.of(

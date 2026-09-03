@@ -22,7 +22,7 @@ import model.schemaType
 import semantics.resolvers.closeResolverDemand
 import semantics.resolvers.materializedChildOccurrences
 import semantics.resolvers.resolvePassiveValues
-import semantics.shared.CycleChecker
+import semantics.shared.CycleCheckState
 import semantics.shared.OperationContext
 import semantics.shared.materialize
 import viaduct.engine.api.EngineObjectData
@@ -31,7 +31,7 @@ import viaduct.engine.api.EngineObjectData
 internal class CoroutineResolve(
     private val operation: OperationContext,
     private val complete: (SelectionForest) -> SelectionForest,
-    private val cycleChecker: CycleChecker = CycleChecker.create(),
+    private val cycleChecker: CycleCheckState = CycleCheckState.create(),
 ) {
     private val world: Assumptions = operation.world
 

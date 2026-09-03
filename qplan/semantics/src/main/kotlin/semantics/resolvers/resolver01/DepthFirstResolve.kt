@@ -22,7 +22,7 @@ import semantics.resolvers.closeResolverDemand
 import semantics.resolvers.materializedChildOccurrences
 import semantics.resolvers.resolvePassiveValues
 import semantics.resolvers.resolveRetainedObjects
-import semantics.shared.CycleChecker
+import semantics.shared.CycleCheckState
 import semantics.shared.OperationContext
 import semantics.shared.materialize
 
@@ -173,7 +173,7 @@ internal class DepthFirstResolve(
                 val input =
                     runBlocking {
                         // Depth-first resolution guarantees this materialization does not block.
-                        context(operation, CycleChecker.createNOP()) {
+                        context(operation, CycleCheckState.createNOP()) {
                             resolved.materialize(
                                 selections = objectFragment.materializeSelections,
                                 reader = coordinate,
@@ -229,7 +229,7 @@ internal class DepthFirstResolve(
             queryResult,
         )
         runBlocking {
-            context(operation, CycleChecker.createNOP()) {
+            context(operation, CycleCheckState.createNOP()) {
                 queryResult.materialize(
                     selections = queryFragment.materializeSelections,
                     reader = coordinate,

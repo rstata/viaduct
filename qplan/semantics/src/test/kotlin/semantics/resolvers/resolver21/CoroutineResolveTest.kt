@@ -21,7 +21,7 @@ import model.sameCompletedResultAs
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import semantics.contract.selectionValues
-import semantics.shared.CycleChecker
+import semantics.shared.CycleCheckState
 import semantics.shared.ResolverReadCycleException
 import semantics.shared.OperationContext
 import kotlin.test.Test
@@ -61,7 +61,7 @@ class CoroutineResolveTest {
         val registeredKeys = linkedSetOf<ObjectEngineResult.GroundKey>()
         var producerStarts = 0
         val cycleChecker =
-            object : CycleChecker {
+            object : CycleCheckState {
                 override fun registerWriter(
                     cell: EngineResultCell,
                     writer: List<PathComponent>,
@@ -132,7 +132,7 @@ class CoroutineResolveTest {
         var rootCell: EngineResultCell? = null
         val childRegistrations = linkedSetOf<ObjectEngineResult.GroundKey>()
         val cycleChecker =
-            object : CycleChecker {
+            object : CycleCheckState {
                 override fun registerWriter(
                     cell: EngineResultCell,
                     writer: List<PathComponent>,

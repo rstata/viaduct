@@ -7,6 +7,7 @@ import model.Arguments
 import model.Assumptions
 import model.ObjectEngineResult
 import model.ObjectSelectionForest
+import model.requireQueryTypeDef
 import model.SelectionForest
 import model.VariableBinding
 import model.registry.VariableDefinition
@@ -25,15 +26,23 @@ internal class ObjectOrchestrationTask(
     private val closedDemand = AtomicReference<CloseInputDemandResult?>(null)
     private val launched = AtomicBoolean(false)
 
+    init {
+        require(occurrence.root.type == operation.schema.requireQueryTypeDef()) {
+            "Resolver26 occurrence root must have Query type"
+        }
+        require(occurrence.path.isEmpty() == (occurrence.root === occurrence.target)) {
+            "Only a root Resolver26 occurrence may use its root as its target"
+        }
+        require(source.schemaType == occurrence.target.type) {
+            "Source type ${source.schemaType.name} does not match result type ${occurrence.target.type.name}"
+        }
+    }
+
     /**
      * Synchronously closes this object's demand and establishes its binding domain.
      * Returns the closed demand needed to materialize passive children before launch.
      */
     fun prepare(): ObjectSelectionForest {
-        require(source.schemaType == occurrence.target.type) {
-            "Source type ${source.schemaType.name} does not match result type ${occurrence.target.type.name}"
-        }
-
         val closed: CloseInputDemandResult =
             context(world) {
                 source.closeInputDemand(

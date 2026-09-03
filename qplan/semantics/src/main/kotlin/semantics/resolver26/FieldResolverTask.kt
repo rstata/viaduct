@@ -39,6 +39,27 @@ internal class FieldResolverTask(
 ) {
     private val world: Assumptions = operation.world
 
+    init {
+        require(selection.key.field.containingDef == occurrence.target.type) {
+            "Resolver selection does not belong to its target occurrence"
+        }
+        require(resolver.field == selection.key.field) {
+            "Resolver field ${resolver.field.name} does not match ${selection.key.field.name}"
+        }
+        require(
+            resolverOccurrenceId ==
+                ResolverOccurrenceId.at(
+                    occurrence.root,
+                    occurrence.coordinate(selection.key),
+                ),
+        ) {
+            "Resolver occurrence ID does not match its target occurrence and selection"
+        }
+        require(occurrence.target.getCell(selection.key) === cell) {
+            "Resolver cell does not belong to its target occurrence and selection"
+        }
+    }
+
     suspend fun run() {
         context(operation, world, operation.cycleChecker) {
             val objectKey = selection.key

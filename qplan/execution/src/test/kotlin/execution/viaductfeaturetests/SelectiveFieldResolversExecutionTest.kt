@@ -2602,7 +2602,6 @@ class SelectiveFieldResolversExecutionTest {
 
     @Nested
     inner class ResultMetadataTests {
-        @Disabled("TODO: ErrorData")
         @Test
         fun `errors returned during materialization are included in the response`() {
             val initialFooCall = AtomicBoolean(true)
@@ -2655,9 +2654,8 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: ErrorData")
         @Test
-        fun `selective resolver rematerializes DataFetcherResult list items`() {
+        fun `selective resolver rematerializes list items`() {
             MockTenantModuleBootstrapper(
                 """
                     extend type Query { foo: [Foo] }
@@ -2671,18 +2669,14 @@ class SelectiveFieldResolversExecutionTest {
                             resolverId = resolverId,
                             unbatchedResolveFn = { _, _, _, sels, _ ->
                                 listOf(
-                                    DataFetcherResult.newResult<EngineObjectData>()
-                                        .data(
-                                            createEngineObjectData(
-                                                "Foo",
-                                                buildMap {
-                                                    if (sels!!.containsField("Foo", "x")) {
-                                                        put("x", 2)
-                                                    }
-                                                },
-                                            )
-                                        )
-                                        .build()
+                                    createEngineObjectData(
+                                        "Foo",
+                                        buildMap {
+                                            if (sels!!.containsField("Foo", "x")) {
+                                                put("x", 2)
+                                            }
+                                        },
+                                    )
                                 )
                             }
                         )

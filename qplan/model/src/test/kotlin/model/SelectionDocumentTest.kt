@@ -1,13 +1,13 @@
-package semantics
+package model
 
 import graphql.parser.Parser
-import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import model.testing.TestWorld
 
 class SelectionDocumentTest {
     @Test
-    fun `accepts nested named fragments at the semantics boundary`() {
+    fun `accepts nested named fragments at the model fixture boundary`() {
         val world =
             TestWorld.fromSDL(
                 """

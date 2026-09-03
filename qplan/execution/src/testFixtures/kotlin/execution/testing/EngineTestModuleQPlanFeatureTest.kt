@@ -20,6 +20,7 @@ import model.SelectionForest
 import model.SourceSchemaAdapter
 import model.emptyFragmentOf
 import model.fragmentFrom
+import model.fragmentFromDocument
 import model.requireQueryTypeDef
 import model.requireType
 import model.testing.FieldResolverDefinition
@@ -29,7 +30,6 @@ import model.testing.VariableDeclaration
 import model.testing.fieldResolverOf
 import model.testing.nodeResolverOf
 import model.testing.selectiveFieldResolverOf
-import semantics.fragmentFromDocument
 import viaduct.engine.EngineConfiguration
 import viaduct.engine.api.EngineExecutionContext
 import viaduct.engine.api.EngineObjectData

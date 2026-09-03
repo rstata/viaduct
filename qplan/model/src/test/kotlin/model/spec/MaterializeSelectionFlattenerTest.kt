@@ -10,8 +10,6 @@ import model.Arguments
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
 import model.ObjectEngineResult
-import model.ResolverOccurrenceId
-import model.materializeSelectionForestOf
 import model.merge
 import model.testing.GJSchema
 import model.testing.GJSelectionParser
@@ -153,30 +151,6 @@ class MaterializeSelectionFlattenerTest {
         val result = selections.collect(fixture.query)["result"]
         assertFalse(result.key is ObjectEngineResult.GroundKey)
         assertEquals(setOf(variable), result.key.arguments.usedVariables())
-    }
-
-    @Test
-    fun `construction-only provider markers cannot enter a materialize forest`() {
-        val fixture = SchemaFixture()
-        val field = fixture.schema.requireObjectField("Query", "version")
-        val variable =
-            Arguments.Variable
-                .of(field = field, variableName = "provider")
-                .instantiate(ResolverOccurrenceId.at(field.testRoot(), emptyList()))
-        val marker =
-            ObjectEngineResult.VariableKey.of(
-                key = ObjectEngineResult.Key.of(field, emptyMap()),
-                variableDefinedByThisKey = variable,
-            )
-
-        assertFailsWith<IllegalArgumentException> {
-            MaterializeSelection.of(
-                responseKey = "version",
-                key = marker,
-                possibleTypes = setOf(fixture.query),
-                subselections = materializeSelectionForestOf(),
-            )
-        }
     }
 
     @Test

@@ -8,11 +8,11 @@ A property-test run has two independent inputs. `testInputProfileId` names a ver
 
 `arbitrary` defines `GeneratorConfigData`, a primitive-shaped data class plus conversion to and from `Config`; it has no serialization or resource-loading responsibility. The launcher layer defines the campaign and round data classes, JSON codec, resource index, and loaders in `semantics/propertytest`. Generator profile resources live under `semantics/src/test/resources/semantics/property-tests/generator-configs`, and the explicit `index.json` makes discovery work identically from directories and jars. Broad campaign resources live under `semantics/src/test/resources/semantics/property-tests/campaigns`.
 
-Each generator document contains a partial `shared` object and one or both partial `resolver25` and `resolver26` objects. The loader parses these as JSON trees, recursively upserts the selected resolver object into `shared`, adds the `GeneratorConfigData` format version, and only then binds and validates the complete data class. The resulting complete profile contains every resolved value rather than relying on `Config` defaults. Every `ConfigKey` has an explicit stable wire name and primitive wire type; query-fragment admission and density are serialized independently.
+Each generator document is a complete `GeneratorConfigData` value for one Resolver26 profile rather than a delta over `Config` defaults. Every `ConfigKey` has an explicit stable wire name and primitive wire type; query-fragment admission and density are serialized independently.
 
 ## Shared Execution
 
-`PropertyTestRoundRunner` resolves the input and subject profiles and calls `executeResolverTestCases`, the property generator entry point that does not inspect process properties. Resolver25 and Resolver26 broad correctness are subject profiles; Resolver26 required structural signatures are supplied by each run.
+`PropertyTestRoundRunner` resolves the input and subject profiles and calls `executeResolverTestCases`, the property generator entry point that does not inspect process properties. Resolver26 broad correctness is the maintained subject profile, and each run supplies its required structural signatures.
 
 The campaign JUnit tests deserialize and expand the same campaign resources before calling the same runner. Their runtime-only `PropertyTestRoundExecution` may select one input profile and one `S:R:Q` coordinate. This preserves the existing JUnit replay interface without adding selected-case state to serialized launcher configuration.
 
@@ -54,7 +54,7 @@ The driver asks the Kotlin launcher for the configured round numbers, performs t
 
 ## Resource Maintenance
 
-Campaign JSON is authored directly. Generator profiles originate as typed Kotlin `Config` values in the Resolver25 and Resolver26 broad-stress profile definitions. After adding, removing, or renaming a `ConfigKey`, or after changing a typed generator profile, regenerate the fully resolved layered resources with:
+Campaign JSON is authored directly. Generator profiles originate as typed Kotlin `Config` values in the Resolver26 broad-stress profile definitions. After adding, removing, or renaming a `ConfigKey`, or after changing a typed generator profile, regenerate the complete resources with:
 
 ```shell
 ./gradlew :semantics:materializeGeneratorConfigs

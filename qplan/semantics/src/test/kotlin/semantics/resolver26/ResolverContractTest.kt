@@ -12,7 +12,6 @@ import semantics.contract.CorrectResolutionPostTestPolicy
 import semantics.contract.EmptyObjectFragmentResolverContract
 import semantics.contract.FromQueryFieldResolverContract
 import semantics.contract.LateObjectPathDemandResolverContract
-import semantics.contract.LateAncestorDemandPolicy
 import semantics.contract.NodeResolverContract
 import semantics.contract.ObjectFragmentFromArgumentResolverContract
 import semantics.contract.ObjectFragmentFromObjectPathResolverContract
@@ -47,12 +46,6 @@ class ResolverContractTest :
     SelectiveResolverOutputPolicyContract,
     SelectiveObjectFragmentOutputPolicyContract,
     CorrectResolutionPostTestPolicy {
-    override val lateAncestorDemandPolicy: LateAncestorDemandPolicy
-        get() = LateAncestorDemandPolicy.CONTRIBUTE_PASSIVE_PREDECESSORS
-
-    override val retainsSymbolicObjectKeys: Boolean
-        get() = true
-
     override fun resolve(
         world: Assumptions,
         root: EngineObjectData.Sync,

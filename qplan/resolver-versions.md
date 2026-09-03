@@ -26,15 +26,9 @@ Resolver06-08 express the same three stages through `DepthFirstReactor` tasks. R
 
 ### Structured Suspension: Resolver21-23
 
-Resolver21-23 express the same stages through request-owned structured coroutines and exact promises. Resolver23 is the clean coroutine baseline for comparing promise installation, suspension, child publication, and request quiescence with Resolver25 or Resolver26.
+Resolver21-23 express the same stages through request-owned structured coroutines and exact promises. Resolver23 is the clean coroutine baseline for comparing promise installation, suspension, child publication, and request quiescence with Resolver26.
 
 ## Advanced Resolvers
-
-### Resolver25
-
-Resolver25 merges actual demand by grounded key. One orchestrator owns each OER occurrence, closes a conservative potential-demand envelope by activated field, grounds actual selections independently, and merges equal keys until a key seals for launch. Source presence lets ancestor outputs own argumentless fields that otherwise have standard resolvers; absent fields use standard resolution. Published output can accept descendant demand through its output and fringe state without reapplying the containing key.
-
-This current activation implementation is authoritative; the retired static preparation graph is not a target to restore. Resolver25 remains an alternate experiment, not the primary blueprint. It is useful when comparing late equality, potential versus actual demand, provider traversal, or merged-ground-key identity with Resolver26.
 
 ### Resolver26
 
@@ -49,7 +43,7 @@ Use this order unless the failing feature requires a later version:
 1. Resolver03 for compact selective semantics.
 2. Resolver08 for explicit work ordering and publication.
 3. Resolver23 for structured suspension and promise ownership.
-4. Resolver25 or Resolver26 for runtime `FromObjectField`, late symbolic keys, or their distinct identity policies; use Resolver26 for `FromQueryField`.
+4. Resolver26 for runtime `FromObjectField`, `FromQueryField`, and symbolic resolver-instance identity.
 
 Reduce further to Resolver01/06/21 to remove object fragments, or Resolver02/07/22 to retain object fragments and `FromArgument` without selective-output pressure.
 
@@ -59,7 +53,7 @@ Cross-version agreement is not independent proof because versions share carriers
 
 Shared carrier and API migrations must update every maintained version. Prefer one shared model operation or adapter boundary over resolver-specific compatibility code. Older versions should not acquire separate `execution2` integrations.
 
-Resolvers01-23 gain behavior through shared contracts. Bespoke tests remain appropriate only for Resolver25/26 policies and implementation-specific lifecycle or concurrency behavior.
+Resolvers01-23 gain behavior through shared contracts. Bespoke tests remain appropriate for Resolver26's symbolic-key policy and implementation-specific lifecycle or concurrency behavior.
 
 ## Resolver10 As A Lesson
 

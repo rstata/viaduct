@@ -20,7 +20,7 @@
   },
   "doubles" : {
     "aliasWeight" : 0.2,
-    "duplicateSelectionWeight" : 0.1,
+    "duplicateSelectionWeight" : 0.2,
     "errorValueWeight" : 0.08,
     "explicitFieldResolverWeight" : 0.8,
     "fieldArgumentWeight" : 0.65,
@@ -51,7 +51,7 @@
     "sometimesPassiveFieldWeight" : 0.25
   },
   "formatVersion" : 4,
-  "id" : "resolver26-balanced-large-deep-low-duplicates",
+  "id" : "resolver26-balanced-large-deep",
   "integers" : {
     "maxInputTypeDepth" : 2,
     "maxOutputListDepth" : 1,

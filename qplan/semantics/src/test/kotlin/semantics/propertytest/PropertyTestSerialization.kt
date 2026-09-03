@@ -1,53 +1,23 @@
 package semantics.propertytest
 
 import com.fasterxml.jackson.annotation.JsonInclude
-import com.fasterxml.jackson.annotation.JsonPropertyOrder
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.MapperFeature
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.databind.json.JsonMapper
 import com.fasterxml.jackson.module.kotlin.kotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
-import semantics.arbitrary.GENERATOR_CONFIG_FORMAT_VERSION
 import semantics.arbitrary.GeneratorConfigData
-import semantics.arbitrary.IntRangeConfig
 import semantics.arbitrary.TestCaseCount
 import java.io.InputStream
 
 const val PROPERTY_TEST_ROUND_FORMAT_VERSION = 1
 const val PROPERTY_TEST_CAMPAIGN_FORMAT_VERSION = 1
-const val GENERATOR_CONFIG_DOCUMENT_FORMAT_VERSION = 1
-const val GENERATOR_CONFIG_INDEX_FORMAT_VERSION = 1
+const val GENERATOR_CONFIG_INDEX_FORMAT_VERSION = 2
 
 data class GeneratorConfigResourceIndex(
     val formatVersion: Int,
     val resources: List<String>,
-)
-
-@JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder("formatVersion", "shared", "resolver25", "resolver26")
-data class GeneratorConfigDocumentFile(
-    val formatVersion: Int,
-    val shared: GeneratorConfigValuesData,
-    val resolver25: GeneratorConfigProfileData? = null,
-    val resolver26: GeneratorConfigProfileData? = null,
-)
-
-@JsonInclude(JsonInclude.Include.NON_EMPTY)
-data class GeneratorConfigValuesData(
-    val booleans: Map<String, Boolean> = emptyMap(),
-    val integers: Map<String, Int> = emptyMap(),
-    val doubles: Map<String, Double> = emptyMap(),
-    val ranges: Map<String, IntRangeConfig> = emptyMap(),
-)
-
-@JsonInclude(JsonInclude.Include.NON_EMPTY)
-data class GeneratorConfigProfileData(
-    val id: String,
-    val booleans: Map<String, Boolean> = emptyMap(),
-    val integers: Map<String, Int> = emptyMap(),
-    val doubles: Map<String, Double> = emptyMap(),
-    val ranges: Map<String, IntRangeConfig> = emptyMap(),
 )
 
 data class PropertyTestRoundConfigFile(
@@ -232,14 +202,10 @@ class GeneratorConfigRegistry private constructor(
                 "Unsupported generator config index formatVersion ${index.formatVersion}"
             }
             val data =
-                index.resources.flatMap { resource ->
-                    generatorConfigDataFromDocument(
-                        document =
-                            PropertyTestJson.readResource<GeneratorConfigDocumentFile>(
-                                resource,
-                                classLoader,
-                            ),
-                        source = resource,
+                index.resources.map { resource ->
+                    PropertyTestJson.readResource<GeneratorConfigData>(
+                        resource,
+                        classLoader,
                     )
                 }
             require(data.map(GeneratorConfigData::id).distinct().size == data.size) {
@@ -280,44 +246,6 @@ object PropertyTestJson {
             .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
             .build()
 }
-
-internal fun generatorConfigDataFromDocument(
-    document: GeneratorConfigDocumentFile,
-    source: String,
-): List<GeneratorConfigData> {
-    require(document.formatVersion == GENERATOR_CONFIG_DOCUMENT_FORMAT_VERSION) {
-        "Unsupported generator config document formatVersion " +
-            "${document.formatVersion} in $source"
-    }
-    val resolverSections =
-        listOfNotNull(document.resolver25, document.resolver26)
-    require(resolverSections.isNotEmpty()) {
-        "Generator config document $source must define resolver25 or resolver26"
-    }
-    return resolverSections.map { profile ->
-        document.shared.merge(profile).also(GeneratorConfigData::toConfig)
-    }
-}
-
-private fun GeneratorConfigValuesData.merge(
-    profile: GeneratorConfigProfileData,
-): GeneratorConfigData =
-    GeneratorConfigData(
-        formatVersion = GENERATOR_CONFIG_FORMAT_VERSION,
-        id = profile.id,
-        booleans = booleans + profile.booleans,
-        integers = integers + profile.integers,
-        doubles = doubles + profile.doubles,
-        ranges = ranges + profile.ranges,
-    )
-
-internal fun GeneratorConfigData.valuesData(): GeneratorConfigValuesData =
-    GeneratorConfigValuesData(
-        booleans = booleans,
-        integers = integers,
-        doubles = doubles,
-        ranges = ranges,
-    )
 
 @PublishedApi
 internal fun defaultClassLoader(): ClassLoader =

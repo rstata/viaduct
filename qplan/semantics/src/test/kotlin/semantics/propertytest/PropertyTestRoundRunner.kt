@@ -4,15 +4,12 @@ import kotlinx.coroutines.runBlocking
 import semantics.arbitrary.Config
 import semantics.arbitrary.ResolverTestCaseCoordinate
 import semantics.arbitrary.ResolverTestExecution
-import semantics.resolver25.runResolver25BroadStress
 import semantics.resolver26.Resolver26StructuralSignature
 import semantics.resolver26.runResolver26BroadStress
 import java.io.File
 
 const val GENERATOR_CONFIG_INDEX_RESOURCE =
     "/semantics/property-tests/generator-configs/index.json"
-const val RESOLVER25_BROAD_CORRECTNESS_SUBJECT_ID =
-    "resolver25-broad-correctness"
 const val RESOLVER26_BROAD_CORRECTNESS_SUBJECT_ID =
     "resolver26-broad-correctness"
 
@@ -144,15 +141,11 @@ private inline fun <reified T> loadConfig(reference: String): T =
 
 private fun subject(id: String): PropertyTestSubject =
     when (id) {
-        Resolver25BroadCorrectnessSubject.id -> Resolver25BroadCorrectnessSubject
         Resolver26BroadCorrectnessSubject.id -> Resolver26BroadCorrectnessSubject
         else ->
             error(
                 "Unknown property-test subject profile $id; profiles=" +
-                    listOf(
-                        Resolver25BroadCorrectnessSubject.id,
-                        Resolver26BroadCorrectnessSubject.id,
-                    ),
+                    listOf(Resolver26BroadCorrectnessSubject.id),
             )
     }
 
@@ -163,28 +156,6 @@ private fun interface PropertyTestSubject {
         config: Config,
         execution: ResolverTestExecution,
     ): Int
-}
-
-private object Resolver25BroadCorrectnessSubject : PropertyTestSubject {
-    const val id = RESOLVER25_BROAD_CORRECTNESS_SUBJECT_ID
-
-    override suspend fun execute(
-        run: PropertyTestRunConfig,
-        propertyProfile: String,
-        config: Config,
-        execution: ResolverTestExecution,
-    ): Int {
-        require(run.requiredCoverage.isEmpty()) {
-            "$id does not define coverage signatures: ${run.requiredCoverage}"
-        }
-        return runResolver25BroadStress(
-            profile = propertyProfile,
-            counts = run.counts,
-            config = config,
-            seed = run.seed,
-            execution = execution,
-        )
-    }
 }
 
 private object Resolver26BroadCorrectnessSubject : PropertyTestSubject {

@@ -8,7 +8,6 @@ Final validation and default benchmark controls ran serially:
 
 ```shell
 ./gradlew :model:test :semantics:test --console=plain
-./gradlew :semantics:resolver25OverheadBenchmark --console=plain
 ./gradlew :semantics:resolver26OverheadBenchmark --console=plain
 ./gradlew :semantics:correctResolutionBenchmark --console=plain
 ./gradlew :semantics:propertyTestBenchmark --console=plain

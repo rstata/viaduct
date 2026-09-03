@@ -2,7 +2,6 @@ package semantics.propertytest
 
 import semantics.arbitrary.Config
 import semantics.arbitrary.GeneratorConfigData
-import semantics.arbitrary.ResolverVariableWeight
 import semantics.arbitrary.TestCaseCount
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -26,26 +25,6 @@ class PropertyTestSerializationTest {
         val registry = GeneratorConfigRegistry.load(GENERATOR_CONFIG_INDEX_RESOURCE)
 
         assertTrue(registry.ids.isNotEmpty())
-    }
-
-    @Test
-    fun `layered generator document upserts resolver values before binding data class`() {
-        val defaults = GeneratorConfigData.from("unused", Config.default)
-        val document =
-            GeneratorConfigDocumentFile(
-                formatVersion = GENERATOR_CONFIG_DOCUMENT_FORMAT_VERSION,
-                shared = defaults.valuesData(),
-                resolver25 =
-                    GeneratorConfigProfileData(
-                        id = "resolver25-layered",
-                        doubles = mapOf(ResolverVariableWeight.wireName to 0.75),
-                    ),
-            )
-
-        val data = generatorConfigDataFromDocument(document, "test")
-
-        assertEquals(listOf("resolver25-layered"), data.map(GeneratorConfigData::id))
-        assertEquals(0.75, data.single().toConfig()[ResolverVariableWeight])
     }
 
     @Test
@@ -81,7 +60,7 @@ class PropertyTestSerializationTest {
             PropertyTestCampaignConfigFile(
                 formatVersion = PROPERTY_TEST_CAMPAIGN_FORMAT_VERSION,
                 id = "sample-campaign",
-                subjectProfileId = RESOLVER25_BROAD_CORRECTNESS_SUBJECT_ID,
+                subjectProfileId = RESOLVER26_BROAD_CORRECTNESS_SUBJECT_ID,
                 seedMultiplier = 10,
                 profiles =
                     listOf(

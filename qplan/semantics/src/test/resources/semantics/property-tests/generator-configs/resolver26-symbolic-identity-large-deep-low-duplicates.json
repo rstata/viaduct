@@ -23,7 +23,7 @@
     "duplicateSelectionWeight" : 0.1,
     "errorValueWeight" : 0.08,
     "explicitFieldResolverWeight" : 0.8,
-    "fieldArgumentWeight" : 0.65,
+    "fieldArgumentWeight" : 0.9,
     "implementationArgumentDefaultWeight" : 0.3,
     "inputListTypeWeight" : 0.2,
     "inputObjectTypeWeight" : 0.25,
@@ -44,14 +44,14 @@
     "resolverFromFieldPassiveUseWeight" : 0.25,
     "resolverFromFieldProviderArgumentVariableWeight" : 0.0,
     "resolverFromFieldVariableOwnerUseWeight" : 0.25,
-    "resolverLiteralVariableConvergenceWeight" : 0.2,
+    "resolverLiteralVariableConvergenceWeight" : 0.75,
     "resolverNestedProviderPathWeight" : 0.5,
     "resolverQueryFragmentWeight" : 0.1,
-    "resolverVariableWeight" : 0.65,
+    "resolverVariableWeight" : 0.95,
     "sometimesPassiveFieldWeight" : 0.25
   },
   "formatVersion" : 4,
-  "id" : "resolver26-balanced-large-deep-low-duplicates",
+  "id" : "resolver26-symbolic-identity-large-deep-low-duplicates",
   "integers" : {
     "maxInputTypeDepth" : 2,
     "maxOutputListDepth" : 1,
@@ -74,7 +74,7 @@
       "minimum" : 1
     },
     "inputScalarValueRange" : {
-      "maximum" : 4,
+      "maximum" : 1,
       "minimum" : 0
     },
     "listValueSize" : {
@@ -110,8 +110,8 @@
       "minimum" : 1
     },
     "resolverVariableCount" : {
-      "maximum" : 3,
-      "minimum" : 1
+      "maximum" : 4,
+      "minimum" : 2
     },
     "rootQueryFieldCount" : {
       "maximum" : 12,

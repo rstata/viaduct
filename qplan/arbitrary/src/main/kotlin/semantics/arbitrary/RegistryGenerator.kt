@@ -1450,7 +1450,6 @@ private class RegistryGenerator(
         if (
             !config[ResolverVariablesEnabled] ||
             !variablesEnabled ||
-            (config[ResolverVariablesOnQueryFieldsOnly] && consumer.typeName != "Query") ||
             (config[ResolverVariablesOnNonQueryFieldsOnly] && consumer.typeName == "Query") ||
             variableProviders
                 .fromField(providerFragment)

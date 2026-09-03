@@ -20,7 +20,7 @@
   },
   "doubles" : {
     "aliasWeight" : 0.2,
-    "duplicateSelectionWeight" : 0.1,
+    "duplicateSelectionWeight" : 0.2,
     "errorValueWeight" : 0.08,
     "explicitFieldResolverWeight" : 0.8,
     "fieldArgumentWeight" : 0.65,
@@ -43,15 +43,15 @@
     "resolverFromArgumentNestedPathWeight" : 0.5,
     "resolverFromFieldPassiveUseWeight" : 0.25,
     "resolverFromFieldProviderArgumentVariableWeight" : 0.0,
-    "resolverFromFieldVariableOwnerUseWeight" : 0.25,
+    "resolverFromFieldVariableOwnerUseWeight" : 1.0,
     "resolverLiteralVariableConvergenceWeight" : 0.2,
     "resolverNestedProviderPathWeight" : 0.5,
     "resolverQueryFragmentWeight" : 0.1,
-    "resolverVariableWeight" : 0.65,
+    "resolverVariableWeight" : 0.9,
     "sometimesPassiveFieldWeight" : 0.25
   },
   "formatVersion" : 4,
-  "id" : "resolver26-balanced-large-deep-low-duplicates",
+  "id" : "resolver26-multiple-owners-large-deep",
   "integers" : {
     "maxInputTypeDepth" : 2,
     "maxOutputListDepth" : 1,
@@ -110,7 +110,7 @@
       "minimum" : 1
     },
     "resolverVariableCount" : {
-      "maximum" : 3,
+      "maximum" : 1,
       "minimum" : 1
     },
     "rootQueryFieldCount" : {

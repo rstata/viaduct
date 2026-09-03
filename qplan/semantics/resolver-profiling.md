@@ -12,7 +12,7 @@ Use the narrowest target that still contains the behavior under investigation:
 | `correctResolutionProfile` | The `correctResolution` judgment over 50 prepared, diverse inputs | Resolver26 execution, query generation and parsing, witness preparation, fragment merging, and binding instantiation |
 | `propertyTestProfile` | One frozen end-to-end Resolver26 property case, including its correctness oracles | Resource decoding and `TestWorld` assembly |
 
-The full Resolver25 and Resolver26 benchmarks intentionally have no dedicated profiling task. They include generation and validation and are useful as end-to-end performance indicators, but they are usually too broad to explain a hotspot. Start with the property-test profile when the expensive phase is not yet known, then move to the Resolver26-overhead or `correctResolution` profile when its phase events identify one of those components.
+The full Resolver26 benchmark intentionally has no dedicated profiling task. It includes generation and validation and is useful as an end-to-end performance indicator, but it is usually too broad to explain a hotspot. Start with the property-test profile when the expensive phase is not yet known, then move to the Resolver26-overhead or `correctResolution` profile when its phase events identify one of those components.
 
 ## Resolver26 Overhead
 
@@ -107,7 +107,7 @@ Workload changes caused by legitimate semantic corrections are valid performance
 
 Update this log whenever a resolver performance investigation concludes. Add the newest entry immediately below these instructions so entries remain in reverse chronological order.
 
-Each entry must record the UTC date and time, host name and relevant hardware or instance configuration, Codex session ID, tested revision, profiling targets added or used, findings, changes made, and any controlled before/after result. At closeout, run the profiling-related benchmarks serially on an otherwise idle host with default parameters unless the entry explicitly records its overrides: Resolver25 overhead, Resolver26 overhead, `correctResolution`, and the frozen property test. The full generated-workflow benchmarks are deliberately excluded because they exercise a different workload and are not controls for the profiling targets. Report every measured iteration, JMH score and error, units, work per operation, and mean time per resolution, property case, or correctness judgment. Include all emitted fixed-corpus statistics with their actual percentile labels. Do not compare results across different hosts, JVMs, benchmark parameters, or corpus revisions without calling out that difference.
+Each entry must record the UTC date and time, host name and relevant hardware or instance configuration, Codex session ID, tested revision, profiling targets added or used, findings, changes made, and any controlled before/after result. At closeout, run the profiling-related benchmarks serially on an otherwise idle host with default parameters unless the entry explicitly records its overrides: Resolver26 overhead, `correctResolution`, and the frozen property test. The full generated-workflow benchmark is deliberately excluded because it exercises a different workload and is not a control for the profiling targets. Report every measured iteration, JMH score and error, units, work per operation, and mean time per resolution, property case, or correctness judgment. Include all emitted fixed-corpus statistics with their actual percentile labels. Do not compare results across different hosts, JVMs, benchmark parameters, or corpus revisions without calling out that difference.
 
 ### 2026-08-22 17:49:08 UTC
 
@@ -123,30 +123,11 @@ The runtime tree was clean and committed before the final test, benchmark, and p
 
 | Benchmark | Measured iterations | JMH score | Work per operation | Mean per unit |
 | --- | --- | --- | --- | --- |
-| Resolver25 overhead | 2.508, 2.495, 2.577 s/op | 2.527 +/- 0.808 s/op | 100 resolutions | 25.270 ms/resolution |
 | Resolver26 overhead | 1.760, 1.748, 1.747 s/op | 1.752 +/- 0.130 s/op | 100 resolutions | 17.520 ms/resolution |
 | `correctResolution` | 0.740, 0.745, 0.742 s/op | 0.743 +/- 0.043 s/op | 50 judgments | 14.860 ms/judgment |
 | Frozen property test | 0.547, 0.551, 0.653, 0.599, 0.531 s/op | 0.576 +/- 0.193 s/op | 1 property case / 12,763 expected resolver applications | 0.576 s/case |
 
 The closeout Resolver26 result is 24.6% faster than the session baseline of 2.325 s/op, and the frozen property result is 9.3% faster than the ten-iteration baseline average of 0.635 s/case. The property closeout had two slower iterations; the immediately preceding retained-revision control was tighter at 0.547 +/- 0.020 s/op from 0.550, 0.546, 0.554, 0.546, and 0.540. The closeout `correctResolution` result is 25.5% faster than the session's 0.997 s/op diagnostic baseline. These comparisons all use the same host, JVM, corpus revisions, default benchmark parameters, and post-`86b9683a7` corrected resolver semantics.
-
-Resolver25 overhead corpus statistics for 100 queries:
-
-```text
-fields returned: average=294.37, p90=448, max=678
-active fields returned: average=93.09, p90=155, max=241
-passive fields returned: average=201.28, p90=297, max=437
-passive fields per active field: average=2.38, p90=3.04, max=4.84
-resolvers executed: average=68.59, p90=107, max=165
-resolver executions with variable-bearing arguments: average=5.72, p50=9, max=20
-variable-bearing arguments per such resolver execution: average=1.00, p90=1, max=1
-maximum variable stack depth: average=0.59, p50=1, max=1
-result depth: average=8.58, p90=9, max=9
-active fields per non-Query object: average=1.88, p90=4, max=5
-passive fields per non-Query object: average=14.31, p90=18, max=18
-selections per object fragment: average=4.48, p90=18, max=39
-object fragment depth: average=1.63, p90=5, max=9
-```
 
 Resolver26 overhead corpus statistics for 100 queries:
 
@@ -245,34 +226,15 @@ Initial profiles identified repeated schema-coordinate recovery, output-type con
 
 The frozen property case began the session at approximately 1.50 s per case and closed at 0.589 s per case, approximately 61% less elapsed time or 2.5 times the original throughput. That comparison uses the same serialized workload and host, but the original control was recorded earlier in the session rather than in the closing run below.
 
-The overhead corpus now also checks in the exact ordered batch of 100 query sources generated with seed 1. Both post-serialization runs reproduced every pre-serialization corpus statistic exactly. Resolver25 moved from 5.928 to 5.905 s/op (0.4% faster), and Resolver26 moved from 3.664 to 3.637 s/op (0.7% faster); these sub-1% differences are not material and are consistent with run-to-run noise. Ordinary benchmark and profile tasks now load this snapshot, while explicit generation tasks own deliberate corpus replacement.
+The overhead corpus now also checks in the exact ordered batch of 100 query sources generated with seed 1. The post-serialization run reproduced every pre-serialization corpus statistic exactly. Resolver26 moved from 3.664 to 3.637 s/op (0.7% faster); this sub-1% difference is not material and is consistent with run-to-run noise. Ordinary benchmark and profile tasks now load this snapshot, while explicit generation tasks own deliberate corpus replacement.
 
 Closing benchmarks used JMH 1.36 on Corretto 21.0.4 and default parameters.
 
 | Benchmark | Measured iterations | JMH score | Work per operation | Mean per unit |
 | --- | --- | --- | --- | --- |
-| Resolver25 overhead | 5.947, 5.846, 5.922 s/op | 5.905 +/- 0.957 s/op | 100 resolutions | 59.050 ms/resolution |
 | Resolver26 overhead | 3.612, 3.690, 3.611 s/op | 3.637 +/- 0.823 s/op | 100 resolutions | 36.370 ms/resolution |
 | `correctResolution` | 1.577, 1.495, 1.517 s/op | 1.530 +/- 0.776 s/op | 50 judgments | 30.600 ms/judgment |
 | Frozen property test | 0.583, 0.554, 0.684, 0.568, 0.559 s/op | 0.589 +/- 0.207 s/op | 1 property case / 12,763 resolver applications | 0.589 s/case |
-
-Resolver25 overhead corpus statistics for 100 queries:
-
-```text
-fields returned: average=802.53, p90=1533, max=1990
-active fields returned: average=246.13, p90=489, max=671
-passive fields returned: average=556.40, p90=1034, max=1331
-passive fields per active field: average=2.49, p90=3.23, max=4.73
-resolvers executed: average=217.55, p90=444, max=595
-resolver executions with variable-bearing arguments: average=11.22, p50=11, max=37
-variable-bearing arguments per such resolver execution: average=1.00, p90=1, max=1
-maximum variable stack depth: average=0.81, p50=1, max=1
-result depth: average=15.04, p90=15, max=18
-active fields per non-Query object: average=1.88, p90=4, max=5
-passive fields per non-Query object: average=14.31, p90=18, max=18
-selections per object fragment: average=4.48, p90=18, max=39
-object fragment depth: average=1.63, p90=5, max=9
-```
 
 Resolver26 overhead corpus statistics for 100 queries:
 

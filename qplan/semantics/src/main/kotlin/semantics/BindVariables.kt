@@ -5,7 +5,6 @@ import model.Arguments
 import model.ObjectEngineResult
 
 import model.Assumptions
-import model.EngineInputData
 import model.PathComponent
 import model.ResolverOccurrenceId
 import model.registry.VariableDefinition
@@ -22,15 +21,6 @@ context(world: Assumptions)
 internal fun Iterable<ObjectEngineResult.GroundKey>.bindFromArguments(
     root: ObjectEngineResult,
     path: List<PathComponent>,
-    onDeclared: (
-        Arguments.Variable,
-        VariableDefinition.FromArgument,
-    ) -> Unit = { _, _ -> },
-    onCompleted: (
-        Arguments.Variable,
-        VariableDefinition.FromArgument,
-        EngineInputData?,
-    ) -> Unit = { _, _, _ -> },
 ) {
     forEach { key ->
         if (key.field !in world.resolverRegistry) return@forEach
@@ -47,9 +37,7 @@ internal fun Iterable<ObjectEngineResult.GroundKey>.bindFromArguments(
                         )
                     val variableId = requireNotNull(instantiated.instanceId)
                     val value = definition.read(arguments)
-                    onDeclared(instantiated, definition)
                     world.declareBinding(variableId)
-                    onCompleted(instantiated, definition, value)
                     world.completeBinding(variableId, value)
                 }
             }

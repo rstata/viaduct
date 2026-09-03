@@ -4,7 +4,7 @@ set -uo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")" || exit 1
 
 seed=20260809
-resolvers=(03 08 23 25 26)
+resolvers=(03 08 23 26)
 pids=()
 
 for resolver in "${resolvers[@]}"; do

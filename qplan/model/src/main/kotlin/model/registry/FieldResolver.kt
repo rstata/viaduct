@@ -190,15 +190,7 @@ class FieldResolver private constructor(
             pathVariableDefinitions.filter { definition ->
                 definition.providerFragment == providerFragment
             }
-        val providerSelections =
-            fragmentPathDefinitions
-                .map { definition ->
-                    instantiatedFragment.markProviderPath(
-                        path = definition.path,
-                        variable = definition.variable,
-                    )
-                }.concatenateSelectionForests()
-        val constructionSelections = instantiatedFragment + providerSelections
+        val constructionSelections = instantiatedFragment
         val usedVariables = constructionSelections.usedVariables()
         return ResolverFragmentImpl(
             resolverOccurrenceId = resolverOccurrenceId,
@@ -519,37 +511,6 @@ private fun MaterializeSelectionForest.instantiateVariables(
             ),
         )
     }
-
-private fun SelectionForest.markProviderPath(
-    path: List<ObjectEngineResult.Key>,
-    variable: Arguments.Variable,
-): SelectionForest {
-    val key = path.first()
-    val remaining = path.drop(1)
-    return flatMap { selection ->
-        if (selection.key != key) {
-            selectionForestOf()
-        } else {
-            val markedSubselections =
-                if (remaining.isEmpty()) {
-                    selectionForestOf()
-                } else {
-                    selection.subselections.markProviderPath(remaining, variable)
-                }
-            if (remaining.isNotEmpty() && markedSubselections.isEmpty()) {
-                selectionForestOf()
-            } else {
-                selectionForestOf(
-                    Selection.of(
-                        key = ObjectEngineResult.VariableKey.of(selection.key, variable),
-                        possibleTypes = selection.possibleTypes,
-                        subselections = markedSubselections,
-                    ),
-                )
-            }
-        }
-    }
-}
 
 private fun SelectionForest.containsPath(path: List<ObjectEngineResult.Key>): Boolean {
     if (path.isEmpty()) return false

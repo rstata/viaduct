@@ -21,8 +21,6 @@ import kotlin.test.assertTrue
  * Contract for coalescing selections with equal symbolic or grounded arguments.
  */
 interface VariableSelectionIdentityResolverContract : ResolverContract {
-    val retainsSymbolicObjectKeys: Boolean
-
     @Test
     fun `equal pre-grounded selections merge in fragments and external queries`() {
         val suppliedDemandFields = ConcurrentLinkedQueue<Set<String>>()
@@ -171,18 +169,13 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
             resolveAndValidate(world, selections)
 
         assertEquals(8, resolved.getCell(resultKey).get())
-        if (retainsSymbolicObjectKeys) {
-            assertEquals(
-                mapOf(
-                    setOf("one") to 2,
-                    setOf("two") to 1,
-                ),
-                suppliedDemandFields.groupingBy { fields -> fields }.eachCount(),
-            )
-        } else {
-            assertEquals(1, suppliedDemandFields.size)
-            assertEquals(listOf(setOf("one", "two")), suppliedDemandFields.toList())
-        }
+        assertEquals(
+            mapOf(
+                setOf("one") to 2,
+                setOf("two") to 1,
+            ),
+            suppliedDemandFields.groupingBy { fields -> fields }.eachCount(),
+        )
         assertTrue(
             context(world) {
                 resolved.correctResolution(
@@ -195,7 +188,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
     }
 
     @Test
-    fun `potential demand covers a fromArgument selection that grounds to an existing key`() {
+    fun `a symbolic fromArgument key remains distinct from an equal grounded key`() {
         val suppliedDemandFields = ConcurrentLinkedQueue<Set<String>>()
         val testWorld =
             TestWorld.fromDSL(
@@ -269,13 +262,9 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
         val resolved = resolveAndValidate(world, selections)
 
         assertEquals(5, resolved.getCell(resultKey).get())
-        if (retainsSymbolicObjectKeys) {
-            assertEquals(
-                setOf(setOf("one"), setOf("two")),
-                suppliedDemandFields.toSet(),
-            )
-        } else {
-            assertEquals(listOf(setOf("one", "two")), suppliedDemandFields.toList())
-        }
+        assertEquals(
+            setOf(setOf("one"), setOf("two")),
+            suppliedDemandFields.toSet(),
+        )
     }
 }

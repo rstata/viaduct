@@ -19,6 +19,8 @@ A type with the suffix **State** owns one mutable protocol. Its storage is priva
 
 A type with the suffix **Observer** is semantically passive instrumentation. Replacing a normally returning observer that does not mutate resolver inputs or state with its NOP implementation preserves resolution's semantic input/output behavior. A synchronous observer can still affect failure or latency by throwing or blocking, so the convention is not a claim that arbitrary observer implementations are operationally invisible.
 
+Resolver classes use `init` blocks only for constructor preconditions and object invariants. Property initializers and explicit lifecycle methods perform initialization and operational transitions; an `init` block must not enqueue work, publish state, or otherwise start the resolution lifecycle.
+
 An **OER** is an `ObjectEngineResult`, always associated with one concrete GraphQL object type. An **LER** is a `ListEngineResult`, whose element cells preserve exact list positions. "OER tree" is convenient shorthand for the complete engine-result tree because active resolver work occurs at object occurrences; list containers and pre-domain scalar values remain explicit parts of the physical result.
 
 When discussing relationships among OER occurrences, a list is treated as a one-to-many path edge. The object containing a list field is therefore the parent of each object element for resolver-ancestry purposes, while each `ListEngineResult.Index` remains part of the element's exact identity.

@@ -23,8 +23,8 @@ import viaduct.engine.api.EngineObjectData
 internal class DepthFirstReactor(
     private val operation: OperationContext,
     private val complete: (SelectionForest) -> SelectionForest,
-    source: EngineObjectData.Sync,
-    selections: SelectionForest,
+    private val source: EngineObjectData.Sync,
+    private val selections: SelectionForest,
     private val onTaskStarted: (Task) -> Unit = {},
 ) {
     private val world: Assumptions = operation.world
@@ -38,14 +38,29 @@ internal class DepthFirstReactor(
         val source: EngineObjectData.Sync,
         val selections: SelectionForest,
         val target: ObjectEngineResult,
-    ) : Task
+    ) : Task {
+        init {
+            require(source.schemaType == target.type) {
+                "Source type ${source.schemaType.name} does not match result type ${target.type.name}"
+            }
+        }
+    }
 
     class SlotResolver(
         override val path: List<PathComponent>,
         val source: EngineObjectData.Sync,
         val selection: ObjectSelection,
         val target: ObjectEngineResult,
-    ) : Task
+    ) : Task {
+        init {
+            require(source.schemaType == target.type) {
+                "Source type ${source.schemaType.name} does not match result type ${target.type.name}"
+            }
+            require(selection.key.field.containingDef == target.type) {
+                "Resolver selection does not belong to its target object"
+            }
+        }
+    }
 
     private val result =
         context(operation, world) {
@@ -63,7 +78,10 @@ internal class DepthFirstReactor(
     private var nextSequence = 0L
     private var started = false
 
-    init {
+    /** Constructs this reactor's result. May be called exactly once. */
+    fun resolve(): ObjectEngineResult {
+        check(!started) { "DepthFirstReactor.resolve() may only be called once" }
+        started = true
         enqueue(
             SlotOrchestrator(
                 path = emptyList(),
@@ -72,12 +90,6 @@ internal class DepthFirstReactor(
                 target = result,
             ),
         )
-    }
-
-    /** Constructs this reactor's result. May be called exactly once. */
-    fun resolve(): ObjectEngineResult {
-        check(!started) { "DepthFirstReactor.resolve() may only be called once" }
-        started = true
 
         while (tasks.isNotEmpty()) {
             val task = tasks.remove().task
@@ -135,10 +147,6 @@ internal class DepthFirstReactor(
     }
 
     private fun SlotOrchestrator.execute() = context(operation, world) {
-        require(target.type == source.schemaType) {
-            "Initial result type ${target.type.name} does not match ${source.schemaType}"
-        }
-
         val closedDemand = source.closeResolverDemand(result, path, selections)
         source.materializedChildOccurrences(path, closedDemand, target)
             .forEach { passiveObjectOccurrence ->

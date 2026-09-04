@@ -9,6 +9,7 @@ import semantics.arbitrary.ListTypeWeight
 import semantics.arbitrary.ListValueSize
 import semantics.arbitrary.MaxSelectionDepth
 import semantics.arbitrary.ObjectFieldCount
+import semantics.arbitrary.ParentFieldsEnabled
 import semantics.arbitrary.RESOLVER_TEST_CASE_PROPERTY
 import semantics.arbitrary.RESOLVER_TEST_PROFILE_PROPERTY
 import semantics.arbitrary.ResolverFromFieldVariableOwnerLimit
@@ -93,6 +94,16 @@ class ResolverBroadStressCampaignConfigurationTest {
         assertTrue(
             Resolver26BroadStressProfile.entries.all { profile ->
                 profile.config[ResolverQueryFragmentWeight] == 0.1
+            },
+        )
+        assertTrue(
+            Resolver26BroadStressProfile.entries.all { profile ->
+                profile.config[ParentFieldsEnabled]
+            },
+        )
+        assertTrue(
+            Resolver26BroadStressProfile.entries.all { profile ->
+                profile.config[MaxSelectionDepth] >= 6
             },
         )
 

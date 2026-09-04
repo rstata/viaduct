@@ -20,6 +20,38 @@ import kotlin.test.assertTrue
 
 class GeneratorTest {
     @Test
+    fun `parent generation reaches a variable-free great-grandparent selection`() {
+        val config =
+            Config.default +
+                (ParentFieldsEnabled to true) +
+                (MaxSelectionDepth to 6) +
+                (ResolverVariablesEnabled to true) +
+                (ResolverFromArgumentVariablesEnabled to true) +
+                (ResolverVariableWeight to 1.0)
+        val random = RandomSource.seeded(2026090402L)
+        val schema = Arb.schema(config).next(random)
+        val registry = schema.registry(config).next(random)
+        val query = schema.query(config).next(random)
+        val resultOwner =
+            FieldCoordinate(
+                GENERATED_PARENT_GREAT_GRANDCHILD_TYPE,
+                GENERATED_PARENT_RESULT_FIELD,
+            )
+
+        assertEquals(3, schema.features.maximumParentChainDepth)
+        assertEquals(3, registry.features.maximumParentSelectionDepth)
+        assertEquals(3, registry.parentDemandOwnerFields.getValue(resultOwner))
+        assertTrue(
+            registry.objectFragmentSources.getValue(resultOwner).contains(
+                "parent {\n    parent {\n      parent {",
+            ),
+        )
+        assertFalse(registry.objectFragmentSources.getValue(resultOwner).contains('$'))
+        assertTrue(query.source.contains(GENERATED_PARENT_RESULT_FIELD))
+        registry.world(schema)
+    }
+
+    @Test
     fun `generated schemas registries and queries form valid worlds`() {
         val random = RandomSource.seeded(90210L)
 

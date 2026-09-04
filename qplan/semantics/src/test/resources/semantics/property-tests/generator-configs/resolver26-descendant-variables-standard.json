@@ -5,6 +5,7 @@
     "interfacesEnabled" : true,
     "listsEnabled" : true,
     "nodeResolversEnabled" : true,
+    "parentFieldsEnabled" : true,
     "queryFragmentsEnabled" : true,
     "recursiveInputTypesEnabled" : true,
     "recursiveOutputEdgesEnabled" : true,
@@ -55,7 +56,7 @@
   "integers" : {
     "maxInputTypeDepth" : 2,
     "maxOutputListDepth" : 1,
-    "maxSelectionDepth" : 4,
+    "maxSelectionDepth" : 6,
     "minimumSelectionDepth" : 2,
     "resolverFragmentDepth" : 3,
     "resolverFromFieldVariableOwnerLimit" : 4

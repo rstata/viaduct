@@ -119,7 +119,9 @@ private class QueryGenerator(
         }
         val objectType = schema.allObjects.singleOrNull { it.name == typeName }
         val candidates =
-            schema.fieldsOn(typeName).filterNot(FieldDefinitionSpec::isGeneratedHashField) +
+            schema.fieldsOn(typeName).filterNot { field ->
+                field.isGeneratedHashField() || field.isParentField
+            } +
                 syntheticFields(typeName, objectType?.implementsNode == true)
 
         val rootOverride = config[RootQueryFieldCount]

@@ -7,11 +7,18 @@ import model.Fragment
 import model.fragmentFrom
 import org.junit.jupiter.api.Test
 import semantics.arbitrary.Config
+import semantics.arbitrary.ErrorValueWeight
+import semantics.arbitrary.MaxSelectionDepth
+import semantics.arbitrary.MinimumSelectionDepth
+import semantics.arbitrary.NodeResolversEnabled
+import semantics.arbitrary.NullValueWeight
+import semantics.arbitrary.ParentFieldsEnabled
 import semantics.arbitrary.FieldCoordinate
 import semantics.contract.RegisteredResolverOccurrence
 import semantics.arbitrary.ResolutionOccurrenceApplicationLog
 import semantics.arbitrary.ResolutionWitness
 import semantics.arbitrary.ResolverFromQueryFieldVariablesEnabled
+import semantics.arbitrary.ResolverFragmentsEnabled
 import semantics.arbitrary.ResolverQueryFragmentsEnabled
 import semantics.arbitrary.ResolverTestExecution
 import semantics.arbitrary.ResolverTestRun
@@ -34,6 +41,34 @@ import semantics.shared.RecordingResolverObserver
  * Unfiltered Resolver26 stress: every generated registry/query product is resolved and validated.
  */
 class ResolverBroadStressTest {
+    @Test
+    fun `generated great-grandparent demand resolves across randomized worlds`(): Unit =
+        runBlocking {
+            val counts = TestCaseCount(schemas = 10, registriesPerSchema = 5, queriesPerSchema = 5)
+            val completed =
+                runResolver26BroadStress(
+                    requiredSignatures =
+                        setOf(
+                            Resolver26StructuralSignature.GREAT_GRANDPARENT_PARENT_DEMAND,
+                        ),
+                    propertyProfile = "resolver26-parent-fields",
+                    counts = counts,
+                    config =
+                        Config.default +
+                            (ParentFieldsEnabled to true) +
+                            (MinimumSelectionDepth to 2) +
+                            (MaxSelectionDepth to 6) +
+                            (ResolverFragmentsEnabled to false) +
+                            (NodeResolversEnabled to false) +
+                            (NullValueWeight to 0.0) +
+                            (ErrorValueWeight to 0.0),
+                    seed = 2026090403L,
+                    execution = ResolverTestExecution(counts),
+                )
+
+            assertEquals(250, completed)
+        }
+
     @Test
     fun `broad full-feature worlds resolve correctly`(): Unit =
         runBlocking {
@@ -136,6 +171,7 @@ internal suspend fun runResolver26BroadStress(
     var activatedSometimesPassiveOccurrences = 0
     var generatedQueryFragments = 0
     var activatedQueryFragmentApplications = 0
+    var activatedParentDemandApplications = 0
     val observedSignatures: MutableSet<Resolver26StructuralSignature> = linkedSetOf()
 
     try {
@@ -215,6 +251,13 @@ internal suspend fun runResolver26BroadStress(
                     )
                 resolverApplications += witness.applications.size
                 witness.applications.forEach { application ->
+                    val sourceField =
+                        testCase.registry.sourceResolverCoordinate(application.key.field)
+                    if (
+                        testCase.registry.parentDemandOwnerFields.getOrDefault(sourceField, 0) >= 3
+                    ) {
+                        activatedParentDemandApplications += 1
+                    }
                     if (
                         testCase.registry.queryFragmentSources[
                             testCase.registry.sourceResolverCoordinate(application.key.field)
@@ -327,6 +370,12 @@ internal suspend fun runResolver26BroadStress(
                 "Resolver26 profile $propertyProfile did not activate FromQueryField variables",
             )
         }
+        if (config[ParentFieldsEnabled]) {
+            run.assertAggregate(
+                activatedParentDemandApplications > 0,
+                "Resolver26 profile $propertyProfile did not activate great-grandparent demand",
+            )
+        }
         return completedCases
     } finally {
         println(
@@ -351,6 +400,7 @@ internal suspend fun runResolver26BroadStress(
                 "$activatedSometimesPassiveOccurrences, " +
                 "generatedQueryFragments=$generatedQueryFragments, " +
                 "activatedQueryFragmentApplications=$activatedQueryFragmentApplications, " +
+                "activatedParentDemandApplications=$activatedParentDemandApplications, " +
                 "signatures=$observedSignatures, " +
                 "elapsedMillis=${(System.nanoTime() - startedAt) / 1_000_000}",
         )

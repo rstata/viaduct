@@ -2,6 +2,7 @@ package semantics.arbitrary
 
 import graphql.language.AstPrinter
 import graphql.language.Document
+import graphql.language.Directive
 import graphql.language.FieldDefinition
 import graphql.language.InputObjectTypeDefinition
 import graphql.language.InputValueDefinition
@@ -25,6 +26,15 @@ import java.math.BigInteger
 internal const val GENERATED_HASH_TYPE = "Hash"
 internal const val GENERATED_HASH_FIELD = "hash"
 internal const val GENERATED_HASH_NESTED_FIELD = "nested"
+internal const val GENERATED_PARENT_ROOT_TYPE = "GeneratedParentRoot"
+internal const val GENERATED_PARENT_CHILD_TYPE = "GeneratedParentChild"
+internal const val GENERATED_PARENT_GRANDCHILD_TYPE = "GeneratedParentGrandchild"
+internal const val GENERATED_PARENT_GREAT_GRANDCHILD_TYPE = "GeneratedParentGreatGrandchild"
+internal const val GENERATED_PARENT_ROOT_FIELD = "generatedParentRoot"
+internal const val GENERATED_PARENT_CHILD_FIELD = "child"
+internal const val GENERATED_PARENT_FIELD = "parent"
+internal const val GENERATED_PARENT_VALUE_FIELD = "ancestorValue"
+internal const val GENERATED_PARENT_RESULT_FIELD = "result"
 
 class ArbitrarySchema internal constructor(
     val sdl: String,
@@ -44,7 +54,7 @@ class ArbitrarySchema internal constructor(
     val sourceFieldCoordinates: Set<FieldCoordinate> =
         (listOf(query) + objects)
             .flatMap(ObjectDefinition::fields)
-            .filterNot(FieldDefinitionSpec::isGeneratedHashField)
+            .filterNot { field -> field.isGeneratedHashField() || field.isParentField }
             .mapTo(linkedSetOf(), FieldDefinitionSpec::coordinate)
 
     /** User-domain fields by non-Query object type, excluding generated hash fields. */
@@ -52,7 +62,7 @@ class ArbitrarySchema internal constructor(
         objects.associate { objectType ->
             objectType.name to
                 objectType.fields
-                    .filterNot(FieldDefinitionSpec::isGeneratedHashField)
+                    .filterNot { field -> field.isGeneratedHashField() || field.isParentField }
                     .mapTo(linkedSetOf(), FieldDefinitionSpec::coordinate)
         }
 
@@ -99,6 +109,7 @@ data class SchemaFeatures(
     val hasImplementationArgumentDefaults: Boolean,
     val hasInterfaces: Boolean,
     val hasUnions: Boolean,
+    val maximumParentChainDepth: Int,
 )
 
 internal data class ObjectDefinition(
@@ -124,6 +135,7 @@ internal data class FieldDefinitionSpec(
     val name: String,
     val type: OutputTypeSpec,
     val arguments: List<ArgumentDefinitionSpec>,
+    val isParentField: Boolean = false,
 ) {
     val coordinate: FieldCoordinate
         get() = FieldCoordinate(ownerName, name)
@@ -365,13 +377,16 @@ private class SchemaGenerator(
             } else {
                 null
             }
+        val parentObjects = if (config[ParentFieldsEnabled]) parentObjects() else emptyList()
         val objects =
-            domainObjects
+            (
+                domainObjects
                 .withAbstractOutputTargets(
                     interfaces = listOfNotNull(generatedInterface),
                     unions = listOfNotNull(generatedUnion),
-                ).map { objectType ->
-                    objectType.copy(fields = objectType.fields + generatedHashField(objectType.name))
+                ) + parentObjects
+            ).map { objectType ->
+                objectType.copy(fields = objectType.fields + generatedHashField(objectType.name))
                 }
         val interfaces =
             buildList {
@@ -426,7 +441,8 @@ private class SchemaGenerator(
                 implementsNode = false,
                 interfaces = emptySet(),
                 fields =
-                    if (minimumDepth > 0) {
+                    parentRootField() +
+                        if (minimumDepth > 0) {
                         listOf(deepField("Query", objectNames.first(), "query0")) +
                             generatedQueryFields.drop(1)
                     } else {
@@ -443,14 +459,22 @@ private class SchemaGenerator(
                 add(objectType(query))
             }
         val sdl =
-            AstPrinter.printAst(
-                Document.newDocument().definitions(definitions).build(),
-            ).trim()
+            (if (config[ParentFieldsEnabled]) "directive @parent on FIELD_DEFINITION\n\n" else "") +
+                AstPrinter.printAst(
+                    Document.newDocument().definitions(definitions).build(),
+                ).trim()
         val deepFields =
             buildMap {
-                if (minimumDepth > 0) put("Query", "query0")
-                (0 until minimumDepth - 1).forEach { index ->
-                    put(objectNames[index], "field0")
+                if (config[ParentFieldsEnabled]) {
+                    put("Query", GENERATED_PARENT_ROOT_FIELD)
+                    put(GENERATED_PARENT_ROOT_TYPE, GENERATED_PARENT_CHILD_FIELD)
+                    put(GENERATED_PARENT_CHILD_TYPE, GENERATED_PARENT_CHILD_FIELD)
+                    put(GENERATED_PARENT_GRANDCHILD_TYPE, GENERATED_PARENT_CHILD_FIELD)
+                } else {
+                    if (minimumDepth > 0) put("Query", "query0")
+                    (0 until minimumDepth - 1).forEach { index ->
+                        put(objectNames[index], "field0")
+                    }
                 }
             }
         val features =
@@ -486,6 +510,119 @@ private class SchemaGenerator(
                     elementNullable = false,
                 ),
             arguments = emptyList(),
+        )
+
+    private fun parentRootField(): List<FieldDefinitionSpec> =
+        if (config[ParentFieldsEnabled]) {
+            listOf(
+                FieldDefinitionSpec(
+                    ownerName = "Query",
+                    name = GENERATED_PARENT_ROOT_FIELD,
+                    type = objectOutputType(GENERATED_PARENT_ROOT_TYPE),
+                    arguments = emptyList(),
+                ),
+            )
+        } else {
+            emptyList()
+        }
+
+    private fun parentObjects(): List<ObjectDefinition> {
+        fun parentField(ownerName: String, parentType: String): FieldDefinitionSpec =
+            FieldDefinitionSpec(
+                ownerName = ownerName,
+                name = GENERATED_PARENT_FIELD,
+                type = objectOutputType(parentType),
+                arguments = emptyList(),
+                isParentField = true,
+            )
+
+        fun childField(ownerName: String, childType: String): FieldDefinitionSpec =
+            FieldDefinitionSpec(
+                ownerName = ownerName,
+                name = GENERATED_PARENT_CHILD_FIELD,
+                type = objectOutputType(childType),
+                arguments = emptyList(),
+            )
+
+        fun scalarField(ownerName: String, name: String): FieldDefinitionSpec =
+            FieldDefinitionSpec(
+                ownerName = ownerName,
+                name = name,
+                type =
+                    OutputTypeSpec(
+                        namedType = "Int",
+                        nullable = false,
+                        list = false,
+                        elementNullable = false,
+                    ),
+                arguments = emptyList(),
+            )
+
+        return listOf(
+            ObjectDefinition(
+                name = GENERATED_PARENT_ROOT_TYPE,
+                implementsNode = false,
+                interfaces = emptySet(),
+                fields =
+                    listOf(
+                        childField(GENERATED_PARENT_ROOT_TYPE, GENERATED_PARENT_CHILD_TYPE),
+                        scalarField(GENERATED_PARENT_ROOT_TYPE, GENERATED_PARENT_VALUE_FIELD),
+                    ),
+            ),
+            ObjectDefinition(
+                name = GENERATED_PARENT_CHILD_TYPE,
+                implementsNode = false,
+                interfaces = emptySet(),
+                fields =
+                    listOf(
+                        parentField(GENERATED_PARENT_CHILD_TYPE, GENERATED_PARENT_ROOT_TYPE),
+                        childField(
+                            GENERATED_PARENT_CHILD_TYPE,
+                            GENERATED_PARENT_GRANDCHILD_TYPE,
+                        ),
+                    ),
+            ),
+            ObjectDefinition(
+                name = GENERATED_PARENT_GRANDCHILD_TYPE,
+                implementsNode = false,
+                interfaces = emptySet(),
+                fields =
+                    listOf(
+                        parentField(
+                            GENERATED_PARENT_GRANDCHILD_TYPE,
+                            GENERATED_PARENT_CHILD_TYPE,
+                        ),
+                        childField(
+                            GENERATED_PARENT_GRANDCHILD_TYPE,
+                            GENERATED_PARENT_GREAT_GRANDCHILD_TYPE,
+                        ),
+                    ),
+            ),
+            ObjectDefinition(
+                name = GENERATED_PARENT_GREAT_GRANDCHILD_TYPE,
+                implementsNode = false,
+                interfaces = emptySet(),
+                fields =
+                    listOf(
+                        parentField(
+                            GENERATED_PARENT_GREAT_GRANDCHILD_TYPE,
+                            GENERATED_PARENT_GRANDCHILD_TYPE,
+                        ),
+                        scalarField(
+                            GENERATED_PARENT_GREAT_GRANDCHILD_TYPE,
+                            GENERATED_PARENT_RESULT_FIELD,
+                        ),
+                    ),
+            ),
+        )
+    }
+
+    private fun objectOutputType(typeName: String): OutputTypeSpec =
+        OutputTypeSpec(
+            namedType = typeName,
+            nullable = false,
+            list = false,
+            elementNullable = false,
         )
 
     private fun deepField(
@@ -765,6 +902,13 @@ private class SchemaGenerator(
             .newFieldDefinition()
             .name(field.name)
             .type(outputType)
+            .directives(
+                if (field.isParentField) {
+                    listOf(Directive.newDirective().name("parent").build())
+                } else {
+                    emptyList()
+                },
+            )
             .inputValueDefinitions(
                 field.arguments.map { argument ->
                     val builder =
@@ -841,6 +985,7 @@ private class SchemaGenerator(
                 },
             hasInterfaces = interfaces.isNotEmpty(),
             hasUnions = unions.isNotEmpty(),
+            maximumParentChainDepth = if (config[ParentFieldsEnabled]) 3 else 0,
         )
     }
 

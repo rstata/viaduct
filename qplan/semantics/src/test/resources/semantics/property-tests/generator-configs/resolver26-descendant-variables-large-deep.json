@@ -5,6 +5,7 @@
     "interfacesEnabled" : true,
     "listsEnabled" : true,
     "nodeResolversEnabled" : true,
+    "parentFieldsEnabled" : true,
     "queryFragmentsEnabled" : true,
     "recursiveInputTypesEnabled" : true,
     "recursiveOutputEdgesEnabled" : true,

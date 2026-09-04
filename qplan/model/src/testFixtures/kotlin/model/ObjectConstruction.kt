@@ -42,14 +42,25 @@ class ObjectValueScope internal constructor(
         fieldName: String,
         vararg arguments: Pair<String, Any?>,
     ): ObjectFieldReference {
-        if (arguments.size > 1) {
-            require(arguments.map(Pair<String, Any?>::first).distinct().size == arguments.size) {
-                "Arguments for ${type.name}/$fieldName must have distinct names"
-            }
-        }
         val field = sourceSchema.field(type.name, fieldName)
         require(field is ViaductSchema.ObjectField) {
             "${type.name}/$fieldName does not lower to an object field"
+        }
+        return field(field, *arguments)
+    }
+
+    /** Selects an already-lowered canonical field on this scope's object type. */
+    fun field(
+        field: ViaductSchema.ObjectField,
+        vararg arguments: Pair<String, Any?>,
+    ): ObjectFieldReference {
+        require(field.containingDef == type) {
+            "${field.containingDef.name}/${field.name} does not belong to ${type.name}"
+        }
+        if (arguments.size > 1) {
+            require(arguments.map(Pair<String, Any?>::first).distinct().size == arguments.size) {
+                "Arguments for ${type.name}/${field.name} must have distinct names"
+            }
         }
         return ObjectFieldReference(
             scope = this,

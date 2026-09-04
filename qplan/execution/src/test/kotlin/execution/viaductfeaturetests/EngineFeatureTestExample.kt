@@ -12,7 +12,6 @@ import viaduct.engine.api.mocks.EngineTestModule
 import viaduct.engine.api.mocks.createEngineObjectData
 import viaduct.engine.api.mocks.fetchAs
 import viaduct.engine.api.mocks.getAs
-import viaduct.engine.runtime.tenantloading.RequiredSelectionsAreInvalid
 
 /**
  * Example test demonstrating the EngineFeatureTest framework usage.
@@ -215,10 +214,9 @@ class EngineFeatureTestExample {
         }
     }
 
-    @Disabled("N/A: Validates bootstrap rejection of an invalid object RSS; no resolver executes.")
     @Test
     fun `test invalid object fragment`() {
-        assertThrows<RequiredSelectionsAreInvalid> {
+        val err = assertThrows<IllegalArgumentException> {
             EngineTestModule(
                 """
                 extend type Query {
@@ -236,12 +234,12 @@ class EngineFeatureTestExample {
                 runQuery("{ foo }")
             }
         }
+        assertTrue(err.message.orEmpty().contains("Invalid GraphQL fragment"), err.message.orEmpty())
     }
 
-    @Disabled("N/A: Validates bootstrap rejection of an invalid query RSS; no resolver executes.")
     @Test
     fun `test invalid query fragment`() {
-        assertThrows<RequiredSelectionsAreInvalid> {
+        val err = assertThrows<IllegalArgumentException> {
             EngineTestModule(
                 """
                 extend type Query {
@@ -260,5 +258,6 @@ class EngineFeatureTestExample {
                     .assertJson("""{ data: { answer: 42, greeting: "Hello, World!" } }""")
             }
         }
+        assertTrue(err.message.orEmpty().contains("Invalid GraphQL fragment"), err.message.orEmpty())
     }
 }

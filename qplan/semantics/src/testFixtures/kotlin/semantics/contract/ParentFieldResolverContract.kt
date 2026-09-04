@@ -5,7 +5,6 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotSame
 import kotlin.test.assertSame
 import model.ListEngineResult
-import model.Arguments
 import model.ObjectEngineResult
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -15,7 +14,6 @@ import model.outputValue
 import model.requireObjectField
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
-import model.testing.fromArgument
 import org.junit.jupiter.api.Test
 import viaduct.engine.api.EngineObjectData
 
@@ -72,75 +70,6 @@ interface ParentFieldResolverContract : ResolverContract {
 
         assertEquals("Airbnb", user.getCell(world.schema.contractKey("User", "label")).get())
         assertSame(company, user.getCell(world.schema.contractKey("User", "parent")).get())
-    }
-
-    @Test
-    fun `parent demand retains child-owned symbolic arguments`() {
-        val testWorld =
-            TestWorld.fromSDL(
-                selectiveResolvers = selectiveResolvers,
-                schemaSDL =
-                    """
-                    directive @parent on FIELD_DEFINITION
-                    type Query { company: Company }
-                    type Company { users: [User], localizedName(locale: String!): String }
-                    type User { parent: Company @parent, display(locale: String!): String }
-                    """.trimIndent(),
-                fieldResolvers = { schema ->
-                    mapOf(
-                        schema.requireObjectField("Query", "company") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Company")
-                            },
-                        schema.requireObjectField("Company", "users") to
-                            fieldResolverOf(schema.emptyFragmentOf("Company")) { _, _ ->
-                                listOf(schema.objectOf("User"), schema.objectOf("User"))
-                            },
-                        schema.requireObjectField("Company", "localizedName") to
-                            fieldResolverOf(schema.emptyFragmentOf("Company")) { _, arguments ->
-                                "Airbnb-${arguments.fieldValues.getValue("locale")}"
-                            },
-                        schema.requireObjectField("User", "display") to
-                            fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment ignored on User { parent { localizedName(locale: ${'$'}locale) } }",
-                                ),
-                            ) { input, _ ->
-                                val parent = assertIs<EngineObjectData.Sync>(input.outputValue("parent"))
-                                parent.outputValue("localizedName")
-                            },
-                    )
-                },
-                variableProviders = { schema ->
-                    val display = schema.requireObjectField("User", "display")
-                    mapOf(
-                        Arguments.Variable.of(display, "locale") to
-                            schema.fromArgument(display, "locale"),
-                    )
-                },
-            )
-        val world = testWorld.assumptions
-        val result =
-            resolveAndValidate(
-                world,
-                "query { company { users { display(locale: \"en\") } } }",
-            )
-        val company =
-            assertIs<ObjectEngineResult>(
-                result.getCell(world.schema.contractKey("Query", "company")).get(),
-            )
-        val users =
-            assertIs<ListEngineResult>(
-                company.getCell(world.schema.contractKey("Company", "users")).get(),
-            )
-        val display = world.schema.requireObjectField("User", "display")
-        users.forEach { cell ->
-            val user = assertIs<ObjectEngineResult>(cell.get())
-            assertEquals(
-                "Airbnb-en",
-                user.getCell(ObjectEngineResult.GroundKey.of(display, mapOf("locale" to "en"))).get(),
-            )
-        }
     }
 
     @Test

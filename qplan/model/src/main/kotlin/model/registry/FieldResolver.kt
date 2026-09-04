@@ -16,6 +16,7 @@ import model.SelectionForest
 import model.arg
 import model.engineObjectDataOf
 import model.instantiateVariables
+import model.isParentField
 import model.materializeSelectionForestOf
 import model.outputValue
 import model.schemaType
@@ -85,6 +86,9 @@ data class ResolverFragments(
  * relative to that field's containing type and is structurally contained by [objectFragment]. A
  * definition supplied by [ProviderFragment.QUERY] satisfies the same path invariant relative to
  * Query and is structurally contained by [queryFragment].
+ *
+ * Neither input fragment may use a variable anywhere beneath an `@parent` selection. Parent
+ * traversal itself remains valid for selective and nonselective resolvers.
  */
 class FieldResolver private constructor(
     val field: ViaductSchema.ObjectField,
@@ -401,6 +405,8 @@ class FieldResolver private constructor(
             require(queryType.name == "Query") {
                 "Query fragment type must be Query"
             }
+            objectFragment.requireNoVariablesBeneathParent(field)
+            queryFragment.requireNoVariablesBeneathParent(field)
             objectFragment.collect(field.containingDef)
             queryFragment.collect(queryType)
             variables.forEach { (variable, definition) ->
@@ -440,6 +446,22 @@ class FieldResolver private constructor(
                 }
             }
         }
+    }
+}
+
+private fun MaterializeSelectionForest.requireNoVariablesBeneathParent(
+    resolverField: ViaductSchema.ObjectField,
+) {
+    forEach { selection ->
+        require(
+            !selection.key.field.isParentField() ||
+                selection.subselections.constructionSelections().usedVariables().isEmpty(),
+        ) {
+            "Resolver input for ${resolverField.containingDef.name}/${resolverField.name} " +
+                "must not use variables beneath @parent field " +
+                "${selection.key.field.containingDef.name}/${selection.key.field.name}"
+        }
+        selection.subselections.requireNoVariablesBeneathParent(resolverField)
     }
 }
 

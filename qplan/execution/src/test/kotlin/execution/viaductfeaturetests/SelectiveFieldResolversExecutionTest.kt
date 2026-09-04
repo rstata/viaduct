@@ -3,12 +3,11 @@
 package execution.viaductfeaturetests
 
 // core/engine/runtime/src/test/kotlin/viaduct/engine/runtime/execution/SelectiveFieldResolversExecutionTest.kt
-// Copied 63 out of 65 current tests as of 2026-09-01; one removed source test remains pending cleanup
+// Copied 63 out of 65 current tests as of 2026-09-04
 
 import execution.testing.QPlanFeatureTest
 import execution.testing.runQPlanFeatureTest as runWithQPlan
 
-import graphql.GraphQLError
 import graphql.execution.DataFetcherResult
 import graphql.execution.instrumentation.parameters.InstrumentationFieldFetchParameters
 import io.kotest.property.Arb
@@ -2604,12 +2603,10 @@ class SelectiveFieldResolversExecutionTest {
     inner class ResultMetadataTests {
         @Disabled("TODO: ErrorData")
         @Test
-        fun `errors returned during materialization are included in the response`() {
-            val initialFooCall = AtomicBoolean(true)
-
+        fun `selective resolver rematerializes DataFetcherResult list items`() {
             MockTenantModuleBootstrapper(
                 """
-                    extend type Query { foo: Foo }
+                    extend type Query { foo: [Foo] }
                     type Foo { x: Int, y: Int }
                 """.trimIndent()
             ) {
@@ -2618,45 +2615,40 @@ class SelectiveFieldResolversExecutionTest {
                         MockFieldUnbatchedResolverExecutor(
                             isSelective = true,
                             resolverId = resolverId,
-                            unbatchedResolveFn = { _, _, _, _, _ ->
-                                if (initialFooCall.getAndSet(false)) {
-                                    createEngineObjectData("Foo")
-                                } else {
+                            unbatchedResolveFn = { _, _, _, sels, _ ->
+                                listOf(
                                     DataFetcherResult.newResult<EngineObjectData>()
-                                        .data(createEngineObjectData("Foo", mapOf("y" to 2)))
-                                        .error(
-                                            GraphQLError.newError()
-                                                .message("foo materialization warning")
-                                                .path(listOf("foo"))
-                                                .build()
+                                        .data(
+                                            createEngineObjectData(
+                                                "Foo",
+                                                buildMap {
+                                                    if (sels!!.containsField("Foo", "x")) {
+                                                        put("x", 2)
+                                                    }
+                                                },
+                                            )
                                         )
                                         .build()
-                                }
+                                )
                             }
                         )
                     }
                 }
 
-                field("Foo" to "x") {
+                field("Foo" to "y") {
                     resolver {
-                        objectSelections("y")
-                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("y") * 3 }
+                        objectSelections("x")
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("x") * 5 }
                     }
                 }
             }.runQPlanFeatureTest {
-                val result = runQueryWithTimeout("{ foo { x } }")
-
-                assertEquals(mapOf("foo" to mapOf("x" to 6)), result.getData())
-                assertEquals(
-                    listOf("foo materialization warning"),
-                    result.errors.map { it.message },
-                )
-                assertEquals(listOf("foo"), result.errors.single().path)
+                runQueryWithTimeout("{ foo { y } }")
+                    .assertJson("{data: {foo: [{y: 10}]}}")
             }
         }
 
         @Test
-        fun `selective resolver rematerializes list items`() {
+        fun `ALTERNATIVE selective resolver rematerializes DataFetcherResult list items`() {
             MockTenantModuleBootstrapper(
                 """
                     extend type Query { foo: [Foo] }

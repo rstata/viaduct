@@ -93,7 +93,10 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
             operation = operation,
             occurrence = occurrence,
             source = this,
-            initialDemand = constructionDemand,
+            initialDemand =
+                context(operation.world) {
+                    constructionDemand + invocationDemand.liftedParentDemand()
+                },
         )
     val closedDemand = orchestration.prepare()
     materializePassiveFields(
@@ -107,7 +110,7 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
 
 // Copies every passive field returned by the resolver and orchestrates its value recursively.
 context(operation: Resolver26OperationContext)
-internal fun EngineObjectData.Sync.materializePassiveFields(
+private fun EngineObjectData.Sync.materializePassiveFields(
     occurrence: OEROccurrenceContext,
     invocationDemand: SelectionForest,
     closedDemand: ObjectSelectionForest,
@@ -144,7 +147,6 @@ internal fun EngineObjectData.Sync.materializePassiveFields(
             demandedKeys += ObjectEngineResult.GroundKey.of(field, emptyMap())
         }
         demandedKeys.forEach { key ->
-            if (occurrence.target.isCellSet(key)) return@forEach
             val childInvocationDemand =
                 invocationDemandByKey[key]
                     ?.subselections

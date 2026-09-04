@@ -12,7 +12,6 @@ internal class Resolver26OperationContext(
     val cycleChecker: CycleCheckState = CycleCheckState.create(),
     val bindingDeclarationsState: BindingDeclarationsState = BindingDeclarationsState(),
     val queryValuesState: QueryValuesState = QueryValuesState(),
-    val objectOrchestrationState: ObjectOrchestrationState = ObjectOrchestrationState(),
 ) : OperationContext(
         world = base.world,
         variableBindingsState = base.variableBindingsState,

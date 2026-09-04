@@ -21,6 +21,14 @@ internal fun SelectionForest.successorDemand(): SelectionForest =
         .successorDemandWithMemo(mutableMapOf())
         .liftParentDemand()
 
+// Returns only demand transposed to this object from @parent selections below its producers.
+// Nested demand is closed first so parent chains lift one ancestor at a time.
+context(world: Assumptions)
+internal fun SelectionForest.liftedParentDemand(): SelectionForest =
+    flatMap { selection ->
+        selection.liftedParentDemand(selection.subselections.liftParentDemand())
+    }
+
 // Conservatively transposes parent-selected demand to each containing producer occurrence.
 context(world: Assumptions)
 private fun SelectionForest.liftParentDemand(): SelectionForest =
@@ -32,25 +40,30 @@ private fun SelectionForest.liftParentDemand(): SelectionForest =
                 possibleTypes = selection.possibleTypes,
                 subselections = nested,
             )
-        val lifted =
-            selection.possibleTypes.flatMapToSelectionForest { possibleType ->
-                val producer = possibleType.requireField(selection.key.field.name)
-                val childType = producer.type.baseTypeDef as? ViaductSchema.Object
-                    ?: return@flatMapToSelectionForest selectionForestOf()
-                nested
-                    .merge(childType)
-                    .byKey()
-                    .values
-                    .filter { childSelection ->
-                        val parentKey = childSelection.key as? ObjectEngineResult.ParentKey
-                        parentKey != null &&
-                            world.parentFieldRelations[parentKey.field] == producer
-                    }
-                    .fold(selectionForestOf()) { demand, parentSelection ->
-                        demand + parentSelection.subselections
-                    }
-            }
+        val lifted = selection.liftedParentDemand(nested)
         selectionForestOf(requested) + lifted
+    }
+
+context(world: Assumptions)
+private fun Selection.liftedParentDemand(
+    nestedDemand: SelectionForest,
+): SelectionForest =
+    possibleTypes.flatMapToSelectionForest { possibleType ->
+        val producer = possibleType.requireField(key.field.name)
+        val childType = producer.type.baseTypeDef as? ViaductSchema.Object
+            ?: return@flatMapToSelectionForest selectionForestOf()
+        nestedDemand
+            .merge(childType)
+            .byKey()
+            .values
+            .filter { childSelection ->
+                val parentKey = childSelection.key as? ObjectEngineResult.ParentKey
+                parentKey != null &&
+                    world.parentFieldRelations[parentKey.field] == producer
+            }
+            .fold(selectionForestOf()) { demand, parentSelection ->
+                demand + parentSelection.subselections
+            }
     }
 
 // Retains requested ground boundaries and adds each resolver-bearing boundary's fixed passive demand.

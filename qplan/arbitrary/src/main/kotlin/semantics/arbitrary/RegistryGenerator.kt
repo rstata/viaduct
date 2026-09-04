@@ -3069,7 +3069,8 @@ internal data class ObjectPlan(
             fields.forEach { (coordinate, plan) ->
                 require(coordinate.typeName == typeName)
                 val outputField = sourceSchema.field(typeName, coordinate.fieldName)
-                field(coordinate.fieldName) setTo
+                require(outputField is ViaductSchema.ObjectField)
+                field(outputField) setTo
                     plan.materialize(
                         schema,
                         sourceSchema.typeExpr(outputField),

@@ -210,10 +210,8 @@ internal class EngineErrorDataReadException(
 private class QPlanEngineObjectDataImpl(
     override val type: GraphQLObjectType,
     override val schemaType: ViaductSchema.Object,
-    values: Map<String, EngineOutputData?>,
+    private val values: Map<String, EngineOutputData?>,
 ) : QPlanEngineObjectData {
-    private val values = values.toMap()
-
     override suspend fun fetch(selection: String): Any? = get(selection)
 
     override suspend fun fetchOrNull(selection: String): Any? = getOrNull(selection)

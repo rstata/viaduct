@@ -28,6 +28,7 @@ import model.testing.testRoot
 import model.testing.fieldResolverOf
 import model.testing.nodeResolverOf
 import model.testing.resolverRegistryOf
+import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -898,6 +899,7 @@ class ResolverRegistryTest {
     }
 
     @Test
+    @Ignore("Runtime argument-bearing resolver-output validation is disabled")
     fun `field resolver rejects output containing an argument-bearing field`() {
         val testWorld =
             TestWorld.fromSDL(

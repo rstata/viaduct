@@ -26,7 +26,6 @@ import viaduct.engine.api.mocks.fetchAs
 import viaduct.engine.api.mocks.getAs
 import viaduct.engine.api.select.SelectionsParser
 import viaduct.engine.runtime.tenantloading.InvalidVariableException
-import viaduct.engine.runtime.tenantloading.RequiredSelectionsCycleException
 
 class FromFieldVariablesFeatureTest {
     @Test
@@ -373,10 +372,9 @@ class FromFieldVariablesFeatureTest {
         assertEquals("x", err.variableName)
     }
 
-    @Disabled("N/A: Tests tenant-loading variable type validation, not resolution.")
     @Test
     fun `invalid from object field -- selection output type is not compatible with variable input type -- nullability mismatch`() {
-        val err = assertThrows<Throwable> {
+        val err = assertThrows<IllegalArgumentException> {
             EngineTestModule("extend type Query { x:Int, y(b:Int!):Int!, z:Int }") {
                 fieldWithFromFieldVariables(
                     coord = "Query" to "x",
@@ -386,15 +384,18 @@ class FromFieldVariablesFeatureTest {
                 fieldWithValue("Query" to "y", 0)
                 fieldWithValue("Query" to "z", null)
             }.runQPlanFeatureTest { }
-        }.unwrapAs<InvalidVariableException>()
-
-        assertEquals("b", err.variableName)
+        }
+        assertTrue(
+            err.message.orEmpty().contains(
+                "Variable b object provider path z is incompatible with one of its argument locations",
+            ),
+            err.message.orEmpty(),
+        )
     }
 
-    @Disabled("N/A: Tests tenant-loading variable type validation, not resolution.")
     @Test
     fun `invalid from object field -- selection output type is not compatible with variable input type -- type mismatch`() {
-        val err = assertThrows<Throwable> {
+        val err = assertThrows<IllegalArgumentException> {
             EngineTestModule("extend type Query { x:Int, y(b:Int!):Int!, z:String! }") {
                 fieldWithFromFieldVariables(
                     coord = "Query" to "x",
@@ -404,9 +405,13 @@ class FromFieldVariablesFeatureTest {
                 fieldWithValue("Query" to "y", 0)
                 fieldWithValue("Query" to "z", "")
             }.runQPlanFeatureTest { }
-        }.unwrapAs<InvalidVariableException>()
-
-        assertEquals("b", err.variableName)
+        }
+        assertTrue(
+            err.message.orEmpty().contains(
+                "Variable b object provider path z is incompatible with one of its argument locations",
+            ),
+            err.message.orEmpty(),
+        )
     }
 
     @Test
@@ -491,7 +496,6 @@ class FromFieldVariablesFeatureTest {
         assertFalse(yResolved)
     }
 
-    @Disabled("N/A: Tests static variable-dependency cycle detection.")
     @Test
     fun `invalid from object field -- variable depends on a field in its own subselections`() {
         val err = assertThrows<Throwable> {
@@ -512,7 +516,6 @@ class FromFieldVariablesFeatureTest {
         assertTrue(err is VariableCycleException)
     }
 
-    @Disabled("N/A: Tests static self-cycle detection.")
     @Test
     fun `invalid from object field -- variable selects a field that uses it`() {
         val err = assertThrows<Throwable> {
@@ -528,7 +531,6 @@ class FromFieldVariablesFeatureTest {
         assertTrue(err is VariableCycleException)
     }
 
-    @Disabled("N/A: Tests static variable-cycle validation within one RSS.")
     @Test
     fun `invalid from object field -- deadlock between 2 variables -- same selection set`() {
         val err = assertThrows<Throwable> {
@@ -552,10 +554,9 @@ class FromFieldVariablesFeatureTest {
         assertTrue(err is VariableCycleException)
     }
 
-    @Disabled("N/A: Tests static required-selection cycle validation across RSSes.")
     @Test
     fun `invalid from object field -- deadlock between 2 variables -- diff selection sets`() {
-        val err = assertThrows<Throwable> {
+        val err = assertThrows<IllegalArgumentException> {
             EngineTestModule("extend type Query { x(a:Int):Int, y(b:Int):Int, z:Int }") {
                 fieldWithFromFieldVariables(
                     coord = "Query" to "x",
@@ -568,12 +569,13 @@ class FromFieldVariablesFeatureTest {
                     variables = listOf(FromObjectFieldVariable("a", "z")),
                 ) { _, _, _, _, _ -> error("should not execute") }
             }.runQPlanFeatureTest { }
-        }.unwrap()
-
-        assertTrue(err is RequiredSelectionsCycleException)
+        }
+        assertTrue(
+            err.message.orEmpty().contains("Resolver object fragments contain a demand cycle"),
+            err.message.orEmpty(),
+        )
     }
 
-    @Disabled("N/A: Tests bootstrap validation of a malformed from-query provider path.")
     @Test
     fun `invalid from query field -- path refers to missing selection`() {
         val err = assertThrows<Throwable> {
@@ -590,10 +592,9 @@ class FromFieldVariablesFeatureTest {
         assertTrue(checkNotNull(err.message).contains("No selections found for path"), err.message.orEmpty())
     }
 
-    @Disabled("N/A: Tests bootstrap validation that provider paths terminate at compatible values.")
     @Test
     fun `invalid from query field -- path ends on object`() {
-        val err = assertThrows<Throwable> {
+        val err = assertThrows<IllegalArgumentException> {
             EngineTestModule("extend type Query { x:Int, y(b:Int):Int, z:Query, w:Int }") {
                 fieldWithFromFieldVariables(
                     coord = "Query" to "x",
@@ -611,9 +612,11 @@ class FromFieldVariablesFeatureTest {
                     }
                 }
             }.runQPlanFeatureTest { }
-        }.unwrapAs<InvalidVariableException>()
-
-        assertEquals("b", err.variableName)
+        }
+        assertTrue(
+            err.message.orEmpty().contains("from-field path z must terminate at a scalar or enum"),
+            err.message.orEmpty(),
+        )
     }
 
     @Test
@@ -762,7 +765,6 @@ class FromFieldVariablesFeatureTest {
             runQuery("{x}").assertJson("{data: {x: 210}}")
         }
 
-    @Disabled("N/A: Tests bootstrap rejection of duplicate provider registrations.")
     @Test
     fun `invalid from query field -- variable name overlaps with object field variable`() {
         val err = assertThrows<Throwable> {
@@ -788,7 +790,6 @@ class FromFieldVariablesFeatureTest {
         )
     }
 
-    @Disabled("N/A: Tests bootstrap rejection of duplicate provider registrations.")
     @Test
     fun `invalid from query field -- variable name overlaps with argument variable`() {
         val err = assertThrows<Throwable> {

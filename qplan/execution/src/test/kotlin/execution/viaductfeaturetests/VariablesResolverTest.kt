@@ -159,7 +159,6 @@ class VariablesResolverTest {
             runQuery("{foo}").assertJson("{data: {foo: 30}}")
         }
 
-    @Disabled("TODO: VarCallbk")
     @Test
     fun `invalid variable reference`() {
         assertThrows<Exception> {

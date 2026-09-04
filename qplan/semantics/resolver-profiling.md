@@ -109,6 +109,64 @@ Update this log whenever a resolver performance investigation concludes. Add the
 
 Each entry must record the UTC date and time, host name and relevant hardware or instance configuration, Codex session ID, tested revision, profiling targets added or used, findings, changes made, and any controlled before/after result. At closeout, run the profiling-related benchmarks serially on an otherwise idle host with default parameters unless the entry explicitly records its overrides: Resolver26 overhead, `correctResolution`, and the frozen property test. The full generated-workflow benchmark is deliberately excluded because it exercises a different workload and is not a control for the profiling targets. Report every measured iteration, JMH score and error, units, work per operation, and mean time per resolution, property case, or correctness judgment. Include all emitted fixed-corpus statistics with their actual percentile labels. Do not compare results across different hosts, JVMs, benchmark parameters, or corpus revisions without calling out that difference.
 
+### 2026-09-03 21:57:03 UTC
+
+Host: `raymie-stata-codex`; one Intel Xeon Platinum 8375C socket, 32 physical cores / 64 vCPUs, 495 GiB RAM, no swap, and one NUMA node. This is materially different hardware from the older entries that share the host name, so their absolute scores are not direct controls.
+
+Session: `01a06931-8c5a-7253-812b-fcba74510836`
+
+Baseline revision: `bd96586f137d2b33f16ef5795102ed05a2e754e0`; post-rebase revision: `9ff5f96f72d647295530305f8146bb6750091ab2`
+
+This investigation ran all four documented Resolver26 benchmarks serially with their default parameters on Corretto 21.0.4 and JMH 1.36. It then used the `resolver26OverheadProfile`, `correctResolutionProfile`, and `propertyTestProfile` targets with loop count three, controlled historical checkouts in a temporary worktree, and one temporary current-revision ablation. The checked-in worktree was not changed by the controls or ablation.
+
+| Benchmark | Measured iterations | JMH score | Work per operation | Mean per unit |
+| --- | --- | --- | --- | --- |
+| Resolver26 overhead | 2.568, 2.531, 2.529 s/op | 2.543 +/- 0.398 s/op | 100 resolutions | 25.430 ms/resolution |
+| `correctResolution` | 1.157, 1.114, 1.118 s/op | 1.130 +/- 0.428 s/op | 50 judgments | 22.600 ms/judgment |
+| Frozen property test | 0.807, 0.783, 0.825, 0.779, 0.813 s/op | 0.801 +/- 0.076 s/op | 1 property case / 12,763 expected resolver applications | 0.801 s/case |
+| Full generated workflow | 9.614, 9.228, 9.063 s/op | 9.302 +/- 5.159 s/op | 1,000 resolutions | 9.302 ms/resolution |
+
+Resolver26 overhead corpus statistics for 100 queries:
+
+```text
+fields returned: average=301.52, p90=448, max=732
+active fields returned: average=100.24, p90=169, max=295
+passive fields returned: average=201.28, p90=297, max=437
+passive fields per active field: average=2.25, p90=3.00, max=4.84
+resolvers executed: average=68.73, p90=107, max=165
+resolver executions with variable-bearing arguments: average=5.72, p50=9, max=20
+variable-bearing arguments per such resolver execution: average=1.00, p90=1, max=1
+maximum variable stack depth: average=0.81, p50=1, max=1
+result depth: average=8.58, p90=9, max=9
+active fields per non-Query object: average=1.88, p90=4, max=5
+passive fields per non-Query object: average=14.31, p90=18, max=18
+selections per object fragment: average=4.48, p90=18, max=39
+object fragment depth: average=1.63, p90=5, max=9
+```
+
+The historical `5193dec7b` closeout is not directly comparable because the host now exposes a different CPU topology. Same-session controls at that revision scored 2.300 +/- 0.325 s/op for Resolver26 overhead from iterations 2.320, 2.287, and 2.292; 0.931 +/- 0.043 s/op for `correctResolution` from 0.933, 0.929, and 0.929; and 0.721 +/- 0.083 s/op for the frozen property case from 0.734, 0.717, 0.749, 0.693, and 0.713. Against those controls, the current revision is 10.6% slower in Resolver26 overhead, 21.4% slower in `correctResolution`, and 11.1% slower in the frozen property case.
+
+The new Query-fragment and selective field-relation features do not produce a material net regression in these workloads. The last pre-Query-fragment Resolver26 revision `1a6620ea0` scored 2.729 s/op for overhead and 1.145 s/op for `correctResolution`; the last pre-selective-relation revision `42bc98feb` scored 2.655 and 1.107 s/op respectively. The selective-relation commit `ae363f35a` scored 2.587 and 1.164 s/op, and the tested revision closes at 2.543 and 1.130 s/op. The fixed benchmark profile intentionally contains no Query fragments, so those comparisons primarily rule out incidental overhead in the shared paths rather than measuring the new Query-fragment work itself.
+
+The reproducible regression boundary is the earlier sometimes-passive resolver plumbing. The pre-plumbing revision `32c9529ff` scored 3.458 s/op for overhead and 0.957 s/op for `correctResolution`; `9adb1a1a8`, which adds the plumbing, scored 3.897 and 1.148 s/op, regressions of 12.7% and 20.0%. Later work recovered the overhead score but retained most of the correctness cost.
+
+The cost comes from `FieldResolver.evaluateRelation` calling `output.requireArgumentlessObjectFields()` on every resolver evaluation. The method recursively walks every returned object and list to enforce the selective-relation rule that resolver outputs cannot supply argument-bearing object fields; correctness reapplication repeats the same walk. In the current profiles, `QPlanEngineObjectDataImpl.getSelections` plus `requireArgumentlessObjectFields` account for 9.28% of Resolver26 CPU samples and 10.87% of `correctResolution` CPU samples. The property profile localizes the remaining property-test slowdown to `correctResolution`: its two steady recorded repetitions spent 326 and 297 ms there, versus 439 and 389 ms in Resolver26 itself.
+
+A current-revision ablation that removed only the `output.requireArgumentlessObjectFields()` call reduced Resolver26 overhead to 2.209 +/- 0.192 s/op from iterations 2.220, 2.210, and 2.199, 13.1% below the unmodified current result. It reduced `correctResolution` to 0.964 +/- 0.124 s/op from 0.972, 0.959, and 0.961, 14.7% below the unmodified current result and close to the 0.957 s/op pre-plumbing control. The ablation is diagnostic and was discarded; removing the validation outright would weaken the relation contract. A safe optimization should validate or encode the argumentless-output invariant once when fixture outputs are constructed, or cache the validation on immutable qplan-owned output objects, instead of recursively proving it on every execution and correctness reapplication.
+
+The branch was subsequently rebased onto `1rv` at `9ff5f96f7`, whose final commit, `Move checking to init blocks where possible`, adds constructor-time invariant checks to frequently created resolver task objects. The complete four-benchmark suite was rerun serially on the same host, JVM, corpus, and default parameters, using the pre-rebase `bd96586f1` measurements above as the direct baseline.
+
+| Benchmark | Post-rebase measured iterations | Post-rebase JMH score | Work per operation | Post-rebase mean per unit | Change from baseline |
+| --- | --- | --- | --- | --- | --- |
+| Resolver26 overhead | 2.579, 2.583, 2.558 s/op | 2.573 +/- 0.250 s/op | 100 resolutions | 25.730 ms/resolution | +1.2% |
+| `correctResolution` | 1.122, 1.117, 1.119 s/op | 1.119 +/- 0.049 s/op | 50 judgments | 22.380 ms/judgment | -1.0% |
+| Frozen property test | 0.792, 0.762, 0.810, 0.823, 0.769 s/op | 0.791 +/- 0.101 s/op | 1 property case / 12,763 expected resolver applications | 0.791 s/case | -1.2% |
+| Full generated workflow | 9.492, 9.376, 9.130 s/op | 9.332 +/- 3.374 s/op | 1,000 resolutions | 9.332 ms/resolution | +0.3% |
+
+The post-rebase corpus statistics were unchanged. All four deltas are small, mixed in direction, and well within ordinary run-to-run variation, so the added constructor checks do not show substantial overhead in these workloads. Because no regression was detected, the conditional rerun at `a75792b5e`, immediately before the checking commit, was not performed.
+
+No runtime changes were retained. The current JFR recordings are in `semantics/build/reports/resolver-benchmarks/` and remain ordinary ignored build outputs.
+
 ### 2026-08-22 17:49:08 UTC
 
 Host: `raymie-stata-codex`; KVM guest with one Intel Xeon 6975P-C socket, 48 physical cores / 96 vCPUs, 371 GiB RAM, no swap, and two NUMA nodes.

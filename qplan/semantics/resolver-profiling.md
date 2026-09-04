@@ -109,6 +109,48 @@ Update this log whenever a resolver performance investigation concludes. Add the
 
 Each entry must record the UTC date and time, host name and relevant hardware or instance configuration, Codex session ID, tested revision, profiling targets added or used, findings, changes made, and any controlled before/after result. At closeout, run the profiling-related benchmarks serially on an otherwise idle host with default parameters unless the entry explicitly records its overrides: Resolver26 overhead, `correctResolution`, and the frozen property test. The full generated-workflow benchmark is deliberately excluded because it exercises a different workload and is not a control for the profiling targets. Report every measured iteration, JMH score and error, units, work per operation, and mean time per resolution, property case, or correctness judgment. Include all emitted fixed-corpus statistics with their actual percentile labels. Do not compare results across different hosts, JVMs, benchmark parameters, or corpus revisions without calling out that difference.
 
+### 2026-09-04 00:22:58 UTC
+
+Host: `raymie-stata-codex`; one Intel Xeon Platinum 8375C socket, 32 physical cores / 64 vCPUs, 495 GiB RAM, no swap, and one NUMA node.
+
+Session: `01a06931-8c5a-7253-812b-fcba74510836`
+
+Runtime revision: `44e941921f6372ddb6a415c826ce35af4d8abbbc`; final test-only revision: `6bb476427b4858a8f3d4a33db429e91f9ebfd64b`
+
+Profile evidence: [`profiles/2026-09-04-44e94192`](./profiles/2026-09-04-44e94192)
+
+This investigation retained the requested disabling of `FieldResolver.evaluateRelation`'s recursive `requireArgumentlessObjectFields()` validation, then profiled Resolver26 overhead and `correctResolution` with three prepared-workload repetitions on Corretto 21.0.4 and JMH 1.36. All benchmarks ran serially with default parameters. The initial no-check controls at `2caa03b7a` scored 2.213 +/- 0.554 s/op for Resolver26 from iterations 2.199, 2.192, and 2.248, and 0.955 +/- 0.137 s/op for `correctResolution` from 0.960, 0.959, and 0.946. Against the checked `9ff5f96f7` controls of 2.573 and 1.119 s/op, commenting out the validation improved the two cases by 14.0% and 14.7%.
+
+| Benchmark | Final measured iterations | Final JMH score | Work per operation | Final mean per unit | Change from checked `9ff5f96f7` |
+| --- | --- | --- | --- | --- | --- |
+| Resolver26 overhead | 1.901, 1.872, 1.897 s/op | 1.890 +/- 0.284 s/op | 100 resolutions | 18.900 ms/resolution | -26.5% |
+| `correctResolution` | 0.846, 0.860, 0.845 s/op | 0.850 +/- 0.150 s/op | 50 judgments | 17.000 ms/judgment | -24.0% |
+| Frozen property test | 0.786, 0.729, 0.765, 0.764, 0.762 s/op | 0.761 +/- 0.078 s/op | 1 property case / 12,763 expected resolver applications | 0.761 s/case | -3.8% |
+
+Resolver26 overhead corpus statistics for 100 queries were unchanged:
+
+```text
+fields returned: average=301.52, p90=448, max=732
+active fields returned: average=100.24, p90=169, max=295
+passive fields returned: average=201.28, p90=297, max=437
+passive fields per active field: average=2.25, p90=3.00, max=4.84
+resolvers executed: average=68.73, p90=107, max=165
+resolver executions with variable-bearing arguments: average=5.72, p50=9, max=20
+variable-bearing arguments per such resolver execution: average=1.00, p90=1, max=1
+maximum variable stack depth: average=0.81, p50=1, max=1
+result depth: average=8.58, p90=9, max=9
+active fields per non-Query object: average=1.88, p90=4, max=5
+passive fields per non-Query object: average=14.31, p90=18, max=18
+selections per object fragment: average=4.48, p90=18, max=39
+object fragment depth: average=1.63, p90=5, max=9
+```
+
+The initial no-check profiles exposed three low-risk fixture-construction redundancies. `5d6754a61` skips the `distinct()` allocation when an `ObjectValueScope.field` call has fewer than two arguments; its immediate controls improved Resolver26 from 2.213 to 2.085 s/op (5.8%) and `correctResolution` from 0.955 to 0.934 s/op (2.2%). `please advance the qplan branch to the current HEAD, push the qplan branch to origin, then rebase the other worktrees to our current HEAD if they are clean2618bf2e3` adds a canonical-field overload and reuses the field that generated `ObjectPlan` materialization had already lowered instead of repeating source-coordinate recovery; its controls improved Resolver26 from 2.085 to 2.012 s/op (3.5%) and correctness from 0.934 to 0.884 s/op (5.4%). `44e941921` transfers the private factory-owned EOD value map into its private immutable implementation instead of immediately copying it; its controls improved Resolver26 from 2.012 to 1.890 s/op (6.1%) and correctness from 0.884 to 0.850 s/op (3.8%). Together, these three changes improve the no-check controls by 14.6% and 11.0%.
+
+The final profiles are again dominated by schema-directed fixture-output work. Resolver26 CPU samples are led by `conformsToOutputSchemaType` at 19.26%, `GJSchema.lowerOrdinaryOutput` at 11.68%, and source-coordinate lowering at 7.38%; correctness reports 17.60%, 12.40%, and 7.20% respectively. Those operations enforce real type and source/lowered-schema boundaries, so no further validation traversal was removed. Final recorded GC pause totals were 63.3 ms for Resolver26 and 32.3 ms for correctness and do not dominate either workload.
+
+Disabling `requireArgumentlessObjectFields()` intentionally weakens the selective resolver-output contract: argument-bearing fields supplied in resolver output are no longer rejected. The existing rejection test is preserved but explicitly ignored at `6bb476427`. The full `:model:test :arbitrary:test :semantics:test` gate passed with that one deliberate skip. No corpus or benchmark code changed.
+
 ### 2026-09-03 21:57:03 UTC
 
 Host: `raymie-stata-codex`; one Intel Xeon Platinum 8375C socket, 32 physical cores / 64 vCPUs, 495 GiB RAM, no swap, and one NUMA node. This is materially different hardware from the older entries that share the host name, so their absolute scores are not direct controls.

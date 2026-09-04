@@ -251,7 +251,7 @@ class FieldResolver private constructor(
             } catch (exception: EngineErrorDataReadException) {
                 exception.errorData
             }
-        output.requireArgumentlessObjectFields()
+        // output.requireArgumentlessObjectFields()
         val selectedOutput =
             if (projectNonselectiveOutput && world.selectiveResolvers) {
                 output.snipToDemand(projectionDemand(selections))

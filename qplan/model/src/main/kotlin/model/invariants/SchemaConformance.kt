@@ -99,11 +99,11 @@ private fun EngineResult.conformsToSchema(
                     key.conformsToSchema() &&
                     value.conformsToResultSchemaType(key.field.outputType) &&
                     if (key is ObjectEngineResult.ParentKey) {
-                        world.parentFieldRelations.relation(key.field)?.let { relation ->
+                        world.parentFieldRelations[key.field]?.let { producerField ->
                             val ancestor = ancestors.lastOrNull()
                             ancestor != null &&
                                 value === ancestor.result &&
-                                relation.producerField == ancestor.producerField
+                                producerField == ancestor.producerField
                         } == true
                     } else {
                         value?.conformsToSchema(

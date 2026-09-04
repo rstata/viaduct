@@ -68,9 +68,7 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
             when {
                 key is ObjectEngineResult.ParentKey ->
                     value === structuralParent &&
-                        operation.world.parentFieldRelations
-                            .relation(key.field)
-                            ?.producerField == producerField
+                        operation.world.parentFieldRelations[key.field] == producerField
                 argumentsContainError -> true
                 sourceSuppliesField ->
                     (arguments as? Arguments.Resolved)

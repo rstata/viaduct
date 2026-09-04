@@ -44,8 +44,7 @@ private fun SelectionForest.liftParentDemand(): SelectionForest =
                     .filter { childSelection ->
                         val parentKey = childSelection.key as? ObjectEngineResult.ParentKey
                         parentKey != null &&
-                            world.parentFieldRelations.relation(parentKey.field)?.producerField ==
-                            producer
+                            world.parentFieldRelations[parentKey.field] == producer
                     }
                     .fold(selectionForestOf()) { demand, parentSelection ->
                         demand + parentSelection.subselections

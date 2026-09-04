@@ -104,9 +104,7 @@ internal fun SelectionForest.liftParentDemand(): SelectionForest =
                     .filter { childSelection ->
                         val parentKey = childSelection.key as? ObjectEngineResult.ParentKey
                         parentKey != null &&
-                            operation.world.parentFieldRelations
-                                .relation(parentKey.field)
-                                ?.producerField == producer
+                            operation.world.parentFieldRelations[parentKey.field] == producer
                     }
                     .map { parentSelection -> parentSelection.subselections }
                     .flatMap { parentSelections ->

@@ -253,21 +253,20 @@ sealed interface ObjectEngineResult {
      * result algorithms avoid recursively unfolding their ancestor backedges.
      */
     sealed interface ParentKey : GroundKey {
+        override val arguments: Arguments.Resolved
+
         companion object {
             fun of(field: ViaductSchema.ObjectField): ParentKey =
-                of(field, Arguments.Resolved.of(field, emptyMap()))
+                of(field, argumentsOfGround(emptyMap()))
 
             fun of(
                 field: ViaductSchema.ObjectField,
                 arguments: Arguments.Ground,
             ): ParentKey {
-                require(field.isParentField()) {
-                    "Parent key field must carry @$PARENT_DIRECTIVE_NAME"
-                }
                 require(arguments is Arguments.Resolved && arguments.fieldValues.isEmpty()) {
                     "Parent key field must have no arguments"
                 }
-                return ParentKeyImpl(field, arguments)
+                return ParentKeyImpl(field)
             }
         }
     }
@@ -439,22 +438,19 @@ private fun EngineResult?.hasSameCompletedResultAs(other: EngineResult?): Boolea
     }
 }
 
-private fun EngineResultCell.hasSameCompletedCellAs(
-    other: EngineResultCell,
-    followValue: Boolean = true,
-): Boolean {
+private fun EngineResultCell.hasSameCompletedCellAs(other: EngineResultCell): Boolean =
+    completedValue.hasSameCompletedResultAs(other.completedValue) &&
+        completedAccessResult.hasSameCompletedAccessResultAs(other.completedAccessResult)
+
+private fun EngineResultCell.hasSameCompletedParentCellAs(other: EngineResultCell): Boolean {
     val leftValue = completedValue
     val rightValue = other.completedValue
     val sameValue =
-        if (followValue) {
-            leftValue.hasSameCompletedResultAs(rightValue)
-        } else {
-            when {
-                leftValue == null || rightValue == null -> leftValue == null && rightValue == null
-                leftValue is ObjectEngineResult && rightValue is ObjectEngineResult ->
-                    leftValue.type == rightValue.type
-                else -> false
-            }
+        when {
+            leftValue == null || rightValue == null -> leftValue == null && rightValue == null
+            leftValue is ObjectEngineResult && rightValue is ObjectEngineResult ->
+                leftValue.type == rightValue.type
+            else -> false
         }
     return sameValue &&
         completedAccessResult.hasSameCompletedAccessResultAs(other.completedAccessResult)
@@ -649,9 +645,8 @@ private class CellImpl(
         if (mutable) valueStore.freeze(cause)
     }
 
-    fun requireCompleted(followValue: Boolean = true) {
-        val value = valueStore.readOrNull()?.get()
-        if (followValue) value.requireCompleted()
+    fun requireCompleted() {
+        valueStore.readOrNull()?.get()
         accessResultStore.snapshot().values.forEach { promise -> promise.get() }
     }
 
@@ -764,7 +759,10 @@ private class ObjectResultImpl(
 
     fun requireCompleted() {
         cellStore.cellEntries.forEach { (key, cell) ->
-            cell.implementation.requireCompleted(followValue = key !is ObjectEngineResult.ParentKey)
+            cell.implementation.requireCompleted()
+            if (key !is ObjectEngineResult.ParentKey) {
+                cell.completedValue.requireCompleted()
+            }
         }
     }
 }
@@ -820,12 +818,8 @@ private class ObjectCellStore(
 
     fun completedCells(): Map<ObjectEngineResult.ObjectKey, EngineResultCell> =
         synchronized(lock) {
-            cells.mapValues { (key, cell) ->
-                cell.also {
-                    it.implementation.requireCompleted(
-                        followValue = key !is ObjectEngineResult.ParentKey,
-                    )
-                }
+            cells.mapValues { (_, cell) ->
+                cell.also { it.implementation.requireCompleted() }
             }
         }
 
@@ -878,8 +872,15 @@ private data class GroundKeyImpl(
 
 private data class ParentKeyImpl(
     override val field: ViaductSchema.ObjectField,
-    override val arguments: Arguments.Ground,
-) : ObjectEngineResult.ParentKey
+) : ObjectEngineResult.ParentKey {
+    override val arguments: Arguments.Resolved = argumentsOfGround(emptyMap())
+
+    init {
+        require(field.isParentField()) {
+            "Parent key field must carry @$PARENT_DIRECTIVE_NAME"
+        }
+    }
+}
 
 private data class CompletedCell(
     val value: EngineResult?,
@@ -924,10 +925,11 @@ private fun ObjectEngineResult.sameCompletedObjectResultAs(other: ObjectEngineRe
             false
         } else {
             val rightCell = unmatchedRightCells.removeAt(matchIndex).value
-            leftCell.hasSameCompletedCellAs(
-                rightCell,
-                followValue = leftKey !is ObjectEngineResult.ParentKey,
-            )
+            if (leftKey is ObjectEngineResult.ParentKey) {
+                leftCell.hasSameCompletedParentCellAs(rightCell)
+            } else {
+                leftCell.hasSameCompletedCellAs(rightCell)
+            }
         }
     }
 }
@@ -938,7 +940,11 @@ private fun EngineResult?.requireCompleted() {
         is ErrorEngineResult,
         -> Unit
         is ListEngineResult ->
-            indices.forEach { index -> get(index).implementation.requireCompleted() }
+            indices.forEach { index ->
+                val cell = get(index)
+                cell.implementation.requireCompleted()
+                cell.completedValue.requireCompleted()
+            }
         is ObjectEngineResult -> implementation.requireCompleted()
         else -> check(isScalarResultMember()) { "Value is not an engine result: $this" }
     }

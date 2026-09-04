@@ -57,7 +57,7 @@ internal fun ObjectEngineResult.installParentBackedges(
                 .lastOrNull()
                 ?.field
         require(
-            operation.world.parentFieldRelations.relation(key.field)?.producerField == producer,
+            operation.world.parentFieldRelations[key.field] == producer,
         ) {
             "Parent field ${key.field.name} is not inverse to its containing producer occurrence"
         }

@@ -13,23 +13,28 @@ import kotlin.test.assertTrue
 
 class ParentFieldsTest {
     @Test
-    fun `parent fields create parent keys and a list-producing transpose`() {
+    fun `parent fields create parent keys and identify their list-producing field`() {
         val assumptions = TestWorld.fromSDL(PARENT_SCHEMA).assumptions
         val schema = assumptions.schema
         val parentField = schema.requireObjectField("Child", "parent")
         val producerField = schema.requireObjectField("Parent", "children")
 
         val key = ObjectEngineResult.GroundKey.of(parentField, emptyMap())
-        val relation = assumptions.parentFieldRelations.relation(parentField)
+        val relatedProducer = assumptions.parentFieldRelations[parentField]
 
-        assertIs<ObjectEngineResult.ParentKey>(key)
-        assertSame(parentField, relation?.parentField)
-        assertSame(producerField, relation?.producerField)
-        assertEquals(setOf(parentField), assumptions.parentFieldRelations.parentFields(producerField))
+        val parentKey = assertIs<ObjectEngineResult.ParentKey>(key)
+        assertTrue(parentKey.arguments.fieldValues.isEmpty())
+        assertSame(producerField, relatedProducer)
+        assertFailsWith<IllegalArgumentException> {
+            ObjectEngineResult.ParentKey.of(producerField)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            ObjectEngineResult.GroundKey.of(parentField, Arguments.Error)
+        }
     }
 
     @Test
-    fun `parent transpose rejects an argument-bearing child producer`() {
+    fun `parent relation rejects an argument-bearing child producer`() {
         val schema =
             GJSchema.fromSDL(
                 """
@@ -41,7 +46,7 @@ class ParentFieldsTest {
             )
 
         assertFailsWith<IllegalArgumentException> {
-            ParentFieldRelations.of(schema)
+            parentFieldRelations(schema)
         }
     }
 

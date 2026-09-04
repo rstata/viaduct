@@ -138,7 +138,7 @@ internal class ObjectOrchestrationTask(
 
     private fun canReceiveParentDemand(): Boolean =
         occurrence.target.type.fields.any { field ->
-            operation.world.parentFieldRelations.parentFields(field).isNotEmpty()
+            operation.world.parentFieldRelations.containsValue(field)
         }
 
     internal fun freezeAtQuiescence() {
@@ -179,7 +179,7 @@ internal class ObjectOrchestrationTask(
                 ?.field
         parentSelections.keys.forEach { objectKey ->
             val key = objectKey as ObjectEngineResult.ParentKey
-            require(world.parentFieldRelations.relation(key.field)?.producerField == producer) {
+            require(world.parentFieldRelations[key.field] == producer) {
                 "Parent field ${key.field.name} is not inverse to its containing producer occurrence"
             }
             if (!occurrence.target.isCellSet(key)) {

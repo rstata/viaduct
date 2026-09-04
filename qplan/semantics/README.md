@@ -25,7 +25,7 @@ An **OER** is an `ObjectEngineResult`, always associated with one concrete Graph
 
 When discussing relationships among OER occurrences, a list is treated as a one-to-many path edge. The object containing a list field is therefore the parent of each object element for resolver-ancestry purposes, while each `ListEngineResult.Index` remains part of the element's exact identity.
 
-A schema-derived `ParentFieldRelations` value validates each argument-free, singular composite `@parent` field and identifies its unique compatible argument-free producer field. Producer output may contain the child directly or through any finite list nesting. The parent-to-child transpose supports demand lifting from a child occurrence to the producer's containing ancestor.
+A schema-derived map validates each argument-free, singular composite `@parent` field and associates it with its unique compatible argument-free producer field. Producer output may contain the child directly or through any finite list nesting. This relation supports demand lifting from a child occurrence to the producer's containing ancestor.
 
 An **active field** has a standard registered field resolver. At a particular output occurrence, an argumentless active field is dynamically passive when the resolver that owns an ancestor output region supplies it; otherwise its standard resolver owns it. Fields with arguments are always active and may never be supplied passively. A resolver's **fringe** is the set of produced object occurrences whose selected fields require further active resolution.
 

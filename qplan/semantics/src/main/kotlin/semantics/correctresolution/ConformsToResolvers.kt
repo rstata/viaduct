@@ -70,9 +70,7 @@ private fun ObjectEngineResult.objectConformsToResolvers(
         when {
             key is ObjectEngineResult.ParentKey ->
                 value === structuralParent &&
-                    operation.world.parentFieldRelations
-                        .relation(key.field)
-                        ?.producerField == producerField
+                    operation.world.parentFieldRelations[key.field] == producerField
 
             arguments !is Arguments.Resolved ->
                 value is ErrorEngineResult

@@ -42,8 +42,10 @@ class ObjectValueScope internal constructor(
         fieldName: String,
         vararg arguments: Pair<String, Any?>,
     ): ObjectFieldReference {
-        require(arguments.map(Pair<String, Any?>::first).distinct().size == arguments.size) {
-            "Arguments for ${type.name}/$fieldName must have distinct names"
+        if (arguments.size > 1) {
+            require(arguments.map(Pair<String, Any?>::first).distinct().size == arguments.size) {
+                "Arguments for ${type.name}/$fieldName must have distinct names"
+            }
         }
         val field = sourceSchema.field(type.name, fieldName)
         require(field is ViaductSchema.ObjectField) {

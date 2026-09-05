@@ -20,6 +20,175 @@ import kotlin.test.assertTrue
 
 class GeneratorTest {
     @Test
+    fun `parent result rank follows its fixed ancestor dependency`() {
+        val unrelatedBefore = FieldCoordinate("Object0", "field0")
+        val ancestor = FieldCoordinate(GENERATED_PARENT_ROOT_TYPE, GENERATED_PARENT_VALUE_FIELD)
+        val result =
+            FieldCoordinate(
+                GENERATED_PARENT_GREAT_GRANDCHILD_TYPE,
+                GENERATED_PARENT_RESULT_FIELD,
+            )
+        val unrelatedAfter = FieldCoordinate("Object1", "field1")
+        val shuffled = listOf(unrelatedBefore, result, ancestor, unrelatedAfter)
+
+        assertEquals(
+            listOf(unrelatedBefore, ancestor, result, unrelatedAfter),
+            shuffled.withGeneratedParentResultAfterAncestor(parentFieldsEnabled = true),
+        )
+        assertEquals(
+            shuffled,
+            shuffled.withGeneratedParentResultAfterAncestor(parentFieldsEnabled = false),
+        )
+    }
+
+    @Test
+    fun `random parent generation varies chains lists abstract targets and resolver inputs`() {
+        val config =
+            Config.default +
+                (ParentFieldsEnabled to true) +
+                (RandomParentFieldsEnabled to true) +
+                (ListsEnabled to true) +
+                (UnionsEnabled to true) +
+                (MaxOutputListDepth to 2) +
+                (ResolverFragmentsEnabled to true) +
+                (ResolverFragmentWeight to 1.0)
+        val random = RandomSource.seeded(2026090501L)
+        var listProducers = 0
+        var abstractTargets = 0
+        var maximumDepth = 0
+        var parentDemandResolvers = 0
+        var argumentBearingParentScalars = 0
+        var boundedDiagonalResolvers = 0
+
+        repeat(100) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+
+            assertTrue(schema.features.randomParentFieldCount > 0)
+            assertTrue(
+                schema.query.fields
+                    .filter { field -> field.name.startsWith("query") }
+                    .none { field ->
+                        field.type.namedType.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX)
+                    },
+            )
+            registry.world(schema)
+
+            listProducers += schema.features.randomParentListProducerCount
+            abstractTargets += schema.features.randomParentAbstractTargetCount
+            maximumDepth = maxOf(maximumDepth, schema.features.maximumParentChainDepth)
+            argumentBearingParentScalars +=
+                schema.allObjects
+                    .filter { objectType ->
+                        objectType.name.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX)
+                    }.flatMap(ObjectDefinition::fields)
+                    .count { field ->
+                        field.name.startsWith("value") && field.arguments.size >= 2
+                    }
+            parentDemandResolvers +=
+                registry.parentDemandOwnerFields.keys.count { field ->
+                    field.typeName.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX)
+                }
+            boundedDiagonalResolvers +=
+                registry.objectFragmentSources.count { (field, source) ->
+                    field.typeName.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX) &&
+                        source.contains("resolverParentCoverage: parent {\n    __typename")
+                }
+        }
+
+        assertTrue(listProducers > 0)
+        assertTrue(abstractTargets > 0)
+        assertTrue(maximumDepth >= 4)
+        assertTrue(parentDemandResolvers > 0)
+        assertTrue(argumentBearingParentScalars > 0)
+        assertTrue(boundedDiagonalResolvers > 0)
+    }
+
+    @Test
+    fun `parent generation reaches a variable-free great-grandparent selection`() {
+        val config =
+            Config.default +
+                (ParentFieldsEnabled to true) +
+                (MaxSelectionDepth to 6) +
+                (ResolverVariablesEnabled to true) +
+                (ResolverFromArgumentVariablesEnabled to true) +
+                (ResolverVariableWeight to 1.0)
+        val random = RandomSource.seeded(2026090402L)
+        val schema = Arb.schema(config).next(random)
+        val registry = schema.registry(config).next(random)
+        val query = schema.query(config).next(random)
+        val resultOwner =
+            FieldCoordinate(
+                GENERATED_PARENT_GREAT_GRANDCHILD_TYPE,
+                GENERATED_PARENT_RESULT_FIELD,
+            )
+        val greatGrandchildProducer =
+            FieldCoordinate(
+                GENERATED_PARENT_GRANDCHILD_TYPE,
+                GENERATED_PARENT_CHILD_FIELD,
+            )
+
+        assertEquals(3, schema.features.maximumParentChainDepth)
+        assertEquals(3, registry.features.maximumParentSelectionDepth)
+        assertTrue(registry.features.resolverOutputParentFieldCount > 0)
+        assertEquals(3, registry.parentDemandOwnerFields.getValue(resultOwner))
+        assertTrue(
+            registry.objectFragmentSources.getValue(resultOwner).contains(
+                "parent {\n    parent {\n      parent {",
+            ),
+        )
+        assertFalse(registry.objectFragmentSources.getValue(resultOwner).contains('$'))
+        assertTrue(
+            "parent.parent.parent" in
+                registry.outputSelectionSets.getValue(greatGrandchildProducer.toString()),
+        )
+        assertTrue(query.source.contains(GENERATED_PARENT_RESULT_FIELD))
+        registry.world(schema)
+    }
+
+    @Test
+    fun `random parents expose a sometimes-passive resolver with parent demand`() {
+        val config =
+            Config.default +
+                (ParentFieldsEnabled to true) +
+                (RandomParentFieldsEnabled to true) +
+                (ResolverFragmentsEnabled to true) +
+                (SometimesPassiveFieldWeight to 1.0)
+        val random = RandomSource.seeded(2026090502L)
+        val schema = Arb.schema(config).next(random)
+        val registry = schema.registry(config).next(random)
+        val witnesses =
+            registry.parentDemandOwnerFields.filterKeys { field ->
+                field.typeName.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX) &&
+                    field.fieldName == GENERATED_SOMETIMES_PASSIVE_PARENT_FIELD
+            }
+        val suppliedFields =
+            registry.fieldValues.values
+                .flatMapTo(linkedSetOf()) { value ->
+                    value.registeredFields(registry.fieldResolverCoordinates)
+                }
+
+        assertTrue(witnesses.isNotEmpty())
+        witnesses.forEach { (field, parentDepth) ->
+            assertEquals(1, parentDepth)
+            assertEquals(ResolverProgramKind.CONSTANT, registry.resolverProgram(field))
+            assertTrue(
+                schema.fieldsOn(field.typeName)
+                    .single { candidate -> candidate.name == field.fieldName }
+                    .arguments
+                    .isEmpty(),
+            )
+            assertTrue(
+                registry.objectFragmentSources.getValue(field).contains(
+                    "resolverParentCoverage: parent {\n    __typename",
+                ),
+            )
+        }
+        assertTrue(witnesses.keys.any { field -> field in suppliedFields })
+        registry.world(schema)
+    }
+
+    @Test
     fun `generated schemas registries and queries form valid worlds`() {
         val random = RandomSource.seeded(90210L)
 

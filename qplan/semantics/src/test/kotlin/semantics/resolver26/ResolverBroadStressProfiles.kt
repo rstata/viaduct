@@ -14,6 +14,7 @@ import semantics.arbitrary.NodeObjectWeight
 import semantics.arbitrary.NullValueWeight
 import semantics.arbitrary.NullableTypeWeight
 import semantics.arbitrary.ObjectFieldCount
+import semantics.arbitrary.ParentFieldsEnabled
 import semantics.arbitrary.QueryFieldCount
 import semantics.arbitrary.QueryScalarFieldWeight
 import semantics.arbitrary.ResolverArgumentErrorWeight
@@ -60,6 +61,7 @@ internal enum class Resolver26BroadStressProfile(
                 Resolver26StructuralSignature.OBJECT_PATH_VARIABLE_OWNER,
                 Resolver26StructuralSignature.MIXED_BINDING_SOURCES,
                 Resolver26StructuralSignature.ABSTRACT_PROVIDER_PATH,
+                Resolver26StructuralSignature.GREAT_GRANDPARENT_PARENT_DEMAND,
             ),
         config = balancedBroadConfig(),
     ),
@@ -167,7 +169,7 @@ internal fun Config.withLargeDeepResolver26Worlds(): Config =
 private fun balancedBroadConfig(): Config =
     Config.default +
         (MinimumSelectionDepth to 2) +
-        (MaxSelectionDepth to 4) +
+        (MaxSelectionDepth to 6) +
         (SchemaObjectCount to 5..7) +
         (ObjectFieldCount to 4..6) +
         (QueryFieldCount to 6..8) +
@@ -185,6 +187,7 @@ private fun balancedBroadConfig(): Config =
         (QueryScalarFieldWeight to 0.2) +
         (ResolverFragmentsEnabled to true) +
         (ResolverQueryFragmentsEnabled to true) +
+        (ParentFieldsEnabled to true) +
         (ResolverQueryFragmentWeight to 0.1) +
         (ResolverFragmentWeight to 0.8) +
         (ResolverFragmentDepth to 3) +

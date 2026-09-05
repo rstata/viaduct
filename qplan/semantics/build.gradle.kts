@@ -681,6 +681,45 @@ val resolver26BroadStressProfiles =
         "multiple-owners" to Pair("resolver26-broad-multiple-owners", "10:50:20"),
     )
 
+val resolver26ParentFocusedSeed =
+    providers
+        .gradleProperty("resolver26ParentFocusedSeed")
+        .orElse(providers.systemProperty("resolver26.parent.focused.seed"))
+        .orElse(providers.environmentVariable("RESOLVER26_PARENT_FOCUSED_SEED"))
+        .orElse("2026090403")
+
+tasks.register<org.gradle.api.tasks.testing.Test>("resolver26ParentFocused") {
+    group = "verification"
+    description = "Runs four 250-case slices of the parent-focused Resolver26 property."
+    maxHeapSize = "2g"
+    maxParallelForks = 1
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching(
+            "semantics.resolver26.ResolverBroadStressTest." +
+                "parent focused randomized worlds resolve correctly",
+        )
+    }
+    outputs.upToDateWhen { false }
+    testLogging {
+        showStandardStreams = true
+    }
+
+    doFirst {
+        val seed = resolver26ParentFocusedSeed.get()
+        seed.toLongOrNull()
+            ?: throw GradleException("resolver26ParentFocusedSeed must be a Long: $seed")
+        systemProperty("resolver26.broad.stress.seed", seed)
+        systemProperty("resolver.property.seed", seed)
+        systemProperty("resolver.property.case", "all")
+        systemProperty("resolver.property.profile", "resolver26-parent-fields")
+        systemProperty("resolver.property.size", "40:5:5")
+        systemProperty("kotest.proptest.default.seed", seed)
+    }
+}
+
 tasks.register<org.gradle.api.tasks.testing.Test>("resolver26BroadStress") {
     group = "verification"
     description = "Runs every case in a seeded broad Resolver26 generated product."
@@ -690,7 +729,10 @@ tasks.register<org.gradle.api.tasks.testing.Test>("resolver26BroadStress") {
     classpath = sourceSets["test"].runtimeClasspath
     useJUnitPlatform()
     filter {
-        includeTestsMatching("semantics.resolver26.ResolverBroadStressTest")
+        includeTestsMatching(
+            "semantics.resolver26.ResolverBroadStressTest." +
+                "broad full-feature worlds resolve correctly",
+        )
     }
     outputs.upToDateWhen { false }
     testLogging {

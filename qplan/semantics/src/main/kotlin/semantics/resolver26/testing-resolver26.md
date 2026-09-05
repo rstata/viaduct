@@ -66,6 +66,15 @@ Run one unfiltered broad product by choosing a directed profile, seed, and `S:R:
 ./gradlew :semantics:resolver26BroadStress -Presolver26BroadStressProfile=multiple-owners -Presolver26BroadStressSeed=424242 -Presolver26BroadStressSize=20:10:50 -Presolver26ThreadCount=5
 ```
 
+Every Resolver26 broad profile includes a forced great-grandparent path: its deepest resolver input selects `parent.parent.parent`, queries activate that resolver, and generated variables are never inserted directly beneath a parent selection. Generated resolver value plans also retain `@parent` fields, and the parent-enabled harness requires evidence that at least one resolver output supplies one. The dedicated parent-focused stress generates a `40:5:5` product and reports it as four consecutive 250-case, 10-schema slices. It supplements the fixed spine with independently shaped parent chains and records parent fields actually present in materialized resolver inputs, separating fixed-spine and random activations and reporting a consecutive parent-depth histogram. Its coverage analyzer attributes selected resolvers to every enclosing materialized parent selection set; reports exact variable-bearing argument selections in those resolvers' object and Query inputs by depth, fragment, and `FromArgument`/`FromObjectField`/`FromQueryField` source combination; and measures diagonal demand when a resolver selected beneath one parent independently starts another top-level parent chain. Exact registered-occurrence accounting also identifies source-supplied active fields whose skipped standard resolver has parent input demand, records their maximum parent depths, and hard-requires at least one such speculative-demand occurrence. Each slice prints an unambiguous `HIT` or `MISS` for nine criteria: parent topology, resolver placement, variable sources, mixed source pairs, input locations, argument-selection depths, diagonal depths, variable-source/input-fragment combinations on diagonals, and sometimes-passive parent demand. Coverage misses are diagnostic and do not fail the test; resolution, binding, occurrence-accounting, the combined sometimes-passive-parent activation requirement, and forbidden direct-variable invariants remain assertions. `ParentQueryFragmentVariableResolverContract` deterministically covers Query-fragment variable use on diagonal parent demand for all three binding sources, independent of whether a random run reports a hit. Run the randomized profile with:
+
+```shell
+./gradlew :semantics:resolver26ParentFocused
+
+# Optional seed override
+./gradlew :semantics:resolver26ParentFocused -Presolver26ParentFocusedSeed=2026090403
+```
+
 Run one persisted five-profile campaign round:
 
 ```shell
@@ -197,3 +206,4 @@ This interaction-local accounting work is deliberately deferred to a follow-up P
 - [x] `FromObjectField` variables generate literal/symbolic convergence and report it independently from `FromArgument` convergence.
 - [x] Resolver26's default deep-stress configuration enables from-field variables and requires both generated and activated evidence.
 - [x] Broad structural coverage records `ABSTRACT_PROVIDER_PATH` only from an activated owner and requires it in the balanced Resolver26 profile.
+- [x] Resolver26 stress profiles generate and activate a variable-free great-grandparent `@parent` demand spine; a dedicated 1,000-case parent-focused run divides its 40 schemas into four reported 250-case slices, supplements the spine with randomized parent chains, records actual materialized-input activations by topology and consecutive parent depth, classifies variable-bearing resolver inputs beneath parents by exact argument occurrence and binding source, reports ordinary and recursively composed diagonal parent demand, and identifies exact source-supplied occurrences whose skipped standard resolver has parent demand against nine explicit diagnostic coverage criteria.

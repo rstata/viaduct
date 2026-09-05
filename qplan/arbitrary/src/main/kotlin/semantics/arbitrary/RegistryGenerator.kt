@@ -83,6 +83,8 @@ data class RegistryFeatures(
     val fromQueryFieldVariableCount: Int = 0,
     val maximumFromQueryFieldPathLength: Int = 0,
     val maximumFromQueryFieldVariableUseDepth: Int = 0,
+    val maximumParentSelectionDepth: Int = 0,
+    val resolverOutputParentFieldCount: Int = 0,
 )
 
 /**
@@ -103,6 +105,7 @@ class ArbitraryRegistry internal constructor(
     internal val queryFragments: Map<FieldCoordinate, FragmentPlan>,
     internal val variableProviders: List<VariableProviderPlan>,
     internal val resolverPrograms: Map<FieldCoordinate, ResolverProgramKind>,
+    val parentDemandOwnerFields: Map<FieldCoordinate, Int> = emptyMap(),
     val features: RegistryFeatures,
 ) {
     private val applicationLog = ResolutionApplicationLog()
@@ -626,14 +629,17 @@ private class RegistryGenerator(
                 .filter { field ->
                     field.ownerName != GENERATED_HASH_TYPE &&
                         !field.isGeneratedHashField() &&
+                        !field.isParentField &&
                         !field.isGeneratedPassiveAbstractOutput() &&
                         (
                             field.ownerName == "Query" ||
                                 field.arguments.isNotEmpty() ||
+                                field.isGeneratedParentSpineResolver() ||
                                 chance(config[ExplicitFieldResolverWeight])
                         )
                 }.map(FieldDefinitionSpec::coordinate)
                 .shuffled(random)
+                .withGeneratedParentResultAfterAncestor(config[ParentFieldsEnabled])
                 .toCollection(linkedSetOf())
 
         val baseFieldValues =
@@ -674,6 +680,8 @@ private class RegistryGenerator(
                 val argumentSensitive =
                     supportsSensitiveOutput && field.arguments.isNotEmpty()
                 when {
+                    site.isGeneratedSometimesPassiveParentResolver() ->
+                        ResolverProgramKind.CONSTANT
                     inputSensitive && argumentSensitive ->
                         ResolverProgramKind.INPUT_AND_ARGUMENT_SENSITIVE
                     inputSensitive -> ResolverProgramKind.INPUT_SENSITIVE
@@ -711,6 +719,10 @@ private class RegistryGenerator(
             variableProviders.fromField(ProviderFragment.OBJECT).features(fieldSites)
         val queryFieldFeatures =
             variableProviders.fromField(ProviderFragment.QUERY).features(fieldSites)
+        val parentDemandOwnerFields =
+            objectFragments
+                .mapValues { (_, fragment) -> fragment.maximumParentSelectionDepth() }
+                .filterValues { depth -> depth > 0 }
         return ArbitraryRegistry(
             fieldResolverCoordinates = fieldSites,
             nodeResolverTypes = nodeSites,
@@ -734,6 +746,7 @@ private class RegistryGenerator(
             queryFragments = queryFragments,
             variableProviders = variableProviders,
             resolverPrograms = resolverPrograms,
+            parentDemandOwnerFields = parentDemandOwnerFields,
             features =
                 RegistryFeatures(
                     inputSensitiveResolvers =
@@ -831,6 +844,11 @@ private class RegistryGenerator(
                     maximumFromQueryFieldPathLength = queryFieldFeatures.maximumPathLength,
                     maximumFromQueryFieldVariableUseDepth =
                         queryFieldFeatures.maximumVariableUseDepth,
+                    maximumParentSelectionDepth =
+                        parentDemandOwnerFields.values.maxOrNull() ?: 0,
+                    resolverOutputParentFieldCount =
+                        (fieldValues.values + nodeValues.values)
+                            .sumOf { value -> value.parentFieldCount() },
                 ),
         )
     }
@@ -894,6 +912,12 @@ private class RegistryGenerator(
         ranks: Map<FieldCoordinate, Int>,
         variableProviders: MutableList<VariableProviderPlan>,
     ): ResolverFragmentPlans {
+        if (consumer.isGeneratedParentResult()) {
+            return ResolverFragmentPlans(
+                objectFragment = generatedGreatGrandparentFragment(),
+                queryFragment = FragmentPlan("Query", emptyList()),
+            )
+        }
         val preferredObjectFields =
             variableProviders
                 .mapTo(linkedSetOf(), VariableProviderPlan::owner)
@@ -920,6 +944,7 @@ private class RegistryGenerator(
                         weight = config[ResolverQueryFragmentWeight],
                     ),
             )
+                .withTopLevelRandomParentDemand(consumer)
                 .withFromArgumentVariableProvider(consumer, ranks, variableProviders)
         return ProviderFragment.entries.fold(fragments) { result, providerFragment ->
             result.withFromFieldVariableProvider(
@@ -929,6 +954,51 @@ private class RegistryGenerator(
                 providerFragment,
             )
         }
+    }
+
+    private fun ResolverFragmentPlans.withTopLevelRandomParentDemand(
+        consumer: FieldCoordinate,
+    ): ResolverFragmentPlans {
+        val parentField =
+            schema
+                .fieldsOn(consumer.typeName)
+                .singleOrNull(FieldDefinitionSpec::isParentField)
+        val sometimesPassiveParentWitness =
+            consumer.isGeneratedSometimesPassiveParentResolver()
+        if (
+            !config[RandomParentFieldsEnabled] ||
+            !consumer.typeName.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX) ||
+            parentField == null ||
+            (
+                !sometimesPassiveParentWitness &&
+                    (
+                        consumer.fieldName != "value0" ||
+                            !chance(RANDOM_PARENT_DIAGONAL_RESOLVER_WEIGHT)
+                    )
+            )
+        ) {
+            return this
+        }
+        return copy(
+            objectFragment =
+                objectFragment.copy(
+                    selections =
+                        objectFragment.selections +
+                            FragmentSelectionPlan(
+                                fieldName = GENERATED_PARENT_FIELD,
+                                arguments = emptyMap(),
+                                alias = "resolverParentCoverage",
+                                subselections =
+                                    listOf(
+                                        FragmentSelectionPlan(
+                                            fieldName = "__typename",
+                                            arguments = emptyMap(),
+                                            subselections = emptyList(),
+                                        ),
+                                    ),
+                            ),
+                ),
+        )
     }
 
     private fun fragmentPlan(
@@ -1788,12 +1858,14 @@ private class RegistryGenerator(
             ownerName = ownerName,
             selections = selections,
             selectionPath = emptyList(),
+            beneathParent = false,
         )
 
     private fun argumentOccurrences(
         ownerName: String,
         selections: List<FragmentSelectionPlan>,
         selectionPath: List<Int>,
+        beneathParent: Boolean,
     ): List<ArgumentOccurrence> =
         selections.flatMapIndexed { index, selection ->
             val selectionOwner = selection.typeCondition ?: ownerName
@@ -1803,20 +1875,26 @@ private class RegistryGenerator(
                     .singleOrNull { it.name == selection.fieldName }
                     ?: return@flatMapIndexed emptyList()
             val path = selectionPath + index
-            field.arguments.flatMap { argument ->
-                selection.arguments
-                    .getValue(argument.name)
-                    .variableOccurrences()
-                    .map { valueOccurrence ->
-                        ArgumentOccurrence(
-                            selectionPath = path,
-                            argument = argument,
-                            valuePath = valueOccurrence.path,
-                            target = valueOccurrence.target,
-                            existingVariableName = valueOccurrence.existingVariableName,
-                        )
+            (
+                if (beneathParent) {
+                    emptyList()
+                } else {
+                    field.arguments.flatMap { argument ->
+                        selection.arguments
+                            .getValue(argument.name)
+                            .variableOccurrences()
+                            .map { valueOccurrence ->
+                                ArgumentOccurrence(
+                                    selectionPath = path,
+                                    argument = argument,
+                                    valuePath = valueOccurrence.path,
+                                    target = valueOccurrence.target,
+                                    existingVariableName = valueOccurrence.existingVariableName,
+                                )
+                            }
                     }
-            } +
+                }
+            ) +
                 (
                     field.type.namedType
                         .takeIf(schema::isComposite)
@@ -1825,6 +1903,7 @@ private class RegistryGenerator(
                                 ownerName = nestedOwner,
                                 selections = selection.subselections,
                                 selectionPath = path,
+                                beneathParent = beneathParent || field.isParentField,
                             )
                         }.orEmpty()
                 )
@@ -2102,6 +2181,20 @@ private class RegistryGenerator(
         return ScalarPlan(scalar, value)
     }
 
+    private fun ValuePlan.parentFieldCount(): Int =
+        when (this) {
+            is ListPlan -> elements.sumOf { element -> element.parentFieldCount() }
+            is ObjectPlan ->
+                fields.entries.sumOf { (coordinate, value) ->
+                    val outputField =
+                        schema.fieldsOn(typeName).singleOrNull { candidate ->
+                            candidate.name == coordinate.fieldName
+                        }
+                    value.parentFieldCount() + if (outputField?.isParentField == true) 1 else 0
+                }
+            else -> 0
+        }
+
     private fun field(coordinate: FieldCoordinate): FieldDefinitionSpec =
         schema
             .objectNamed(coordinate.typeName)
@@ -2132,6 +2225,102 @@ private class RegistryGenerator(
             ownerName != "Query" &&
             schema.isComposite(type.namedType) &&
             schema.allObjects.none { objectType -> objectType.name == type.namedType }
+
+    private fun FieldDefinitionSpec.isGeneratedParentSpineResolver(): Boolean =
+        config[ParentFieldsEnabled] &&
+            (
+                ownerName in
+                    setOf(
+                        GENERATED_PARENT_ROOT_TYPE,
+                        GENERATED_PARENT_CHILD_TYPE,
+                        GENERATED_PARENT_GRANDCHILD_TYPE,
+                        GENERATED_PARENT_GREAT_GRANDCHILD_TYPE,
+                    ) ||
+                    (
+                        config[RandomParentFieldsEnabled] &&
+                            ownerName.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX) &&
+                            (
+                                name == "value0" ||
+                                    (
+                                        config[SometimesPassiveFieldWeight] > 0.0 &&
+                                            name == GENERATED_SOMETIMES_PASSIVE_PARENT_FIELD
+                                    )
+                            )
+                    )
+            )
+
+    // Names the argumentless constant resolver whose unused parent input exercises speculative
+    // demand when an ancestor resolver supplies the active field's value.
+    private fun FieldCoordinate.isGeneratedSometimesPassiveParentResolver(): Boolean =
+        config[RandomParentFieldsEnabled] &&
+            config[SometimesPassiveFieldWeight] > 0.0 &&
+            typeName.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX) &&
+            fieldName == GENERATED_SOMETIMES_PASSIVE_PARENT_FIELD
+
+    private fun FieldCoordinate.isGeneratedParentResult(): Boolean =
+        config[ParentFieldsEnabled] &&
+            typeName == GENERATED_PARENT_GREAT_GRANDCHILD_TYPE &&
+            fieldName == GENERATED_PARENT_RESULT_FIELD
+
+    private fun generatedGreatGrandparentFragment(): FragmentPlan =
+        FragmentPlan(
+            ownerName = GENERATED_PARENT_GREAT_GRANDCHILD_TYPE,
+            selections =
+                listOf(
+                    FragmentSelectionPlan(
+                        fieldName = GENERATED_PARENT_FIELD,
+                        arguments = emptyMap(),
+                        subselections =
+                            listOf(
+                                FragmentSelectionPlan(
+                                    fieldName = GENERATED_PARENT_FIELD,
+                                    arguments = emptyMap(),
+                                    subselections =
+                                        listOf(
+                                            FragmentSelectionPlan(
+                                                fieldName = GENERATED_PARENT_FIELD,
+                                                arguments = emptyMap(),
+                                                subselections =
+                                                    listOf(
+                                                        FragmentSelectionPlan(
+                                                            fieldName =
+                                                                GENERATED_PARENT_VALUE_FIELD,
+                                                            arguments = emptyMap(),
+                                                            subselections = emptyList(),
+                                                        ),
+                                                    ),
+                                            ),
+                                        ),
+                                ),
+                            ),
+                    ),
+                ),
+        )
+
+    private fun FragmentPlan.maximumParentSelectionDepth(): Int =
+        selections.maxOfOrNull { selection ->
+            selection.maximumParentSelectionDepth(ownerName, parentDepth = 0)
+        } ?: 0
+
+    private fun FragmentSelectionPlan.maximumParentSelectionDepth(
+        ownerName: String,
+        parentDepth: Int,
+    ): Int {
+        val selectionOwner = typeCondition ?: ownerName
+        val field =
+            schema.fieldsOn(selectionOwner).singleOrNull { candidate ->
+                candidate.name == fieldName
+            } ?: return parentDepth
+        val nextParentDepth = if (field.isParentField) parentDepth + 1 else 0
+        val nestedMaximum =
+            subselections.maxOfOrNull { selection ->
+                selection.maximumParentSelectionDepth(
+                    ownerName = field.type.namedType,
+                    parentDepth = nextParentDepth,
+                )
+            } ?: 0
+        return maxOf(nextParentDepth, nestedMaximum)
+    }
 
     private fun chance(weight: Double): Boolean =
         Arb.double(0.0, 1.0).next(random) < weight
@@ -3135,8 +3324,28 @@ internal data class GeneratedHashPlan(
     override fun containsGeneratedHash(): Boolean = true
 }
 
+// Keeps diagonal-parent witnesses frequent without recursively amplifying every random-parent resolver.
+private const val RANDOM_PARENT_DIAGONAL_RESOLVER_WEIGHT = 0.35
 private const val MAX_GENERATED_HASH_DEPTH = 4
 private const val GENERATED_HASH_NESTED_SALT = -1640531527
+
+internal fun List<FieldCoordinate>.withGeneratedParentResultAfterAncestor(
+    parentFieldsEnabled: Boolean,
+): List<FieldCoordinate> {
+    if (!parentFieldsEnabled) return this
+    val ancestor = FieldCoordinate(GENERATED_PARENT_ROOT_TYPE, GENERATED_PARENT_VALUE_FIELD)
+    val result =
+        FieldCoordinate(
+            GENERATED_PARENT_GREAT_GRANDCHILD_TYPE,
+            GENERATED_PARENT_RESULT_FIELD,
+        )
+    if (indexOf(ancestor) < indexOf(result)) return this
+
+    return toMutableList().apply {
+        remove(result)
+        add(indexOf(ancestor) + 1, result)
+    }
+}
 
 private fun generatedHashObject(
     schema: ViaductSchema,

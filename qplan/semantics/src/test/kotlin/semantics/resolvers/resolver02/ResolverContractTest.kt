@@ -17,11 +17,13 @@ import semantics.contract.ObjectFragmentResolverContract
 import semantics.contract.QueryFragmentResolverContract
 import semantics.contract.SometimesPassiveResolverContract
 import semantics.contract.SometimesPassiveObjectFragmentResolverContract
+import semantics.contract.UnsupportedParentFieldResolverContract
 
 class ResolverContractTest :
     EmptyObjectFragmentResolverContract,
     NodeResolverContract,
     ObjectFragmentResolverContract,
+    UnsupportedParentFieldResolverContract,
     ObjectFragmentFromArgumentResolverContract,
     QueryFragmentResolverContract,
     SometimesPassiveResolverContract,

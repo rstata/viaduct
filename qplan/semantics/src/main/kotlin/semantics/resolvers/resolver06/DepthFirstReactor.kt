@@ -148,6 +148,9 @@ internal class DepthFirstReactor(
 
     private fun SlotOrchestrator.execute() = context(operation, world) {
         val closedDemand = source.closeResolverDemand(result, path, selections)
+        require(closedDemand.groundKeys().none { key -> key is ObjectEngineResult.ParentKey }) {
+            "Resolver06-08 do not support @parent fields"
+        }
         source.materializedChildOccurrences(path, closedDemand, target)
             .forEach { passiveObjectOccurrence ->
                 enqueue(

@@ -78,7 +78,7 @@ class ResolverBroadStressTest {
                             (ListValueSize to 1..2) +
                             (NullValueWeight to 0.0) +
                             (ErrorValueWeight to 0.0),
-                    seed = 2026090403L,
+                    seed = configuredSeed(default = 2026090403L),
                     execution = ResolverTestExecution(counts),
                 )
 
@@ -138,11 +138,12 @@ class ResolverBroadStressTest {
     }
 
     // Returns the explicit seed required for reproducible broad generation.
-    private fun configuredSeed(): Long {
+    private fun configuredSeed(default: Long? = null): Long {
         val configured: String =
             System.getProperty(SEED_PROPERTY)
                 ?: System.getenv(SEED_ENVIRONMENT)
                 ?: System.getProperty("resolver.property.seed")
+                ?: default?.toString()
                 ?: error(
                     "Set $SEED_PROPERTY or $SEED_ENVIRONMENT; use the " +
                         ":semantics:resolver26BroadStress task",

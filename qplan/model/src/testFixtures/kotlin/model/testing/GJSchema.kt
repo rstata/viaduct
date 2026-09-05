@@ -235,7 +235,7 @@ internal class GJSchema private constructor(
         private val STANDARD_SCALAR_NAMES = setOf("Int", "Float", "String", "Boolean", "ID")
         private val SCALARS_REQUIRING_REGISTRATION = setOf("Int", "Float", "ID")
         private val STANDARD_DIRECTIVE_NAMES =
-            setOf("skip", "include", "deprecated", "specifiedBy", "oneOf")
+            setOf("skip", "include", "deprecated", "specifiedBy", "oneOf", "parent")
 
         @JvmStatic
         fun fromSDL(schemaSDL: String): GJSchema {

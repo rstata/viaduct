@@ -12,6 +12,44 @@ import model.testing.fromArgument
 
 class ParentVariableValidationAdversarialTest {
     @Test
+    fun `accepts variable restricted to non-parent concrete branch of mixed abstract field`() {
+        TestWorld.fromDSL(
+            """
+            extend type Query {
+              nodes: [ChildIface]
+              result(locale: String!): String
+                @resolver(
+                  of: "nodes { edge { ... on ParentB { localized(locale: ${'$'}locale) } } }"
+                  result: "ok"
+                )
+            }
+
+            interface ChildIface { edge: ParentIface }
+
+            type ChildA implements ChildIface {
+              edge: ParentA @parent
+            }
+
+            type ChildB implements ChildIface {
+              edge: ParentB
+            }
+
+            interface ParentIface { id: ID }
+
+            type ParentA implements ParentIface {
+              id: ID
+              child: ChildA
+            }
+
+            type ParentB implements ParentIface {
+              id: ID
+              localized(locale: String!): String @resolver(result: "ok")
+            }
+            """.trimIndent(),
+        )
+    }
+
+    @Test
     fun `rejects variable below parent selected through abstract coordinate`() {
         assertFailsWith<IllegalArgumentException> {
             TestWorld.fromSDL(

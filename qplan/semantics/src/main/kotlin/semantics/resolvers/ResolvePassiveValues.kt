@@ -19,6 +19,7 @@ import semantics.shared.applicableGroundSelections
 import model.invariants.conformsToOutputSchemaType
 import model.schemaType
 import model.requireField
+import model.isParentField
 import model.selectionForestOf
 import model.toEngineResult
 import semantics.shared.OperationContext
@@ -39,6 +40,42 @@ internal class PassiveObjectOccurrence(
     val selections: SelectionForest,
     val target: ObjectEngineResult,
 )
+
+/** Installs every selected parent field as a reference to [parent] and returns its selections. */
+context(operation: OperationContext)
+internal fun ObjectEngineResult.installParentBackedges(
+    selections: ObjectSelectionForest,
+    parent: PassiveObjectOccurrence?,
+    path: List<PathComponent>,
+): List<model.ObjectSelection> =
+    selections.byGroundKey().mapNotNull { (key, selection) ->
+        if (key !is ObjectEngineResult.ParentKey) return@mapNotNull null
+        val containingParent =
+            parent ?: error("Parent field ${key.field.name} has no containing object occurrence")
+        val producer =
+            path
+                .filterIsInstance<ObjectEngineResult.ObjectKey>()
+                .lastOrNull()
+                ?.field
+        require(
+            operation.world.parentFieldRelations[key.field] == producer,
+        ) {
+            "Parent field ${key.field.name} is not inverse to its containing producer occurrence"
+        }
+        val cell =
+            if (isCellSet(key)) {
+                getCell(key)
+            } else {
+                reserveCell(key).also { parentCell ->
+                    parentCell.setValue(containingParent.target)
+                    parentCell.setAccessResult(true)
+                }
+            }
+        check(cell.getValue().get() === containingParent.target) {
+            "Parent field ${key.field.name} does not reference its containing object occurrence"
+        }
+        selection
+    }
 
 /**
  * Eagerly materializes every argumentless field present in this output.
@@ -109,7 +146,10 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
     if (operation.selectiveResolvers) {
         val selectedFieldNames =
             invocationDemandByKey.keys.mapTo(linkedSetOf()) { key -> key.field.name }
-        val unselectedKeys = getSelections().toSet() - selectedFieldNames
+        val unselectedKeys =
+            getSelections()
+                .filterNot { fieldName -> schemaType.requireField(fieldName).isParentField() }
+                .toSet() - selectedFieldNames
         require(unselectedKeys.isEmpty()) {
             "Selective resolver output ${schemaType.name} contains unselected fields: " +
                 unselectedKeys.joinToString()
@@ -118,8 +158,9 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
 
     val selectedKeys =
         getSelections()
-            .map { fieldName ->
+            .mapNotNull { fieldName ->
                 val field = schemaType.requireField(fieldName)
+                if (field.isParentField()) return@mapNotNull null
                 require(field.args.isEmpty()) {
                     "Passive object field ${schemaType.name}/$fieldName must be argumentless"
                 }
@@ -187,7 +228,7 @@ private fun EngineObjectData.Sync.hasUnresolvedDemand(
         .applicableGroundSelections(schemaType)
         .byGroundKey()
         .any { (key, selection) ->
-            if (!isPresent(key.field.name)) {
+            if (key is ObjectEngineResult.ParentKey || !isPresent(key.field.name)) {
                 true
             } else {
                 require(key.field.args.isEmpty()) {
@@ -208,7 +249,7 @@ internal fun EngineObjectData.Sync.materializedChildOccurrences(
     resolved: ObjectEngineResult,
 ): List<PassiveObjectOccurrence> =
     selections.byGroundKey().flatMap { (key, selection) ->
-        if (!isPresent(key.field.name)) {
+        if (key is ObjectEngineResult.ParentKey || !isPresent(key.field.name)) {
             emptyList()
         } else {
             require(key.field.args.isEmpty()) {

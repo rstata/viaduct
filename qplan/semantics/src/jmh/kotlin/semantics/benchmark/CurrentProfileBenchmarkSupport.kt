@@ -333,7 +333,17 @@ internal class CurrentProfileBenchmarkSupport(
             is ObjectEngineResult ->
                 keys
                     .map { key ->
-                        val child = getCell(key).getValue().get().shape(depth + 1)
+                        val child =
+                            if (key is ObjectEngineResult.ParentKey) {
+                                ResultShape(
+                                    fields = 0,
+                                    activeFields = 0,
+                                    passiveFields = 0,
+                                    depth = depth + 1,
+                                )
+                            } else {
+                                getCell(key).getValue().get().shape(depth + 1)
+                            }
                         child.copy(
                             fields = child.fields + 1,
                             activeFields =

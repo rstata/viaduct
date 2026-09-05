@@ -6,10 +6,13 @@ import model.ObjectEngineResult
 import model.Selection
 import model.SelectionForest
 import model.flatMapToSelectionForest
+import model.merge
 import model.objectKey
 import model.requireField
 import model.selectionForestOf
+import model.toSelectionForest
 import model.substituteTemplates
+import viaduct.graphql.schema.ViaductSchema
 import model.registry.FieldResolver
 import model.registry.VariableDefinition
 import semantics.shared.instantiateBindings
@@ -18,6 +21,10 @@ import semantics.shared.OperationContext
 /** Extends this demand with every encountered successor resolver's transitive input demand. */
 context(operation: OperationContext)
 fun SelectionForest.successorDemand(): SelectionForest =
+    successorDemandWithoutParentLifting().liftParentDemand()
+
+context(operation: OperationContext)
+private fun SelectionForest.successorDemandWithoutParentLifting(): SelectionForest =
     flatMap { selection ->
         val nestedDemand = selection.subselections.successorDemand()
         val rootedSelection =
@@ -53,6 +60,10 @@ fun SelectionForest.successorDemand(): SelectionForest =
 /** Extends this demand with the paths needed to find every successor resolver boundary. */
 context(operation: OperationContext)
 fun SelectionForest.successorBoundaryDemand(): SelectionForest =
+    successorBoundaryDemandWithoutParentLifting().liftParentDemand()
+
+context(operation: OperationContext)
+private fun SelectionForest.successorBoundaryDemandWithoutParentLifting(): SelectionForest =
     flatMap { selection ->
         val requested =
             Selection.of(
@@ -62,6 +73,46 @@ fun SelectionForest.successorBoundaryDemand(): SelectionForest =
             )
 
         selectionForestOf(requested) + selection.successorInputBoundaries()
+    }
+
+/**
+ * Lifts demand selected through a child's `@parent` field to the containing parent occurrence.
+ *
+ * The transform is bottom-up, so `parent { parent { x } }` crosses one producer boundary per
+ * recursive level. Parent selections remain in place for materialization; their subselections are
+ * additionally demanded at the ancestor that owns the referenced OER.
+ */
+context(operation: OperationContext)
+internal fun SelectionForest.liftParentDemand(): SelectionForest =
+    flatMap { selection ->
+        val nestedDemand = selection.subselections.liftParentDemand()
+        val requested =
+            Selection.of(
+                key = selection.key,
+                possibleTypes = selection.possibleTypes,
+                subselections = nestedDemand,
+            )
+        val lifted =
+            selection.possibleTypes.flatMapToSelectionForest { possibleType ->
+                val producer = possibleType.requireField(selection.key.field.name)
+                val childType = producer.type.baseTypeDef as? ViaductSchema.Object
+                    ?: return@flatMapToSelectionForest selectionForestOf()
+                nestedDemand
+                    .merge(childType)
+                    .byKey()
+                    .values
+                    .filter { childSelection ->
+                        val parentKey = childSelection.key as? ObjectEngineResult.ParentKey
+                        parentKey != null &&
+                            operation.world.parentFieldRelations[parentKey.field] == producer
+                    }
+                    .map { parentSelection -> parentSelection.subselections }
+                    .flatMap { parentSelections ->
+                        buildList { parentSelections.forEach(::add) }
+                    }
+                    .toSelectionForest()
+            }
+        selectionForestOf(requested) + lifted
     }
 
 context(operation: OperationContext)

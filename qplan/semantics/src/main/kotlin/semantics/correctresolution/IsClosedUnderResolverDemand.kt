@@ -15,6 +15,7 @@ import model.schemaType
 import model.usedVariables
 import viaduct.engine.api.EngineObjectData
 import semantics.shared.OperationContext
+import viaduct.graphql.schema.ViaductSchema
 
 /**
  * Whether every standard registered resolver activated by this result has its required input.
@@ -38,6 +39,8 @@ internal fun ObjectEngineResult.isClosedUnderResolverDemand(
         objectIsClosedUnderResolverDemand(
             path = emptyList(),
             source = null,
+            structuralParent = null,
+            producerField = null,
         )
     }
 
@@ -48,6 +51,8 @@ context(
 private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
     path: List<PathComponent>,
     source: EngineObjectData.Sync?,
+    structuralParent: ObjectEngineResult?,
+    producerField: ViaductSchema.ObjectField?,
 ): Boolean {
     val registry = operation.resolverRegistry
 
@@ -61,6 +66,9 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
         source.requireArgumentlessField(key)
         val fieldResolverDemandIsClosed =
             when {
+                key is ObjectEngineResult.ParentKey ->
+                    value === structuralParent &&
+                        operation.world.parentFieldRelations[key.field] == producerField
                 argumentsContainError -> true
                 sourceSuppliesField ->
                     (arguments as? Arguments.Resolved)
@@ -110,21 +118,30 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
 
         fieldResolverDemandIsClosed &&
             when {
+                key is ObjectEngineResult.ParentKey -> true
                 argumentsContainError -> true
                 sourceSuppliesField ->
                     value.engineResultIsClosedUnderResolverDemand(
                         path = path + key,
                         source = source.outputValue(fieldName),
+                        structuralParent = this,
+                        producerField = key.field,
                     )
                 key.field in registry ->
                     reapplyResolver(key, path)?.let { application ->
                         value.engineResultIsClosedUnderResolverDemand(
                             path = path + key,
                             source = application.output,
+                            structuralParent = this,
+                            producerField = key.field,
                         )
                     } == true
                 source == null ->
-                    value.engineResultIsClosedUnderResolverDemand(path + key)
+                    value.engineResultIsClosedUnderResolverDemand(
+                        path = path + key,
+                        structuralParent = this,
+                        producerField = key.field,
+                    )
                 else -> false
             }
     }
@@ -137,6 +154,8 @@ context(
 private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
     path: List<PathComponent>,
     source: EngineOutputData?,
+    structuralParent: ObjectEngineResult,
+    producerField: ViaductSchema.ObjectField,
 ): Boolean =
     when (this) {
         null,
@@ -146,7 +165,12 @@ private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
         is ObjectEngineResult ->
             source is EngineObjectData.Sync &&
                 type == source.schemaType &&
-                objectIsClosedUnderResolverDemand(path, source)
+                objectIsClosedUnderResolverDemand(
+                    path = path,
+                    source = source,
+                    structuralParent = structuralParent,
+                    producerField = producerField,
+                )
         is ListEngineResult ->
             source is List<*> &&
                 size == source.size &&
@@ -154,6 +178,8 @@ private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
                     get(index).getValue().get().engineResultIsClosedUnderResolverDemand(
                         path = path + ListEngineResult.Index.of(index),
                         source = source[index],
+                        structuralParent = structuralParent,
+                        producerField = producerField,
                     )
                 }
         else -> true
@@ -165,6 +191,8 @@ context(
 )
 private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
     path: List<PathComponent>,
+    structuralParent: ObjectEngineResult,
+    producerField: ViaductSchema.ObjectField,
 ): Boolean =
     when (this) {
         null,
@@ -175,11 +203,15 @@ private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
             objectIsClosedUnderResolverDemand(
                 path = path,
                 source = null,
+                structuralParent = structuralParent,
+                producerField = producerField,
             )
         is ListEngineResult ->
             indices.all { index ->
                 get(index).getValue().get().engineResultIsClosedUnderResolverDemand(
-                    path + ListEngineResult.Index.of(index),
+                    path = path + ListEngineResult.Index.of(index),
+                    structuralParent = structuralParent,
+                    producerField = producerField,
                 )
             }
         else -> true

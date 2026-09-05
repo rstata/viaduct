@@ -110,6 +110,7 @@ internal class FieldResolverTask(
                     path = coordinate,
                     invocationDemand = invocationDemand,
                     constructionDemand = constructionDemand,
+                    parent = occurrence,
                 )
 
             cell.getValue().complete(passiveValue)

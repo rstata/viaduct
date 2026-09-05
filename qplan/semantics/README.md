@@ -21,9 +21,11 @@ A type with the suffix **Observer** is semantically passive instrumentation. Rep
 
 Resolver classes use `init` blocks only for constructor preconditions and object invariants. Property initializers and explicit lifecycle methods perform initialization and operational transitions; an `init` block must not enqueue work, publish state, or otherwise start the resolution lifecycle.
 
-An **OER** is an `ObjectEngineResult`, always associated with one concrete GraphQL object type. An **LER** is a `ListEngineResult`, whose element cells preserve exact list positions. "OER tree" is convenient shorthand for the complete engine-result tree because active resolver work occurs at object occurrences; list containers and pre-domain scalar values remain explicit parts of the physical result.
+An **OER** is an `ObjectEngineResult`, always associated with one concrete GraphQL object type. An **LER** is a `ListEngineResult`, whose element cells preserve exact list positions. The ordinary object-field and list-element containment edges form a well-founded structural tree. A demanded `@parent` field adds the sole distinguished backedge: its `ParentKey` cell references the actual immediate ancestor OER. Structural traversals and occurrence paths exclude parent backedges; finite selection-driven materialization may follow them.
 
 When discussing relationships among OER occurrences, a list is treated as a one-to-many path edge. The object containing a list field is therefore the parent of each object element for resolver-ancestry purposes, while each `ListEngineResult.Index` remains part of the element's exact identity.
+
+A schema-derived map validates each argument-free, singular composite `@parent` field and associates it with its unique compatible argument-free producer field. Producer output may contain the child directly or through any finite list nesting. This relation supports demand lifting from a child occurrence to the producer's containing ancestor.
 
 An **active field** has a standard registered field resolver. At a particular output occurrence, an argumentless active field is dynamically passive when the resolver that owns an ancestor output region supplies it; otherwise its standard resolver owns it. Fields with arguments are always active and may never be supplied passively. A resolver's **fringe** is the set of produced object occurrences whose selected fields require further active resolution.
 
@@ -47,6 +49,10 @@ Model fixture preparation accepts resolver selection documents that retain named
 
 Resolver26 is the self-contained advanced resolver with runtime from-field bindings. It supports both `FromObjectField` and `FromQueryField`; its current protocol is documented in [`resolver26/design.md`](./src/main/kotlin/semantics/resolver26/design.md).
 
+Resolver22/23 and Resolver26 resolve `@parent` selections. Each installs the child's parent cell with the containing ancestor OER itself, including for list and nested-list child occurrences. Resolver input fragments may not use variables beneath a parent selection. Demand on `parent { ... }` is lifted one ancestor at a time, so repeated static closure handles grandparents. Resolver26 transposes parent demand into selective producer output through successor demand and independently adds parent-induced ancestor work through input-demand closure.
+
+Resolver01-03 and Resolver06-08 reject `@parent` demand. Their depth-first progression orders sibling resolver keys within one OER, but parent-induced work can require leaving a descendant for an ancestor and re-entering that same still-open descendant before either resolver can complete. Supporting that graph re-entry would require occurrence-aware suspension or orchestration beyond their intentionally small execution models. [`examples.md`](../examples.md#why-the-depth-first-resolvers-do-not-support-parent) demonstrates the ordering problem.
+
 ## Variable Production And Consumption
 
 A variable recipe determines where one resolver-occurrence binding is produced. Independently, every occurrence of that variable in the resolver's object fragment or Query fragment is a consumer of the same binding. The fragment that consumes a variable does not determine or change its source, and a binding may be consumed by either fragment or by both.
@@ -62,6 +68,10 @@ Producer/consumer legality is distinct from current implementation support. `Fro
 ## Publication
 
 OER construction is monotonic. Active cells have one writer, parent values may publish stable child OERs before those children complete, and each algorithm must install or reserve discoverable child work before a reader can depend on it.
+
+Resolver-visible `EngineObjectData` does not retain OER identity. Materializing a parent selection follows the selected parent backedge and constructs a fresh finite EOD projection; the resulting object is not reference-equal to an EOD previously used to construct or materialize that ancestor. Parent backedges therefore do not enter the EOD carrier.
+
+Sometimes-passive active fields make transitive parent demand conservative: a grandchild field that ultimately remains passive can still lift `parent.parent` demand and resolve or materialize unused ancestor fields. This marginal speculative work is an accepted precision tradeoff for keeping closure monotonic and independent of the later dynamic ownership decision.
 
 ## Testing And Benchmarks
 

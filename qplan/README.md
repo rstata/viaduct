@@ -16,7 +16,7 @@ The longer-term `viaduct.engine.runtime.execution2` goal is query execution only
 - [`resolver-versions.md`](./resolver-versions.md) explains why every maintained resolver exists and how earlier versions help simplify or debug Resolver26 work.
 - [`context-params.md`](./context-params.md) defines the canonical `Assumptions` context-parameter conventions used by model and semantics APIs.
 - [`viaduct-execution.md`](./viaduct-execution.md) describes the idealized source-world execution model that qplan represents.
-- [`examples.md`](./examples.md) gives complete GraphQL examples of demand closure and output projection.
+- [`examples.md`](./examples.md) gives complete GraphQL examples of demand closure, output projection, and the cross-occurrence ordering that prevents the depth-first resolvers from supporting `@parent`.
 - [`resolver-test-dsl.md`](./resolver-test-dsl.md) defines the schema-embedded deterministic resolver-world DSL.
 - [`execution/README.md`](./execution/README.md) describes GraphQL execution, executor-backed feature tests, current limitations, and the next integration slices.
 - [`from-object-field-census.md`](./from-object-field-census.md) preserves a dated production-shape census used to choose representative provider-path fixtures.

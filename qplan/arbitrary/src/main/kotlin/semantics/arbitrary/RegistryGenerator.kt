@@ -84,6 +84,7 @@ data class RegistryFeatures(
     val maximumFromQueryFieldPathLength: Int = 0,
     val maximumFromQueryFieldVariableUseDepth: Int = 0,
     val maximumParentSelectionDepth: Int = 0,
+    val resolverOutputParentFieldCount: Int = 0,
 )
 
 /**
@@ -842,6 +843,9 @@ private class RegistryGenerator(
                         queryFieldFeatures.maximumVariableUseDepth,
                     maximumParentSelectionDepth =
                         parentDemandOwnerFields.values.maxOrNull() ?: 0,
+                    resolverOutputParentFieldCount =
+                        (fieldValues.values + nodeValues.values)
+                            .sumOf { value -> value.parentFieldCount() },
                 ),
         )
     }
@@ -2135,7 +2139,6 @@ private class RegistryGenerator(
                 if (!isNodeBoundary) {
                     type.fields
                         .filter { it.arguments.isEmpty() }
-                        .filterNot(FieldDefinitionSpec::isParentField)
                         .filter { it.coordinate !in fieldSites }
                         .forEach { field ->
                             put(
@@ -2167,6 +2170,20 @@ private class RegistryGenerator(
             }
         return ScalarPlan(scalar, value)
     }
+
+    private fun ValuePlan.parentFieldCount(): Int =
+        when (this) {
+            is ListPlan -> elements.sumOf { element -> element.parentFieldCount() }
+            is ObjectPlan ->
+                fields.entries.sumOf { (coordinate, value) ->
+                    val outputField =
+                        schema.fieldsOn(typeName).singleOrNull { candidate ->
+                            candidate.name == coordinate.fieldName
+                        }
+                    value.parentFieldCount() + if (outputField?.isParentField == true) 1 else 0
+                }
+            else -> 0
+        }
 
     private fun field(coordinate: FieldCoordinate): FieldDefinitionSpec =
         schema

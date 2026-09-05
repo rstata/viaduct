@@ -12,6 +12,7 @@ import model.ObjectSelectionForest
 import model.PathComponent
 import model.SelectionForest
 import model.invariants.conformsToOutputSchemaType
+import model.isParentField
 import model.merge
 import model.outputType
 import model.outputValue
@@ -105,7 +106,7 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
     return target
 }
 
-// Copies every passive field returned by the resolver and orchestrates its value recursively.
+// Copies resolver-returned passive fields except engine-provided parent backedges.
 context(operation: Resolver26OperationContext)
 private fun EngineObjectData.Sync.materializePassiveFields(
     occurrence: OEROccurrenceContext,
@@ -127,6 +128,7 @@ private fun EngineObjectData.Sync.materializePassiveFields(
     val closedDemandByKey = closedDemand.byKey()
     getSelections().forEach { fieldName ->
         val field = schemaType.requireField(fieldName)
+        if (field.isParentField()) return@forEach
         require(field.args.isEmpty()) {
             "Resolver output must not supply argument-bearing field " +
                 "${schemaType.name}/$fieldName"

@@ -100,9 +100,15 @@ class GeneratorTest {
                 GENERATED_PARENT_GREAT_GRANDCHILD_TYPE,
                 GENERATED_PARENT_RESULT_FIELD,
             )
+        val greatGrandchildProducer =
+            FieldCoordinate(
+                GENERATED_PARENT_GRANDCHILD_TYPE,
+                GENERATED_PARENT_CHILD_FIELD,
+            )
 
         assertEquals(3, schema.features.maximumParentChainDepth)
         assertEquals(3, registry.features.maximumParentSelectionDepth)
+        assertTrue(registry.features.resolverOutputParentFieldCount > 0)
         assertEquals(3, registry.parentDemandOwnerFields.getValue(resultOwner))
         assertTrue(
             registry.objectFragmentSources.getValue(resultOwner).contains(
@@ -110,6 +116,10 @@ class GeneratorTest {
             ),
         )
         assertFalse(registry.objectFragmentSources.getValue(resultOwner).contains('$'))
+        assertTrue(
+            "parent.parent.parent" in
+                registry.outputSelectionSets.getValue(greatGrandchildProducer.toString()),
+        )
         assertTrue(query.source.contains(GENERATED_PARENT_RESULT_FIELD))
         registry.world(schema)
     }

@@ -57,7 +57,7 @@ class ResolverApplicationObserverTest {
         }
 
         assertEquals(3, observed.size)
-        assertTrue(observed[0]?.isEmpty() == true)
+        assertTrue(observed[0]!!.isEmpty())
         assertSame(suppliedDemand, observed[1])
         assertNull(observed[2])
     }

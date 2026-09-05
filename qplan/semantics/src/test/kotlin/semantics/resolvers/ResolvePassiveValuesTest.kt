@@ -499,7 +499,6 @@ class ResolvePassiveValuesTest {
                 callbackPaths += passiveObjectOccurrence.path
                 passiveObjectOccurrence.target.reserveCell(computedKey).also { cell ->
                     cell.setValue(1)
-                    cell.setAccessResult(true)
                 }
             }
 

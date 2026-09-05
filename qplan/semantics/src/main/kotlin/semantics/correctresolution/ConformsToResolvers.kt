@@ -127,7 +127,7 @@ internal fun FieldResolver.fragmentsSatisfiedBy(
             arguments = arguments,
         ) &&
             constructionSelections.usedVariables().all { variable ->
-                variable.instanceId?.let(operation.variableBindingsState::isBound) == true
+                operation.variableBindingsState.isBound(variable.instanceId!!)
             } &&
             context(operation.world) {
                 result.conformsToSelectionsAt(

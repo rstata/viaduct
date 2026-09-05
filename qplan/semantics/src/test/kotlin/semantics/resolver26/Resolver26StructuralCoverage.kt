@@ -26,6 +26,7 @@ internal enum class Resolver26StructuralSignature {
     ERROR_PROVIDER_INTERMEDIATE,
     MULTIPLE_OBJECT_PATH_OWNERS,
     OBJECT_PATH_OWNER_DEPENDENCY,
+    GREAT_GRANDPARENT_PARENT_DEMAND,
 }
 
 // Classifies one completed case without consulting Resolver26's scheduler or private runtime state.
@@ -134,6 +135,9 @@ internal fun resolver26StructuralSignatures(
         }
     ) {
         signatures += Resolver26StructuralSignature.OBJECT_PATH_OWNER_DEPENDENCY
+    }
+    if (registry.features.maximumParentSelectionDepth >= 3) {
+        signatures += Resolver26StructuralSignature.GREAT_GRANDPARENT_PARENT_DEMAND
     }
     return signatures
 }

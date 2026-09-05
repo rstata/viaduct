@@ -2,6 +2,7 @@ package semantics.arbitrary
 
 import graphql.language.AstPrinter
 import graphql.language.Document
+import graphql.language.Directive
 import graphql.language.FieldDefinition
 import graphql.language.InputObjectTypeDefinition
 import graphql.language.InputValueDefinition
@@ -25,6 +26,17 @@ import java.math.BigInteger
 internal const val GENERATED_HASH_TYPE = "Hash"
 internal const val GENERATED_HASH_FIELD = "hash"
 internal const val GENERATED_HASH_NESTED_FIELD = "nested"
+internal const val GENERATED_PARENT_ROOT_TYPE = "GeneratedParentRoot"
+internal const val GENERATED_PARENT_CHILD_TYPE = "GeneratedParentChild"
+internal const val GENERATED_PARENT_GRANDCHILD_TYPE = "GeneratedParentGrandchild"
+internal const val GENERATED_PARENT_GREAT_GRANDCHILD_TYPE = "GeneratedParentGreatGrandchild"
+internal const val GENERATED_PARENT_ROOT_FIELD = "generatedParentRoot"
+internal const val GENERATED_PARENT_CHILD_FIELD = "child"
+internal const val GENERATED_PARENT_FIELD = "parent"
+internal const val GENERATED_PARENT_VALUE_FIELD = "ancestorValue"
+internal const val GENERATED_PARENT_RESULT_FIELD = "result"
+internal const val GENERATED_RANDOM_PARENT_TYPE_PREFIX = "GeneratedRandomParent"
+internal const val GENERATED_SOMETIMES_PASSIVE_PARENT_FIELD = "value1"
 
 class ArbitrarySchema internal constructor(
     val sdl: String,
@@ -44,7 +56,7 @@ class ArbitrarySchema internal constructor(
     val sourceFieldCoordinates: Set<FieldCoordinate> =
         (listOf(query) + objects)
             .flatMap(ObjectDefinition::fields)
-            .filterNot(FieldDefinitionSpec::isGeneratedHashField)
+            .filterNot { field -> field.isGeneratedHashField() || field.isParentField }
             .mapTo(linkedSetOf(), FieldDefinitionSpec::coordinate)
 
     /** User-domain fields by non-Query object type, excluding generated hash fields. */
@@ -52,7 +64,7 @@ class ArbitrarySchema internal constructor(
         objects.associate { objectType ->
             objectType.name to
                 objectType.fields
-                    .filterNot(FieldDefinitionSpec::isGeneratedHashField)
+                    .filterNot { field -> field.isGeneratedHashField() || field.isParentField }
                     .mapTo(linkedSetOf(), FieldDefinitionSpec::coordinate)
         }
 
@@ -99,6 +111,10 @@ data class SchemaFeatures(
     val hasImplementationArgumentDefaults: Boolean,
     val hasInterfaces: Boolean,
     val hasUnions: Boolean,
+    val maximumParentChainDepth: Int,
+    val randomParentFieldCount: Int,
+    val randomParentListProducerCount: Int,
+    val randomParentAbstractTargetCount: Int,
 )
 
 internal data class ObjectDefinition(
@@ -119,11 +135,21 @@ internal data class UnionDefinitionSpec(
     val members: Set<String>,
 )
 
+private data class RandomParentGraph(
+    val objects: List<ObjectDefinition> = emptyList(),
+    val queryFields: List<FieldDefinitionSpec> = emptyList(),
+    val unions: List<UnionDefinitionSpec> = emptyList(),
+    val maximumChainDepth: Int = 0,
+    val listProducerCount: Int = 0,
+    val abstractTargetCount: Int = 0,
+)
+
 internal data class FieldDefinitionSpec(
     val ownerName: String,
     val name: String,
     val type: OutputTypeSpec,
     val arguments: List<ArgumentDefinitionSpec>,
+    val isParentField: Boolean = false,
 ) {
     val coordinate: FieldCoordinate
         get() = FieldCoordinate(ownerName, name)
@@ -135,6 +161,10 @@ data class FieldCoordinate(
 ) {
     override fun toString(): String = "$typeName/$fieldName"
 }
+
+fun FieldCoordinate.isGeneratedRandomParentField(): Boolean =
+    typeName.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX) &&
+        fieldName == GENERATED_PARENT_FIELD
 
 internal data class ArgumentDefinitionSpec(
     val name: String,
@@ -232,6 +262,9 @@ private class SchemaGenerator(
         }
         require(minimumDepth <= config[SchemaObjectCount].last) {
             "Schema object count must permit the minimum selection depth"
+        }
+        require(!config[RandomParentFieldsEnabled] || config[ParentFieldsEnabled]) {
+            "Random parent fields require parent fields to be enabled"
         }
         val objectCountRange =
             maxOf(config[SchemaObjectCount].first, minimumDepth)..config[SchemaObjectCount].last
@@ -365,14 +398,23 @@ private class SchemaGenerator(
             } else {
                 null
             }
+        val ordinaryObjects =
+            domainObjects.withAbstractOutputTargets(
+                interfaces = listOfNotNull(generatedInterface),
+                unions = listOfNotNull(generatedUnion),
+            )
+        val parentObjects = if (config[ParentFieldsEnabled]) parentObjects() else emptyList()
+        val randomParentGraph =
+            randomParentGraph(
+                alternativeParentTypeNames = ordinaryObjects.map(ObjectDefinition::name),
+                inputObjectNames = inputObjects.map(InputObjectDefinitionSpec::name),
+            )
         val objects =
-            domainObjects
-                .withAbstractOutputTargets(
-                    interfaces = listOfNotNull(generatedInterface),
-                    unions = listOfNotNull(generatedUnion),
-                ).map { objectType ->
-                    objectType.copy(fields = objectType.fields + generatedHashField(objectType.name))
-                }
+            (
+                ordinaryObjects + parentObjects + randomParentGraph.objects
+            ).map { objectType ->
+                objectType.copy(fields = objectType.fields + generatedHashField(objectType.name))
+            }
         val interfaces =
             buildList {
                 if (nodeNames.isNotEmpty()) {
@@ -400,11 +442,11 @@ private class SchemaGenerator(
                 }
                 generatedInterface?.let(::add)
             }
-        val unions = listOfNotNull(generatedUnion)
+        val unions = listOfNotNull(generatedUnion) + randomParentGraph.unions
         val queryTargets =
             objectNames +
                 interfaces.map(InterfaceDefinitionSpec::name) +
-                unions.map(UnionDefinitionSpec::name)
+                listOfNotNull(generatedUnion).map(UnionDefinitionSpec::name)
         val queryFieldCount = Arb.int(config[QueryFieldCount]).next(random)
         val generatedQueryFields =
             (0 until queryFieldCount).map { index ->
@@ -426,7 +468,9 @@ private class SchemaGenerator(
                 implementsNode = false,
                 interfaces = emptySet(),
                 fields =
-                    if (minimumDepth > 0) {
+                    randomParentGraph.queryFields +
+                        parentRootField() +
+                        if (minimumDepth > 0) {
                         listOf(deepField("Query", objectNames.first(), "query0")) +
                             generatedQueryFields.drop(1)
                     } else {
@@ -443,14 +487,22 @@ private class SchemaGenerator(
                 add(objectType(query))
             }
         val sdl =
-            AstPrinter.printAst(
-                Document.newDocument().definitions(definitions).build(),
-            ).trim()
+            (if (config[ParentFieldsEnabled]) "directive @parent on FIELD_DEFINITION\n\n" else "") +
+                AstPrinter.printAst(
+                    Document.newDocument().definitions(definitions).build(),
+                ).trim()
         val deepFields =
             buildMap {
-                if (minimumDepth > 0) put("Query", "query0")
-                (0 until minimumDepth - 1).forEach { index ->
-                    put(objectNames[index], "field0")
+                if (config[ParentFieldsEnabled]) {
+                    put("Query", GENERATED_PARENT_ROOT_FIELD)
+                    put(GENERATED_PARENT_ROOT_TYPE, GENERATED_PARENT_CHILD_FIELD)
+                    put(GENERATED_PARENT_CHILD_TYPE, GENERATED_PARENT_CHILD_FIELD)
+                    put(GENERATED_PARENT_GRANDCHILD_TYPE, GENERATED_PARENT_CHILD_FIELD)
+                } else {
+                    if (minimumDepth > 0) put("Query", "query0")
+                    (0 until minimumDepth - 1).forEach { index ->
+                        put(objectNames[index], "field0")
+                    }
                 }
             }
         val features =
@@ -460,6 +512,7 @@ private class SchemaGenerator(
                 interfaces = interfaces,
                 unions = unions,
                 inputObjects = inputObjects,
+                randomParentGraph = randomParentGraph,
             )
         return ArbitrarySchema(
             sdl = sdl,
@@ -486,6 +539,293 @@ private class SchemaGenerator(
                     elementNullable = false,
                 ),
             arguments = emptyList(),
+        )
+
+    private fun parentRootField(): List<FieldDefinitionSpec> =
+        if (config[ParentFieldsEnabled]) {
+            listOf(
+                FieldDefinitionSpec(
+                    ownerName = "Query",
+                    name = GENERATED_PARENT_ROOT_FIELD,
+                    type = objectOutputType(GENERATED_PARENT_ROOT_TYPE),
+                    arguments = emptyList(),
+                ),
+            )
+        } else {
+            emptyList()
+        }
+
+    private fun parentObjects(): List<ObjectDefinition> {
+        fun parentField(ownerName: String, parentType: String): FieldDefinitionSpec =
+            FieldDefinitionSpec(
+                ownerName = ownerName,
+                name = GENERATED_PARENT_FIELD,
+                type = objectOutputType(parentType),
+                arguments = emptyList(),
+                isParentField = true,
+            )
+
+        fun childField(ownerName: String, childType: String): FieldDefinitionSpec =
+            FieldDefinitionSpec(
+                ownerName = ownerName,
+                name = GENERATED_PARENT_CHILD_FIELD,
+                type = objectOutputType(childType),
+                arguments = emptyList(),
+            )
+
+        fun scalarField(ownerName: String, name: String): FieldDefinitionSpec =
+            FieldDefinitionSpec(
+                ownerName = ownerName,
+                name = name,
+                type =
+                    OutputTypeSpec(
+                        namedType = "Int",
+                        nullable = false,
+                        list = false,
+                        elementNullable = false,
+                    ),
+                arguments = emptyList(),
+            )
+
+        return listOf(
+            ObjectDefinition(
+                name = GENERATED_PARENT_ROOT_TYPE,
+                implementsNode = false,
+                interfaces = emptySet(),
+                fields =
+                    listOf(
+                        childField(GENERATED_PARENT_ROOT_TYPE, GENERATED_PARENT_CHILD_TYPE),
+                        scalarField(GENERATED_PARENT_ROOT_TYPE, GENERATED_PARENT_VALUE_FIELD),
+                    ),
+            ),
+            ObjectDefinition(
+                name = GENERATED_PARENT_CHILD_TYPE,
+                implementsNode = false,
+                interfaces = emptySet(),
+                fields =
+                    listOf(
+                        parentField(GENERATED_PARENT_CHILD_TYPE, GENERATED_PARENT_ROOT_TYPE),
+                        childField(
+                            GENERATED_PARENT_CHILD_TYPE,
+                            GENERATED_PARENT_GRANDCHILD_TYPE,
+                        ),
+                    ),
+            ),
+            ObjectDefinition(
+                name = GENERATED_PARENT_GRANDCHILD_TYPE,
+                implementsNode = false,
+                interfaces = emptySet(),
+                fields =
+                    listOf(
+                        parentField(
+                            GENERATED_PARENT_GRANDCHILD_TYPE,
+                            GENERATED_PARENT_CHILD_TYPE,
+                        ),
+                        childField(
+                            GENERATED_PARENT_GRANDCHILD_TYPE,
+                            GENERATED_PARENT_GREAT_GRANDCHILD_TYPE,
+                        ),
+                    ),
+            ),
+            ObjectDefinition(
+                name = GENERATED_PARENT_GREAT_GRANDCHILD_TYPE,
+                implementsNode = false,
+                interfaces = emptySet(),
+                fields =
+                    listOf(
+                        parentField(
+                            GENERATED_PARENT_GREAT_GRANDCHILD_TYPE,
+                            GENERATED_PARENT_GRANDCHILD_TYPE,
+                        ),
+                        scalarField(
+                            GENERATED_PARENT_GREAT_GRANDCHILD_TYPE,
+                            GENERATED_PARENT_RESULT_FIELD,
+                        ),
+                    ),
+            ),
+        )
+    }
+
+    private fun randomParentGraph(
+        alternativeParentTypeNames: List<String>,
+        inputObjectNames: List<String>,
+    ): RandomParentGraph {
+        if (!config[RandomParentFieldsEnabled]) return RandomParentGraph()
+
+        val fieldsByObject = linkedMapOf<String, MutableList<FieldDefinitionSpec>>()
+        val queryFields = mutableListOf<FieldDefinitionSpec>()
+        val unions = mutableListOf<UnionDefinitionSpec>()
+        var maximumChainDepth = 0
+        var listProducerCount = 0
+        var abstractTargetCount = 0
+        val chainCount = Arb.int(1..3).next(random)
+
+        repeat(chainCount) { chainIndex ->
+            val chainDepth = Arb.int(1..4).next(random)
+            maximumChainDepth = maxOf(maximumChainDepth, chainDepth)
+            var parentOwner = "Query"
+
+            repeat(chainDepth) { level ->
+                val childName =
+                    "$GENERATED_RANDOM_PARENT_TYPE_PREFIX${chainIndex}Level$level"
+                val producerType = randomParentProducerType(childName)
+                if (producerType.list) listProducerCount += 1
+                val producer =
+                    FieldDefinitionSpec(
+                        ownerName = parentOwner,
+                        name = "randomParent${chainIndex}Child$level",
+                        type = producerType,
+                        arguments = emptyList(),
+                    )
+                if (parentOwner == "Query") {
+                    queryFields += producer
+                } else {
+                    fieldsByObject.getValue(parentOwner) += producer
+                }
+
+                val alternativeTargets =
+                    (alternativeParentTypeNames + fieldsByObject.keys)
+                        .filterNot { typeName -> typeName == parentOwner }
+                val useAbstractTarget =
+                    parentOwner != "Query" &&
+                        alternativeTargets.isNotEmpty() &&
+                        chance(0.4)
+                val parentTarget =
+                    if (useAbstractTarget) {
+                        abstractTargetCount += 1
+                        val unionName =
+                            "$GENERATED_RANDOM_PARENT_TYPE_PREFIX${chainIndex}Parent$level"
+                        val firstAlternative = Arb.element(alternativeTargets).next(random)
+                        val remainingAlternatives =
+                            alternativeTargets.filterNot { typeName ->
+                                typeName == firstAlternative
+                            }
+                        val alternatives =
+                            listOf(firstAlternative) +
+                                remainingAlternatives
+                                    .takeIf { candidates ->
+                                        candidates.isNotEmpty() && chance(0.5)
+                                    }?.let { candidates ->
+                                        listOf(Arb.element(candidates).next(random))
+                                    }.orEmpty()
+                        unions +=
+                            UnionDefinitionSpec(
+                                name = unionName,
+                                members = (listOf(parentOwner) + alternatives).toSet(),
+                            )
+                        unionName
+                    } else {
+                        parentOwner
+                }
+
+                val scalarFieldCount = Arb.int(2..4).next(random)
+                val sharedArgumentType = inputType(inputObjectNames)
+                fieldsByObject[childName] =
+                    buildList {
+                        add(
+                            FieldDefinitionSpec(
+                                ownerName = childName,
+                                name = GENERATED_PARENT_FIELD,
+                                type =
+                                    objectOutputType(parentTarget).copy(
+                                        nullable = chance(config[NullableTypeWeight]),
+                                    ),
+                                arguments = emptyList(),
+                                isParentField = true,
+                            ),
+                        )
+                        repeat(scalarFieldCount) { fieldIndex ->
+                            val fieldName = "value$fieldIndex"
+                            val argumentlessSometimesPassiveParentWitness =
+                                config[SometimesPassiveFieldWeight] > 0.0 &&
+                                    fieldName == GENERATED_SOMETIMES_PASSIVE_PARENT_FIELD
+                            add(
+                                FieldDefinitionSpec(
+                                    ownerName = childName,
+                                    name = fieldName,
+                                    type =
+                                        OutputTypeSpec(
+                                            namedType =
+                                                Arb.element(ScalarKind.entries)
+                                                    .next(random)
+                                                    .graphQLName,
+                                            nullable = chance(config[NullableTypeWeight]),
+                                            list = false,
+                                            elementNullable = false,
+                                        ),
+                                    arguments =
+                                        if (
+                                            config[ArgumentsEnabled] &&
+                                            !argumentlessSometimesPassiveParentWitness &&
+                                            (
+                                                fieldIndex == 0 ||
+                                                    chance(config[FieldArgumentWeight])
+                                            )
+                                        ) {
+                                            listOf(
+                                                ArgumentDefinitionSpec(
+                                                    name = "arg",
+                                                    type = sharedArgumentType,
+                                                ),
+                                                ArgumentDefinitionSpec(
+                                                    name = "arg1",
+                                                    type = sharedArgumentType,
+                                                ),
+                                            )
+                                        } else {
+                                            emptyList()
+                                        },
+                                ),
+                            )
+                        }
+                    }.toMutableList()
+                parentOwner = childName
+            }
+        }
+
+        return RandomParentGraph(
+            objects =
+                fieldsByObject.map { (typeName, fields) ->
+                    ObjectDefinition(
+                        name = typeName,
+                        implementsNode = false,
+                        interfaces = emptySet(),
+                        fields = fields,
+                    )
+                },
+            queryFields = queryFields,
+            unions = unions,
+            maximumChainDepth = maximumChainDepth,
+            listProducerCount = listProducerCount,
+            abstractTargetCount = abstractTargetCount,
+        )
+    }
+
+    private fun randomParentProducerType(childName: String): OutputTypeSpec {
+        val listDepth =
+            if (config[ListsEnabled] && chance(0.5)) {
+                Arb.int(1..config[MaxOutputListDepth]).next(random)
+            } else {
+                0
+            }
+        return OutputTypeSpec(
+            namedType = childName,
+            nullable = chance(config[NullableTypeWeight]),
+            list = listDepth > 0,
+            elementNullable = listDepth > 0 && chance(config[NullableTypeWeight]),
+            nestedElementNullabilities =
+                List((listDepth - 1).coerceAtLeast(0)) {
+                    chance(config[NullableTypeWeight])
+                },
+        )
+    }
+
+    private fun objectOutputType(typeName: String): OutputTypeSpec =
+        OutputTypeSpec(
+            namedType = typeName,
+            nullable = false,
+            list = false,
+            elementNullable = false,
         )
 
     private fun deepField(
@@ -765,6 +1105,13 @@ private class SchemaGenerator(
             .newFieldDefinition()
             .name(field.name)
             .type(outputType)
+            .directives(
+                if (field.isParentField) {
+                    listOf(Directive.newDirective().name("parent").build())
+                } else {
+                    emptyList()
+                },
+            )
             .inputValueDefinitions(
                 field.arguments.map { argument ->
                     val builder =
@@ -794,6 +1141,7 @@ private class SchemaGenerator(
         interfaces: List<InterfaceDefinitionSpec>,
         unions: List<UnionDefinitionSpec>,
         inputObjects: List<InputObjectDefinitionSpec>,
+        randomParentGraph: RandomParentGraph,
     ): SchemaFeatures {
         val objectIndices = objects.mapIndexed { index, objectType -> objectType.name to index }.toMap()
         val recursiveOutputFields =
@@ -841,6 +1189,14 @@ private class SchemaGenerator(
                 },
             hasInterfaces = interfaces.isNotEmpty(),
             hasUnions = unions.isNotEmpty(),
+            maximumParentChainDepth =
+                maxOf(
+                    if (config[ParentFieldsEnabled]) 3 else 0,
+                    randomParentGraph.maximumChainDepth,
+                ),
+            randomParentFieldCount = randomParentGraph.objects.size,
+            randomParentListProducerCount = randomParentGraph.listProducerCount,
+            randomParentAbstractTargetCount = randomParentGraph.abstractTargetCount,
         )
     }
 

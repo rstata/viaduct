@@ -94,6 +94,8 @@ object ArgumentsEnabled : ConfigKey<Boolean>("argumentsEnabled", ConfigValueType
 object InputObjectsEnabled : ConfigKey<Boolean>("inputObjectsEnabled", ConfigValueType.BOOLEAN, true, { null })
 object RecursiveInputTypesEnabled : ConfigKey<Boolean>("recursiveInputTypesEnabled", ConfigValueType.BOOLEAN, true, { null })
 object RecursiveOutputEdgesEnabled : ConfigKey<Boolean>("recursiveOutputEdgesEnabled", ConfigValueType.BOOLEAN, true, { null })
+object ParentFieldsEnabled : ConfigKey<Boolean>("parentFieldsEnabled", ConfigValueType.BOOLEAN, false, { null })
+object RandomParentFieldsEnabled : ConfigKey<Boolean>("randomParentFieldsEnabled", ConfigValueType.BOOLEAN, false, { null })
 object QueryFragmentsEnabled : ConfigKey<Boolean>("queryFragmentsEnabled", ConfigValueType.BOOLEAN, true, { null })
 object ResolverQueryFragmentsEnabled : ConfigKey<Boolean>("resolverQueryFragmentsEnabled", ConfigValueType.BOOLEAN, false, { null })
 object ResolverQueryFragmentWeight : ConfigKey<Double>("resolverQueryFragmentWeight", ConfigValueType.DOUBLE, 1.0, ::weight)
@@ -170,6 +172,8 @@ internal object ConfigKeys {
             InputObjectsEnabled,
             RecursiveInputTypesEnabled,
             RecursiveOutputEdgesEnabled,
+            ParentFieldsEnabled,
+            RandomParentFieldsEnabled,
             QueryFragmentsEnabled,
             ResolverQueryFragmentsEnabled,
             ResolverQueryFragmentWeight,

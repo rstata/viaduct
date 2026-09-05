@@ -89,7 +89,7 @@
   },
   "profiles" : [ {
     "id" : "balanced",
-    "requiredCoverage" : [ "mixed-binding-sources", "object-path-variable-owner", "symbolic-resolver-instance" ],
+    "requiredCoverage" : [ "great-grandparent-parent-demand", "mixed-binding-sources", "object-path-variable-owner", "symbolic-resolver-instance" ],
     "seedOffset" : 1,
     "testInputProfiles" : {
       "large-deep" : "resolver26-balanced-large-deep",

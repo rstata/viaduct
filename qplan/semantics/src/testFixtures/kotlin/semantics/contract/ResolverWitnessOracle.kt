@@ -187,7 +187,7 @@ private fun FieldResolver.objectFragmentSatisfiedBy(
     return objectFragment.takeIf {
         val constructionSelections = objectFragment.constructionSelections
         constructionSelections.usedVariables().all { variable ->
-            variable.instanceId?.let(operation.variableBindingsState::isBound) == true
+            operation.variableBindingsState.isBound(requireNotNull(variable.instanceId))
         } &&
             result.conformsToSelectionsAt(
                 selections = constructionSelections,

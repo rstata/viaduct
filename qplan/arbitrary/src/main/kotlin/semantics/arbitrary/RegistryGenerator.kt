@@ -1286,38 +1286,36 @@ private class RegistryGenerator(
                     }
                     .mapNotNull { locatedOccurrence ->
                         val occurrence = locatedOccurrence.occurrence
-                        occurrence.target?.let { target ->
-                            val sources =
-                                resolverArguments
-                                    .flatMap(::fromArgumentSources)
-                                    .filter { source ->
-                                        target.accepts(
-                                            source.type,
-                                            config[ResolverVariableSingletonCoercionEnabled],
-                                        )
-                                    }
-                            val nestedSources =
-                                sources.filter { source -> source.inputPath.isNotEmpty() }
-                            val preferredSources =
-                                if (
-                                    nestedSources.isNotEmpty() &&
-                                    chance(config[ResolverFromArgumentNestedPathWeight])
-                                ) {
-                                    nestedSources
-                                } else {
-                                    sources
-                                }
-                            preferredSources
-                                .shuffled(random)
-                                .firstOrNull()
-                                ?.let { source ->
-                                    FromArgumentCandidate(
-                                        location = locatedOccurrence.location,
-                                        occurrence = occurrence,
-                                        source = source,
+                        val sources =
+                            resolverArguments
+                                .flatMap(::fromArgumentSources)
+                                .filter { source ->
+                                    occurrence.target.accepts(
+                                        source.type,
+                                        config[ResolverVariableSingletonCoercionEnabled],
                                     )
                                 }
-                        }
+                        val nestedSources =
+                            sources.filter { source -> source.inputPath.isNotEmpty() }
+                        val preferredSources =
+                            if (
+                                nestedSources.isNotEmpty() &&
+                                chance(config[ResolverFromArgumentNestedPathWeight])
+                            ) {
+                                nestedSources
+                            } else {
+                                sources
+                            }
+                        preferredSources
+                            .shuffled(random)
+                            .firstOrNull()
+                            ?.let { source ->
+                                FromArgumentCandidate(
+                                    location = locatedOccurrence.location,
+                                    occurrence = occurrence,
+                                    source = source,
+                                )
+                            }
                     }
             val convergenceCandidate =
                 candidates.firstOrNull { candidate ->
@@ -1352,10 +1350,10 @@ private class RegistryGenerator(
                     }
                     .shuffled(random)
                     .firstOrNull { locatedOccurrence ->
-                        locatedOccurrence.occurrence.target?.accepts(
+                        locatedOccurrence.occurrence.target.accepts(
                             candidate.source.type,
                             config[ResolverVariableSingletonCoercionEnabled],
-                        ) == true
+                        )
                     }
             val variableName = "resolverArgVar${ranks.getValue(consumer)}_$variableIndex"
             variableProviders +=
@@ -1434,7 +1432,7 @@ private class RegistryGenerator(
                     argumentName = occurrence.argument.name,
                     valuePath = occurrence.valuePath,
                     variableName = variableName,
-                    target = requireNotNull(occurrence.target),
+                    target = occurrence.target,
                 )
             } else {
                 fragment.selections.replaceArgument(
@@ -1608,17 +1606,13 @@ private class RegistryGenerator(
                         } else {
                             null
                         }
-                    occurrence.target
-                        ?.let { target ->
-                            variableProviderPaths(
-                                ownerName = providerOwnerName,
-                                target = target,
-                                consumerRank = ranks.getValue(consumer),
-                                ranks = ranks,
-                                maximumPathLength =
-                                    config[ResolverFromFieldProviderPathLength].last,
-                            )
-                        }.orEmpty()
+                    variableProviderPaths(
+                        ownerName = providerOwnerName,
+                        target = occurrence.target,
+                        consumerRank = ranks.getValue(consumer),
+                        ranks = ranks,
+                        maximumPathLength = config[ResolverFromFieldProviderPathLength].last,
+                    )
                         .filter { provider ->
                             provider.pathLength() in
                                 config[ResolverFromFieldProviderPathLength]
@@ -1683,9 +1677,10 @@ private class RegistryGenerator(
                         orderedAfterProvider &&
                             locatedOccurrence.occurrence.selectionPath.size in
                             config[ResolverFromFieldVariableUseDepth] &&
-                            locatedOccurrence.occurrence.target?.let { target ->
-                                providerSelection.isCompatibleProviderFor(providerOwnerName, target)
-                            } == true
+                            providerSelection.isCompatibleProviderFor(
+                                providerOwnerName,
+                                locatedOccurrence.occurrence.target,
+                            )
                     }
             val replacedOccurrences =
                 listOfNotNull(
@@ -1725,7 +1720,7 @@ private class RegistryGenerator(
                     selection = providerSelection,
                     nestedInput = candidate.occurrence.valuePath.isNotEmpty(),
                     listValue = candidate.occurrence.target is ListVariableTarget,
-                    nullable = candidate.occurrence.target?.nullable == true,
+                    nullable = candidate.occurrence.target.nullable,
                     abstractPath = candidate.provider.hasAbstractPath(providerOwnerName),
                     useDepth = candidate.occurrence.selectionPath.size,
                     topLevelUseField =
@@ -2190,7 +2185,7 @@ private class RegistryGenerator(
                         schema.fieldsOn(typeName).singleOrNull { candidate ->
                             candidate.name == coordinate.fieldName
                         }
-                    value.parentFieldCount() + if (outputField?.isParentField == true) 1 else 0
+                    value.parentFieldCount() + if (outputField?.isParentField ?: false) 1 else 0
                 }
             else -> 0
         }
@@ -2862,7 +2857,7 @@ private fun FragmentSelectionPlan.pathLength(): Int =
 
 private fun FragmentSelectionPlan.hasPathArguments(): Boolean =
     arguments.isNotEmpty() ||
-        subselections.singleOrNull()?.hasPathArguments() == true
+        (subselections.singleOrNull()?.hasPathArguments() ?: false)
 
 private fun sensitiveScalar(
     scalar: ScalarKind,
@@ -2890,7 +2885,7 @@ private data class ArgumentOccurrence(
     val selectionPath: List<Int>,
     val argument: ArgumentDefinitionSpec,
     val valuePath: List<InputValueStep>,
-    val target: VariableTarget?,
+    val target: VariableTarget,
     val existingVariableName: String?,
 )
 

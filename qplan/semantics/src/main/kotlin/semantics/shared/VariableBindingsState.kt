@@ -13,7 +13,7 @@ class VariableBindingsState {
 
     /** Whether [variableId] has a completed binding, including one whose value is null. */
     fun isBound(variableId: VariableInstanceId): Boolean =
-        bindings[variableId]?.isCompleted == true
+        bindings[variableId]?.isCompleted ?: false
 
     /** Declares one incomplete binding. */
     fun declareBinding(variableId: VariableInstanceId) {

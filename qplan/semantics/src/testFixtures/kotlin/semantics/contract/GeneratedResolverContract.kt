@@ -912,9 +912,9 @@ private fun GeneratedCaseAssertionPolicy.observeGeneratedCaseWithCurrentAssertio
 private fun ArbitraryRegistry.hasNonemptyObjectFragment(
     application: ResolverApplicationRecord,
 ): Boolean =
-    objectFragmentSources[application.key.field]?.isNotEmpty() == true
+    objectFragmentSources[application.key.field].orEmpty().isNotEmpty()
 
 private fun ArbitraryRegistry.hasNonemptyQueryFragment(
     application: ResolverApplicationRecord,
 ): Boolean =
-    queryFragmentSources[application.key.field]?.isNotEmpty() == true
+    queryFragmentSources[application.key.field].orEmpty().isNotEmpty()

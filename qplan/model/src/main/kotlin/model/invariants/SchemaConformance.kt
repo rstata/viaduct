@@ -99,12 +99,12 @@ private fun EngineResult.conformsToSchema(
                     key.conformsToSchema() &&
                     value.conformsToResultSchemaType(key.field.outputType) &&
                     if (key is ObjectEngineResult.ParentKey) {
-                        world.parentFieldRelations[key.field]?.let { producerField ->
+                        world.parentFieldRelations.getValue(key.field).let { producerField ->
                             val ancestor = ancestors.lastOrNull()
                             ancestor != null &&
                                 value === ancestor.result &&
                                 producerField == ancestor.producerField
-                        } == true
+                        }
                     } else {
                         value?.conformsToSchema(
                             ancestors + StructuralAncestor(result, key.field),
@@ -268,7 +268,7 @@ internal fun EngineResult?.conformsToResultSchemaType(
                 false
             }
         is ListEngineResult ->
-            typeExpr.unwrapList()?.canContainPure(this.typeExpr) == true
+            typeExpr.unwrapList()?.canContainPure(this.typeExpr) ?: false
         is Int -> typeExpr.hasScalarType("Int")
         is Double ->
             isFinite() &&

@@ -75,7 +75,7 @@ private fun ObjectEngineResult.objectConformsToResolvers(
             arguments !is Arguments.Resolved ->
                 value is ErrorEngineResult
 
-            source?.isPresent(fieldName) == true ->
+            source != null && source.isPresent(fieldName) ->
                 arguments.fieldValues.isEmpty() &&
                     value.engineResultConformsToResolverValue(
                         resolverValue = source.outputValue(fieldName),
@@ -86,8 +86,8 @@ private fun ObjectEngineResult.objectConformsToResolvers(
                     )
 
             key.field in operation.resolverRegistry ->
-                reapplyResolver(key, path)
-                    ?.let { application ->
+                checkNotNull(reapplyResolver(key, path))
+                    .let { application ->
                         value.engineResultConformsToResolverValue(
                             resolverValue = application.output,
                             expectedType = key.field.outputType,
@@ -95,7 +95,7 @@ private fun ObjectEngineResult.objectConformsToResolvers(
                             structuralParent = this,
                             producerField = key.field,
                         )
-                    } == true
+                    }
 
             source == null ->
                 value.engineResultConformsToResolvers(
@@ -127,7 +127,7 @@ internal fun FieldResolver.fragmentsSatisfiedBy(
             arguments = arguments,
         ) &&
             constructionSelections.usedVariables().all { variable ->
-                variable.instanceId?.let(operation.variableBindingsState::isBound) == true
+                operation.variableBindingsState.isBound(requireNotNull(variable.instanceId))
             } &&
             context(operation.world) {
                 result.conformsToSelectionsAt(

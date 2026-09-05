@@ -434,7 +434,7 @@ private fun EngineResult?.hasSameCompletedResultAs(other: EngineResult?): Boolea
                 indices.all { index -> this[index].hasSameCompletedCellAs(other[index]) }
         is ObjectEngineResult ->
             other is ObjectEngineResult && sameCompletedObjectResultAs(other)
-        else -> isScalarResultMember() && other?.isScalarResultMember() == true && this == other
+        else -> isScalarResultMember() && other.isScalarResultMember() && this == other
     }
 }
 
@@ -520,10 +520,10 @@ private fun EngineResult.containsParentBackedge(): Boolean =
         is ObjectEngineResult ->
             keys.any { key -> key is ObjectEngineResult.ParentKey } ||
                 keys.any { key ->
-                    getCell(key).getValue().get()?.containsParentBackedge() == true
+                    getCell(key).getValue().get()?.containsParentBackedge() ?: false
                 }
         is ListEngineResult ->
-            any { cell -> cell.getValue().get()?.containsParentBackedge() == true }
+            any { cell -> cell.getValue().get()?.containsParentBackedge() ?: false }
         else -> false
     }
 

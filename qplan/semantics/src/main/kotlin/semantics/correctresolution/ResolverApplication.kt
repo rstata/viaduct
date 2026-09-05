@@ -165,7 +165,7 @@ private fun EngineResult?.completedOutputDemand(): SelectionForest =
 internal fun EngineObjectData.Sync?.requireArgumentlessField(
     key: ObjectEngineResult.ObjectKey,
 ) {
-    if (this?.isPresent(key.field.name) == true) {
+    if (this != null && isPresent(key.field.name)) {
         require(key.field.args.isEmpty()) {
             "Resolver output must not supply argument-bearing field " +
                 "${key.field.containingDef.name}/${key.field.name}"

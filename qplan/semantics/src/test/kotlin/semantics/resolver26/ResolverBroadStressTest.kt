@@ -471,7 +471,7 @@ internal suspend fun runResolver26BroadStress(
                     if (
                         testCase.registry.queryFragmentSources[
                             testCase.registry.sourceResolverCoordinate(application.key.field)
-                        ]?.isNotEmpty() == true
+                        ].orEmpty().isNotEmpty()
                     ) {
                         activatedQueryFragmentApplications += 1
                     }

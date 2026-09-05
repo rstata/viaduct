@@ -62,7 +62,7 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
         val value = getCell(key).getValue().get()
         val fieldName = key.field.name
         val argumentsContainError = arguments.argumentsContainErrorValue()
-        val sourceSuppliesField = source?.isPresent(fieldName) == true
+        val sourceSuppliesField = source != null && source.isPresent(fieldName)
         source.requireArgumentlessField(key)
         val fieldResolverDemandIsClosed =
             when {
@@ -71,9 +71,7 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
                         operation.world.parentFieldRelations[key.field] == producerField
                 argumentsContainError -> true
                 sourceSuppliesField ->
-                    (arguments as? Arguments.Resolved)
-                        ?.fieldValues
-                        ?.isEmpty() == true
+                    (arguments as Arguments.Resolved).fieldValues.isEmpty()
                 key.field !in registry -> source == null
                 else ->
                     registry
@@ -89,9 +87,9 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
                                     .constructionSelections
                             if (
                                 instantiatedSelections.usedVariables().all { variable ->
-                                    variable.instanceId?.let(
-                                        operation.variableBindingsState::isBound,
-                                    ) == true
+                                    operation.variableBindingsState.isBound(
+                                        requireNotNull(variable.instanceId),
+                                    )
                                 }
                             ) {
                                 context(operation.world) {
@@ -135,7 +133,7 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
                             structuralParent = this,
                             producerField = key.field,
                         )
-                    } == true
+                    } ?: false
                 source == null ->
                     value.engineResultIsClosedUnderResolverDemand(
                         path = path + key,

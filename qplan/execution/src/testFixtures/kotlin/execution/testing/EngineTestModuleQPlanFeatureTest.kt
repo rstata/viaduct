@@ -468,8 +468,8 @@ private fun qplanSchemaSDL(schema: EngineSchema): String {
             .defaultOptions()
             .includeIntrospectionTypes(false)
             .includeScalarTypes(false)
-            .includeDirectiveDefinitions(false)
-            .includeDirectives(false)
+            .includeDirectiveDefinition { directiveName -> directiveName == "parent" }
+            .includeDirectives { directiveName -> directiveName == "parent" }
             .includeSchemaDefinition(false)
     return SchemaPrinter(options).print(schema.schema)
 }

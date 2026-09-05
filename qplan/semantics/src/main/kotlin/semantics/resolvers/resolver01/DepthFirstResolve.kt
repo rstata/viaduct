@@ -74,6 +74,9 @@ internal class DepthFirstResolve(
                 )
             }
         val unresolvedKeys = closedDemand.groundKeys() - resolved.requireGroundKeys()
+        require(unresolvedKeys.none { key -> key is ObjectEngineResult.ParentKey }) {
+            "Resolver01-03 do not support @parent fields"
+        }
         val orderedKeys = dependencyOrder(source, root, path, unresolvedKeys)
         orderedKeys.forEach { key ->
             val selection = closedDemand[key]

@@ -12,10 +12,12 @@ import semantics.contract.CorrectResolutionPostTestPolicy
 import semantics.contract.EmptyObjectFragmentResolverContract
 import semantics.contract.NodeResolverContract
 import semantics.contract.SometimesPassiveResolverContract
+import semantics.contract.UnsupportedParentFieldResolverContract
 
 class ResolverContractTest :
     EmptyObjectFragmentResolverContract,
     NodeResolverContract,
+    UnsupportedParentFieldResolverContract,
     SometimesPassiveResolverContract,
     CompleteResolverOutputPolicyContract,
     CorrectResolutionPostTestPolicy {

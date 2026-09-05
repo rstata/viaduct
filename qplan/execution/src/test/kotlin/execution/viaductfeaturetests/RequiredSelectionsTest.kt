@@ -475,7 +475,6 @@ class RequiredSelectionsTest {
         assertEquals(setOf("a", "b"), detailsSelections)
     }
 
-    @Disabled("TODO: ParentFld")
     @Test
     fun `parent field accesses already requested parent fields through named fragment`() {
         EngineTestModule(
@@ -530,7 +529,6 @@ class RequiredSelectionsTest {
         }
     }
 
-    @Disabled("TODO: ParentFld")
     @Test
     fun `nested parent field accesses already requested grandparent fields`() {
         EngineTestModule(

@@ -86,7 +86,6 @@ class ParentFieldRequiredSelectionsExecutionTest {
         assertEquals("Airbnb", checkedParentName.get())
     }
 
-    @Disabled("TODO: ParentFld")
     @Test
     fun `execution resolves parent fields required by resolver selection sets`() {
         EngineTestModule(
@@ -127,7 +126,6 @@ class ParentFieldRequiredSelectionsExecutionTest {
         }
     }
 
-    @Disabled("TODO: ParentFld")
     @Test
     fun `execution resolves nested parent fields required by resolver selection sets`() {
         EngineTestModule(
@@ -178,7 +176,6 @@ class ParentFieldRequiredSelectionsExecutionTest {
         }
     }
 
-    @Disabled("TODO: ParentFld")
     @Test
     fun `execution resolves parent fields for each object in list child fields`() {
         EngineTestModule(
@@ -222,7 +219,6 @@ class ParentFieldRequiredSelectionsExecutionTest {
         }
     }
 
-    @Disabled("TODO: ParentFld")
     @Test
     fun `execution resolves interface typed parent fields`() {
         EngineTestModule(
@@ -264,7 +260,6 @@ class ParentFieldRequiredSelectionsExecutionTest {
         }
     }
 
-    @Disabled("TODO: ParentFld")
     @Test
     fun `execution resolves union typed parent fields`() {
         EngineTestModule(
@@ -306,7 +301,6 @@ class ParentFieldRequiredSelectionsExecutionTest {
         }
     }
 
-    @Disabled("TODO: ParentFld")
     @Test
     fun `execution traverses parent after normal child traversal in resolver selection sets`() {
         EngineTestModule(
@@ -358,7 +352,6 @@ class ParentFieldRequiredSelectionsExecutionTest {
         }
     }
 
-    @Disabled("TODO: ParentFld")
     @Test
     fun `execution resolves nested object selections on parent fields`() {
         EngineTestModule(
@@ -409,7 +402,6 @@ class ParentFieldRequiredSelectionsExecutionTest {
         }
     }
 
-    @Disabled("TODO: ParentFld")
     @Test
     fun `execution resolves repeated aliased parent selections`() {
         EngineTestModule(

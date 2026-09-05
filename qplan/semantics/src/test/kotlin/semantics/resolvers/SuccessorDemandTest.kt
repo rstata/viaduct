@@ -20,6 +20,42 @@ import kotlin.test.assertEquals
 
 class SuccessorDemandTest {
     @Test
+    fun `successor demand lifts nested parent selections through producer fields`() {
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    directive @parent on FIELD_DEFINITION
+                    type Query { organization: Organization }
+                    type Organization { name: String, company: Company }
+                    type Company { parent: Organization @parent, user: User }
+                    type User { parent: Company @parent }
+                    """.trimIndent(),
+            ).assumptions
+        val schema = world.schema
+        val query = schema.requireQueryTypeDef()
+        val organization = schema.requireType("Organization") as ViaductSchema.Object
+        val company = schema.requireType("Company") as ViaductSchema.Object
+        val user = schema.requireType("User") as ViaductSchema.Object
+        val selections =
+            schema.fragmentFrom(
+                "fragment ignored on Query { organization { company { user { parent { parent { name } } } } } }",
+            ).subselections
+
+        val completed = context(OperationContext(world)) { selections.successorDemand() }
+        val organizationSelection = completed.merge(query)[schema.key(query, "organization")]
+        val organizationDemand = organizationSelection.subselections.merge(organization)
+        val companySelection = organizationDemand[schema.key(organization, "company")]
+        val companyDemand = companySelection.subselections.merge(company)
+        val userSelection = companyDemand[schema.key(company, "user")]
+        val userDemand = userSelection.subselections.merge(user)
+
+        assertEquals(setOf("company", "name"), organizationDemand.keys().objectKeyFieldNames())
+        assertEquals(setOf("user", "parent"), companyDemand.keys().objectKeyFieldNames())
+        assertEquals(setOf("parent"), userDemand.keys().objectKeyFieldNames())
+    }
+
+    @Test
     fun `boundary demand retains resolver paths but omits passive leaves`() {
         val world =
             TestWorld.fromSDL(
@@ -130,6 +166,9 @@ class SuccessorDemandTest {
     }
 
     private fun Set<ObjectEngineResult.GroundKey>.fieldNames(): Set<String> =
+        mapTo(mutableSetOf()) { key -> key.field.name }
+
+    private fun Set<ObjectEngineResult.ObjectKey>.objectKeyFieldNames(): Set<String> =
         mapTo(mutableSetOf()) { key -> key.field.name }
 
     private fun ViaductSchema.key(

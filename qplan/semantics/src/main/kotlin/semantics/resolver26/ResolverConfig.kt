@@ -9,6 +9,7 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import model.PathComponent
 import model.ResolverOccurrenceId
 import model.SelectionForest
+import model.MaterializeSelectionForest
 import viaduct.engine.api.EngineObjectData
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -25,6 +26,7 @@ internal data class Resolver26ApplicationObservation(
     val occurrencePath: List<PathComponent>,
     val field: ViaductSchema.ObjectField,
     val input: EngineObjectData.Sync,
+    val inputSelections: MaterializeSelectionForest,
     val arguments: Arguments.Resolved,
     val suppliedDemand: SelectionForest,
     val resolverOccurrenceId: ResolverOccurrenceId,

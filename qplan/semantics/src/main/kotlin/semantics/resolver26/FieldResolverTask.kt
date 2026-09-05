@@ -87,6 +87,7 @@ internal class FieldResolverTask(
                     occurrencePath = coordinate,
                     field = objectKey.field,
                     input = input,
+                    inputSelections = inputMaterializeSelections,
                     arguments = resolverArguments,
                     suppliedDemand = invocationDemand,
                     resolverOccurrenceId = resolverOccurrenceId,

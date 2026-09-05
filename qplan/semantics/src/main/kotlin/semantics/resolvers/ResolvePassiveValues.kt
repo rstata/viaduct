@@ -68,7 +68,6 @@ internal fun ObjectEngineResult.installParentBackedges(
             } else {
                 reserveCell(key).also { parentCell ->
                     parentCell.setValue(containingParent.target)
-                    parentCell.setAccessResult(true)
                 }
             }
         check(cell.getValue().get() === containingParent.target) {

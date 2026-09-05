@@ -157,7 +157,6 @@ internal class CoroutineResolve(
             Arguments.Error -> {
                 val errorResult = ErrorEngineResult.of(EngineErrorData.of())
                 valuePromise.complete(errorResult)
-                cell.setAccessResult(errorResult)
             }
 
             is Arguments.Resolved ->
@@ -209,7 +208,6 @@ internal class CoroutineResolve(
                         )
                     }
                     valuePromise.complete(passiveValuesResult.engineResult)
-                    cell.setAccessResult(true)
                 }
         }
     }

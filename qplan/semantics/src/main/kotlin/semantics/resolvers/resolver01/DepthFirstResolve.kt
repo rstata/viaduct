@@ -157,7 +157,6 @@ internal class DepthFirstResolve(
             Arguments.Error -> {
                 val errorResult = ErrorEngineResult.of(EngineErrorData.of())
                 cell.setValue(errorResult)
-                cell.setAccessResult(errorResult)
                 null
             }
 
@@ -197,9 +196,8 @@ internal class DepthFirstResolve(
                         path = path + key,
                         constructionDemand = fieldSelection.subselections,
                         invocationDemand = invocationDemand,
-                    )
+                )
                 cell.setValue(passiveValuesResult.engineResult)
-                cell.setAccessResult(true)
                 passiveValuesResult
             }
         }

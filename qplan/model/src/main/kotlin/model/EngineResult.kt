@@ -434,7 +434,7 @@ private fun EngineResult?.hasSameCompletedResultAs(other: EngineResult?): Boolea
                 indices.all { index -> this[index].hasSameCompletedCellAs(other[index]) }
         is ObjectEngineResult ->
             other is ObjectEngineResult && sameCompletedObjectResultAs(other)
-        else -> isScalarResultMember() && other?.isScalarResultMember() == true && this == other
+        else -> isScalarResultMember() && other.isScalarResultMember() && this == other
     }
 }
 

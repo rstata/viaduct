@@ -166,7 +166,6 @@ private fun EngineObjectData.Sync.materializePassiveFields(
                     )
             occurrence.target.reserveCell(key).also { cell ->
                 cell.setValue(value)
-                cell.setAccessResult(true)
             }
         }
     }

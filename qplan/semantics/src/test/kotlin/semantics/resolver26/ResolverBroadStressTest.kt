@@ -64,16 +64,20 @@ import viaduct.engine.api.EngineObjectData
  */
 class ResolverBroadStressTest {
     @Test
-    fun `generated great-grandparent demand resolves across randomized worlds`(): Unit =
+    fun `parent focused randomized worlds resolve correctly`(): Unit =
         runBlocking {
-            val counts = TestCaseCount(schemas = 10, registriesPerSchema = 5, queriesPerSchema = 5)
+            val defaultCounts =
+                TestCaseCount(schemas = 40, registriesPerSchema = 5, queriesPerSchema = 5)
+            val propertyProfile = "resolver26-parent-fields"
+            val execution = configuredResolverTestExecution(defaultCounts, propertyProfile)
+            val counts = execution.counts
             val completed =
                 runResolver26BroadStress(
                     requiredSignatures =
                         setOf(
                             Resolver26StructuralSignature.GREAT_GRANDPARENT_PARENT_DEMAND,
                         ),
-                    propertyProfile = "resolver26-parent-fields",
+                    propertyProfile = propertyProfile,
                     counts = counts,
                     config =
                         Config.default +
@@ -103,10 +107,18 @@ class ResolverBroadStressTest {
                             (NullValueWeight to 0.0) +
                             (ErrorValueWeight to 0.0),
                     seed = configuredSeed(default = 2026090403L),
-                    execution = ResolverTestExecution(counts),
+                    execution = execution,
+                    parentFocusedReportSlices = if (execution.selectedCase == null) 4 else 1,
                 )
 
-            assertEquals(250, completed)
+            assertEquals(
+                if (execution.selectedCase == null) {
+                    counts.schemas * counts.registriesPerSchema * counts.queriesPerSchema
+                } else {
+                    1
+                },
+                completed,
+            )
         }
 
     @Test
@@ -194,6 +206,7 @@ internal suspend fun runResolver26BroadStress(
     config: Config,
     seed: Long,
     execution: ResolverTestExecution = configuredResolverTestExecution(counts, propertyProfile),
+    parentFocusedReportSlices: Int = 0,
 ): Int {
     val startedAt: Long = System.nanoTime()
     var attemptedCases = 0
@@ -250,6 +263,10 @@ internal suspend fun runResolver26BroadStress(
         MutableMap<Set<ParentVariableSource>, Int> = linkedMapOf()
     val parentCoverageLock = Any()
     val observedSignatures: MutableSet<Resolver26StructuralSignature> = linkedSetOf()
+    val parentFocusedReport =
+        parentFocusedReportSlices.takeIf { slices -> slices > 0 }?.let { slices ->
+            ParentFocusedCoverageReport(counts.schemas, slices)
+        }
 
     try {
         val run: ResolverTestRun =
@@ -260,6 +277,8 @@ internal suspend fun runResolver26BroadStress(
                 seed = seed,
             ) { testWorld, testCase ->
                 attemptedCases += 1
+                val schemaIndex = requireNotNull(testCase.coordinates).schemaIndex
+                parentFocusedReport?.recordCase(schemaIndex)
                 generatedArgumentVariables +=
                     testCase.registry.features.fromArgumentVariableCount
                 generatedObjectPathVariables +=
@@ -300,6 +319,10 @@ internal suspend fun runResolver26BroadStress(
                             val parentCoverage =
                                 ParentCoverageAnalyzer(world).analyze(application)
                             synchronized(parentCoverageLock) {
+                                parentFocusedReport?.record(
+                                    schemaIndex,
+                                    parentFocusedCoverageSnapshot(world, parentCoverage),
+                                )
                                 materializedParentFieldActivations += parentActivations.size
                                 materializedRandomParentFieldActivations +=
                                     parentActivations.count { activation ->
@@ -600,6 +623,7 @@ internal suspend fun runResolver26BroadStress(
         }
         return completedCases
     } finally {
+        parentFocusedReport?.let { report -> println(report.render()) }
         println(
             "Resolver26 broad stress: profile=$propertyProfile, seed=$seed, " +
                 "size=${counts.summary()}, " +

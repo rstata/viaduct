@@ -14,10 +14,12 @@ import semantics.contract.EmptyObjectFragmentResolverContract
 import semantics.contract.NodeResolverContract
 import semantics.contract.ResolverTaskObservation
 import semantics.contract.SometimesPassiveResolverContract
+import semantics.contract.UnsupportedParentFieldResolverContract
 
 class ResolverContractTest :
     EmptyObjectFragmentResolverContract,
     NodeResolverContract,
+    UnsupportedParentFieldResolverContract,
     SometimesPassiveResolverContract,
     CompleteResolverOutputPolicyContract,
     DepthFirstTaskOrderingContract,

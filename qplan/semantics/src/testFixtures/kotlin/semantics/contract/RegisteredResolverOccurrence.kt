@@ -102,7 +102,9 @@ private fun EngineResult?.visitRegisteredResolverOccurrences(
                             ),
                         )
                     }
-                    visit(value.getCell(key).getValue().get(), fieldPath)
+                    if (key !is ObjectEngineResult.ParentKey) {
+                        visit(value.getCell(key).getValue().get(), fieldPath)
+                    }
                 }
             }
 

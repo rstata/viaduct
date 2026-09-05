@@ -46,6 +46,8 @@ internal fun ObjectEngineResult.conformsToResolvers(
         objectConformsToResolvers(
             path = emptyList(),
             source = null,
+            structuralParent = null,
+            producerField = null,
         )
     }
 
@@ -56,6 +58,8 @@ context(
 private fun ObjectEngineResult.objectConformsToResolvers(
     path: List<PathComponent>,
     source: EngineObjectData.Sync?,
+    structuralParent: ObjectEngineResult?,
+    producerField: ViaductSchema.ObjectField?,
 ): Boolean =
     keys.all { key ->
         if (!key.isContextuallyGrounded()) return@all false
@@ -64,6 +68,10 @@ private fun ObjectEngineResult.objectConformsToResolvers(
         val fieldName = key.field.name
         source.requireArgumentlessField(key)
         when {
+            key is ObjectEngineResult.ParentKey ->
+                value === structuralParent &&
+                    operation.world.parentFieldRelations[key.field] == producerField
+
             arguments !is Arguments.Resolved ->
                 value is ErrorEngineResult
 
@@ -73,6 +81,8 @@ private fun ObjectEngineResult.objectConformsToResolvers(
                         resolverValue = source.outputValue(fieldName),
                         expectedType = key.field.outputType,
                         path = path + key,
+                        structuralParent = this,
+                        producerField = key.field,
                     )
 
             key.field in operation.resolverRegistry ->
@@ -82,11 +92,17 @@ private fun ObjectEngineResult.objectConformsToResolvers(
                             resolverValue = application.output,
                             expectedType = key.field.outputType,
                             path = path + key,
+                            structuralParent = this,
+                            producerField = key.field,
                         )
                     } == true
 
             source == null ->
-                value.engineResultConformsToResolvers(path + key)
+                value.engineResultConformsToResolvers(
+                    path = path + key,
+                    structuralParent = this,
+                    producerField = key.field,
+                )
 
             else -> false
         }
@@ -149,6 +165,8 @@ context(
 )
 private fun EngineResult?.engineResultConformsToResolvers(
     path: List<PathComponent>,
+    structuralParent: ObjectEngineResult,
+    producerField: ViaductSchema.ObjectField,
 ): Boolean =
     when (this) {
         null,
@@ -159,11 +177,15 @@ private fun EngineResult?.engineResultConformsToResolvers(
             objectConformsToResolvers(
                 path = path,
                 source = null,
+                structuralParent = structuralParent,
+                producerField = producerField,
             )
         is ListEngineResult ->
             indices.all { index ->
                 get(index).getValue().get().engineResultConformsToResolvers(
-                    path + ListEngineResult.Index.of(index),
+                    path = path + ListEngineResult.Index.of(index),
+                    structuralParent = structuralParent,
+                    producerField = producerField,
                 )
             }
         else -> true
@@ -177,6 +199,8 @@ private fun EngineResult?.engineResultConformsToResolverValue(
     resolverValue: EngineOutputData?,
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     path: List<PathComponent>,
+    structuralParent: ObjectEngineResult,
+    producerField: ViaductSchema.ObjectField,
 ): Boolean =
     when (this) {
         null -> resolverValue == null
@@ -187,6 +211,8 @@ private fun EngineResult?.engineResultConformsToResolverValue(
                 objectFieldsConformToResolverValue(
                     resolverValue = resolverValue,
                     path = path,
+                    structuralParent = structuralParent,
+                    producerField = producerField,
                 )
 
         is ListEngineResult ->
@@ -197,6 +223,8 @@ private fun EngineResult?.engineResultConformsToResolverValue(
                         resolverValue[index],
                         typeExpr,
                         path + ListEngineResult.Index.of(index),
+                        structuralParent,
+                        producerField,
                     )
                 }
 
@@ -212,8 +240,15 @@ context(
 private fun ObjectEngineResult.objectFieldsConformToResolverValue(
     resolverValue: EngineObjectData.Sync,
     path: List<PathComponent>,
+    structuralParent: ObjectEngineResult,
+    producerField: ViaductSchema.ObjectField,
 ): Boolean {
     if (type != resolverValue.schemaType) return false
 
-    return objectConformsToResolvers(path, resolverValue)
+    return objectConformsToResolvers(
+        path = path,
+        source = resolverValue,
+        structuralParent = structuralParent,
+        producerField = producerField,
+    )
 }

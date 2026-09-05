@@ -216,7 +216,12 @@ object ResolverBenchmarkCorpusSearch {
                 val childShapes =
                     keys.map { key ->
                         val value = getCell(key).getValue().get()
-                        val child = value.shape(depth + 1, beneathList)
+                        val child =
+                            if (key is ObjectEngineResult.ParentKey) {
+                                ResultShape()
+                            } else {
+                                value.shape(depth + 1, beneathList)
+                            }
                         child.copy(
                             fields = child.fields + 1,
                             nonListFields =

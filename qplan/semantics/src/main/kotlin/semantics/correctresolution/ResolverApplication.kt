@@ -141,6 +141,7 @@ private fun EngineResult?.completedOutputDemand(): SelectionForest =
     when (this) {
         is ObjectEngineResult ->
             keys
+                .filterNot { key -> key is ObjectEngineResult.ParentKey }
                 .map { key ->
                     selectionForestOf(
                         Selection.of(

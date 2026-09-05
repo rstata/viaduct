@@ -93,8 +93,9 @@ internal class ObjectOrchestrationTask(
                     objectKey is ObjectEngineResult.GroundKey &&
                         occurrence.target.isCellSet(objectKey),
                 ) {
-                    "Resolver26 passive key $objectKey was not materialized by " +
-                        "resolvePassiveValues"
+                    "Resolver26 passive key $objectKey on ${occurrence.target.type.name} at " +
+                        "${occurrence.path} was not materialized by resolvePassiveValues; " +
+                        "source fields=${source.getSelections()}"
                 }
             }
         }
@@ -118,11 +119,12 @@ internal class ObjectOrchestrationTask(
         parentSelections.keys.forEach { objectKey ->
             val key = objectKey as ObjectEngineResult.ParentKey
             require(world.parentFieldRelations[key.field] == producer) {
-                "Parent field ${key.field.name} is not inverse to its containing producer occurrence"
+                "Parent field ${key.field.containingDef.name}.${key.field.name} maps to " +
+                    "${world.parentFieldRelations[key.field]}, not containing producer $producer " +
+                    "at ${occurrence.path}"
             }
             occurrence.target.reserveCell(key).also { cell ->
                 cell.setValue(parent.target)
-                cell.setAccessResult(true)
             }
             check(occurrence.target.getCell(key).getValue().get() === parent.target) {
                 "Parent field ${key.field.name} does not reference its containing object occurrence"

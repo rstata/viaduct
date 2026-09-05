@@ -44,7 +44,16 @@ private suspend fun ObjectEngineResult.materializeSelectedObject(
         linkedMapOf<String, Pair<ViaductSchema.ObjectField, EngineOutputData?>>()
     selections.collect(type).byResponseKey().forEach { (responseKey, selection) ->
         val storedKey = selection.materializedObjectKey()
-        val cell = reserveCell(storedKey)
+        val cell =
+            try {
+                reserveCell(storedKey)
+            } catch (failure: NoSuchElementException) {
+                throw NoSuchElementException(
+                    "${failure.message} while materializing resolver input for $reader " +
+                        "at result path $resultPath",
+                    failure,
+                )
+            }
         cycleChecker.cycleCheck(reader, cell)
         val selectedValue: EngineOutputData? =
             cell

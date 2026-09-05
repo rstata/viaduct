@@ -26,7 +26,8 @@ internal fun EngineObjectData.Sync.closeInputDemand(
     occurrence: OEROccurrenceContext,
     initialDemand: SelectionForest,
 ): CloseInputDemandResult {
-    var accumulatedDemand: SelectionForest = initialDemand
+    var accumulatedDemand: SelectionForest =
+        initialDemand + initialDemand.inputParentDemand()
     val expansions: MutableMap<ObjectEngineResult.ObjectKey, ResolverExpansion> =
         linkedMapOf()
     val objectProviderReads: MutableList<ProviderDefinitionRead> =
@@ -114,7 +115,9 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                         readerPath = readerPath,
                     )
                 }
-            accumulatedDemand += objectFragment.constructionSelections
+            accumulatedDemand +=
+                objectFragment.constructionSelections +
+                    objectFragment.constructionSelections.inputParentDemand()
         }
     }
     error("Resolver26 demand closure terminated unexpectedly")

@@ -2,23 +2,32 @@ package semantics.resolver26
 
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
+import model.EngineOutputData
+import model.MaterializeSelectionForest
 import model.ObjectEngineResult
 import model.Fragment
 import model.fragmentFrom
+import model.outputValue
+import model.schemaType
 import org.junit.jupiter.api.Test
 import semantics.arbitrary.Config
 import semantics.arbitrary.ErrorValueWeight
+import semantics.arbitrary.ListValueSize
 import semantics.arbitrary.MaxSelectionDepth
+import semantics.arbitrary.MaxOutputListDepth
 import semantics.arbitrary.MinimumSelectionDepth
 import semantics.arbitrary.NodeResolversEnabled
 import semantics.arbitrary.NullValueWeight
 import semantics.arbitrary.ParentFieldsEnabled
+import semantics.arbitrary.RandomParentFieldsEnabled
 import semantics.arbitrary.FieldCoordinate
 import semantics.contract.RegisteredResolverOccurrence
 import semantics.arbitrary.ResolutionOccurrenceApplicationLog
 import semantics.arbitrary.ResolutionWitness
 import semantics.arbitrary.ResolverFromQueryFieldVariablesEnabled
 import semantics.arbitrary.ResolverFragmentsEnabled
+import semantics.arbitrary.ResolverFragmentDepth
+import semantics.arbitrary.ResolverFragmentWeight
 import semantics.arbitrary.ResolverQueryFragmentsEnabled
 import semantics.arbitrary.ResolverTestExecution
 import semantics.arbitrary.ResolverTestRun
@@ -26,6 +35,7 @@ import semantics.arbitrary.SometimesPassiveFieldWeight
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.configuredResolverTestExecution
 import semantics.arbitrary.executeResolverTestCases
+import semantics.arbitrary.isGeneratedRandomParentField
 import semantics.contract.registeredResolverOccurrences
 import semantics.contract.registeredResolverOccurrenceApplicationIdentityCounts
 import semantics.contract.registeredResolverOccurrenceApplicationIdentityCountsFor
@@ -36,6 +46,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import semantics.shared.OperationContext
 import semantics.shared.RecordingResolverObserver
+import viaduct.engine.api.EngineObjectData
 
 /**
  * Unfiltered Resolver26 stress: every generated registry/query product is resolved and validated.
@@ -58,8 +69,13 @@ class ResolverBroadStressTest {
                             (ParentFieldsEnabled to true) +
                             (MinimumSelectionDepth to 2) +
                             (MaxSelectionDepth to 6) +
-                            (ResolverFragmentsEnabled to false) +
+                            (RandomParentFieldsEnabled to true) +
+                            (ResolverFragmentsEnabled to true) +
+                            (ResolverFragmentWeight to 1.0) +
+                            (ResolverFragmentDepth to 3) +
                             (NodeResolversEnabled to false) +
+                            (MaxOutputListDepth to 2) +
+                            (ListValueSize to 1..2) +
                             (NullValueWeight to 0.0) +
                             (ErrorValueWeight to 0.0),
                     seed = 2026090403L,
@@ -172,6 +188,11 @@ internal suspend fun runResolver26BroadStress(
     var generatedQueryFragments = 0
     var activatedQueryFragmentApplications = 0
     var activatedParentDemandApplications = 0
+    var materializedParentFieldActivations = 0
+    var materializedRandomParentFieldActivations = 0
+    val materializedParentFieldDepths: MutableMap<Int, Int> = linkedMapOf()
+    val materializedParentFields: MutableSet<FieldCoordinate> = linkedSetOf()
+    val parentCoverageLock = Any()
     val observedSignatures: MutableSet<Resolver26StructuralSignature> = linkedSetOf()
 
     try {
@@ -216,6 +237,25 @@ internal suspend fun runResolver26BroadStress(
                 val result: ObjectEngineResult =
                     context(operation) {
                         resolveObserved(fragment.subselections) { application ->
+                            val parentActivations =
+                                application.input.materializedParentFieldActivations(
+                                    application.inputSelections,
+                                )
+                            synchronized(parentCoverageLock) {
+                                materializedParentFieldActivations += parentActivations.size
+                                materializedRandomParentFieldActivations +=
+                                    parentActivations.count { activation ->
+                                        activation.field.isGeneratedRandomParentField()
+                                    }
+                                parentActivations.forEach { activation ->
+                                    materializedParentFields += activation.field
+                                    materializedParentFieldDepths[activation.depth] =
+                                        materializedParentFieldDepths.getOrDefault(
+                                            activation.depth,
+                                            0,
+                                        ) + 1
+                                }
+                            }
                             occurrenceLog.record(
                                 resolverOccurrenceId = application.resolverOccurrenceId,
                                 occurrencePath = application.occurrencePath,
@@ -376,6 +416,12 @@ internal suspend fun runResolver26BroadStress(
                 "Resolver26 profile $propertyProfile did not activate great-grandparent demand",
             )
         }
+        if (config[RandomParentFieldsEnabled]) {
+            run.assertAggregate(
+                materializedRandomParentFieldActivations > 0,
+                "Resolver26 profile $propertyProfile did not materialize a random parent field",
+            )
+        }
         return completedCases
     } finally {
         println(
@@ -401,6 +447,11 @@ internal suspend fun runResolver26BroadStress(
                 "generatedQueryFragments=$generatedQueryFragments, " +
                 "activatedQueryFragmentApplications=$activatedQueryFragmentApplications, " +
                 "activatedParentDemandApplications=$activatedParentDemandApplications, " +
+                "materializedParentFieldActivations=$materializedParentFieldActivations, " +
+                "materializedRandomParentFieldActivations=" +
+                "$materializedRandomParentFieldActivations, " +
+                "distinctMaterializedParentFields=${materializedParentFields.size}, " +
+                "materializedParentFieldDepths=$materializedParentFieldDepths, " +
                 "signatures=$observedSignatures, " +
                 "elapsedMillis=${(System.nanoTime() - startedAt) / 1_000_000}",
         )
@@ -410,3 +461,50 @@ internal suspend fun runResolver26BroadStress(
 // Returns compact S:R:Q dimensions for diagnostics.
 private fun TestCaseCount.summary(): String =
     "$schemas:$registriesPerSchema:$queriesPerSchema"
+
+private data class MaterializedParentFieldActivation(
+    val field: FieldCoordinate,
+    val depth: Int,
+)
+
+private fun EngineOutputData?.materializedParentFieldActivations(
+    selections: MaterializeSelectionForest,
+    parentDepth: Int = 0,
+): List<MaterializedParentFieldActivation> =
+    when (this) {
+        is EngineObjectData.Sync ->
+            selections
+                .collect(schemaType)
+                .byResponseKey()
+                .flatMap { (responseKey, selection) ->
+                    val isParent = selection.key is ObjectEngineResult.ParentKey
+                    val nextParentDepth = if (isParent) parentDepth + 1 else 0
+                    buildList {
+                        if (isParent) {
+                            add(
+                                MaterializedParentFieldActivation(
+                                    field =
+                                        FieldCoordinate(
+                                            selection.key.field.containingDef.name,
+                                            selection.key.field.name,
+                                        ),
+                                    depth = nextParentDepth,
+                                ),
+                            )
+                        }
+                        addAll(
+                            outputValue(responseKey).materializedParentFieldActivations(
+                                selections = selection.subselections,
+                                parentDepth = nextParentDepth,
+                            ),
+                        )
+                    }
+                }
+
+        is List<*> ->
+            flatMap { value ->
+                value.materializedParentFieldActivations(selections, parentDepth)
+            }
+
+        else -> emptyList()
+    }

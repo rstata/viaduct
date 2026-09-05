@@ -49,7 +49,7 @@ Model fixture preparation accepts resolver selection documents that retain named
 
 Resolver26 is the self-contained advanced resolver with runtime from-field bindings. It supports both `FromObjectField` and `FromQueryField`; its current protocol is documented in [`resolver26/design.md`](./src/main/kotlin/semantics/resolver26/design.md).
 
-Resolver02/03, Resolver07/08, Resolver22/23, and Resolver26 resolve `@parent` selections. Each installs the child's parent cell with the containing ancestor OER itself, including for list and nested-list child occurrences. Resolver input fragments may not use variables beneath a parent selection. Demand on `parent { ... }` is lifted one ancestor at a time, so repeated static closure handles grandparents. Resolver26 carries the statically lifted portion of successor demand into each returned object's initial input closure.
+Resolver02/03, Resolver07/08, Resolver22/23, and Resolver26 resolve `@parent` selections. Each installs the child's parent cell with the containing ancestor OER itself, including for list and nested-list child occurrences. Resolver input fragments may not use variables beneath a parent selection. Demand on `parent { ... }` is lifted one ancestor at a time, so repeated static closure handles grandparents. Resolver26 transposes parent demand into selective producer output through successor demand and independently adds parent-induced ancestor work through input-demand closure.
 
 ## Variable Production And Consumption
 

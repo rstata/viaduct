@@ -20,6 +20,90 @@ import viaduct.engine.api.EngineObjectData
 /** Contract for engine-provided parent backedges and transitive ancestor demand. */
 interface ParentFieldResolverContract : ResolverContract {
     @Test
+    fun `resolver input closes sibling demand reached through a child parent`() {
+        val world =
+            TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    directive @parent on FIELD_DEFINITION
+                    type Query { child: Child, sibling: Sibling, result: String }
+                    type Child { parent: Query @parent }
+                    type Sibling { label: String }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    mapOf(
+                        schema.requireObjectField("Query", "child") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                schema.objectOf("Child")
+                            },
+                        schema.requireObjectField("Query", "sibling") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                schema.objectOf("Sibling") { "label" setTo "ready" }
+                            },
+                        schema.requireObjectField("Query", "result") to
+                            fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment ignored on Query { child { parent { sibling { __typename } } } }",
+                                ),
+                            ) { input, _ ->
+                                val child = assertIs<EngineObjectData.Sync>(input.outputValue("child"))
+                                val parent = assertIs<EngineObjectData.Sync>(child.outputValue("parent"))
+                                val sibling =
+                                    assertIs<EngineObjectData.Sync>(parent.outputValue("sibling"))
+                                sibling.outputValue("V_A_typename")
+                            },
+                    )
+                },
+            ).assumptions
+
+        val result = resolveAndValidate(world, "query { result }")
+
+        assertEquals("Sibling", result.getCell(world.schema.contractKey("Query", "result")).get())
+    }
+
+    @Test
+    fun `child resolver parent input closes active ancestor demand`() {
+        val world =
+            TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    directive @parent on FIELD_DEFINITION
+                    type Query { child: Child, sibling: String }
+                    type Child { parent: Query @parent, value: String }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    mapOf(
+                        schema.requireObjectField("Query", "child") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                schema.objectOf("Child")
+                            },
+                        schema.requireObjectField("Query", "sibling") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> "ready" },
+                        schema.requireObjectField("Child", "value") to
+                            fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment ignored on Child { parent { sibling } }",
+                                ),
+                            ) { input, _ ->
+                                val parent = assertIs<EngineObjectData.Sync>(input.outputValue("parent"))
+                                parent.outputValue("sibling")
+                            },
+                    )
+                },
+            ).assumptions
+
+        val result = resolveAndValidate(world, "query { child { value } }")
+        val child =
+            assertIs<ObjectEngineResult>(
+                result.getCell(world.schema.contractKey("Query", "child")).get(),
+            )
+
+        assertEquals("ready", child.getCell(world.schema.contractKey("Child", "value")).get())
+    }
+
+    @Test
     fun `materialized parent EOD is a copy of the ancestor value`() {
         lateinit var sourceParent: EngineObjectData.Sync
         val world =

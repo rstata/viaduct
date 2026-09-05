@@ -66,9 +66,7 @@ Run one unfiltered broad product by choosing a directed profile, seed, and `S:R:
 ./gradlew :semantics:resolver26BroadStress -Presolver26BroadStressProfile=multiple-owners -Presolver26BroadStressSeed=424242 -Presolver26BroadStressSize=20:10:50 -Presolver26ThreadCount=5
 ```
 
-Every Resolver26 broad profile includes a forced great-grandparent path: its deepest resolver input
-selects `parent.parent.parent`, queries activate that resolver, and generated variables are never
-inserted beneath a parent selection. The focused 250-case parent stress can be run with:
+Every Resolver26 broad profile includes a forced great-grandparent path: its deepest resolver input selects `parent.parent.parent`, queries activate that resolver, and generated variables are never inserted beneath a parent selection. The focused 250-case parent stress also generates independently shaped parent chains and records parent fields actually present in materialized resolver inputs, separating fixed-spine and random activations and reporting a consecutive parent-depth histogram. Run it with:
 
 ```shell
 ./gradlew :semantics:resolver26BroadStress \
@@ -207,4 +205,4 @@ This interaction-local accounting work is deliberately deferred to a follow-up P
 - [x] `FromObjectField` variables generate literal/symbolic convergence and report it independently from `FromArgument` convergence.
 - [x] Resolver26's default deep-stress configuration enables from-field variables and requires both generated and activated evidence.
 - [x] Broad structural coverage records `ABSTRACT_PROVIDER_PATH` only from an activated owner and requires it in the balanced Resolver26 profile.
-- [x] Resolver26 stress profiles generate and activate a variable-free great-grandparent `@parent` demand spine; a focused 250-case run records actual applications of its deepest resolver.
+- [x] Resolver26 stress profiles generate and activate a variable-free great-grandparent `@parent` demand spine; a focused 250-case run supplements it with randomized parent chains and records actual materialized-input activations by source coordinate and consecutive parent depth.

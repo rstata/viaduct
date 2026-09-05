@@ -20,6 +20,52 @@ import kotlin.test.assertTrue
 
 class GeneratorTest {
     @Test
+    fun `random parent generation varies chains lists abstract targets and resolver inputs`() {
+        val config =
+            Config.default +
+                (ParentFieldsEnabled to true) +
+                (RandomParentFieldsEnabled to true) +
+                (ListsEnabled to true) +
+                (UnionsEnabled to true) +
+                (MaxOutputListDepth to 2) +
+                (ResolverFragmentsEnabled to true) +
+                (ResolverFragmentWeight to 1.0)
+        val random = RandomSource.seeded(2026090501L)
+        var listProducers = 0
+        var abstractTargets = 0
+        var maximumDepth = 0
+        var parentDemandResolvers = 0
+
+        repeat(100) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+
+            assertTrue(schema.features.randomParentFieldCount > 0)
+            assertTrue(
+                schema.query.fields
+                    .filter { field -> field.name.startsWith("query") }
+                    .none { field ->
+                        field.type.namedType.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX)
+                    },
+            )
+            registry.world(schema)
+
+            listProducers += schema.features.randomParentListProducerCount
+            abstractTargets += schema.features.randomParentAbstractTargetCount
+            maximumDepth = maxOf(maximumDepth, schema.features.maximumParentChainDepth)
+            parentDemandResolvers +=
+                registry.parentDemandOwnerFields.keys.count { field ->
+                    field.typeName.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX)
+                }
+        }
+
+        assertTrue(listProducers > 0)
+        assertTrue(abstractTargets > 0)
+        assertTrue(maximumDepth >= 4)
+        assertTrue(parentDemandResolvers > 0)
+    }
+
+    @Test
     fun `parent generation reaches a variable-free great-grandparent selection`() {
         val config =
             Config.default +

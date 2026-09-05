@@ -93,10 +93,7 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
             operation = operation,
             occurrence = occurrence,
             source = this,
-            initialDemand =
-                context(operation.world) {
-                    constructionDemand + invocationDemand.liftedParentDemand()
-                },
+            initialDemand = constructionDemand,
         )
     val closedDemand = orchestration.prepare()
     materializePassiveFields(

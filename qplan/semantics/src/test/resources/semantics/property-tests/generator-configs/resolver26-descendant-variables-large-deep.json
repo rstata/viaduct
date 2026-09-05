@@ -7,6 +7,7 @@
     "nodeResolversEnabled" : true,
     "parentFieldsEnabled" : true,
     "queryFragmentsEnabled" : true,
+    "randomParentFieldsEnabled" : false,
     "recursiveInputTypesEnabled" : true,
     "recursiveOutputEdgesEnabled" : true,
     "resolverFragmentsEnabled" : true,

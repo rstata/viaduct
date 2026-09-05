@@ -2162,12 +2162,19 @@ private class RegistryGenerator(
 
     private fun FieldDefinitionSpec.isGeneratedParentSpineResolver(): Boolean =
         config[ParentFieldsEnabled] &&
-            ownerName in
-            setOf(
-                GENERATED_PARENT_ROOT_TYPE,
-                GENERATED_PARENT_CHILD_TYPE,
-                GENERATED_PARENT_GRANDCHILD_TYPE,
-                GENERATED_PARENT_GREAT_GRANDCHILD_TYPE,
+            (
+                ownerName in
+                    setOf(
+                        GENERATED_PARENT_ROOT_TYPE,
+                        GENERATED_PARENT_CHILD_TYPE,
+                        GENERATED_PARENT_GRANDCHILD_TYPE,
+                        GENERATED_PARENT_GREAT_GRANDCHILD_TYPE,
+                    ) ||
+                    (
+                        config[RandomParentFieldsEnabled] &&
+                            ownerName.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX) &&
+                            name == "value0"
+                    )
             )
 
     private fun FieldCoordinate.isGeneratedParentResult(): Boolean =

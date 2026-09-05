@@ -55,6 +55,7 @@ internal class ObjectOrchestrationTask(
         }
         context(operation) {
             declareBindings(closed)
+            installParentFields(closed.demand)
         }
         operation.bindingDeclarationsState.markBindingsDeclared(occurrence.target)
         return closed.demand
@@ -95,6 +96,37 @@ internal class ObjectOrchestrationTask(
                     "Resolver26 passive key $objectKey was not materialized by " +
                         "resolvePassiveValues"
                 }
+            }
+        }
+    }
+
+    context(operation: Resolver26OperationContext)
+    private fun installParentFields(closedDemand: ObjectSelectionForest) {
+        val parentSelections =
+            closedDemand.byKey().filterKeys { key ->
+                key is ObjectEngineResult.ParentKey
+            }
+        if (parentSelections.isEmpty()) return
+        val parent =
+            occurrence.parent
+                ?: error("Parent demand at ${occurrence.path} has no containing occurrence")
+        val producer =
+            occurrence.path
+                .filterIsInstance<ObjectEngineResult.ObjectKey>()
+                .lastOrNull()
+                ?.field
+        parentSelections.keys.forEach { objectKey ->
+            val key = objectKey as ObjectEngineResult.ParentKey
+            require(world.parentFieldRelations[key.field] == producer) {
+                "Parent field ${key.field.containingDef.name}.${key.field.name} maps to " +
+                    "${world.parentFieldRelations[key.field]}, not containing producer $producer " +
+                    "at ${occurrence.path}"
+            }
+            occurrence.target.reserveCell(key).also { cell ->
+                cell.setValue(parent.target)
+            }
+            check(occurrence.target.getCell(key).getValue().get() === parent.target) {
+                "Parent field ${key.field.name} does not reference its containing object occurrence"
             }
         }
     }

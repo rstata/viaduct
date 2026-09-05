@@ -21,6 +21,8 @@ import model.requireQueryTypeDef
 import model.schemaType
 import semantics.resolvers.closeResolverDemand
 import semantics.resolvers.materializedChildOccurrences
+import semantics.resolvers.installParentBackedges
+import semantics.resolvers.PassiveObjectOccurrence
 import semantics.resolvers.resolvePassiveValues
 import semantics.shared.CycleCheckState
 import semantics.shared.OperationContext
@@ -31,6 +33,7 @@ import viaduct.engine.api.EngineObjectData
 internal class CoroutineResolve(
     private val operation: OperationContext,
     private val complete: (SelectionForest) -> SelectionForest,
+    private val supportsParentFields: Boolean = false,
     private val cycleChecker: CycleCheckState = CycleCheckState.create(),
 ) {
     private val world: Assumptions = operation.world
@@ -52,6 +55,7 @@ internal class CoroutineResolve(
                 source = source,
                 selections = selections,
                 target = result,
+                ancestors = emptyList(),
             )
         }
 
@@ -64,12 +68,43 @@ internal class CoroutineResolve(
         source: EngineObjectData.Sync,
         selections: SelectionForest,
         target: ObjectEngineResult,
+        ancestors: List<PassiveObjectOccurrence>,
     ): Unit = context(operation, world) {
         require(source.schemaType == target.type) {
             "Source type ${source.schemaType.name} does not match result type ${target.type.name}"
         }
 
-        val closedDemand = source.closeResolverDemand(root, path, selections)
+        val closedDemand =
+            source.closeResolverDemand(
+                root = root,
+                path = path,
+                selections = selections,
+                includeParentInputDemand = supportsParentFields,
+            )
+        val occurrence = PassiveObjectOccurrence(path, source, closedDemand, target)
+        val parentSelections =
+            if (supportsParentFields) {
+                target.installParentBackedges(closedDemand, ancestors.lastOrNull(), path)
+            } else {
+                require(closedDemand.groundKeys().none { key -> key is ObjectEngineResult.ParentKey }) {
+                    "Resolver21 does not support @parent fields"
+                }
+                emptyList()
+            }
+        parentSelections
+            .forEach { parentSelection ->
+                val parent = checkNotNull(ancestors.lastOrNull())
+                synchronized(parent.target) {
+                    orchestrateSlot(
+                        root = root,
+                        path = parent.path,
+                        source = parent.source,
+                        selections = parentSelection.subselections,
+                        target = parent.target,
+                        ancestors = ancestors.dropLast(1),
+                    )
+                }
+            }
         source.materializedChildOccurrences(path, closedDemand, target)
             .forEach { child ->
                 orchestrateSlot(
@@ -78,6 +113,7 @@ internal class CoroutineResolve(
                     source = child.source,
                     selections = child.selections,
                     target = child.target,
+                    ancestors = ancestors + occurrence,
                 )
             }
         val unresolvedKeys = closedDemand.groundKeys() - target.keys
@@ -100,6 +136,7 @@ internal class CoroutineResolve(
                     selection = closedDemand[key],
                     target = target,
                     cell = target.getCell(key),
+                    ancestors = ancestors,
                 )
             }
         }
@@ -112,6 +149,7 @@ internal class CoroutineResolve(
         selection: ObjectSelection,
         target: ObjectEngineResult,
         cell: EngineResultCell,
+        ancestors: List<PassiveObjectOccurrence>,
     ): Unit = context(operation, world) {
         val key = selection.groundKey()
         val valuePromise = cell.getValue()
@@ -158,6 +196,8 @@ internal class CoroutineResolve(
                             invocationDemand = invocationDemand,
                         )
 
+                    val occurrence =
+                        PassiveObjectOccurrence(path, source, selection.subselections, target)
                     passiveValuesResult.objectsNeedingResolution.forEach { child ->
                         orchestrateSlot(
                             root = root,
@@ -165,6 +205,7 @@ internal class CoroutineResolve(
                             source = child.source,
                             selections = child.selections,
                             target = child.target,
+                            ancestors = ancestors + occurrence,
                         )
                     }
                     valuePromise.complete(passiveValuesResult.engineResult)
@@ -193,6 +234,7 @@ internal class CoroutineResolve(
             source = source,
             selections = queryFragment.constructionSelections,
             target = queryResult,
+            ancestors = emptyList(),
         )
         operation.resolverObserver.onQueryFragmentResult(
             queryFragment.resolverOccurrenceId,

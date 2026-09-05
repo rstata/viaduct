@@ -321,7 +321,9 @@ private fun assertCompletedAndWriteOnce(result: EngineResult?) {
                 assertFailsWith<IllegalStateException> {
                     promise.complete(value)
                 }
-                assertCompletedAndWriteOnce(value)
+                if (key !is ObjectEngineResult.ParentKey) {
+                    assertCompletedAndWriteOnce(value)
+                }
             }
         else -> Unit
     }

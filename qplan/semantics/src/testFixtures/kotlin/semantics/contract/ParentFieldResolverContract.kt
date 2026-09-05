@@ -1,9 +1,11 @@
 package semantics.contract
 
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotSame
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.emptyFragmentOf
@@ -19,6 +21,344 @@ import viaduct.engine.api.EngineObjectData
 
 /** Contract for engine-provided parent backedges and transitive ancestor demand. */
 interface ParentFieldResolverContract : ResolverContract {
+    @Test
+    fun `parent demand waits for a revisited active child field`() {
+        val world =
+            TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    directive @parent on FIELD_DEFINITION
+                    type Query { root: Root }
+                    type Root { child: Child, ancestorValue: Int }
+                    type Child { parent: Root @parent, grandchild: Grandchild, marker: String }
+                    type Grandchild { parent: Child @parent, greatGrandchild: GreatGrandchild }
+                    type GreatGrandchild { parent: Grandchild @parent, result: Int }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    mapOf(
+                        schema.requireObjectField("Query", "root") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                schema.objectOf("Root")
+                            },
+                        schema.requireObjectField("Root", "child") to
+                            fieldResolverOf(schema.emptyFragmentOf("Root")) { _, _ ->
+                                schema.objectOf("Child")
+                            },
+                        schema.requireObjectField("Child", "grandchild") to
+                            fieldResolverOf(schema.emptyFragmentOf("Child")) { _, _ ->
+                                schema.objectOf("Grandchild")
+                            },
+                        schema.requireObjectField("Child", "marker") to
+                            fieldResolverOf(schema.emptyFragmentOf("Child")) { _, _ -> "child" },
+                        schema.requireObjectField("Grandchild", "greatGrandchild") to
+                            fieldResolverOf(schema.emptyFragmentOf("Grandchild")) { _, _ ->
+                                schema.objectOf("GreatGrandchild")
+                            },
+                        schema.requireObjectField("Root", "ancestorValue") to
+                            fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment ignored on Root { " +
+                                        "child { parent { child { marker } } } }",
+                                ),
+                            ) { input, _ ->
+                                val child =
+                                    assertIs<EngineObjectData.Sync>(input.outputValue("child"))
+                                val parent =
+                                    assertIs<EngineObjectData.Sync>(child.outputValue("parent"))
+                                val revisitedChild =
+                                    assertIs<EngineObjectData.Sync>(parent.outputValue("child"))
+                                assertEquals("child", revisitedChild.outputValue("marker"))
+                                42
+                            },
+                        schema.requireObjectField("GreatGrandchild", "result") to
+                            fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment ignored on GreatGrandchild { " +
+                                        "parent { parent { parent { ancestorValue } } } }",
+                                ),
+                            ) { input, _ ->
+                                val grandchild =
+                                    assertIs<EngineObjectData.Sync>(input.outputValue("parent"))
+                                val child =
+                                    assertIs<EngineObjectData.Sync>(grandchild.outputValue("parent"))
+                                val root =
+                                    assertIs<EngineObjectData.Sync>(child.outputValue("parent"))
+                                root.outputValue("ancestorValue")
+                            },
+                    )
+                },
+            ).assumptions
+
+        val result =
+            resolveAndValidate(
+                world,
+                "query { root { child { grandchild { greatGrandchild { result } } } } }",
+            )
+        val root =
+            assertIs<ObjectEngineResult>(
+                result.getCell(world.schema.contractKey("Query", "root")).get(),
+            )
+        val child =
+            assertIs<ObjectEngineResult>(
+                root.getCell(world.schema.contractKey("Root", "child")).get(),
+            )
+        val grandchild =
+            assertIs<ObjectEngineResult>(
+                child.getCell(world.schema.contractKey("Child", "grandchild")).get(),
+            )
+        val greatGrandchild =
+            assertIs<ObjectEngineResult>(
+                grandchild
+                    .getCell(world.schema.contractKey("Grandchild", "greatGrandchild"))
+                    .get(),
+            )
+
+        assertEquals(
+            42,
+            greatGrandchild
+                .getCell(world.schema.contractKey("GreatGrandchild", "result"))
+                .get(),
+        )
+    }
+
+    @Test
+    fun `parent demand can revisit its child before deepening the same parent`() {
+        val world =
+            TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    directive @parent on FIELD_DEFINITION
+                    type Query { root: Root }
+                    type Root { child: Child }
+                    type Child { parent: Root @parent, result: String }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    mapOf(
+                        schema.requireObjectField("Query", "root") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                schema.objectOf("Root")
+                            },
+                        schema.requireObjectField("Root", "child") to
+                            fieldResolverOf(schema.emptyFragmentOf("Root")) { _, _ ->
+                                schema.objectOf("Child")
+                            },
+                        schema.requireObjectField("Child", "result") to
+                            fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment ignored on Child { " +
+                                        "parent { child { parent { __typename } } } }",
+                                ),
+                            ) { input, _ ->
+                                val parent =
+                                    assertIs<EngineObjectData.Sync>(input.outputValue("parent"))
+                                val child =
+                                    assertIs<EngineObjectData.Sync>(parent.outputValue("child"))
+                                val revisitedParent =
+                                    assertIs<EngineObjectData.Sync>(child.outputValue("parent"))
+                                revisitedParent.outputValue("V_A_typename")
+                            },
+                    )
+                },
+            ).assumptions
+
+        val result = resolveAndValidate(world, "query { root { child { result } } }")
+        val root =
+            assertIs<ObjectEngineResult>(
+                result.getCell(world.schema.contractKey("Query", "root")).get(),
+            )
+        val child =
+            assertIs<ObjectEngineResult>(
+                root.getCell(world.schema.contractKey("Root", "child")).get(),
+            )
+
+        assertEquals(
+            "Root",
+            child.getCell(world.schema.contractKey("Child", "result")).get(),
+        )
+    }
+
+    @Test
+    fun `recursive same-type parent chain retains immediate occurrence identity`() {
+        val world =
+            TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    directive @parent on FIELD_DEFINITION
+                    type Query { root: Link }
+                    type Link { name: String, child: Link, parent: Link @parent }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    mapOf(
+                        schema.requireObjectField("Query", "root") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                schema.objectOf("Link") { "name" setTo "root" }
+                            },
+                        schema.requireObjectField("Link", "child") to
+                            fieldResolverOf(schema.emptyFragmentOf("Link")) { _, _ ->
+                                schema.objectOf("Link") { "name" setTo "child" }
+                            },
+                    )
+                },
+            ).assumptions
+
+        val result =
+            resolveAndValidate(
+                world,
+                "query { root { child { child { parent { parent { name } } } } } }",
+            )
+        val root =
+            assertIs<ObjectEngineResult>(
+                result.getCell(world.schema.contractKey("Query", "root")).get(),
+            )
+        val firstChild =
+            assertIs<ObjectEngineResult>(
+                root.getCell(world.schema.contractKey("Link", "child")).get(),
+            )
+        val secondChild =
+            assertIs<ObjectEngineResult>(
+                firstChild.getCell(world.schema.contractKey("Link", "child")).get(),
+            )
+        val parentKey = world.schema.contractKey("Link", "parent")
+
+        assertSame(firstChild, secondChild.getCell(parentKey).get())
+        assertSame(root, firstChild.getCell(parentKey).get())
+    }
+
+    @Test
+    fun `resolver produced parent field cannot replace the structural parent`() {
+        val world =
+            TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    directive @parent on FIELD_DEFINITION
+                    type Query { company: Company }
+                    type Company { name: String, user: User }
+                    type User { parent: Company @parent, companyName: String }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val unrelatedCompany =
+                        schema.objectOf("Company") {
+                            "name" setTo "unrelated"
+                        }
+                    mapOf(
+                        schema.requireObjectField("Query", "company") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                schema.objectOf("Company") {
+                                    "name" setTo "structural"
+                                    "user" setTo
+                                        schema.objectOf("User") {
+                                            "parent" setTo unrelatedCompany
+                                        }
+                                }
+                            },
+                        schema.requireObjectField("User", "companyName") to
+                            fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment ignored on User { parent { name } }",
+                                ),
+                            ) { input, _ ->
+                                val parent =
+                                    assertIs<EngineObjectData.Sync>(
+                                        input.outputValue("parent"),
+                                    )
+                                parent.outputValue("name")
+                            },
+                    )
+                },
+            ).assumptions
+
+        val result =
+            resolveAndValidate(
+                world,
+                "query { company { user { companyName } } }",
+            )
+        val company =
+            assertIs<ObjectEngineResult>(
+                result.getCell(world.schema.contractKey("Query", "company")).get(),
+            )
+        val user =
+            assertIs<ObjectEngineResult>(
+                company.getCell(world.schema.contractKey("Company", "user")).get(),
+            )
+
+        assertSame(
+            company,
+            user.getCell(world.schema.contractKey("User", "parent")).get(),
+        )
+        assertEquals(
+            "structural",
+            user.getCell(world.schema.contractKey("User", "companyName")).get(),
+        )
+    }
+
+    @Test
+    fun `resolver produced parent field is not traversed as a passive child`() {
+        val world =
+            TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    directive @parent on FIELD_DEFINITION
+                    type Query { root: Root }
+                    type Root { child: Child }
+                    type Child { parent: Root @parent, grandchild: Grandchild }
+                    type Grandchild { parent: Child @parent }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    mapOf(
+                        schema.requireObjectField("Query", "root") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                schema.objectOf("Root")
+                            },
+                        schema.requireObjectField("Root", "child") to
+                            fieldResolverOf(schema.emptyFragmentOf("Root")) { _, _ ->
+                                schema.objectOf("Child") {
+                                    "parent" setTo schema.objectOf("Root")
+                                }
+                            },
+                        schema.requireObjectField("Child", "grandchild") to
+                            fieldResolverOf(schema.emptyFragmentOf("Child")) { _, _ ->
+                                schema.objectOf("Grandchild") {
+                                    "parent" setTo schema.objectOf("Child")
+                                }
+                            },
+                    )
+                },
+            ).assumptions
+
+        val result =
+            resolveAndValidate(
+                world,
+                "query { root { child { grandchild { parent { parent { __typename } } } } } }",
+            )
+        val root =
+            assertIs<ObjectEngineResult>(
+                result.getCell(world.schema.contractKey("Query", "root")).get(),
+            )
+        val child =
+            assertIs<ObjectEngineResult>(
+                root.getCell(world.schema.contractKey("Root", "child")).get(),
+            )
+        val grandchild =
+            assertIs<ObjectEngineResult>(
+                child.getCell(world.schema.contractKey("Child", "grandchild")).get(),
+            )
+        val grandchildParent =
+            assertIs<ObjectEngineResult>(
+                grandchild.getCell(world.schema.contractKey("Grandchild", "parent")).get(),
+            )
+
+        assertSame(child, grandchildParent)
+        assertSame(
+            root,
+            grandchildParent.getCell(world.schema.contractKey("Child", "parent")).get(),
+        )
+    }
+
     @Test
     fun `resolver input closes sibling demand reached through a child parent`() {
         val world =
@@ -230,6 +570,43 @@ interface ParentFieldResolverContract : ResolverContract {
         assertSame(
             organization,
             company.getCell(world.schema.contractKey("Company", "parent")).get(),
+        )
+    }
+}
+
+/** Contract for resolver versions that deliberately exclude parent backedges. */
+interface UnsupportedParentFieldResolverContract : ResolverContract {
+    @Test
+    fun `parent demand is rejected`() {
+        val world =
+            TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    directive @parent on FIELD_DEFINITION
+                    type Query { root: Root }
+                    type Root { child: Child }
+                    type Child { parent: Root @parent }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    mapOf(
+                        schema.requireObjectField("Query", "root") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                schema.objectOf("Root") {
+                                    "child" setTo schema.objectOf("Child")
+                                }
+                            },
+                    )
+                },
+            ).assumptions
+
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                resolveAndValidate(world, "query { root { child { parent { __typename } } } }")
+            }
+        assertTrue(
+            failure.message?.contains("support @parent fields") == true,
+            "Expected an explicit unsupported-parent failure, got: ${failure.message}",
         )
     }
 }

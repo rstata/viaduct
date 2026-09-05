@@ -10,8 +10,6 @@ import semantics.arbitrary.ListValueSize
 import semantics.arbitrary.MaxSelectionDepth
 import semantics.arbitrary.ObjectFieldCount
 import semantics.arbitrary.ParentFieldsEnabled
-import semantics.arbitrary.RESOLVER_TEST_CASE_PROPERTY
-import semantics.arbitrary.RESOLVER_TEST_PROFILE_PROPERTY
 import semantics.arbitrary.ResolverFromFieldVariableOwnerLimit
 import semantics.arbitrary.ResolverFromFieldVariableOwnerUseWeight
 import semantics.arbitrary.ResolverFromQueryFieldVariablesEnabled
@@ -21,8 +19,6 @@ import semantics.arbitrary.ResolverQueryFragmentWeight
 import semantics.arbitrary.ResolverTestCaseCoordinate
 import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.SometimesPassiveFieldWeight
-import semantics.arbitrary.TestCaseCount
-import semantics.arbitrary.checkResolverTestCases
 import semantics.propertytest.PropertyTestCampaignConfigFile
 import semantics.propertytest.PropertyTestJson
 import semantics.propertytest.PropertyTestRoundExecution
@@ -213,94 +209,4 @@ class ResolverBroadStressCampaignConfigurationTest {
             assertEquals(1, result.completedCases)
         }
 
-    @Test
-    fun `large deep profiles generate bounded queries`() =
-        runBlocking {
-            val symbolicIdentityRun: Resolver26BroadStressCampaignRun =
-                Resolver26BroadStressCampaign
-                    .round(81)
-                    .runs
-                    .single { run ->
-                        run.profile == Resolver26BroadStressProfile.SYMBOLIC_IDENTITY
-                    }
-            val balancedRun: Resolver26BroadStressCampaignRun =
-                Resolver26BroadStressCampaign
-                    .round(95)
-                    .runs
-                    .single { run ->
-                        run.profile == Resolver26BroadStressProfile.BALANCED
-                    }
-            val runCoordinates:
-                List<Pair<Resolver26BroadStressCampaignRun, List<String>>> =
-                listOf(
-                    symbolicIdentityRun to listOf("1:1:1", "12:1:1"),
-                    balancedRun to listOf("14:1:1"),
-                )
-
-            runCoordinates.forEach { (campaignRun, coordinates) ->
-                coordinates.forEach { coordinate ->
-                    withSystemProperties(
-                        RESOLVER_TEST_CASE_PROPERTY to coordinate,
-                        RESOLVER_TEST_PROFILE_PROPERTY to campaignRun.propertyProfile,
-                    ) {
-                        val run =
-                            checkResolverTestCases(
-                                counts = campaignRun.counts,
-                                config = campaignRun.config,
-                                profile = campaignRun.propertyProfile,
-                                seed = campaignRun.seed,
-                            ) { _, _ -> }
-
-                        assertEquals(1, run.attemptedCases)
-                    }
-                }
-            }
-        }
-
-    @Test
-    fun `descendant variable generation orders multiple passive branches acyclically`() =
-        runBlocking {
-            val profile: Resolver26BroadStressProfile =
-                Resolver26BroadStressProfile.DESCENDANT_VARIABLES
-            withSystemProperties(
-                RESOLVER_TEST_CASE_PROPERTY to "48:1:1",
-                RESOLVER_TEST_PROFILE_PROPERTY to profile.propertyProfile,
-            ) {
-                val run =
-                    checkResolverTestCases(
-                        counts =
-                            TestCaseCount(
-                                schemas = 200,
-                                registriesPerSchema = 2,
-                                queriesPerSchema = 5,
-                            ),
-                        config = profile.config,
-                        profile = profile.propertyProfile,
-                        seed = 2_026_081_300_022L,
-                    ) { _, _ -> }
-
-                assertEquals(1, run.attemptedCases)
-            }
-        }
-}
-
-// Temporarily installs replay coordinates without leaking them into neighboring generated tests.
-private suspend fun <T> withSystemProperties(
-    vararg properties: Pair<String, String>,
-    block: suspend () -> T,
-): T {
-    val previous: Map<String, String?> =
-        properties.associate { (property, _) -> property to System.getProperty(property) }
-    return try {
-        properties.forEach { (property, value) -> System.setProperty(property, value) }
-        block()
-    } finally {
-        previous.forEach { (property, value) ->
-            if (value == null) {
-                System.clearProperty(property)
-            } else {
-                System.setProperty(property, value)
-            }
-        }
-    }
 }

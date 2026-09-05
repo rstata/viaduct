@@ -10,6 +10,7 @@ import model.SelectionForest
 import semantics.shared.applicableGroundSelections
 import model.flatMapToSelectionForest
 import model.schemaType
+import model.selectionForestOf
 import semantics.correctresolution.argumentsContainErrorValue
 import viaduct.engine.api.EngineObjectData
 import semantics.shared.OperationContext
@@ -25,12 +26,14 @@ fun ViaductSchema.Object.closeResolverDemand(
     root: ObjectEngineResult,
     path: List<PathComponent>,
     selections: SelectionForest,
+    includeParentInputDemand: Boolean = false,
 ): ObjectSelectionForest =
     closeResolverDemand(
         root = root,
         path = path,
         selections = selections,
         expanded = emptySet(),
+        includeParentInputDemand = includeParentInputDemand,
     )
 
 /** Closes demand only for standard resolvers whose fields are absent from this source object. */
@@ -39,12 +42,14 @@ fun EngineObjectData.Sync.closeResolverDemand(
     root: ObjectEngineResult,
     path: List<PathComponent>,
     selections: SelectionForest,
+    includeParentInputDemand: Boolean = false,
 ): ObjectSelectionForest =
     schemaType.closeResolverDemand(
         root = root,
         path = path,
         selections = selections,
         expanded = emptySet(),
+        includeParentInputDemand = includeParentInputDemand,
         expandResolver = { key ->
             if (!isPresent(key.field.name)) {
                 true
@@ -64,9 +69,19 @@ private fun ViaductSchema.Object.closeResolverDemand(
     path: List<PathComponent>,
     selections: SelectionForest,
     expanded: Set<ObjectEngineResult.GroundKey>,
+    includeParentInputDemand: Boolean,
     expandResolver: (ObjectEngineResult.GroundKey) -> Boolean = { true },
 ): ObjectSelectionForest {
-    val applicableSelections = selections.applicableGroundSelections(this)
+    val parentInputDemand =
+        if (includeParentInputDemand) {
+            context(operation.world) {
+                selections.inputParentDemand()
+            }
+        } else {
+            selectionForestOf()
+        }
+    val applicableSelections =
+        (selections + parentInputDemand).applicableGroundSelections(this)
     val unexpandedResolverKeys =
         applicableSelections.groundKeys().filter { key ->
             key !in expanded &&
@@ -91,6 +106,7 @@ private fun ViaductSchema.Object.closeResolverDemand(
         path = path,
         selections = applicableSelections + resolverDemand,
         expanded = expanded + unexpandedResolverKeys,
+        includeParentInputDemand = includeParentInputDemand,
         expandResolver = expandResolver,
     )
 }

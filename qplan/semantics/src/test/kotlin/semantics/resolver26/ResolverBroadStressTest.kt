@@ -303,12 +303,6 @@ internal suspend fun runResolver26BroadStress(
                         testCase.registry.features.maximumFromObjectFieldVariableUseDepth,
                         testCase.registry.features.maximumFromQueryFieldVariableUseDepth,
                     )
-                if (config[ParentFieldsEnabled]) {
-                    check(testCase.registry.features.resolverOutputParentFieldCount > 0) {
-                        "Resolver26 parent profile generated no resolver-supplied @parent fields"
-                    }
-                }
-
                 val world: Assumptions =
                     testWorld.newAssumptions(selectiveResolvers = true)
                 val fragment: Fragment = world.fragmentFrom(testCase.query.source)

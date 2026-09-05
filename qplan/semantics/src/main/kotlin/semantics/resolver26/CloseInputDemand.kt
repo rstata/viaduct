@@ -17,6 +17,7 @@ import model.registry.VariableInstanceDefinition
 import model.schemaType
 import model.selectionForestOf
 import semantics.correctresolution.argumentsContainErrorValue
+import semantics.resolvers.inputParentDemand
 import viaduct.engine.api.EngineObjectData
 
 // Expands resolver object fragments until no new resolver keys enter the object's demand.

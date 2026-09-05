@@ -236,3 +236,80 @@ fragment on Subject {
 Projection examines the returned `Person`. The `Person` condition applies, so `first` is retained;
 the `Organization` condition does not apply. Lifting preserves possible successor demand, while
 the retained type conditions prevent that demand from becoming unconditional.
+
+## Why The Depth-First Resolvers Do Not Support `@parent`
+
+`@parent` turns the ordinary result tree into a graph and can require resolution to leave an occurrence, revisit an ancestor, and then re-enter the same still-open descendant before the original work can finish. Consider this complete resolver world:
+
+```graphql
+directive @parent on FIELD_DEFINITION
+
+extend type Query {
+  root: Root!
+    @resolver(result: {})
+}
+
+type Root {
+  child: Child!
+    @resolver(result: {})
+
+  ancestorValue: Int!
+    @resolver(
+      of: "child { parent { child { marker } } }"
+      result: "value(child.parent.child.marker)"
+    )
+}
+
+type Child {
+  parent: Root! @parent
+
+  grandchild: Grandchild!
+    @resolver(result: {})
+
+  marker: Int!
+    @resolver(result: 42)
+}
+
+type Grandchild {
+  parent: Child! @parent
+
+  greatGrandchild: GreatGrandchild!
+    @resolver(result: {})
+}
+
+type GreatGrandchild {
+  parent: Grandchild! @parent
+
+  result: Int!
+    @resolver(
+      of: "parent { parent { parent { ancestorValue } } }"
+      result: "value(parent.parent.parent.ancestorValue)"
+    )
+}
+```
+
+The client asks for:
+
+```graphql
+query {
+  root {
+    child {
+      grandchild {
+        greatGrandchild {
+          result
+        }
+      }
+    }
+  }
+}
+```
+
+`GreatGrandchild.result` walks three parent edges to demand `Root.ancestorValue`. That resolver's input descends through `Root.child`, follows the child's parent back to the same `Root`, then re-enters the same `Child` occurrence to demand `marker`. The required execution order is therefore:
+
+```text
+Child.marker -> Root.ancestorValue -> GreatGrandchild.result
+```
+
+This order crosses occurrence boundaries in both directions. A `dependencyOrder` computed for sibling keys on one OER cannot express it, and a traversal that reserves an occurrence's work before recursively deepening it cannot safely re-enter that still-open occurrence. Supporting the case requires occurrence-aware suspension or orchestration across parent and child edges, not merely a different local sibling order.
+
+Resolver01-03 and Resolver06-08 intentionally retain their simple recursive and explicit-task depth-first structures, so they reject `@parent` demand. Resolver22/23 use structured suspension with exact promises, and Resolver26 performs parent-aware input-demand and successor-demand fixed-point computations, so those resolvers support this world. A more elaborate graph-aware depth-first engine could be built, but adding its re-entry machinery to these reference algorithms would defeat their purpose as small stepping stones toward correctness proofs.

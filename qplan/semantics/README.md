@@ -49,7 +49,9 @@ Model fixture preparation accepts resolver selection documents that retain named
 
 Resolver26 is the self-contained advanced resolver with runtime from-field bindings. It supports both `FromObjectField` and `FromQueryField`; its current protocol is documented in [`resolver26/design.md`](./src/main/kotlin/semantics/resolver26/design.md).
 
-Resolver02/03, Resolver07/08, Resolver22/23, and Resolver26 resolve `@parent` selections. Each installs the child's parent cell with the containing ancestor OER itself, including for list and nested-list child occurrences. Resolver input fragments may not use variables beneath a parent selection. Demand on `parent { ... }` is lifted one ancestor at a time, so repeated static closure handles grandparents. Resolver26 transposes parent demand into selective producer output through successor demand and independently adds parent-induced ancestor work through input-demand closure.
+Resolver22/23 and Resolver26 resolve `@parent` selections. Each installs the child's parent cell with the containing ancestor OER itself, including for list and nested-list child occurrences. Resolver input fragments may not use variables beneath a parent selection. Demand on `parent { ... }` is lifted one ancestor at a time, so repeated static closure handles grandparents. Resolver26 transposes parent demand into selective producer output through successor demand and independently adds parent-induced ancestor work through input-demand closure.
+
+Resolver01-03 and Resolver06-08 reject `@parent` demand. Their depth-first progression orders sibling resolver keys within one OER, but parent-induced work can require leaving a descendant for an ancestor and re-entering that same still-open descendant before either resolver can complete. Supporting that graph re-entry would require occurrence-aware suspension or orchestration beyond their intentionally small execution models. [`examples.md`](../examples.md#why-the-depth-first-resolvers-do-not-support-parent) demonstrates the ordering problem.
 
 ## Variable Production And Consumption
 

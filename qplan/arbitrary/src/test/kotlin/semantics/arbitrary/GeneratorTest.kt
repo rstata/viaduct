@@ -20,6 +20,28 @@ import kotlin.test.assertTrue
 
 class GeneratorTest {
     @Test
+    fun `parent result rank follows its fixed ancestor dependency`() {
+        val unrelatedBefore = FieldCoordinate("Object0", "field0")
+        val ancestor = FieldCoordinate(GENERATED_PARENT_ROOT_TYPE, GENERATED_PARENT_VALUE_FIELD)
+        val result =
+            FieldCoordinate(
+                GENERATED_PARENT_GREAT_GRANDCHILD_TYPE,
+                GENERATED_PARENT_RESULT_FIELD,
+            )
+        val unrelatedAfter = FieldCoordinate("Object1", "field1")
+        val shuffled = listOf(unrelatedBefore, result, ancestor, unrelatedAfter)
+
+        assertEquals(
+            listOf(unrelatedBefore, ancestor, result, unrelatedAfter),
+            shuffled.withGeneratedParentResultAfterAncestor(parentFieldsEnabled = true),
+        )
+        assertEquals(
+            shuffled,
+            shuffled.withGeneratedParentResultAfterAncestor(parentFieldsEnabled = false),
+        )
+    }
+
+    @Test
     fun `random parent generation varies chains lists abstract targets and resolver inputs`() {
         val config =
             Config.default +

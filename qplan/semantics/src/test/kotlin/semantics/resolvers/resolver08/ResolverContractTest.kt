@@ -13,7 +13,6 @@ import semantics.contract.EmptyObjectFragmentResolverContract
 import semantics.contract.NodeResolverContract
 import semantics.contract.ObjectFragmentFromArgumentResolverContract
 import semantics.contract.ObjectFragmentResolverContract
-import semantics.contract.ParentFieldResolverContract
 import semantics.contract.QueryFragmentResolverContract
 import semantics.contract.ResolverTaskObservation
 import semantics.contract.SelectiveObjectFragmentOutputPolicyContract
@@ -21,13 +20,14 @@ import semantics.contract.SelectiveResolverOutputPolicyContract
 import semantics.contract.SometimesPassiveObjectFragmentResolverContract
 import semantics.contract.SometimesPassiveResolverContract
 import semantics.contract.SometimesPassiveSelectiveResolverContract
+import semantics.contract.UnsupportedParentFieldResolverContract
 import semantics.resolvers.resolver06.toContractObservation
 
 class ResolverContractTest :
     EmptyObjectFragmentResolverContract,
     NodeResolverContract,
     ObjectFragmentResolverContract,
-    ParentFieldResolverContract,
+    UnsupportedParentFieldResolverContract,
     ObjectFragmentFromArgumentResolverContract,
     QueryFragmentResolverContract,
     SometimesPassiveResolverContract,

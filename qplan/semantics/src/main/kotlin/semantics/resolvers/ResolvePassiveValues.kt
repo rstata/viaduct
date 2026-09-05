@@ -19,6 +19,7 @@ import semantics.shared.applicableGroundSelections
 import model.invariants.conformsToOutputSchemaType
 import model.schemaType
 import model.requireField
+import model.isParentField
 import model.selectionForestOf
 import model.toEngineResult
 import semantics.shared.OperationContext
@@ -145,7 +146,10 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
     if (operation.selectiveResolvers) {
         val selectedFieldNames =
             invocationDemandByKey.keys.mapTo(linkedSetOf()) { key -> key.field.name }
-        val unselectedKeys = getSelections().toSet() - selectedFieldNames
+        val unselectedKeys =
+            getSelections()
+                .filterNot { fieldName -> schemaType.requireField(fieldName).isParentField() }
+                .toSet() - selectedFieldNames
         require(unselectedKeys.isEmpty()) {
             "Selective resolver output ${schemaType.name} contains unselected fields: " +
                 unselectedKeys.joinToString()
@@ -154,8 +158,9 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
 
     val selectedKeys =
         getSelections()
-            .map { fieldName ->
+            .mapNotNull { fieldName ->
                 val field = schemaType.requireField(fieldName)
+                if (field.isParentField()) return@mapNotNull null
                 require(field.args.isEmpty()) {
                     "Passive object field ${schemaType.name}/$fieldName must be argumentless"
                 }
@@ -223,7 +228,7 @@ private fun EngineObjectData.Sync.hasUnresolvedDemand(
         .applicableGroundSelections(schemaType)
         .byGroundKey()
         .any { (key, selection) ->
-            if (!isPresent(key.field.name)) {
+            if (key is ObjectEngineResult.ParentKey || !isPresent(key.field.name)) {
                 true
             } else {
                 require(key.field.args.isEmpty()) {
@@ -244,7 +249,7 @@ internal fun EngineObjectData.Sync.materializedChildOccurrences(
     resolved: ObjectEngineResult,
 ): List<PassiveObjectOccurrence> =
     selections.byGroundKey().flatMap { (key, selection) ->
-        if (!isPresent(key.field.name)) {
+        if (key is ObjectEngineResult.ParentKey || !isPresent(key.field.name)) {
             emptyList()
         } else {
             require(key.field.args.isEmpty()) {

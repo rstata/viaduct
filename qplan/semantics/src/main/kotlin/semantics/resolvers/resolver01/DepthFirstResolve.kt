@@ -18,10 +18,8 @@ import model.registry.ResolverFragment
 import model.schemaType
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.resolvers.ResolvePassiveValuesResult
-import semantics.resolvers.PassiveObjectOccurrence
 import semantics.resolvers.closeResolverDemand
 import semantics.resolvers.materializedChildOccurrences
-import semantics.resolvers.installParentBackedges
 import semantics.resolvers.resolvePassiveValues
 import semantics.resolvers.resolveRetainedObjects
 import semantics.shared.CycleCheckState
@@ -49,7 +47,6 @@ internal class DepthFirstResolve(
             path = emptyList(),
             selections = selections,
             resolved = result,
-            ancestors = emptyList(),
         )
     }
 
@@ -60,34 +57,12 @@ internal class DepthFirstResolve(
         path: List<PathComponent>,
         selections: SelectionForest,
         resolved: ObjectEngineResult,
-        ancestors: List<PassiveObjectOccurrence>,
     ): ObjectEngineResult = context(operation, world) {
         require(resolved.type == source.schemaType) {
             "Initial result type ${resolved.type.name} does not match ${source.schemaType}"
         }
 
         val closedDemand = source.closeResolverDemand(root, path, selections)
-        val occurrence = PassiveObjectOccurrence(path, source, closedDemand, resolved)
-        val missingKeys = closedDemand.groundKeys() - resolved.requireGroundKeys()
-        val missingResolverKeys =
-            missingKeys.filterNotTo(linkedSetOf()) { key ->
-                key is ObjectEngineResult.ParentKey
-            }
-        missingResolverKeys.forEach(resolved::reserveCell)
-        if (missingKeys.isNotEmpty()) {
-            resolved.installParentBackedges(closedDemand, ancestors.lastOrNull(), path)
-                .forEach { selection ->
-                val parent = checkNotNull(ancestors.lastOrNull())
-                orchestrateKeys(
-                    source = parent.source,
-                    root = root,
-                    path = parent.path,
-                    selections = selection.subselections,
-                    resolved = parent.target,
-                    ancestors = ancestors.dropLast(1),
-                )
-            }
-        }
         source.materializedChildOccurrences(path, closedDemand, resolved)
             .forEach { passiveObjectOccurrence ->
                 orchestrateKeys(
@@ -96,10 +71,13 @@ internal class DepthFirstResolve(
                     path = passiveObjectOccurrence.path,
                     selections = passiveObjectOccurrence.selections,
                     resolved = passiveObjectOccurrence.target,
-                    ancestors = ancestors + occurrence,
                 )
             }
-        val orderedKeys = dependencyOrder(source, root, path, missingResolverKeys)
+        val unresolvedKeys = closedDemand.groundKeys() - resolved.requireGroundKeys()
+        require(unresolvedKeys.none { key -> key is ObjectEngineResult.ParentKey }) {
+            "Resolver01-03 do not support @parent fields"
+        }
+        val orderedKeys = dependencyOrder(source, root, path, unresolvedKeys)
         orderedKeys.forEach { key ->
             val selection = closedDemand[key]
             resolveKey(source, root, path, selection, resolved)
@@ -110,7 +88,6 @@ internal class DepthFirstResolve(
                         path = passiveObjectOccurrence.path,
                         selections = passiveObjectOccurrence.selections,
                         resolved = passiveObjectOccurrence.target,
-                        ancestors = ancestors + occurrence,
                     )
                 }
         }
@@ -249,7 +226,6 @@ internal class DepthFirstResolve(
             path = emptyList(),
             selections = queryFragment.constructionSelections,
             resolved = queryResult,
-            ancestors = emptyList(),
         )
         operation.resolverObserver.onQueryFragmentResult(
             queryFragment.resolverOccurrenceId,

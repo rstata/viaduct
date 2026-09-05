@@ -33,6 +33,7 @@ import viaduct.engine.api.EngineObjectData
 internal class CoroutineResolve(
     private val operation: OperationContext,
     private val complete: (SelectionForest) -> SelectionForest,
+    private val supportsParentFields: Boolean = false,
     private val cycleChecker: CycleCheckState = CycleCheckState.create(),
 ) {
     private val world: Assumptions = operation.world
@@ -73,9 +74,24 @@ internal class CoroutineResolve(
             "Source type ${source.schemaType.name} does not match result type ${target.type.name}"
         }
 
-        val closedDemand = source.closeResolverDemand(root, path, selections)
+        val closedDemand =
+            source.closeResolverDemand(
+                root = root,
+                path = path,
+                selections = selections,
+                includeParentInputDemand = supportsParentFields,
+            )
         val occurrence = PassiveObjectOccurrence(path, source, closedDemand, target)
-        target.installParentBackedges(closedDemand, ancestors.lastOrNull(), path)
+        val parentSelections =
+            if (supportsParentFields) {
+                target.installParentBackedges(closedDemand, ancestors.lastOrNull(), path)
+            } else {
+                require(closedDemand.groundKeys().none { key -> key is ObjectEngineResult.ParentKey }) {
+                    "Resolver21 does not support @parent fields"
+                }
+                emptyList()
+            }
+        parentSelections
             .forEach { parentSelection ->
                 val parent = checkNotNull(ancestors.lastOrNull())
                 synchronized(parent.target) {

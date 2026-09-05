@@ -639,6 +639,7 @@ private class RegistryGenerator(
                         )
                 }.map(FieldDefinitionSpec::coordinate)
                 .shuffled(random)
+                .withGeneratedParentResultAfterAncestor(config[ParentFieldsEnabled])
                 .toCollection(linkedSetOf())
 
         val baseFieldValues =
@@ -3327,6 +3328,24 @@ internal data class GeneratedHashPlan(
 private const val RANDOM_PARENT_DIAGONAL_RESOLVER_WEIGHT = 0.35
 private const val MAX_GENERATED_HASH_DEPTH = 4
 private const val GENERATED_HASH_NESTED_SALT = -1640531527
+
+internal fun List<FieldCoordinate>.withGeneratedParentResultAfterAncestor(
+    parentFieldsEnabled: Boolean,
+): List<FieldCoordinate> {
+    if (!parentFieldsEnabled) return this
+    val ancestor = FieldCoordinate(GENERATED_PARENT_ROOT_TYPE, GENERATED_PARENT_VALUE_FIELD)
+    val result =
+        FieldCoordinate(
+            GENERATED_PARENT_GREAT_GRANDCHILD_TYPE,
+            GENERATED_PARENT_RESULT_FIELD,
+        )
+    if (indexOf(ancestor) < indexOf(result)) return this
+
+    return toMutableList().apply {
+        remove(result)
+        add(indexOf(ancestor) + 1, result)
+    }
+}
 
 private fun generatedHashObject(
     schema: ViaductSchema,

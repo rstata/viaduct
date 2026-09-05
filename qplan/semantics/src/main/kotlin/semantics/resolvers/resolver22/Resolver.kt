@@ -21,6 +21,7 @@ fun resolve(selections: SelectionForest): ObjectEngineResult {
     val resolver =
         CoroutineResolve(
             operation = operation,
+            supportsParentFields = true,
             complete = { completedSelections ->
                 context(operation.world) {
                     completedSelections.successorBoundaryDemand()

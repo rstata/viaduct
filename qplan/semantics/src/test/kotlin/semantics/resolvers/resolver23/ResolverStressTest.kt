@@ -7,10 +7,16 @@ import viaduct.engine.api.EngineObjectData
 import semantics.shared.OperationContext
 import model.ObjectEngineResult
 import model.SelectionForest
+import semantics.arbitrary.Config
+import semantics.arbitrary.ParentFieldsEnabled
 import semantics.contract.DeepResolverStressContract
 
 class ResolverStressTest : DeepResolverStressContract {
     override val resolverName: String = "resolver23"
+
+    override val stressConfigOverrides: Config =
+        Config.default +
+            (ParentFieldsEnabled to true)
 
     override fun resolve(
         operation: OperationContext,

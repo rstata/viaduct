@@ -43,7 +43,7 @@ interface ProductionDeadlockResolverContract : ResolverContract {
             }
 
         assertTrue(
-            error.message?.contains("contains a cycle foo_V_A_node -> foo_V_A_node") == true,
+            error.message!!.contains("contains a cycle foo_V_A_node -> foo_V_A_node"),
         )
     }
 }

@@ -225,11 +225,9 @@ class CorrectResolutionTest {
             )
         result.reserveCell(symbolicSourceKey).apply {
             setValue(99)
-            setAccessResult(true)
         }
         result.reserveCell(consumerKey).apply {
             setValue(99)
-            setAccessResult(true)
         }
         result.freeze()
         val selections =

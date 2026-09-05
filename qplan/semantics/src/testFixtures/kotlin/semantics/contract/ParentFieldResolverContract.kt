@@ -605,7 +605,7 @@ interface UnsupportedParentFieldResolverContract : ResolverContract {
                 resolveAndValidate(world, "query { root { child { parent { __typename } } } }")
             }
         assertTrue(
-            failure.message?.contains("support @parent fields") == true,
+            failure.message!!.contains("support @parent fields"),
             "Expected an explicit unsupported-parent failure, got: ${failure.message}",
         )
     }

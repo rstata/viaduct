@@ -17,6 +17,7 @@ import model.arg
 import model.engineObjectDataOf
 import model.instantiateVariables
 import model.materializeSelectionForestOf
+import model.objectKey
 import model.outputValue
 import model.schemaType
 import model.selectionForestOf
@@ -85,6 +86,10 @@ data class ResolverFragments(
  * relative to that field's containing type and is structurally contained by [objectFragment]. A
  * definition supplied by [ProviderFragment.QUERY] satisfies the same path invariant relative to
  * Query and is structurally contained by [queryFragment].
+ *
+ * Neither input fragment may use a variable on any concrete branch reachable beneath an `@parent`
+ * selection. A variable guarded by a concrete branch disjoint from every parent retarget remains
+ * valid. Parent traversal itself remains valid for selective and nonselective resolvers.
  */
 class FieldResolver private constructor(
     val field: ViaductSchema.ObjectField,
@@ -401,6 +406,8 @@ class FieldResolver private constructor(
             require(queryType.name == "Query") {
                 "Query fragment type must be Query"
             }
+            objectFragment.requireNoVariablesBeneathParent(field)
+            queryFragment.requireNoVariablesBeneathParent(field)
             objectFragment.collect(field.containingDef)
             queryFragment.collect(queryType)
             variables.forEach { (variable, definition) ->
@@ -441,6 +448,46 @@ class FieldResolver private constructor(
             }
         }
     }
+}
+
+private fun MaterializeSelectionForest.requireNoVariablesBeneathParent(
+    resolverField: ViaductSchema.ObjectField,
+) {
+    forEach { selection ->
+        require(
+            selection.possibleTypes.all { possibleType ->
+                val objectKey = selection.key.objectKey(possibleType)
+                objectKey !is ObjectEngineResult.ParentKey ||
+                    (objectKey.field.type.baseTypeDef as? ViaductSchema.CompositeTypeDef)
+                        ?.possibleObjectTypes
+                        .orEmpty()
+                        .all { parentType ->
+                            selection.subselections.usedVariablesApplicableTo(parentType).isEmpty()
+                        }
+            },
+        ) {
+            "Resolver input for ${resolverField.containingDef.name}/${resolverField.name} " +
+                "must not use variables beneath @parent field " +
+                "${selection.key.field.containingDef.name}/${selection.key.field.name}"
+        }
+        selection.subselections.requireNoVariablesBeneathParent(resolverField)
+    }
+}
+
+private fun MaterializeSelectionForest.usedVariablesApplicableTo(
+    type: ViaductSchema.Object,
+): Set<Arguments.Variable> {
+    val variables = linkedSetOf<Arguments.Variable>()
+    forEach { selection ->
+        if (type !in selection.possibleTypes) return@forEach
+        val objectKey = selection.key.objectKey(type)
+        variables += objectKey.arguments.usedVariables()
+        val outputType = objectKey.field.type.baseTypeDef as? ViaductSchema.CompositeTypeDef
+        outputType?.possibleObjectTypes?.forEach { possibleOutputType ->
+            variables += selection.subselections.usedVariablesApplicableTo(possibleOutputType)
+        }
+    }
+    return variables
 }
 
 private fun EngineOutputData?.requireArgumentlessObjectFields() {

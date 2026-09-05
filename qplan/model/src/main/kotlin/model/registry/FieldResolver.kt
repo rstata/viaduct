@@ -16,8 +16,8 @@ import model.SelectionForest
 import model.arg
 import model.engineObjectDataOf
 import model.instantiateVariables
-import model.isParentField
 import model.materializeSelectionForestOf
+import model.objectKey
 import model.outputValue
 import model.schemaType
 import model.selectionForestOf
@@ -454,7 +454,9 @@ private fun MaterializeSelectionForest.requireNoVariablesBeneathParent(
 ) {
     forEach { selection ->
         require(
-            !selection.key.field.isParentField() ||
+            selection.possibleTypes.none { possibleType ->
+                selection.key.objectKey(possibleType) is ObjectEngineResult.ParentKey
+            } ||
                 selection.subselections.constructionSelections().usedVariables().isEmpty(),
         ) {
             "Resolver input for ${resolverField.containingDef.name}/${resolverField.name} " +

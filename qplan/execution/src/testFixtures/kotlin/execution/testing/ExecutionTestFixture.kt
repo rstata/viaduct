@@ -156,6 +156,7 @@ private val RESOLVER_DIRECTIVES = setOf("resolver", "nodeResolver")
 
 private val BUILT_IN_SCHEMA =
     """
+    directive @parent on FIELD_DEFINITION
     interface Node { id: ID! }
     type Query { node(id: ID!): Node }
     """.trimIndent()

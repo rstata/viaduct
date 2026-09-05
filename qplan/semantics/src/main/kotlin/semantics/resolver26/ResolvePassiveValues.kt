@@ -12,6 +12,7 @@ import model.ObjectSelectionForest
 import model.PathComponent
 import model.SelectionForest
 import model.invariants.conformsToOutputSchemaType
+import model.isParentField
 import model.merge
 import model.outputType
 import model.outputValue
@@ -29,6 +30,7 @@ internal fun EngineOutputData?.resolvePassiveValues(
     path: List<PathComponent>,
     invocationDemand: SelectionForest,
     constructionDemand: SelectionForest,
+    parent: OEROccurrenceContext? = null,
 ): EngineResult? {
     require(conformsToOutputSchemaType(expectedType)) {
         "Resolver output does not conform to $expectedType"
@@ -42,6 +44,7 @@ internal fun EngineOutputData?.resolvePassiveValues(
                 path = path,
                 invocationDemand = invocationDemand,
                 constructionDemand = constructionDemand,
+                parent = parent,
             )
         is List<*> -> {
             val elementType = checkNotNull(expectedType.unwrapList())
@@ -55,6 +58,7 @@ internal fun EngineOutputData?.resolvePassiveValues(
                             path = path + ListEngineResult.Index.of(index),
                             invocationDemand = invocationDemand,
                             constructionDemand = constructionDemand,
+                            parent = parent,
                         )
                     },
             )
@@ -71,6 +75,7 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
     path: List<PathComponent>,
     invocationDemand: SelectionForest,
     constructionDemand: SelectionForest,
+    parent: OEROccurrenceContext?,
 ): ObjectEngineResult {
     val target =
         ObjectEngineResult.of(
@@ -82,6 +87,7 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
             root = root,
             path = path,
             target = target,
+            parent = parent,
         )
     val orchestration =
         ObjectOrchestrationTask(
@@ -100,7 +106,7 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
     return target
 }
 
-// Copies every passive field returned by the resolver and orchestrates its value recursively.
+// Copies resolver-returned passive fields except engine-provided parent backedges.
 context(operation: Resolver26OperationContext)
 private fun EngineObjectData.Sync.materializePassiveFields(
     occurrence: OEROccurrenceContext,
@@ -122,6 +128,7 @@ private fun EngineObjectData.Sync.materializePassiveFields(
     val closedDemandByKey = closedDemand.byKey()
     getSelections().forEach { fieldName ->
         val field = schemaType.requireField(fieldName)
+        if (field.isParentField()) return@forEach
         require(field.args.isEmpty()) {
             "Resolver output must not supply argument-bearing field " +
                 "${schemaType.name}/$fieldName"
@@ -155,6 +162,7 @@ private fun EngineObjectData.Sync.materializePassiveFields(
                         path = occurrence.coordinate(key),
                         invocationDemand = childInvocationDemand,
                         constructionDemand = childConstructionDemand,
+                        parent = occurrence,
                     )
             occurrence.target.reserveCell(key).also { cell ->
                 cell.setValue(value)

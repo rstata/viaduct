@@ -20,19 +20,27 @@ Resolver01 is the smallest result-tree constructor. Resolver02 adds object-fragm
 
 Resolver03 is the principal compact semantic reference. Start there when reasoning about demand closure, exact-key publication, passive deepening, argument grounding, or completed-result correctness that does not require runtime object-field variables.
 
+Resolver01-03 intentionally do not support `@parent`. Parent backedges can require an ancestor resolver to re-enter the same still-open child occurrence, which is not representable by their per-OER sibling dependency order without adding graph re-entry machinery. [`examples.md`](./examples.md#why-the-depth-first-resolvers-do-not-support-parent) gives a concrete world.
+
 ### Explicit Work: Resolver06-08
 
 Resolver06-08 express the same three stages through `DepthFirstReactor` tasks. Resolver08 is especially useful after Resolver03 passes: it exposes task identity, queue ordering, and publication as explicit mechanics without adding `FromObjectField`.
 
+Resolver06-08 also intentionally do not support `@parent`; making their task queue occurrence-aware enough to suspend, revisit an ancestor, and safely re-enter an open descendant would erase the simplicity that makes this family useful.
+
 ### Structured Suspension: Resolver21-23
 
 Resolver21-23 express the same stages through request-owned structured coroutines and exact promises. Resolver23 is the clean coroutine baseline for comparing promise installation, suspension, child publication, and request quiescence with Resolver26.
+
+Resolver22/23 support `@parent`. Their structured suspension and exact promises allow demand to cross to an ancestor and return through an already-started descendant without forcing a depth-first re-entry protocol into local dependency ordering. Resolver21 retains its empty-fragment capability boundary and does not claim parent support.
 
 ## Advanced Resolvers
 
 ### Resolver26
 
 Resolver26 retains variable-bearing resolver-fragment selections as symbolic OER keys. Variables are instantiated once per resolver occurrence, so equal symbolic keys coalesce within an OER while separate containing OERs remain distinct. It synchronously closes symbolic demand before local installation, uses source presence to let ancestor outputs own argumentless fields that otherwise have standard resolvers, prepares every binding required by the remaining work, reserves active cells once their symbolic keys are contextually grounded, freezes the OER key set, and runs field resolution under one request-owned coroutine scope.
+
+Resolver26 supports `@parent` by extending both input-demand closure and successor-demand closure to lift parent-induced demand before each OER is frozen.
 
 Resolver26 is the primary algorithm and eventual implementation blueprint. Its aligned qplan shape remains close to what a future Viaduct query executor can use, but that future executor is not part of an ordinary qplan refactor.
 

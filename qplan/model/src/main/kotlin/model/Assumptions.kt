@@ -14,6 +14,9 @@ sealed interface Assumptions {
     val schema: ViaductSchema
     val resolverRegistry: ResolverRegistry
 
+    /** The validated parent-field-to-producer-field relation for [schema]. */
+    val parentFieldRelations: Map<ViaductSchema.ObjectField, ViaductSchema.ObjectField>
+
     /** Whether resolver invocation and passive output traversal are selective to supplied demand. */
     val selectiveResolvers: Boolean
 
@@ -35,4 +38,7 @@ private class AssumptionsImpl(
     override val schema: ViaductSchema,
     override val resolverRegistry: ResolverRegistry,
     override val selectiveResolvers: Boolean,
-) : Assumptions
+) : Assumptions {
+    override val parentFieldRelations: Map<ViaductSchema.ObjectField, ViaductSchema.ObjectField> =
+        parentFieldRelations(schema)
+}

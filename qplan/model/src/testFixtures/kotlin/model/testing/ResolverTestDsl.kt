@@ -921,6 +921,7 @@ private val ERROR_ARGUMENT_LITERAL = Regex("\"ERROR\"")
 
 private val BUILT_IN_SCHEMA =
     """
+    directive @parent on FIELD_DEFINITION
     interface Node { id: ID! }
     type Query { node(id: ID!): Node }
     """.trimIndent()

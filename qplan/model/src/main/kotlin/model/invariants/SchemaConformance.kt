@@ -77,28 +77,51 @@ internal fun ObjectEngineResult.Key.conformsToSchema(): Boolean {
  */
 context(world: Assumptions)
 internal fun EngineResult.conformsToSchema(): Boolean =
-    when (this) {
+    this.conformsToSchema(ancestors = emptyList())
+
+private data class StructuralAncestor(
+    val result: ObjectEngineResult,
+    val producerField: ViaductSchema.ObjectField,
+)
+
+context(world: Assumptions)
+private fun EngineResult.conformsToSchema(
+    ancestors: List<StructuralAncestor>,
+): Boolean {
+    val result = this
+    return when (result) {
         is ErrorEngineResult -> true
         is ObjectEngineResult ->
-            keys.all { key ->
-                val cell = getCell(key)
-                val value = getCell(key).getValue().get()
-                key.field.containingDef == type &&
+            result.keys.all { key ->
+                val cell = result.getCell(key)
+                val value = cell.getValue().get()
+                key.field.containingDef == result.type &&
                     key.conformsToSchema() &&
                     value.conformsToResultSchemaType(key.field.outputType) &&
-                    (value?.conformsToSchema() ?: true) &&
+                    if (key is ObjectEngineResult.ParentKey) {
+                        world.parentFieldRelations[key.field]?.let { producerField ->
+                            val ancestor = ancestors.lastOrNull()
+                            ancestor != null &&
+                                value === ancestor.result &&
+                                producerField == ancestor.producerField
+                        } == true
+                    } else {
+                        value?.conformsToSchema(
+                            ancestors + StructuralAncestor(result, key.field),
+                        ) ?: true
+                    } &&
                     cell.getAccessResult().get().conformsToAccessResult()
             }
         is ListEngineResult ->
-            all { cell ->
+            result.all { cell ->
                 val value = cell.getValue().get()
-                value.conformsToResultSchemaType(typeExpr) &&
-                    (value?.conformsToSchema() ?: true) &&
+                value.conformsToResultSchemaType(result.typeExpr) &&
+                    (value?.conformsToSchema(ancestors) ?: true) &&
                     cell.getAccessResult().get().conformsToAccessResult()
             }
         is ViaductSchema.EnumValue ->
-            containingDef.value(name) == this
-        is Double -> isFinite()
+            result.containingDef.value(result.name) == result
+        is Double -> result.isFinite()
         is Int,
         is Boolean,
         is String,
@@ -106,6 +129,7 @@ internal fun EngineResult.conformsToSchema(): Boolean =
         -> true
         else -> false
     }
+}
 
 private fun EngineInputData.conformsToInputObjectType(
     expectedType: ViaductSchema.Input,

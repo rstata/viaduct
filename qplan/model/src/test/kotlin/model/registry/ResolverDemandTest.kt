@@ -275,6 +275,57 @@ class ResolverDemandTest {
     }
 
     @Test
+    fun `rejects variables beneath parent selections`() {
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                TestWorld.fromSDL(
+                    schemaSDL =
+                        """
+                        directive @parent on FIELD_DEFINITION
+                        type Query { company: Company }
+                        type Company {
+                          users: User
+                          localizedName(locale: String!): String
+                        }
+                        type User {
+                          parent: Company @parent
+                          display(locale: String!): String
+                        }
+                        """.trimIndent(),
+                    fieldResolvers = { schema ->
+                        mapOf(
+                            schema.requireField("Query", "company") to
+                                resolver(schema.emptyFragmentOf("Query")),
+                            schema.requireField("Company", "users") to
+                                resolver(schema.emptyFragmentOf("Company")),
+                            schema.requireField("Company", "localizedName") to
+                                resolver(schema.emptyFragmentOf("Company")),
+                            schema.requireField("User", "display") to
+                                resolver(
+                                    schema.fragmentFrom(
+                                        """
+                                        fragment ignored on User {
+                                          parent { localizedName(locale: ${'$'}locale) }
+                                        }
+                                        """.trimIndent(),
+                                    ),
+                                ),
+                        )
+                    },
+                    variableProviders = { schema ->
+                        val display = schema.requireObjectField("User", "display")
+                        mapOf(
+                            Arguments.Variable.of(display, "locale") to
+                                schema.fromArgument(display, "locale"),
+                        )
+                    },
+                )
+            }
+
+        assertTrue(failure.message!!.contains("must not use variables beneath @parent"))
+    }
+
+    @Test
     fun `rejects variable cycles`() = assertRejectedVariableCycle(mixedFragments = false)
 
     @Test

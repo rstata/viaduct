@@ -125,6 +125,48 @@ class GeneratorTest {
     }
 
     @Test
+    fun `random parents expose a sometimes-passive resolver with parent demand`() {
+        val config =
+            Config.default +
+                (ParentFieldsEnabled to true) +
+                (RandomParentFieldsEnabled to true) +
+                (ResolverFragmentsEnabled to true) +
+                (SometimesPassiveFieldWeight to 1.0)
+        val random = RandomSource.seeded(2026090502L)
+        val schema = Arb.schema(config).next(random)
+        val registry = schema.registry(config).next(random)
+        val witnesses =
+            registry.parentDemandOwnerFields.filterKeys { field ->
+                field.typeName.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX) &&
+                    field.fieldName == GENERATED_SOMETIMES_PASSIVE_PARENT_FIELD
+            }
+        val suppliedFields =
+            registry.fieldValues.values
+                .flatMapTo(linkedSetOf()) { value ->
+                    value.registeredFields(registry.fieldResolverCoordinates)
+                }
+
+        assertTrue(witnesses.isNotEmpty())
+        witnesses.forEach { (field, parentDepth) ->
+            assertEquals(1, parentDepth)
+            assertEquals(ResolverProgramKind.CONSTANT, registry.resolverProgram(field))
+            assertTrue(
+                schema.fieldsOn(field.typeName)
+                    .single { candidate -> candidate.name == field.fieldName }
+                    .arguments
+                    .isEmpty(),
+            )
+            assertTrue(
+                registry.objectFragmentSources.getValue(field).contains(
+                    "resolverParentCoverage: parent {\n    __typename",
+                ),
+            )
+        }
+        assertTrue(witnesses.keys.any { field -> field in suppliedFields })
+        registry.world(schema)
+    }
+
+    @Test
     fun `generated schemas registries and queries form valid worlds`() {
         val random = RandomSource.seeded(90210L)
 

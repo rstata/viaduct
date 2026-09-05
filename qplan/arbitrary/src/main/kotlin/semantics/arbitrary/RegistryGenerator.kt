@@ -679,6 +679,8 @@ private class RegistryGenerator(
                 val argumentSensitive =
                     supportsSensitiveOutput && field.arguments.isNotEmpty()
                 when {
+                    site.isGeneratedSometimesPassiveParentResolver() ->
+                        ResolverProgramKind.CONSTANT
                     inputSensitive && argumentSensitive ->
                         ResolverProgramKind.INPUT_AND_ARGUMENT_SENSITIVE
                     inputSensitive -> ResolverProgramKind.INPUT_SENSITIVE
@@ -960,12 +962,19 @@ private class RegistryGenerator(
             schema
                 .fieldsOn(consumer.typeName)
                 .singleOrNull(FieldDefinitionSpec::isParentField)
+        val sometimesPassiveParentWitness =
+            consumer.isGeneratedSometimesPassiveParentResolver()
         if (
             !config[RandomParentFieldsEnabled] ||
             !consumer.typeName.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX) ||
-            consumer.fieldName != "value0" ||
             parentField == null ||
-            !chance(RANDOM_PARENT_DIAGONAL_RESOLVER_WEIGHT)
+            (
+                !sometimesPassiveParentWitness &&
+                    (
+                        consumer.fieldName != "value0" ||
+                            !chance(RANDOM_PARENT_DIAGONAL_RESOLVER_WEIGHT)
+                    )
+            )
         ) {
             return this
         }
@@ -2229,9 +2238,23 @@ private class RegistryGenerator(
                     (
                         config[RandomParentFieldsEnabled] &&
                             ownerName.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX) &&
-                            name == "value0"
+                            (
+                                name == "value0" ||
+                                    (
+                                        config[SometimesPassiveFieldWeight] > 0.0 &&
+                                            name == GENERATED_SOMETIMES_PASSIVE_PARENT_FIELD
+                                    )
+                            )
                     )
             )
+
+    // Names the argumentless constant resolver whose unused parent input exercises speculative
+    // demand when an ancestor resolver supplies the active field's value.
+    private fun FieldCoordinate.isGeneratedSometimesPassiveParentResolver(): Boolean =
+        config[RandomParentFieldsEnabled] &&
+            config[SometimesPassiveFieldWeight] > 0.0 &&
+            typeName.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX) &&
+            fieldName == GENERATED_SOMETIMES_PASSIVE_PARENT_FIELD
 
     private fun FieldCoordinate.isGeneratedParentResult(): Boolean =
         config[ParentFieldsEnabled] &&

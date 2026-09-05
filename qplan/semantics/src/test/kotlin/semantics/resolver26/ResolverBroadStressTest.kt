@@ -101,6 +101,7 @@ class ResolverBroadStressTest {
                             (ResolverVariableSingletonCoercionEnabled to true) +
                             (ResolverFromFieldProviderPathLength to 1..3) +
                             (ResolverFromFieldVariableUseDepth to 1..3) +
+                            (SometimesPassiveFieldWeight to 1.0) +
                             (NodeResolversEnabled to false) +
                             (MaxOutputListDepth to 2) +
                             (ListValueSize to 1..1) +
@@ -223,6 +224,8 @@ internal suspend fun runResolver26BroadStress(
     var maximumVariableUseDepth = 0
     var generatedSometimesPassiveFields = 0
     var activatedSometimesPassiveOccurrences = 0
+    var activatedSometimesPassiveParentDemandOccurrences = 0
+    val sometimesPassiveParentDemandDepths: MutableMap<Int, Int> = linkedMapOf()
     var generatedQueryFragments = 0
     var activatedQueryFragmentApplications = 0
     var activatedParentDemandApplications = 0
@@ -507,7 +510,8 @@ internal suspend fun runResolver26BroadStress(
                         context(operation) {
                             result.registeredResolverOccurrenceApplicationKeyCounts()
                         }
-                    occurrenceWitness.applicationKeyCounts().forEach { (key, count) ->
+                    val observedOccurrenceKeyCounts = occurrenceWitness.applicationKeyCounts()
+                    observedOccurrenceKeyCounts.forEach { (key, count) ->
                         assertTrue(
                             count <= expectedOccurrenceKeyCounts.getOrDefault(key, 0),
                             "Observed $count applications of $key but request results " +
@@ -525,9 +529,36 @@ internal suspend fun runResolver26BroadStress(
                             )
                         }
                     assertEquals(expectedObservedIdentities, observedOccurrenceCounts)
-                    activatedSometimesPassiveOccurrences +=
-                        expectedOccurrenceKeyCounts.values.sum() -
-                            occurrenceWitness.applications.size
+                    var caseSometimesPassiveOccurrences = 0
+                    val caseSometimesPassiveParentDemandDepths = mutableListOf<Int>()
+                    expectedOccurrenceKeyCounts.forEach { (key, expectedCount) ->
+                        val passiveCount =
+                            expectedCount - observedOccurrenceKeyCounts.getOrDefault(key, 0)
+                        check(passiveCount >= 0)
+                        caseSometimesPassiveOccurrences += passiveCount
+                        val sourceField =
+                            testCase.registry.sourceResolverCoordinate(key.applicationKey.field)
+                        testCase.registry.parentDemandOwnerFields[sourceField]?.let { parentDepth ->
+                            repeat(passiveCount) {
+                                caseSometimesPassiveParentDemandDepths += parentDepth
+                            }
+                        }
+                    }
+                    activatedSometimesPassiveOccurrences += caseSometimesPassiveOccurrences
+                    activatedSometimesPassiveParentDemandOccurrences +=
+                        caseSometimesPassiveParentDemandDepths.size
+                    caseSometimesPassiveParentDemandDepths.forEach { depth ->
+                        sometimesPassiveParentDemandDepths.increment(depth)
+                    }
+                    parentFocusedReport?.record(
+                        schemaIndex,
+                        ParentFocusedCoverageSnapshot(
+                            sometimesPassiveParentDemandOccurrences =
+                                caseSometimesPassiveParentDemandDepths.size,
+                            sometimesPassiveParentDemandDepths =
+                                caseSometimesPassiveParentDemandDepths.toSet(),
+                        ),
+                    )
                 } else {
                     val expectedOccurrenceCounts =
                         context(operation) {
@@ -569,6 +600,13 @@ internal suspend fun runResolver26BroadStress(
                     activatedSometimesPassiveOccurrences > 0,
                 "Resolver26 profile $propertyProfile did not activate sometimes-passive fields",
             )
+            if (config[ParentFieldsEnabled]) {
+                run.assertAggregate(
+                    activatedSometimesPassiveParentDemandOccurrences > 0,
+                    "Resolver26 profile $propertyProfile did not source-supply a registered " +
+                        "field whose standard resolver has @parent demand",
+                )
+            }
         }
         if (config[ResolverQueryFragmentsEnabled]) {
             run.assertAggregate(
@@ -649,6 +687,9 @@ internal suspend fun runResolver26BroadStress(
                 "generatedSometimesPassiveFields=$generatedSometimesPassiveFields, " +
                 "activatedSometimesPassiveOccurrences=" +
                 "$activatedSometimesPassiveOccurrences, " +
+                "activatedSometimesPassiveParentDemandOccurrences=" +
+                "$activatedSometimesPassiveParentDemandOccurrences, " +
+                "sometimesPassiveParentDemandDepths=$sometimesPassiveParentDemandDepths, " +
                 "generatedQueryFragments=$generatedQueryFragments, " +
                 "activatedQueryFragmentApplications=$activatedQueryFragmentApplications, " +
                 "activatedParentDemandApplications=$activatedParentDemandApplications, " +

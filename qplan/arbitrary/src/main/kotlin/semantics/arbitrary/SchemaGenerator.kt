@@ -36,6 +36,7 @@ internal const val GENERATED_PARENT_FIELD = "parent"
 internal const val GENERATED_PARENT_VALUE_FIELD = "ancestorValue"
 internal const val GENERATED_PARENT_RESULT_FIELD = "result"
 internal const val GENERATED_RANDOM_PARENT_TYPE_PREFIX = "GeneratedRandomParent"
+internal const val GENERATED_SOMETIMES_PASSIVE_PARENT_FIELD = "value1"
 
 class ArbitrarySchema internal constructor(
     val sdl: String,
@@ -734,10 +735,14 @@ private class SchemaGenerator(
                             ),
                         )
                         repeat(scalarFieldCount) { fieldIndex ->
+                            val fieldName = "value$fieldIndex"
+                            val argumentlessSometimesPassiveParentWitness =
+                                config[SometimesPassiveFieldWeight] > 0.0 &&
+                                    fieldName == GENERATED_SOMETIMES_PASSIVE_PARENT_FIELD
                             add(
                                 FieldDefinitionSpec(
                                     ownerName = childName,
-                                    name = "value$fieldIndex",
+                                    name = fieldName,
                                     type =
                                         OutputTypeSpec(
                                             namedType =
@@ -751,6 +756,7 @@ private class SchemaGenerator(
                                     arguments =
                                         if (
                                             config[ArgumentsEnabled] &&
+                                            !argumentlessSometimesPassiveParentWitness &&
                                             (
                                                 fieldIndex == 0 ||
                                                     chance(config[FieldArgumentWeight])

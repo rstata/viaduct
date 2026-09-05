@@ -40,6 +40,8 @@ internal data class ParentFocusedCoverageSnapshot(
     val argumentSelectionDepths: Set<ParentArgumentSelectionDepth> = emptySet(),
     val diagonalDepths: Set<Int> = emptySet(),
     val diagonalVariableFragments: Set<ParentVariableFragment> = emptySet(),
+    val sometimesPassiveParentDemandOccurrences: Int = 0,
+    val sometimesPassiveParentDemandDepths: Set<Int> = emptySet(),
 ) {
     operator fun plus(other: ParentFocusedCoverageSnapshot): ParentFocusedCoverageSnapshot =
         ParentFocusedCoverageSnapshot(
@@ -54,6 +56,12 @@ internal data class ParentFocusedCoverageSnapshot(
             diagonalDepths = diagonalDepths + other.diagonalDepths,
             diagonalVariableFragments =
                 diagonalVariableFragments + other.diagonalVariableFragments,
+            sometimesPassiveParentDemandOccurrences =
+                sometimesPassiveParentDemandOccurrences +
+                    other.sometimesPassiveParentDemandOccurrences,
+            sometimesPassiveParentDemandDepths =
+                sometimesPassiveParentDemandDepths +
+                    other.sometimesPassiveParentDemandDepths,
         )
 }
 
@@ -203,6 +211,19 @@ internal fun ParentFocusedCoverageSnapshot.criteria(): List<ParentFocusedCoverag
                 ),
             observed = "sourceFragments=$diagonalVariableFragments",
         ),
+        criterion(
+            number = 9,
+            name = "Sometimes-passive parent demand",
+            missing =
+                if (sometimesPassiveParentDemandOccurrences == 0) {
+                    listOf("source-supplied occurrences")
+                } else {
+                    emptyList()
+                },
+            observed =
+                "occurrences=$sometimesPassiveParentDemandOccurrences, " +
+                    "depths=$sometimesPassiveParentDemandDepths",
+        ),
     )
 }
 
@@ -253,7 +274,7 @@ internal class ParentFocusedCoverageReport(
             runReports.forEach { report -> appendLine(report) }
             appendLine(
                 "FOUR-RUN RESULT: ${if (hitRuns == sliceCount) "HIT" else "MISS"} " +
-                    "($hitRuns/$sliceCount runs hit all eight criteria)",
+                    "($hitRuns/$sliceCount runs hit all nine criteria)",
             )
             appendLine("COMBINED RESULT: ${if (overall.criteria().all { it.hit }) "HIT" else "MISS"}")
         }.trimEnd()

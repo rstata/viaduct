@@ -119,7 +119,7 @@ class ParentCoverageMetricsTest {
     }
 
     @Test
-    fun `reports all eight criteria for each parent-focused slice`() {
+    fun `reports all nine criteria for each parent-focused slice`() {
         val sources = ParentVariableSource.entries.toSet()
         val fragments = ParentResolverInputFragment.entries.toSet()
         val complete =
@@ -142,6 +142,8 @@ class ParentCoverageMetricsTest {
                     sources.flatMapTo(linkedSetOf()) { source ->
                         fragments.map { fragment -> ParentVariableFragment(source, fragment) }
                     },
+                sometimesPassiveParentDemandOccurrences = 3,
+                sometimesPassiveParentDemandDepths = setOf(1, 2, 3),
             )
         val report = ParentFocusedCoverageReport(schemaCount = 40, sliceCount = 4)
         repeat(40) { schemaOffset ->
@@ -152,8 +154,8 @@ class ParentCoverageMetricsTest {
         val rendered = report.render()
 
         (1..4).forEach { run -> assertContains(rendered, "RUN $run/4: HIT") }
-        (1..8).forEach { criterion -> assertContains(rendered, "  $criterion.") }
-        assertContains(rendered, "FOUR-RUN RESULT: HIT (4/4 runs hit all eight criteria)")
+        (1..9).forEach { criterion -> assertContains(rendered, "  $criterion.") }
+        assertContains(rendered, "FOUR-RUN RESULT: HIT (4/4 runs hit all nine criteria)")
         assertContains(rendered, "COMBINED RESULT: HIT")
     }
 
@@ -167,7 +169,8 @@ class ParentCoverageMetricsTest {
         assertContains(rendered, "RUN 1/4: MISS")
         assertContains(rendered, "1. Parent topology: MISS")
         assertContains(rendered, "8. Variable-bearing diagonals: MISS")
-        assertContains(rendered, "FOUR-RUN RESULT: MISS (0/4 runs hit all eight criteria)")
+        assertContains(rendered, "9. Sometimes-passive parent demand: MISS")
+        assertContains(rendered, "FOUR-RUN RESULT: MISS (0/4 runs hit all nine criteria)")
         assertContains(rendered, "COMBINED RESULT: MISS")
     }
 }

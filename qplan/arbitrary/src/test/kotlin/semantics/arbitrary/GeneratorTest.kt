@@ -35,6 +35,8 @@ class GeneratorTest {
         var abstractTargets = 0
         var maximumDepth = 0
         var parentDemandResolvers = 0
+        var argumentBearingParentScalars = 0
+        var boundedDiagonalResolvers = 0
 
         repeat(100) {
             val schema = Arb.schema(config).next(random)
@@ -53,9 +55,22 @@ class GeneratorTest {
             listProducers += schema.features.randomParentListProducerCount
             abstractTargets += schema.features.randomParentAbstractTargetCount
             maximumDepth = maxOf(maximumDepth, schema.features.maximumParentChainDepth)
+            argumentBearingParentScalars +=
+                schema.allObjects
+                    .filter { objectType ->
+                        objectType.name.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX)
+                    }.flatMap(ObjectDefinition::fields)
+                    .count { field ->
+                        field.name.startsWith("value") && field.arguments.size >= 2
+                    }
             parentDemandResolvers +=
                 registry.parentDemandOwnerFields.keys.count { field ->
                     field.typeName.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX)
+                }
+            boundedDiagonalResolvers +=
+                registry.objectFragmentSources.count { (field, source) ->
+                    field.typeName.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX) &&
+                        source.contains("resolverParentCoverage: parent {\n    __typename")
                 }
         }
 
@@ -63,6 +78,8 @@ class GeneratorTest {
         assertTrue(abstractTargets > 0)
         assertTrue(maximumDepth >= 4)
         assertTrue(parentDemandResolvers > 0)
+        assertTrue(argumentBearingParentScalars > 0)
+        assertTrue(boundedDiagonalResolvers > 0)
     }
 
     @Test

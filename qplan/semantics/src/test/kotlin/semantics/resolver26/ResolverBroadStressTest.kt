@@ -12,6 +12,7 @@ import model.schemaType
 import org.junit.jupiter.api.Test
 import semantics.arbitrary.Config
 import semantics.arbitrary.ErrorValueWeight
+import semantics.arbitrary.FieldArgumentWeight
 import semantics.arbitrary.ListValueSize
 import semantics.arbitrary.MaxSelectionDepth
 import semantics.arbitrary.MaxOutputListDepth
@@ -25,12 +26,22 @@ import semantics.contract.RegisteredResolverOccurrence
 import semantics.arbitrary.ResolutionOccurrenceApplicationLog
 import semantics.arbitrary.ResolutionWitness
 import semantics.arbitrary.ResolverFromQueryFieldVariablesEnabled
+import semantics.arbitrary.ResolverFromArgumentVariablesEnabled
+import semantics.arbitrary.ResolverFromFieldProviderPathLength
+import semantics.arbitrary.ResolverFromFieldVariableUseDepth
+import semantics.arbitrary.ResolverFromObjectFieldVariablesEnabled
 import semantics.arbitrary.ResolverFragmentsEnabled
+import semantics.arbitrary.ResolverFragmentArgumentFieldWeight
 import semantics.arbitrary.ResolverFragmentDepth
 import semantics.arbitrary.ResolverFragmentWeight
+import semantics.arbitrary.ResolverQueryFragmentWeight
 import semantics.arbitrary.ResolverQueryFragmentsEnabled
 import semantics.arbitrary.ResolverTestExecution
 import semantics.arbitrary.ResolverTestRun
+import semantics.arbitrary.ResolverVariableCount
+import semantics.arbitrary.ResolverVariableSingletonCoercionEnabled
+import semantics.arbitrary.ResolverVariableWeight
+import semantics.arbitrary.ResolverVariablesEnabled
 import semantics.arbitrary.SometimesPassiveFieldWeight
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.configuredResolverTestExecution
@@ -73,9 +84,22 @@ class ResolverBroadStressTest {
                             (ResolverFragmentsEnabled to true) +
                             (ResolverFragmentWeight to 1.0) +
                             (ResolverFragmentDepth to 3) +
+                            (FieldArgumentWeight to 0.65) +
+                            (ResolverFragmentArgumentFieldWeight to 1.0) +
+                            (ResolverQueryFragmentsEnabled to true) +
+                            (ResolverQueryFragmentWeight to 0.15) +
+                            (ResolverVariablesEnabled to true) +
+                            (ResolverFromArgumentVariablesEnabled to true) +
+                            (ResolverFromObjectFieldVariablesEnabled to true) +
+                            (ResolverFromQueryFieldVariablesEnabled to true) +
+                            (ResolverVariableWeight to 0.75) +
+                            (ResolverVariableCount to 1..2) +
+                            (ResolverVariableSingletonCoercionEnabled to true) +
+                            (ResolverFromFieldProviderPathLength to 1..3) +
+                            (ResolverFromFieldVariableUseDepth to 1..3) +
                             (NodeResolversEnabled to false) +
                             (MaxOutputListDepth to 2) +
-                            (ListValueSize to 1..2) +
+                            (ListValueSize to 1..1) +
                             (NullValueWeight to 0.0) +
                             (ErrorValueWeight to 0.0),
                     seed = configuredSeed(default = 2026090403L),
@@ -191,8 +215,39 @@ internal suspend fun runResolver26BroadStress(
     var activatedParentDemandApplications = 0
     var materializedParentFieldActivations = 0
     var materializedRandomParentFieldActivations = 0
+    var materializedParentSelectionSets = 0
+    var parentSelectionSetsWithArgumentVariables = 0
+    var argumentVariableSelectionsBeneathParent = 0
+    var parentSelectionSetsWithSelectedResolvers = 0
+    var resolverSelectionsBeneathParent = 0
+    var directResolverSelectionsBeneathParent = 0
+    var resolverSelectionsWithVariablesBeneathParent = 0
+    var directResolverSelectionsWithVariablesBeneathParent = 0
+    var resolverVariableArgumentSelectionsBeneathParent = 0
+    var parentSelectionSetsWithDiagonalDemand = 0
+    var diagonalResolverSelectionsBeneathParent = 0
+    var directDiagonalResolverSelectionsBeneathParent = 0
+    var diagonalResolverSelectionsWithVariables = 0
+    var diagonalVariableArgumentSelections = 0
     val materializedParentFieldDepths: MutableMap<Int, Int> = linkedMapOf()
     val materializedParentFields: MutableSet<FieldCoordinate> = linkedSetOf()
+    val parentSelectionSetVariableSourceCombinations: MutableMap<Set<ParentVariableSource>, Int> =
+        linkedMapOf()
+    val argumentVariableSourceCombinationsBeneathParent:
+        MutableMap<Set<ParentVariableSource>, Int> = linkedMapOf()
+    val resolverVariableSourceCombinationsBeneathParent:
+        MutableMap<Set<ParentVariableSource>, Int> = linkedMapOf()
+    val resolverVariableArgumentFragmentsBeneathParent:
+        MutableMap<ParentResolverInputFragment, Int> =
+        linkedMapOf()
+    val resolverVariableArgumentDepthsBeneathParent: MutableMap<Int, Int> = linkedMapOf()
+    val resolverVariableArgumentSourceCombinationsBeneathParent:
+        MutableMap<Set<ParentVariableSource>, Int> = linkedMapOf()
+    val diagonalParentDepths: MutableMap<Int, Int> = linkedMapOf()
+    val diagonalVariableSourceCombinations: MutableMap<Set<ParentVariableSource>, Int> =
+        linkedMapOf()
+    val diagonalVariableArgumentSourceCombinations:
+        MutableMap<Set<ParentVariableSource>, Int> = linkedMapOf()
     val parentCoverageLock = Any()
     val observedSignatures: MutableSet<Resolver26StructuralSignature> = linkedSetOf()
 
@@ -242,6 +297,8 @@ internal suspend fun runResolver26BroadStress(
                                 application.input.materializedParentFieldActivations(
                                     application.inputSelections,
                                 )
+                            val parentCoverage =
+                                ParentCoverageAnalyzer(world).analyze(application)
                             synchronized(parentCoverageLock) {
                                 materializedParentFieldActivations += parentActivations.size
                                 materializedRandomParentFieldActivations +=
@@ -254,7 +311,95 @@ internal suspend fun runResolver26BroadStress(
                                         materializedParentFieldDepths.getOrDefault(
                                             activation.depth,
                                             0,
-                                        ) + 1
+                                    ) + 1
+                                }
+                                materializedParentSelectionSets += parentCoverage.size
+                                parentCoverage.forEach { parent ->
+                                    if (parent.argumentVariables.isNotEmpty()) {
+                                        parentSelectionSetsWithArgumentVariables += 1
+                                    }
+                                    argumentVariableSelectionsBeneathParent +=
+                                        parent.argumentVariables.size
+                                    parent.argumentVariables.forEach { argument ->
+                                        argumentVariableSourceCombinationsBeneathParent.increment(
+                                            argument.variableSources,
+                                        )
+                                    }
+                                    if (parent.selectedResolvers.isNotEmpty()) {
+                                        parentSelectionSetsWithSelectedResolvers += 1
+                                    }
+                                    resolverSelectionsBeneathParent +=
+                                        parent.selectedResolvers.size
+                                    directResolverSelectionsBeneathParent +=
+                                        parent.selectedResolvers.count { selected ->
+                                            selected.selectionDepthBelowParent == 1
+                                        }
+                                    val variableSources =
+                                        parent.selectedResolvers
+                                            .flatMap { selected ->
+                                                selected.requiredInputVariableSources
+                                            }.toSet()
+                                    if (variableSources.isNotEmpty()) {
+                                        parentSelectionSetVariableSourceCombinations.increment(
+                                            variableSources,
+                                        )
+                                    }
+                                    parent.selectedResolvers.forEach { selected ->
+                                        if (selected.requiredInputVariableSources.isNotEmpty()) {
+                                            resolverSelectionsWithVariablesBeneathParent += 1
+                                            if (selected.selectionDepthBelowParent == 1) {
+                                                directResolverSelectionsWithVariablesBeneathParent +=
+                                                    1
+                                            }
+                                            resolverVariableSourceCombinationsBeneathParent
+                                                .increment(
+                                                    selected.requiredInputVariableSources,
+                                                )
+                                        }
+                                        resolverVariableArgumentSelectionsBeneathParent +=
+                                            selected.variableArgumentSelections.size
+                                        selected.variableArgumentSelections.forEach { argument ->
+                                            resolverVariableArgumentFragmentsBeneathParent.increment(
+                                                argument.fragment,
+                                            )
+                                            resolverVariableArgumentDepthsBeneathParent.increment(
+                                                argument.selectionDepth,
+                                            )
+                                            resolverVariableArgumentSourceCombinationsBeneathParent
+                                                .increment(argument.variableSources)
+                                        }
+                                        if (selected.diagonalParentDepth > 0) {
+                                            diagonalResolverSelectionsBeneathParent += 1
+                                            if (selected.selectionDepthBelowParent == 1) {
+                                                directDiagonalResolverSelectionsBeneathParent += 1
+                                            }
+                                            diagonalParentDepths.increment(
+                                                selected.diagonalParentDepth,
+                                            )
+                                            if (
+                                                selected.requiredInputVariableSources.isNotEmpty()
+                                            ) {
+                                                diagonalResolverSelectionsWithVariables += 1
+                                                diagonalVariableSourceCombinations.increment(
+                                                    selected.requiredInputVariableSources,
+                                                )
+                                            }
+                                            diagonalVariableArgumentSelections +=
+                                                selected.variableArgumentSelections.size
+                                            selected.variableArgumentSelections.forEach { argument ->
+                                                diagonalVariableArgumentSourceCombinations.increment(
+                                                    argument.variableSources,
+                                                )
+                                            }
+                                        }
+                                    }
+                                    if (
+                                        parent.selectedResolvers.any { selected ->
+                                            selected.diagonalParentDepth > 0
+                                        }
+                                    ) {
+                                        parentSelectionSetsWithDiagonalDemand += 1
+                                    }
                                 }
                             }
                             occurrenceLog.record(
@@ -267,7 +412,6 @@ internal suspend fun runResolver26BroadStress(
                                     ),
                                 arguments = application.arguments,
                                 input = application.input,
-                                suppliedDemand = application.suppliedDemand,
                             )
                         }
                     }
@@ -416,12 +560,43 @@ internal suspend fun runResolver26BroadStress(
                 activatedParentDemandApplications > 0,
                 "Resolver26 profile $propertyProfile did not activate great-grandparent demand",
             )
+            run.assertAggregate(
+                argumentVariableSelectionsBeneathParent == 0,
+                "Resolver26 profile $propertyProfile materialized a directly variable-bearing " +
+                    "selection beneath @parent",
+            )
         }
         if (config[RandomParentFieldsEnabled]) {
             run.assertAggregate(
                 materializedRandomParentFieldActivations > 0,
                 "Resolver26 profile $propertyProfile did not materialize a random parent field",
             )
+            run.assertAggregate(
+                directDiagonalResolverSelectionsBeneathParent > 0,
+                "Resolver26 profile $propertyProfile did not activate diagonal parent demand",
+            )
+            if (config[ResolverVariablesEnabled]) {
+                buildList {
+                    add(ParentVariableSource.ARGUMENT)
+                    add(ParentVariableSource.OBJECT_FIELD)
+                    if (config[ResolverFromQueryFieldVariablesEnabled]) {
+                        add(ParentVariableSource.QUERY_FIELD)
+                    }
+                }.forEach { source ->
+                    run.assertAggregate(
+                        resolverVariableSourceCombinationsBeneathParent.keys.any { sources ->
+                            source in sources
+                        },
+                        "Resolver26 profile $propertyProfile did not activate $source beneath " +
+                            "@parent",
+                    )
+                }
+                run.assertAggregate(
+                    diagonalResolverSelectionsWithVariables > 0,
+                    "Resolver26 profile $propertyProfile did not activate variables in " +
+                        "diagonal parent demand",
+                )
+            }
         }
         return completedCases
     } finally {
@@ -451,6 +626,49 @@ internal suspend fun runResolver26BroadStress(
                 "materializedParentFieldActivations=$materializedParentFieldActivations, " +
                 "materializedRandomParentFieldActivations=" +
                 "$materializedRandomParentFieldActivations, " +
+                "materializedParentSelectionSets=$materializedParentSelectionSets, " +
+                "parentSelectionSetsWithArgumentVariables=" +
+                "$parentSelectionSetsWithArgumentVariables, " +
+                "argumentVariableSelectionsBeneathParent=" +
+                "$argumentVariableSelectionsBeneathParent, " +
+                "argumentVariableSourceCombinationsBeneathParent=" +
+                "$argumentVariableSourceCombinationsBeneathParent, " +
+                "parentSelectionSetsWithSelectedResolvers=" +
+                "$parentSelectionSetsWithSelectedResolvers, " +
+                "resolverSelectionsBeneathParent=$resolverSelectionsBeneathParent, " +
+                "directResolverSelectionsBeneathParent=" +
+                "$directResolverSelectionsBeneathParent, " +
+                "resolverSelectionsWithVariablesBeneathParent=" +
+                "$resolverSelectionsWithVariablesBeneathParent, " +
+                "directResolverSelectionsWithVariablesBeneathParent=" +
+                "$directResolverSelectionsWithVariablesBeneathParent, " +
+                "parentSelectionSetVariableSourceCombinations=" +
+                "$parentSelectionSetVariableSourceCombinations, " +
+                "resolverVariableSourceCombinationsBeneathParent=" +
+                "$resolverVariableSourceCombinationsBeneathParent, " +
+                "resolverVariableArgumentSelectionsBeneathParent=" +
+                "$resolverVariableArgumentSelectionsBeneathParent, " +
+                "resolverVariableArgumentFragmentsBeneathParent=" +
+                "$resolverVariableArgumentFragmentsBeneathParent, " +
+                "resolverVariableArgumentDepthsBeneathParent=" +
+                "$resolverVariableArgumentDepthsBeneathParent, " +
+                "resolverVariableArgumentSourceCombinationsBeneathParent=" +
+                "$resolverVariableArgumentSourceCombinationsBeneathParent, " +
+                "parentSelectionSetsWithDiagonalDemand=" +
+                "$parentSelectionSetsWithDiagonalDemand, " +
+                "diagonalResolverSelectionsBeneathParent=" +
+                "$diagonalResolverSelectionsBeneathParent, " +
+                "directDiagonalResolverSelectionsBeneathParent=" +
+                "$directDiagonalResolverSelectionsBeneathParent, " +
+                "diagonalResolverSelectionsWithVariables=" +
+                "$diagonalResolverSelectionsWithVariables, " +
+                "diagonalVariableArgumentSelections=" +
+                "$diagonalVariableArgumentSelections, " +
+                "diagonalParentDepths=$diagonalParentDepths, " +
+                "diagonalVariableSourceCombinations=" +
+                "$diagonalVariableSourceCombinations, " +
+                "diagonalVariableArgumentSourceCombinations=" +
+                "$diagonalVariableArgumentSourceCombinations, " +
                 "distinctMaterializedParentFields=${materializedParentFields.size}, " +
                 "materializedParentFieldDepths=$materializedParentFieldDepths, " +
                 "signatures=$observedSignatures, " +
@@ -462,6 +680,10 @@ internal suspend fun runResolver26BroadStress(
 // Returns compact S:R:Q dimensions for diagnostics.
 private fun TestCaseCount.summary(): String =
     "$schemas:$registriesPerSchema:$queriesPerSchema"
+
+private fun <K> MutableMap<K, Int>.increment(key: K) {
+    this[key] = getOrDefault(key, 0) + 1
+}
 
 private data class MaterializedParentFieldActivation(
     val field: FieldCoordinate,

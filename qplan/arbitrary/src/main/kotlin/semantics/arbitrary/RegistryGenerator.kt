@@ -937,6 +937,7 @@ private class RegistryGenerator(
                         weight = config[ResolverQueryFragmentWeight],
                     ),
             )
+                .withTopLevelRandomParentDemand(consumer)
                 .withFromArgumentVariableProvider(consumer, ranks, variableProviders)
         return ProviderFragment.entries.fold(fragments) { result, providerFragment ->
             result.withFromFieldVariableProvider(
@@ -946,6 +947,44 @@ private class RegistryGenerator(
                 providerFragment,
             )
         }
+    }
+
+    private fun ResolverFragmentPlans.withTopLevelRandomParentDemand(
+        consumer: FieldCoordinate,
+    ): ResolverFragmentPlans {
+        val parentField =
+            schema
+                .fieldsOn(consumer.typeName)
+                .singleOrNull(FieldDefinitionSpec::isParentField)
+        if (
+            !config[RandomParentFieldsEnabled] ||
+            !consumer.typeName.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX) ||
+            consumer.fieldName != "value0" ||
+            parentField == null ||
+            !chance(RANDOM_PARENT_DIAGONAL_RESOLVER_WEIGHT)
+        ) {
+            return this
+        }
+        return copy(
+            objectFragment =
+                objectFragment.copy(
+                    selections =
+                        objectFragment.selections +
+                            FragmentSelectionPlan(
+                                fieldName = GENERATED_PARENT_FIELD,
+                                arguments = emptyMap(),
+                                alias = "resolverParentCoverage",
+                                subselections =
+                                    listOf(
+                                        FragmentSelectionPlan(
+                                            fieldName = "__typename",
+                                            arguments = emptyMap(),
+                                            subselections = emptyList(),
+                                        ),
+                                    ),
+                            ),
+                ),
+        )
     }
 
     private fun fragmentPlan(
@@ -3244,6 +3283,8 @@ internal data class GeneratedHashPlan(
     override fun containsGeneratedHash(): Boolean = true
 }
 
+// Keeps diagonal-parent witnesses frequent without recursively amplifying every random-parent resolver.
+private const val RANDOM_PARENT_DIAGONAL_RESOLVER_WEIGHT = 0.35
 private const val MAX_GENERATED_HASH_DEPTH = 4
 private const val GENERATED_HASH_NESTED_SALT = -1640531527
 

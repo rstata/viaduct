@@ -406,6 +406,7 @@ private class SchemaGenerator(
         val randomParentGraph =
             randomParentGraph(
                 alternativeParentTypeNames = ordinaryObjects.map(ObjectDefinition::name),
+                inputObjectNames = inputObjects.map(InputObjectDefinitionSpec::name),
             )
         val objects =
             (
@@ -646,6 +647,7 @@ private class SchemaGenerator(
 
     private fun randomParentGraph(
         alternativeParentTypeNames: List<String>,
+        inputObjectNames: List<String>,
     ): RandomParentGraph {
         if (!config[RandomParentFieldsEnabled]) return RandomParentGraph()
 
@@ -713,9 +715,10 @@ private class SchemaGenerator(
                         unionName
                     } else {
                         parentOwner
-                    }
+                }
 
                 val scalarFieldCount = Arb.int(2..4).next(random)
+                val sharedArgumentType = inputType(inputObjectNames)
                 fieldsByObject[childName] =
                     buildList {
                         add(
@@ -745,7 +748,27 @@ private class SchemaGenerator(
                                             list = false,
                                             elementNullable = false,
                                         ),
-                                    arguments = emptyList(),
+                                    arguments =
+                                        if (
+                                            config[ArgumentsEnabled] &&
+                                            (
+                                                fieldIndex == 0 ||
+                                                    chance(config[FieldArgumentWeight])
+                                            )
+                                        ) {
+                                            listOf(
+                                                ArgumentDefinitionSpec(
+                                                    name = "arg",
+                                                    type = sharedArgumentType,
+                                                ),
+                                                ArgumentDefinitionSpec(
+                                                    name = "arg1",
+                                                    type = sharedArgumentType,
+                                                ),
+                                            )
+                                        } else {
+                                            emptyList()
+                                        },
                                 ),
                             )
                         }

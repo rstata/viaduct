@@ -115,7 +115,7 @@ class RequiredSelectionSetVariableRecoveryTest {
                 ),
             )
 
-        val declaration = recovered.values.single() as FromField
+        val declaration = recovered.declarations.values.single() as FromField
         assertEquals(listOf("selected"), declaration.responsePath)
     }
 
@@ -158,7 +158,7 @@ class RequiredSelectionSetVariableRecoveryTest {
                     ),
             )
 
-        val declaration = assertIs<FromField>(recovered.values.single())
+        val declaration = assertIs<FromField>(recovered.declarations.values.single())
         assertEquals(listOf("selected"), declaration.responsePath)
     }
 
@@ -299,30 +299,53 @@ class RequiredSelectionSetVariableRecoveryTest {
     }
 
     @Test
-    fun `rejects raw variable provider`() {
+    fun `recovers raw variable provider`() {
         val fragment =
             schema.fragmentFrom(
                 "fragment _ on Query { bar(x: \$vary) }",
                 variableField = field,
             )
 
-        val error =
-            assertFailsWith<IllegalArgumentException> {
-                recovery.recoverConfigurations(
-                    field,
-                    fragment,
-                    requiredSelectionSet(
-                        "bar(x: \$vary)",
-                        VariablesResolver.const(mapOf("vary" to 1)),
-                    ),
-                )
-            }
+        val result =
+            recovery.recover(
+                field,
+                fragment,
+                requiredSelectionSet(
+                    "bar(x: \$vary)",
+                    VariablesResolver.const(mapOf("vary" to 1)),
+                ),
+            )
 
-        assertTrue(
-            error.message
-                .orEmpty()
-                .contains("support only FromArgument and from-field variable providers"),
+        assertTrue(result.declarations.isEmpty())
+        assertEquals(
+            setOf("vary"),
+            requireNotNull(result.variablesProvider).variableNames,
         )
+    }
+
+    @Test
+    fun `recovers multiple disjoint raw variable providers`() {
+        val fragment =
+            schema.fragmentFrom(
+                "fragment _ on Query { bar(x: \$first) source(scale: \$second) }",
+                variableField = field,
+            )
+
+        val result =
+            recovery.recover(
+                field,
+                fragment,
+                requiredSelectionSet(
+                    "bar(x: \$first) source(scale: \$second)",
+                    VariablesResolver.const(mapOf("first" to 1)),
+                    VariablesResolver.const(mapOf("second" to 2)),
+                ),
+            )
+
+        assertTrue(result.declarations.isEmpty())
+        val provider = requireNotNull(result.variablesProvider)
+        assertEquals(setOf("first", "second"), provider.variableNames)
+        assertEquals(2, provider.resolvers.size)
     }
 
     @Test

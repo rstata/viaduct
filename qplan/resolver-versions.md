@@ -51,7 +51,7 @@ Use this order unless the failing feature requires a later version:
 1. Resolver03 for compact selective semantics.
 2. Resolver08 for explicit work ordering and publication.
 3. Resolver23 for structured suspension and promise ownership.
-4. Resolver26 for runtime `FromObjectField`, `FromQueryField`, and symbolic resolver-instance identity.
+4. Resolver26 for runtime `FromObjectField`, `FromQueryField`, `FromProvider`, and symbolic resolver-instance identity.
 
 Reduce further to Resolver01/06/21 to remove object fragments, or Resolver02/07/22 to retain object fragments and `FromArgument` without selective-output pressure.
 

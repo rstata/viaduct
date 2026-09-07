@@ -1,5 +1,6 @@
 package semantics.resolver26
 
+import kotlinx.coroutines.CancellationException
 import model.Arguments
 import model.Assumptions
 import model.EngineErrorData
@@ -69,12 +70,18 @@ internal class FieldResolverTask(
             cell.setActivated(activated)
             if (!activated) return
             if (groundedArguments.argumentsContainErrorValue()) {
+                completeVariablesProviderBindingsWithError()
                 val errorResult = ErrorEngineResult.of(EngineErrorData.of())
                 cell.getValue().complete(errorResult)
                 return
             }
 
             val coordinate = oerOccurrenceContext.coordinate(objectKey)
+            val resolverArguments = groundedArguments as Arguments.Resolved
+            completeVariablesProviderBindings(resolverArguments)?.let { errorData ->
+                cell.getValue().complete(ErrorEngineResult.of(errorData))
+                return
+            }
             val input: EngineObjectData.Sync =
                 oerOccurrenceContext.target.materializeResolverInput(
                     selections = fieldResolverOccurrenceContext.inputMaterializeSelections,
@@ -82,7 +89,6 @@ internal class FieldResolverTask(
                     resultPath = oerOccurrenceContext.path,
                 )
 
-            val resolverArguments = groundedArguments as Arguments.Resolved
             val constructionDemand: SelectionForest = selection.subselections
             val invocationDemand: SelectionForest = constructionDemand.successorDemand()
             val queryValue =
@@ -132,6 +138,61 @@ internal class FieldResolverTask(
                 )
 
             cell.getValue().complete(passiveValue)
+        }
+    }
+
+    // Calls the tenant provider once for this occurrence and publishes its complete binding set.
+    // A provider failure becomes the owning field's error while also unblocking fragment work.
+    private suspend fun completeVariablesProviderBindings(
+        arguments: Arguments.Resolved,
+    ): EngineErrorData? {
+        val resolver = fieldResolverOccurrenceContext.resolver
+        val provider = resolver.variablesProvider ?: return null
+        val providerDefinitions =
+            fieldResolverOccurrenceContext.variableDefinitions.filter { definition ->
+                definition.definition == VariableDefinition.FromProvider
+            }
+        val expectedNames =
+            providerDefinitions.mapTo(linkedSetOf()) { definition ->
+                definition.variable.variableName
+            }
+        val values =
+            try {
+                provider(arguments)
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                completeVariablesProviderBindingsWithError()
+                return EngineErrorData.of(exception)
+            }
+        if (values.keys != expectedNames) {
+            val extra = values.keys - expectedNames
+            val missing = expectedNames - values.keys
+            completeVariablesProviderBindingsWithError()
+            error(
+                buildString {
+                    append("VariablesProvider returned invalid variables.")
+                    if (extra.isNotEmpty()) append(" Extra keys: ${extra.joinToString(",")}")
+                    if (missing.isNotEmpty()) append(" Missing keys: ${missing.joinToString(",")}")
+                },
+            )
+        }
+        providerDefinitions.forEach { definition ->
+            operationContext.variableBindingsState.completeBinding(
+                requireNotNull(definition.variable.instanceId),
+                values.getValue(definition.variable.variableName),
+            )
+        }
+        return null
+    }
+
+    private fun completeVariablesProviderBindingsWithError() {
+        fieldResolverOccurrenceContext.variableDefinitions.forEach { definition ->
+            if (definition.definition != VariableDefinition.FromProvider) return@forEach
+            operationContext.variableBindingsState.completeBinding(
+                requireNotNull(definition.variable.instanceId),
+                model.VariableBinding.Error,
+            )
         }
     }
 

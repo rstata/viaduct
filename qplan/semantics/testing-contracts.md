@@ -28,6 +28,7 @@ Shared contracts live in `src/testFixtures/kotlin/semantics/contract`:
 - `ObjectFragmentFromArgumentResolverContract` covers variables bound from resolver arguments, including nested input-object paths, null intermediate traversal, and a transitive chain.
 - `QueryFragmentResolverContract` covers independently orchestrated Query-rooted resolver inputs, including response aliases, `FromArgument` bindings consumed by either or both resolver fragments, distinct OER identity for each application, separation from the primary result, transitive query-fragment resolution, and occurrence isolation when the same variable-bearing resolver path appears in the request and one or more query fragments. `QueryFragmentFromObjectPathResolverContract` separately covers a Query-fragment use of a `FromObjectField` binding whose provider remains in the object fragment. `FromQueryFieldResolverContract` covers a Query-fragment provider consumed by the object fragment, Query fragment, or both.
 - `ObjectFragmentFromObjectPathResolverContract` covers variables bound from exact object-fragment provider paths, including nested paths and scalar-list, null, and error values.
+- `VariablesProviderResolverContract` covers Resolver26 variables returned by its one-shot tenant provider, including argument-derived and multiple values, occurrence-local bindings, null, and provider failure.
 - `ParentFieldResolverContract` covers structural parent identity, ancestor and descendant demand lifting, list-nested children, abstract parent targets, recursive same-type occurrences, source attempts to replace structural backedges, and cross-occurrence re-entry. Resolver22/23 and Resolver26 implement it. `UnsupportedParentFieldResolverContract` requires an explicit rejection from Resolver01-03, Resolver06-08, and Resolver21. [`examples.md`](../examples.md#why-the-depth-first-resolvers-do-not-support-parent) explains the boundary.
 - `SometimesPassiveResolverContract` covers argumentless active fields exceptionally supplied by ancestor resolver outputs. `SometimesPassiveObjectFragmentResolverContract` checks both ownership branches when the standard resolver has input demand, `SometimesPassiveObjectPathResolverContract` preserves a provider path below an ancestor-supplied active field and verifies that binding validation ignores the unbound object-path variables of a skipped standard resolver, and `SometimesPassiveSelectiveResolverContract` witnesses Resolver03, Resolver08, Resolver23, and Resolver26's single selective ancestor application and conservative pre-execution demand.
 - The advanced demand contracts cover recursive-key isolation, deferred demand through passive objects and node bridges, nested `FromArgument` and `FromObjectField` uses, recursive lists, and acyclic mixed-variable dependency chains.
@@ -49,12 +50,13 @@ Current support is:
 | Query fragments consuming `FromObjectField` | no | no | no | Resolver26 |
 | Query fragments producing `FromQueryField` | no | no | no | Resolver26 |
 | Nonempty fragments with `FromObjectField` | no | no | no | yes |
+| Nonempty fragments with `FromProvider` | no | no | no | yes |
 | Advanced `FromArgument` demand | no | yes | yes | yes |
 | Advanced `FromObjectField` demand | no | no | no | yes |
 | Late symbolic object-path demand | no | no | no | yes |
 | List-passive deepening generated coverage | no | no | yes | yes |
 
-Runtime `FromObjectField` and `FromQueryField` binding is supported by Resolver26. Every resolver that claims a base feature contract inherits its advanced deterministic regressions. Resolver26 additionally implements late symbolic-demand and symbolic-key-identity contracts.
+Runtime `FromObjectField`, `FromQueryField`, and `FromProvider` binding is supported by Resolver26. Every resolver that claims a base feature contract inherits its advanced deterministic regressions. Resolver26 additionally implements provider-function, late symbolic-demand, and symbolic-key-identity contracts.
 
 ## Policy Mixins
 

@@ -20,6 +20,7 @@ internal enum class ParentVariableSource {
     ARGUMENT,
     OBJECT_FIELD,
     QUERY_FIELD,
+    PROVIDER,
 }
 
 internal enum class ParentResolverInputFragment {
@@ -299,6 +300,7 @@ private fun FieldResolver.variableSourcesByName(): Map<String, ParentVariableSou
 
 private fun VariableDefinition.parentVariableSource(): ParentVariableSource =
     when (this) {
+        VariableDefinition.FromProvider -> ParentVariableSource.PROVIDER
         is VariableDefinition.FromArgument -> ParentVariableSource.ARGUMENT
         is VariableDefinition.FromField ->
             when (providerFragment) {

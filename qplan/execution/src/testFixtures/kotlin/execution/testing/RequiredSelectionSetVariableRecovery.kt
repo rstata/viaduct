@@ -14,6 +14,7 @@ import viaduct.engine.api.FromFieldVariablesResolver
 import viaduct.engine.api.RequiredSelectionSet
 import viaduct.engine.api.Validated
 import viaduct.engine.api.VariablesResolver
+import viaduct.engine.api.resolve
 import viaduct.graphql.schema.ViaductSchema
 import viaduct.graphql.utils.ParsedSelections
 
@@ -36,7 +37,9 @@ import viaduct.graphql.utils.ParsedSelections
  *
  * Qplan's semantic registry supports nested input-object paths, but this adapter can recover only
  * the one-segment argument recipes retained by the production Engine API. Nested input-object
- * paths and arbitrary [VariablesResolver] callbacks are rejected here rather than approximated.
+ * paths and callbacks with their own required selections are rejected here rather than
+ * approximated. All disjoint no-RSS callbacks are composed as the field resolver's variables
+ * provider.
  */
 internal class RequiredSelectionSetVariableRecovery(
     private val schema: ViaductSchema,
@@ -68,9 +71,30 @@ internal class RequiredSelectionSetVariableRecovery(
         val responsePath: List<String>,
     ) : RecoveredConfiguration
 
+    /** One variable supplied by the field resolver's shared tenant callback. */
+    data class RecoveredFromProvider(
+        override val variable: Arguments.Variable,
+        val resolver: VariablesResolver,
+    ) : RecoveredConfiguration
+
     sealed interface RecoveredConfiguration {
         val variable: Arguments.Variable
     }
+
+    data class RecoveredVariablesProvider(
+        val variableNames: Set<String>,
+        val resolvers: List<VariablesResolver>,
+    ) {
+        suspend fun resolve(
+            ctx: VariablesResolver.ResolveCtx,
+            context: viaduct.engine.api.EngineExecutionContext,
+        ): Map<String, Any?> = resolvers.resolve(ctx, context)
+    }
+
+    data class RecoveryResult(
+        val declarations: Map<Arguments.Variable, VariableDeclaration>,
+        val variablesProvider: RecoveredVariablesProvider?,
+    )
 
     /**
      * Returns declarations ready for `TestWorld.fromSDL(variableProviders = ...)`.
@@ -79,7 +103,7 @@ internal class RequiredSelectionSetVariableRecovery(
         field: ViaductSchema.ObjectField,
         objectFragment: Fragment,
         requiredSelectionSet: RequiredSelectionSet?,
-    ): Map<Arguments.Variable, VariableDeclaration> =
+    ): RecoveryResult =
         recover(
             field = field,
             objectFragment = objectFragment,
@@ -98,10 +122,10 @@ internal class RequiredSelectionSetVariableRecovery(
         objectRequiredSelectionSet: RequiredSelectionSet?,
         queryFragment: Fragment?,
         queryRequiredSelectionSet: RequiredSelectionSet?,
-    ): Map<Arguments.Variable, VariableDeclaration> {
+    ): RecoveryResult {
         val objectFragmentSource = objectRequiredSelectionSet?.fragmentSource()
         val queryFragmentSource = queryRequiredSelectionSet?.fragmentSource()
-        return recoverConfigurations(
+        val configurations = recoverConfigurations(
             field = field,
             fragments = listOfNotNull(objectFragment, queryFragment),
             variableResolvers =
@@ -112,31 +136,46 @@ internal class RequiredSelectionSetVariableRecovery(
             querySelections = queryRequiredSelectionSet?.selections,
             observedSources = linkedMapOf(),
         )
-            .associate { configuration ->
-                configuration.variable to
-                    when (configuration) {
-                        is RecoveredFromArgument ->
-                            schema.fromArgument(field, configuration.argumentName)
-                        is RecoveredFromObjectField ->
-                            schema.fromObjectField(
-                                objectFragmentSource =
-                                    checkNotNull(objectFragmentSource) {
-                                        "FromObjectField recovery requires an object RSS"
-                                    },
-                                responsePath = configuration.responsePath,
-                                variableField = field,
-                            )
-                        is RecoveredFromQueryField ->
-                            schema.fromQueryField(
-                                queryFragmentSource =
-                                    checkNotNull(queryFragmentSource) {
-                                        "FromQueryField recovery requires a Query RSS"
-                                    },
-                                responsePath = configuration.responsePath,
-                                variableField = field,
-                            )
-                    }
-            }
+        val providerConfigurations = configurations.filterIsInstance<RecoveredFromProvider>()
+        val providerResolvers = providerConfigurations.map { it.resolver }.distinct()
+        return RecoveryResult(
+            declarations =
+                configurations.filterNot { it is RecoveredFromProvider }.associate { configuration ->
+                    configuration.variable to
+                        when (configuration) {
+                            is RecoveredFromArgument ->
+                                schema.fromArgument(field, configuration.argumentName)
+                            is RecoveredFromObjectField ->
+                                schema.fromObjectField(
+                                    objectFragmentSource =
+                                        checkNotNull(objectFragmentSource) {
+                                            "FromObjectField recovery requires an object RSS"
+                                        },
+                                    responsePath = configuration.responsePath,
+                                    variableField = field,
+                                )
+                            is RecoveredFromQueryField ->
+                                schema.fromQueryField(
+                                    queryFragmentSource =
+                                        checkNotNull(queryFragmentSource) {
+                                            "FromQueryField recovery requires a Query RSS"
+                                        },
+                                    responsePath = configuration.responsePath,
+                                    variableField = field,
+                                )
+                            is RecoveredFromProvider -> error("Provider configurations are separate")
+                        }
+                },
+            variablesProvider =
+                providerResolvers.takeIf { it.isNotEmpty() }?.let { resolvers ->
+                    RecoveredVariablesProvider(
+                        variableNames = providerConfigurations.mapTo(linkedSetOf()) {
+                            it.variable.variableName
+                        },
+                        resolvers = resolvers,
+                    )
+                },
+        )
     }
 
     /**
@@ -256,12 +295,17 @@ internal class RequiredSelectionSetVariableRecovery(
                             observedSources.record(resolver.name, source, coordinate)
                             listOf(resolver.name to source)
                         }
-                        else ->
-                            throw IllegalArgumentException(
-                                "Qplan feature tests support only FromArgument and from-field " +
-                                    "variable providers; $coordinate uses " +
-                                    resolver::class.qualifiedName,
-                            )
+                        else -> {
+                            require(resolver.requiredSelectionSet == null) {
+                                "Qplan variables-provider callbacks may not have required selections; " +
+                                    "$coordinate uses ${resolver::class.qualifiedName}"
+                            }
+                            resolver.variableNames.map { name ->
+                                val source = RecoveredSource.FromProvider(resolver)
+                                observedSources.record(name, source, coordinate)
+                                name to source
+                            }
+                        }
                     }
                 }.groupBy({ (name, _) -> name }, { (_, source) -> source })
 
@@ -297,6 +341,11 @@ internal class RequiredSelectionSetVariableRecovery(
                         variable = variables.single(),
                         responsePath = source.responsePath,
                     )
+                is RecoveredSource.FromProvider ->
+                    RecoveredFromProvider(
+                        variable = variables.single(),
+                        resolver = source.resolver,
+                    )
             }
         }
     }
@@ -313,6 +362,10 @@ private sealed interface RecoveredSource {
 
     data class FromQueryField(
         val responsePath: List<String>,
+    ) : RecoveredSource
+
+    data class FromProvider(
+        val resolver: VariablesResolver,
     ) : RecoveredSource
 }
 

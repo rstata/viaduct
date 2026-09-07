@@ -16,6 +16,7 @@ import model.registry.FieldResolverApplicationObserver
 import model.registry.NonselectiveFieldResolverFunction
 import model.registry.SelectiveFieldResolverFunction
 import model.registry.VariableDefinition
+import model.registry.VariablesProviderFunction
 import model.merge
 import model.selectionForestOf
 import model.variableTemplates
@@ -35,6 +36,8 @@ class FieldResolverDefinition private constructor(
     private val passesDemand: Boolean,
     private val projectionDemand: (SelectionForest) -> SelectionForest,
     private val applicationObserver: FieldResolverApplicationObserver,
+    internal val variablesProviderNames: Set<String>,
+    internal val variablesProvider: VariablesProviderFunction?,
 ) {
     fun mapOutput(
         transform: (EngineOutputData?) -> EngineOutputData?,
@@ -49,6 +52,8 @@ class FieldResolverDefinition private constructor(
             passesDemand = passesDemand,
             projectionDemand = projectionDemand,
             applicationObserver = applicationObserver,
+            variablesProviderNames = variablesProviderNames,
+            variablesProvider = variablesProvider,
         )
 
     fun mapDemand(
@@ -62,6 +67,8 @@ class FieldResolverDefinition private constructor(
             passesDemand = passesDemand,
             projectionDemand = { demand -> transform(projectionDemand(demand)) },
             applicationObserver = applicationObserver,
+            variablesProviderNames = variablesProviderNames,
+            variablesProvider = variablesProvider,
         )
 
     fun mapObjectFragment(transform: (Fragment) -> Fragment): FieldResolverDefinition =
@@ -73,6 +80,8 @@ class FieldResolverDefinition private constructor(
             passesDemand = passesDemand,
             projectionDemand = projectionDemand,
             applicationObserver = applicationObserver,
+            variablesProviderNames = variablesProviderNames,
+            variablesProvider = variablesProvider,
         )
 
     fun mapQueryFragment(transform: (Fragment) -> Fragment): FieldResolverDefinition =
@@ -84,6 +93,8 @@ class FieldResolverDefinition private constructor(
             passesDemand = passesDemand,
             projectionDemand = projectionDemand,
             applicationObserver = applicationObserver,
+            variablesProviderNames = variablesProviderNames,
+            variablesProvider = variablesProvider,
         )
 
     fun observeApplications(
@@ -100,7 +111,29 @@ class FieldResolverDefinition private constructor(
                 applicationObserver(input, arguments, selections)
                 observer(input, arguments, selections)
             },
+            variablesProviderNames = variablesProviderNames,
+            variablesProvider = variablesProvider,
         )
+
+    /** Attaches one occurrence-local provider for the named fragment variables. */
+    fun withVariablesProvider(
+        variableNames: Set<String>,
+        provider: VariablesProviderFunction,
+    ): FieldResolverDefinition {
+        require(variableNames.isNotEmpty()) { "A variables provider must declare a variable" }
+        require(variablesProvider == null) { "A variables provider is already attached" }
+        return FieldResolverDefinition(
+            objectFragment = objectFragment,
+            queryFragment = queryFragment,
+            function = function,
+            selective = selective,
+            passesDemand = passesDemand,
+            projectionDemand = projectionDemand,
+            applicationObserver = applicationObserver,
+            variablesProviderNames = variableNames.toSet(),
+            variablesProvider = provider,
+        )
+    }
 
     internal fun assemble(
         field: ViaductSchema.ObjectField,
@@ -156,6 +189,7 @@ class FieldResolverDefinition private constructor(
                     function(input, queryValue, arguments, projectionDemand(selections))
                 },
                 applicationObserver = applicationObserver,
+                variablesProvider = variablesProvider,
             )
         } else if (passesDemand) {
             FieldResolver.ofSelectionAwareNonselective(
@@ -168,6 +202,7 @@ class FieldResolverDefinition private constructor(
                     function(input, queryValue, arguments, projectionDemand(selections))
                 },
                 applicationObserver = applicationObserver,
+                variablesProvider = variablesProvider,
             )
         } else {
             FieldResolver.of(
@@ -181,6 +216,7 @@ class FieldResolverDefinition private constructor(
                 },
                 projectionDemand = projectionDemand,
                 applicationObserver = applicationObserver,
+                variablesProvider = variablesProvider,
             )
         }
     }
@@ -201,6 +237,8 @@ class FieldResolverDefinition private constructor(
                 passesDemand = false,
                 projectionDemand = { it },
                 applicationObserver = { _, _, _ -> },
+                variablesProviderNames = emptySet(),
+                variablesProvider = null,
             )
 
         fun ofSelective(
@@ -216,6 +254,8 @@ class FieldResolverDefinition private constructor(
                 passesDemand = true,
                 projectionDemand = { it },
                 applicationObserver = { _, _, _ -> },
+                variablesProviderNames = emptySet(),
+                variablesProvider = null,
             )
 
         fun of(
@@ -240,6 +280,8 @@ class FieldResolverDefinition private constructor(
                 passesDemand = true,
                 projectionDemand = { it },
                 applicationObserver = { _, _, _ -> },
+                variablesProviderNames = emptySet(),
+                variablesProvider = null,
             )
         }
 }

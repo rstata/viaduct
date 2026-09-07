@@ -141,7 +141,13 @@ internal fun ParentFocusedCoverageSnapshot.criteria(): List<ParentFocusedCoverag
     val expectedProducerShapes = ParentProducerShape.entries.toSet()
     val expectedTargetKinds = ParentTargetKind.entries.toSet()
     val expectedPlacements = ParentResolverPlacement.entries.toSet()
-    val expectedSources = ParentVariableSource.entries.toSet()
+    // The broad stress generator does not yet create variables-provider functions.
+    val expectedSources =
+        setOf(
+            ParentVariableSource.ARGUMENT,
+            ParentVariableSource.OBJECT_FIELD,
+            ParentVariableSource.QUERY_FIELD,
+        )
     val expectedPairs = expectedSources.allPairs()
     val expectedFragments = ParentResolverInputFragment.entries.toSet()
     val expectedArgumentDepths = ParentArgumentSelectionDepth.entries.toSet()

@@ -147,6 +147,9 @@ private fun declareBindings(closed: CloseInputDemandResult) {
         fieldResolverOccurrenceContext.variableDefinitions.forEach { variableDefinition ->
             val variableId = requireNotNull(variableDefinition.variable.instanceId)
             when (val definition = variableDefinition.definition) {
+                VariableDefinition.FromProvider ->
+                    operation.variableBindingsState.declareBinding(variableId)
+
                 is VariableDefinition.FromArgument ->
                     if (ownerKey is ObjectEngineResult.GroundKey) {
                         operation.variableBindingsState.bindVariable(

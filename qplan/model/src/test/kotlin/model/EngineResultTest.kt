@@ -140,6 +140,7 @@ class EngineResultTest {
 
         val writerPromise = cell.createValuePromise()
         assertSame(readerPlaceholder, writerPromise)
+        cell.setActivated(true)
         writerPromise.complete(firstValue)
 
         assertTrue(result.isCellSet(key))
@@ -150,6 +151,70 @@ class EngineResultTest {
             cell.setValue("second")
         }
         assertSame(firstValue, result.getCell(key).getValue().get())
+    }
+
+    @Test
+    fun `value await suspends until the cell is activated`() =
+        runBlocking {
+            val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+            val key = schema.key("Query", "first")
+            val result = ObjectEngineResult.of(schema.requireQueryTypeDef(), mutable = true)
+            val cell = result.reserveCell(key)
+            val promise = cell.createValuePromise()
+            val awaiting = async { promise.await() }
+
+            assertFalse(awaiting.isCompleted)
+            cell.setActivated(true)
+            assertFalse(awaiting.isCompleted)
+            promise.complete("ready")
+
+            assertEquals("ready", awaiting.await())
+        }
+
+    @Test
+    fun `not activated cell rejects every slot operation`() =
+        runBlocking {
+            val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+            val key = schema.key("Query", "first")
+            val result = ObjectEngineResult.of(schema.requireQueryTypeDef(), mutable = true)
+            val cell = result.reserveCell(key)
+            val promise = cell.createValuePromise()
+
+            cell.setActivated(false)
+
+            assertFailsWith<IllegalStateException> { cell.checkActivated() }
+            assertFailsWith<IllegalStateException> { promise.get() }
+            assertFailsWith<IllegalStateException> { promise.complete("excluded") }
+            assertFailsWith<IllegalStateException> { promise.await() }
+            assertFailsWith<IllegalStateException> { cell.setValue("excluded") }
+            assertFailsWith<IllegalStateException> { cell.setActivated(true) }
+        }
+
+    @Test
+    fun `direct cell value installation is activated and completed from birth`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val key = schema.key("Query", "first")
+        val result = ObjectEngineResult.of(schema.requireQueryTypeDef(), mutable = true)
+
+        val cell = result.setCellValue(key, "ready")
+
+        cell.checkActivated()
+        assertEquals("ready", cell.getValue().get())
+        assertFailsWith<IllegalStateException> { cell.setValue("again") }
+    }
+
+    @Test
+    fun `direct cell value installation completes an existing reader placeholder`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val key = schema.key("Query", "first")
+        val result = ObjectEngineResult.of(schema.requireQueryTypeDef(), mutable = true)
+        val reservedCell = result.reserveCell(key)
+        val readerPlaceholder = reservedCell.reserveValue()
+
+        val installedCell = result.setCellValue(key, "ready")
+
+        assertSame(reservedCell, installedCell)
+        assertEquals("ready", readerPlaceholder.get())
     }
 
     @Test
@@ -207,6 +272,7 @@ class EngineResultTest {
         val writerPromise = cell.createValuePromise()
 
         result.freeze()
+        cell.setActivated(true)
         writerPromise.complete("ready")
 
         assertSame(readerPlaceholder, writerPromise)
@@ -253,6 +319,7 @@ class EngineResultTest {
 
         val value = cell.createValuePromise()
         val accessResult = cell.createAccessResultPromise()
+        cell.setActivated(true)
 
         assertFailsWith<UncompletedPromiseException> { value.get() }
         assertFailsWith<UncompletedPromiseException> { accessResult.get() }
@@ -306,6 +373,7 @@ class EngineResultTest {
         assertSame(directError, direct.getAccessResult().get())
 
         val deferred = mutable.reserveCell(secondKey).createAccessResultPromise()
+        mutable.getCell(secondKey).setActivated(true)
         assertFailsWith<IllegalArgumentException> {
             deferred.complete("not an access result")
         }

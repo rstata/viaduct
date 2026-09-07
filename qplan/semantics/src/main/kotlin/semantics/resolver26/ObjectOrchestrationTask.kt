@@ -122,9 +122,7 @@ internal class ObjectOrchestrationTask(
                     "${world.parentFieldRelations[key.field]}, not containing producer $producer " +
                     "at ${occurrence.path}"
             }
-            occurrence.target.reserveCell(key).also { cell ->
-                cell.setValue(parent.target)
-            }
+            occurrence.target.setCellValue(key, parent.target)
             check(occurrence.target.getCell(key).getValue().get() === parent.target) {
                 "Parent field ${key.field.name} does not reference its containing object occurrence"
             }

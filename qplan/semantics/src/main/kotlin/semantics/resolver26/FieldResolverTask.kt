@@ -58,6 +58,7 @@ internal class FieldResolverTask(
 
     suspend fun run() {
         context(operationContext, world, operationContext.cycleChecker) {
+            cell.setActivated(true)
             val selection = fieldResolverOccurrenceContext.selection
             val objectKey = selection.key
             val groundedArguments = objectKey.fetchGroundedArguments()

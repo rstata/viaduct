@@ -63,7 +63,8 @@ class MaterializeTest {
                     type = world.schema.requireQueryTypeDef(),
                     mutable = true,
                 )
-            val promise = result.reserveCell(field).createValuePromise()
+            val cell = result.reserveCell(field)
+            val promise = cell.createValuePromise()
             val materialized =
                 async(start = CoroutineStart.UNDISPATCHED) {
                     context(OperationContext(world), cycleChecker) {
@@ -75,6 +76,7 @@ class MaterializeTest {
                 }
 
             assertFalse(materialized.isCompleted)
+            cell.setActivated(true)
             promise.complete("ready")
 
             assertEquals(

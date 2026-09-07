@@ -108,10 +108,11 @@ class CycleCheckStateTest {
     fun `completed deferred slot still contributes a read edge`() {
         val fixture = Fixture()
         val key = fixture.key("first")
-        fixture.target
-            .reserveCell(key)
-            .createValuePromise()
-            .complete("complete")
+        fixture.target.reserveCell(key).also { cell ->
+            cell.createValuePromise()
+            cell.setActivated(true)
+            cell.getValue().complete("complete")
+        }
         fixture.register("first")
 
         assertFailsWith<ResolverReadCycleException> {

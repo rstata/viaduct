@@ -49,13 +49,26 @@ internal fun List<PathComponent>?.toSelectionPath():
     this?.map { component -> component as? ObjectEngineResult.ObjectKey ?: return null }
 
 /**
- * One result occurrence with independent write-once value and access-result slots.
+ * One result occurrence with one write-once activation decision and independent write-once value
+ * and access-result slots.
  *
- * The value slot contains [EngineResult] or GraphQL null. The access-result slot contains a Boolean
- * result or [ErrorEngineResult]. Cells use reference equality and stable identity hashing because
- * either slot may be completed after publication.
+ * Pending cells permit either slot's promise to be reserved, but those promises cannot be read or
+ * completed until the cell is activated. A negative activation decision permanently prohibits both
+ * slots. Direct slot setters activate a pending cell before completing it. The value slot contains
+ * [EngineResult] or GraphQL null. The access-result slot contains a Boolean result or
+ * [ErrorEngineResult]. Cells use reference equality and stable identity hashing because their
+ * activation or either slot may be completed after publication.
  */
 sealed interface EngineResultCell {
+    /** Completes this cell's activation decision exactly once. */
+    fun setActivated(activated: Boolean)
+
+    /** Suspends until activation is decided and throws when this cell is not activated. */
+    suspend fun awaitActivated()
+
+    /** Throws unless this cell has already been activated. */
+    fun checkActivated()
+
     /** @throws IllegalStateException when this cell has no value promise */
     fun getValue(): Promise<EngineResult?>
 
@@ -287,6 +300,15 @@ sealed interface ObjectEngineResult {
      * @throws NoSuchElementException when this object is immutable or frozen and has no cell
      */
     fun reserveCell(field: ObjectKey): EngineResultCell
+
+    /**
+     * Installs an activated cell with a completed value, or completes a placeholder previously
+     * reserved for [field].
+     */
+    fun setCellValue(
+        field: ObjectKey,
+        value: EngineResult?,
+    ): EngineResultCell
 
     /**
      * Seals this object's cell-key set and freezes every present cell's value slot. Claimed
@@ -601,15 +623,44 @@ private class CellImpl(
         accessResult?.let(::validateAccessResult)
     }
 
+    private val activationLock = Any()
+    private val activation: Promise<Boolean> =
+        if (initiallyValueSet || accessResult != null) {
+            Promise.of(true)
+        } else {
+            Promise.ofDeferred()
+        }
     private val valueStore =
         CellValueStore(
+            cell = this,
             initialValue = initialValue,
             initiallySet = initiallyValueSet,
             mutable = mutable,
             validateValue = validateValue,
         )
     private val accessResultStore =
-        promiseStore(accessResult?.let { mapOf(Unit to it) }.orEmpty())
+        promiseStore(
+            values = accessResult?.let { mapOf(Unit to it) }.orEmpty(),
+            cell = this,
+        )
+
+    override fun setActivated(activated: Boolean) {
+        checkMutable()
+        synchronized(activationLock) {
+            check(!activation.isCompleted) { "Cell activation has already been decided" }
+            activation.complete(activated)
+        }
+    }
+
+    override suspend fun awaitActivated() {
+        check(activation.await()) { "Cell was not activated" }
+    }
+
+    override fun checkActivated() {
+        synchronized(activationLock) {
+            check(activation.isCompleted && activation.get()) { "Cell is not activated" }
+        }
+    }
 
     override fun getValue(): Promise<EngineResult?> =
         checkNotNull(valueStore.readOrNull()) {
@@ -619,7 +670,9 @@ private class CellImpl(
     override fun reserveValue(): Promise<EngineResult?> = valueStore.reserve()
 
     override fun setValue(value: EngineResult?) {
+        checkMayWrite()
         validateValue(value)
+        activateForWrite()
         valueStore.claimAndComplete(value)
     }
 
@@ -631,21 +684,30 @@ private class CellImpl(
         }
 
     override fun setAccessResult(result: EngineResult) {
-        checkMutable()
+        checkMayWrite()
         validateAccessResult(result)
-        accessResultStore.set(Unit, result)
+        activateForWrite()
+        accessResultStore.set(Unit, result, this)
     }
 
     override fun createAccessResultPromise(): Promise<EngineResult> {
         checkMutable()
-        return accessResultStore.create(Unit, ::validateAccessResult)
+        return accessResultStore.create(Unit, this, ::validateAccessResult)
     }
 
     inline fun freezeValue(cause: () -> Throwable) {
-        if (mutable) valueStore.freeze(cause)
+        if (mutable) {
+            valueStore.freeze(cause)?.let { failure ->
+                synchronized(activationLock) {
+                    if (!activation.isCompleted) activation.fail(failure)
+                }
+            }
+        }
     }
 
     fun requireCompleted() {
+        val activated = activation.get()
+        if (!activated) return
         valueStore.readOrNull()?.get()
         accessResultStore.snapshot().values.forEach { promise -> promise.get() }
     }
@@ -657,17 +719,33 @@ private class CellImpl(
         get() = accessResultStore.readOrNull(Unit)?.get()
 
     private fun checkMutable() = check(mutable) { "Cell is immutable" }
+
+    private fun checkMayWrite() {
+        checkMutable()
+        synchronized(activationLock) {
+            check(!activation.isCompleted || activation.get()) { "Cell was not activated" }
+        }
+    }
+
+    private fun activateForWrite() {
+        checkMutable()
+        synchronized(activationLock) {
+            if (!activation.isCompleted) activation.complete(true)
+            check(activation.get()) { "Cell was not activated" }
+        }
+    }
 }
 
 private class CellValueStore(
+    private val cell: EngineResultCell,
     initialValue: EngineResult?,
     initiallySet: Boolean,
     private val mutable: Boolean,
     private val validateValue: (EngineResult?) -> Unit,
 ) {
     private val lock = Any()
-    private var promise: Promise<EngineResult?>? =
-        if (initiallySet) Promise.of(initialValue) else null
+    private var promise: ActivationAwarePromise<EngineResult?>? =
+        if (initiallySet) activationAwarePromise(cell, Promise.of(initialValue)) else null
     private var claimed = initiallySet
     private var frozen = !mutable
 
@@ -684,6 +762,7 @@ private class CellValueStore(
                 } else {
                     Promise
                         .ofDeferred(validateValue)
+                        .let { promise -> activationAwarePromise(cell, promise) }
                         .also { created -> promise = created }
                 }
         }
@@ -699,6 +778,7 @@ private class CellValueStore(
             } else {
                 Promise
                     .ofDeferred(validateValue)
+                    .let { promise -> activationAwarePromise(cell, promise) }
                     .also { created ->
                         promise = created
                         claimed = true
@@ -710,7 +790,7 @@ private class CellValueStore(
         claim().complete(value)
     }
 
-    inline fun freeze(cause: () -> Throwable) {
+    inline fun freeze(cause: () -> Throwable): Throwable? {
         val unclaimed =
             synchronized(lock) {
                 check(mutable) { "Cell is immutable" }
@@ -718,7 +798,9 @@ private class CellValueStore(
                 frozen = true
                 promise?.takeUnless { claimed }
             }
-        unclaimed?.fail(cause())
+        return unclaimed?.let { promise ->
+            cause().also(promise::failWithoutActivation)
+        }
     }
 }
 
@@ -748,6 +830,15 @@ private class ObjectResultImpl(
     override fun reserveCell(field: ObjectEngineResult.ObjectKey): EngineResultCell {
         validateObjectField(type, field)
         return cellStore.reserve(field)
+    }
+
+    override fun setCellValue(
+        field: ObjectEngineResult.ObjectKey,
+        value: EngineResult?,
+    ): EngineResultCell {
+        validateObjectField(type, field)
+        validateObjectValue(field, value)
+        return cellStore.setValue(field, value)
     }
 
     override fun freeze() {
@@ -801,6 +892,28 @@ private class ObjectCellStore(
                 }
         }
 
+    fun setValue(
+        field: ObjectEngineResult.ObjectKey,
+        value: EngineResult?,
+    ): EngineResultCell {
+        var installed = false
+        val cell =
+            synchronized(lock) {
+                cells[field]
+                    ?: if (frozen) {
+                        throw missingResultCell(type, field)
+                    } else {
+                        completedValueCell(field, value).also { created ->
+                            cells[field] = created
+                            keySnapshot = cells.keys.toSet()
+                            installed = true
+                        }
+                    }
+            }
+        if (!installed) cell.setValue(value)
+        return cell
+    }
+
     fun freeze() {
         val presentCells =
             synchronized(lock) {
@@ -827,6 +940,17 @@ private class ObjectCellStore(
         CellImpl(
             mutable = true,
             validateValue = { value -> validateObjectValue(field, value) },
+        )
+
+    private fun completedValueCell(
+        field: ObjectEngineResult.ObjectKey,
+        value: EngineResult?,
+    ): EngineResultCell =
+        CellImpl(
+            initialValue = value,
+            initiallyValueSet = true,
+            mutable = true,
+            validateValue = { updated -> validateObjectValue(field, updated) },
         )
 }
 
@@ -978,8 +1102,52 @@ private fun unionAccessResult(
             }
     }
 
-private fun <K : Any, V> promiseStore(values: Map<K, V>): OnceStore<K, Promise<V>> =
-    OnceStore(values.mapValues { (_, value) -> Promise.of(value) })
+private class ActivationAwarePromise<T>(
+    private val cell: EngineResultCell,
+    private val delegate: Promise<T>,
+) : Promise<T> {
+    override val isCompleted: Boolean
+        get() = delegate.isCompleted
+
+    override suspend fun await(): T {
+        cell.awaitActivated()
+        return delegate.await()
+    }
+
+    override fun get(): T {
+        cell.checkActivated()
+        return delegate.get()
+    }
+
+    override fun complete(value: T) {
+        cell.checkActivated()
+        delegate.complete(value)
+    }
+
+    override fun fail(cause: Throwable) {
+        cell.checkActivated()
+        delegate.fail(cause)
+    }
+
+    fun failWithoutActivation(cause: Throwable) {
+        delegate.fail(cause)
+    }
+}
+
+private fun <T> activationAwarePromise(
+    cell: EngineResultCell,
+    promise: Promise<T>,
+): ActivationAwarePromise<T> = ActivationAwarePromise(cell, promise)
+
+private fun <K : Any, V> promiseStore(
+    values: Map<K, V>,
+    cell: EngineResultCell,
+): OnceStore<K, Promise<V>> =
+    OnceStore(
+        values.mapValues { (_, value) ->
+            activationAwarePromise(cell, Promise.of(value))
+        },
+    )
 
 private fun <K : Any, V> OnceStore<K, Promise<V>>.readOrNull(key: K): Promise<V>? =
     if (isSet(key)) read(key) else null
@@ -987,14 +1155,17 @@ private fun <K : Any, V> OnceStore<K, Promise<V>>.readOrNull(key: K): Promise<V>
 private fun <K : Any, V> OnceStore<K, Promise<V>>.set(
     key: K,
     value: V,
-) = write(key, Promise.of(value))
+    cell: EngineResultCell,
+) = write(key, activationAwarePromise(cell, Promise.of(value)))
 
 private fun <K : Any, V> OnceStore<K, Promise<V>>.create(
     key: K,
+    cell: EngineResultCell,
     validate: (V) -> Unit = {},
 ): Promise<V> =
     Promise
         .ofDeferred(validate)
+        .let { promise -> activationAwarePromise(cell, promise) }
         .also { write(key, it) }
 
 private fun validateObjectField(

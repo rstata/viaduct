@@ -77,6 +77,7 @@ class PromiseTest {
             ObjectEngineResult
                 .of(schema.requireQueryTypeDef(), mutable = true)
                 .reserveCell(field)
+                .also { cell -> cell.setActivated(true) }
                 .createValuePromise()
 
         assertFailsWith<IllegalArgumentException> {

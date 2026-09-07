@@ -13,6 +13,7 @@
     "resolverFragmentsEnabled" : true,
     "resolverFromArgumentVariablesEnabled" : true,
     "resolverFromObjectFieldVariablesEnabled" : true,
+    "resolverFromProviderVariablesEnabled" : true,
     "resolverFromQueryFieldVariablesEnabled" : true,
     "resolverQueryFragmentsEnabled" : true,
     "resolverVariableSingletonCoercionEnabled" : true,

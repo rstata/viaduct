@@ -114,6 +114,7 @@ object ResolverFragmentArgumentFieldWeight : ConfigKey<Double>("resolverFragment
 object ResolverArgumentErrorWeight : ConfigKey<Double>("resolverArgumentErrorWeight", ConfigValueType.DOUBLE, 0.05, ::weight)
 object ResolverVariablesEnabled : ConfigKey<Boolean>("resolverVariablesEnabled", ConfigValueType.BOOLEAN, false, { null })
 object ResolverFromArgumentVariablesEnabled : ConfigKey<Boolean>("resolverFromArgumentVariablesEnabled", ConfigValueType.BOOLEAN, false, { null })
+object ResolverFromProviderVariablesEnabled : ConfigKey<Boolean>("resolverFromProviderVariablesEnabled", ConfigValueType.BOOLEAN, false, { null })
 object ResolverFromObjectFieldVariablesEnabled : ConfigKey<Boolean>("resolverFromObjectFieldVariablesEnabled", ConfigValueType.BOOLEAN, true, { null })
 object ResolverFromQueryFieldVariablesEnabled : ConfigKey<Boolean>("resolverFromQueryFieldVariablesEnabled", ConfigValueType.BOOLEAN, false, { null })
 object ResolverFromArgumentNestedPathWeight :
@@ -192,6 +193,7 @@ internal object ConfigKeys {
             ResolverArgumentErrorWeight,
             ResolverVariablesEnabled,
             ResolverFromArgumentVariablesEnabled,
+            ResolverFromProviderVariablesEnabled,
             ResolverFromObjectFieldVariablesEnabled,
             ResolverFromQueryFieldVariablesEnabled,
             ResolverFromArgumentNestedPathWeight,

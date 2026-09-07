@@ -11,6 +11,7 @@ import io.kotest.property.arbitrary.element
 import io.kotest.property.arbitrary.int
 import io.kotest.property.arbitrary.next
 import model.EngineErrorData
+import model.EngineInputData
 import model.EngineOutputData
 import model.EngineOutputListData
 import model.Fragment
@@ -36,6 +37,7 @@ import model.testing.fromQueryField
 import model.testing.nodeResolverOf
 import model.testing.withErrorArguments
 import model.toSelectionForest
+import model.usedVariables
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -64,6 +66,8 @@ data class RegistryFeatures(
     val fromArgumentVariableCount: Int,
     val fromArgumentNestedPathVariableCount: Int,
     val fromArgumentNullableTraversalVariableCount: Int,
+    val fromProviderVariableCount: Int,
+    val fromProviderArgumentSensitiveVariableCount: Int,
     val fromObjectFieldVariableCount: Int,
     val literalVariableConvergenceCount: Int,
     val fromObjectFieldLiteralVariableConvergenceCount: Int,
@@ -115,6 +119,12 @@ class ArbitraryRegistry internal constructor(
     val fromArgumentVariableOwnerFields: Set<FieldCoordinate> =
         variableProviders
             .filterIsInstance<FromArgumentVariableProviderPlan>()
+            .mapTo(linkedSetOf(), VariableProviderPlan::owner)
+
+    /** Source resolver fields whose generated fragments consume a FromProvider variable. */
+    val fromProviderVariableOwnerFields: Set<FieldCoordinate> =
+        variableProviders
+            .filterIsInstance<FromProviderVariableProviderPlan>()
             .mapTo(linkedSetOf(), VariableProviderPlan::owner)
 
     /** Source resolver fields with a variable read through an input-object argument path. */
@@ -213,6 +223,11 @@ class ArbitraryRegistry internal constructor(
         canonicalField: FieldCoordinate,
     ): Boolean =
         sourceField(canonicalField) in fromObjectFieldVariableOwnerFields
+
+    fun sourceResolverHasFromProviderVariables(
+        canonicalField: FieldCoordinate,
+    ): Boolean =
+        sourceField(canonicalField) in fromProviderVariableOwnerFields
 
     fun sourceResolverHasFromQueryFieldVariables(
         canonicalField: FieldCoordinate,
@@ -422,22 +437,24 @@ class ArbitraryRegistry internal constructor(
                             sourceSchema.typeExpr(field),
                         )
                     val program = resolverPrograms.getValue(coordinate)
-                    field to
+                    val objectFragment =
+                        objectFragments
+                            .getValue(coordinate)
+                            .materialize(
+                                canonicalSchema,
+                                field as ViaductSchema.ObjectField,
+                            )
+                    val queryFragment =
+                        queryFragments
+                            .getValue(coordinate)
+                            .materialize(
+                                canonicalSchema,
+                                field,
+                            )
+                    val definition =
                         fieldResolverOf(
-                            objectFragment =
-                                objectFragments
-                                    .getValue(coordinate)
-                                    .materialize(
-                                        canonicalSchema,
-                                        field as ViaductSchema.ObjectField,
-                                    ),
-                            queryFragment =
-                                queryFragments
-                                    .getValue(coordinate)
-                                    .materialize(
-                                        canonicalSchema,
-                                        field,
-                                    ),
+                            objectFragment = objectFragment,
+                            queryFragment = queryFragment,
                             function = { input, _, arguments ->
                                 field.args
                                     .filter { argument -> argument.hasDefault }
@@ -512,11 +529,38 @@ class ArbitraryRegistry internal constructor(
                                 }
                             },
                         )
+                    val providerPlans =
+                        variableProviders
+                            .filterIsInstance<FromProviderVariableProviderPlan>()
+                            .filter { provider -> provider.owner == coordinate }
+                    val parsedProviderNames =
+                        (objectFragment.subselections.usedVariables() +
+                            queryFragment.subselections.usedVariables())
+                            .mapTo(linkedSetOf(), Arguments.Variable::variableName)
+                    require(providerPlans.all { provider -> provider.variableName in parsedProviderNames }) {
+                        "Parsed fragments lost provider variables for $coordinate: " +
+                            "planned=${providerPlans.map { it.variableName }} parsed=$parsedProviderNames"
+                    }
+                    field to
+                        if (providerPlans.isEmpty()) {
+                            definition
+                        } else {
+                            definition.withVariablesProvider(
+                                providerPlans.mapTo(linkedSetOf()) { provider ->
+                                    provider.variableName
+                                },
+                            ) { arguments ->
+                                providerPlans.associate { provider ->
+                                    provider.variableName to provider.value(arguments, field)
+                                }
+                            }
+                        }
                 }.toMap()
             },
             variableProviders = { canonicalSchema ->
                 val sourceSchema = SourceSchemaAdapter(canonicalSchema)
-                variableProviders.associate { provider ->
+                variableProviders.mapNotNull { provider ->
+                    if (provider is FromProviderVariableProviderPlan) return@mapNotNull null
                     val field =
                         sourceSchema.field(
                             provider.owner.typeName,
@@ -549,8 +593,10 @@ class ArbitraryRegistry internal constructor(
                                             variableField = field,
                                         )
                                 }
+                            is FromProviderVariableProviderPlan ->
+                                error("FromProvider plan was not filtered")
                         }
-                }
+                }.toMap()
             },
         )
         objectFragmentSources.values
@@ -583,6 +629,10 @@ class ArbitraryRegistry internal constructor(
                         appendLine(
                             "  \$${provider.variableName} owner=${provider.owner} " +
                                 "fromArgument=${provider.argumentPath.joinToString(".")}",
+                        )
+                    is FromProviderVariableProviderPlan ->
+                        appendLine(
+                            "  \$${provider.variableName} owner=${provider.owner} fromProvider",
                         )
                     is FromFieldVariableProviderPlan -> {
                         appendLine(
@@ -737,7 +787,9 @@ private class RegistryGenerator(
                             when (provider) {
                                 is FromFieldVariableProviderPlan ->
                                     provider.variableName to provider.source()
-                                is FromArgumentVariableProviderPlan -> null
+                                is FromArgumentVariableProviderPlan,
+                                is FromProviderVariableProviderPlan,
+                                -> null
                         }
                     }.toMap(),
             fieldValues = fieldValues,
@@ -780,6 +832,14 @@ private class RegistryGenerator(
                         variableProviders
                             .filterIsInstance<FromArgumentVariableProviderPlan>()
                             .count(FromArgumentVariableProviderPlan::nullableTraversal),
+                    fromProviderVariableCount =
+                        variableProviders.count {
+                            it is FromProviderVariableProviderPlan
+                        },
+                    fromProviderArgumentSensitiveVariableCount =
+                        variableProviders
+                            .filterIsInstance<FromProviderVariableProviderPlan>()
+                            .count(FromProviderVariableProviderPlan::argumentSensitive),
                     fromObjectFieldVariableCount = objectFieldFeatures.variableCount,
                     literalVariableConvergenceCount =
                         variableProviders.count(VariableProviderPlan::literalConvergence),
@@ -946,6 +1006,7 @@ private class RegistryGenerator(
             )
                 .withTopLevelRandomParentDemand(consumer)
                 .withFromArgumentVariableProvider(consumer, ranks, variableProviders)
+                .withFromProviderVariableProvider(consumer, ranks, variableProviders)
         return ProviderFragment.entries.fold(fragments) { result, providerFragment ->
             result.withFromFieldVariableProvider(
                 consumer,
@@ -1397,6 +1458,53 @@ private class RegistryGenerator(
                 LocatedArgumentOccurrence(FragmentLocation.QUERY, occurrence)
             }
 
+    private fun ResolverFragmentPlans.withFromProviderVariableProvider(
+        consumer: FieldCoordinate,
+        ranks: Map<FieldCoordinate, Int>,
+        variableProviders: MutableList<VariableProviderPlan>,
+    ): ResolverFragmentPlans {
+        if (
+            !config[ResolverFromProviderVariablesEnabled] ||
+            !chance(config[ResolverVariableWeight])
+        ) {
+            return this
+        }
+        val variableCount = Arb.int(config[ResolverVariableCount]).next(random)
+        return (0 until variableCount).fold(this) { fragments, variableIndex ->
+            val candidate =
+                fragments
+                    .argumentOccurrences()
+                    .shuffled(random)
+                    .firstOrNull { locatedOccurrence ->
+                        locatedOccurrence.occurrence.existingVariableName == null &&
+                            fragments
+                                .fragment(locatedOccurrence.location)
+                                .selectionAt(locatedOccurrence.occurrence)
+                                .arguments
+                                .values
+                                .none { argument -> argument is ErrorInputPlan } &&
+                            !fragments
+                                .fragment(locatedOccurrence.location)
+                                .argumentOccursAcrossNodeBoundary(locatedOccurrence.occurrence)
+                    } ?: return@fold fragments
+            val variableName = "resolverProviderVar${ranks.getValue(consumer)}_$variableIndex"
+            variableProviders +=
+                FromProviderVariableProviderPlan(
+                    owner = consumer,
+                    variableName = variableName,
+                    target = candidate.occurrence.target,
+                    nestedInput = candidate.occurrence.valuePath.isNotEmpty(),
+                    argumentSensitive = field(consumer).arguments.isNotEmpty(),
+                )
+            fragments.replaceArgument(
+                location = candidate.location,
+                occurrence = candidate.occurrence,
+                variableName = variableName,
+                literalConvergence = false,
+            )
+        }
+    }
+
     private fun ResolverFragmentPlans.fragment(location: FragmentLocation): FragmentPlan =
         when (location) {
             FragmentLocation.OBJECT -> objectFragment
@@ -1706,7 +1814,9 @@ private class RegistryGenerator(
                                         provider.providerFragment.location() &&
                                         provider.owner == consumer &&
                                         provider.selection == oldSelection
-                                is FromArgumentVariableProviderPlan -> false
+                                is FromArgumentVariableProviderPlan,
+                                is FromProviderVariableProviderPlan,
+                                -> false
                             }
                         indexed.takeIf { matches }?.let {
                             Triple(
@@ -1756,7 +1866,9 @@ private class RegistryGenerator(
                     when (val provider = variableProviders[index]) {
                         is FromFieldVariableProviderPlan ->
                             provider.copy(selection = selection)
-                        is FromArgumentVariableProviderPlan -> provider
+                        is FromArgumentVariableProviderPlan,
+                        is FromProviderVariableProviderPlan,
+                        -> provider
                     }
             }
             updated
@@ -1799,6 +1911,33 @@ private class RegistryGenerator(
             selections = selected.subselections
         }
         return selected
+    }
+
+    private fun FragmentPlan.argumentOccursAcrossNodeBoundary(
+        occurrence: ArgumentOccurrence,
+    ): Boolean {
+        var currentOwner = ownerName
+        var currentSelections = selections
+        occurrence.selectionPath.forEach { index ->
+            val selection = currentSelections[index]
+            val selectionOwner = selection.typeCondition ?: currentOwner
+            val selectedField =
+                schema.fieldsOn(selectionOwner).single { field ->
+                    field.name == selection.fieldName
+                }
+            if (
+                schema.isComposite(selectedField.type.namedType) &&
+                schema.possibleObjects(selectedField.type.namedType).let { possibleTypes ->
+                    possibleTypes.isNotEmpty() &&
+                        possibleTypes.all { possibleType -> possibleType.name in nodeSites }
+                }
+            ) {
+                return true
+            }
+            currentOwner = selectedField.type.namedType
+            currentSelections = selection.subselections
+        }
+        return false
     }
 
     private fun FragmentSelectionPlan.topLevelField(ownerName: String): FieldCoordinate =
@@ -2753,6 +2892,31 @@ internal data class FromArgumentVariableProviderPlan(
         get() = listOf(argumentName) + inputPath
 }
 
+internal data class FromProviderVariableProviderPlan(
+    override val owner: FieldCoordinate,
+    override val variableName: String,
+    val target: VariableTarget,
+    override val nestedInput: Boolean,
+    val argumentSensitive: Boolean,
+) : VariableProviderPlan {
+    override val listValue: Boolean = target is ListVariableTarget
+    override val nullable: Boolean = target.nullable
+    override val literalConvergence: Boolean = false
+
+    fun value(
+        arguments: Arguments.Resolved,
+        field: ViaductSchema.Field,
+    ): EngineInputData {
+        val hash =
+            stableGeneratedHash(
+                owner.toString(),
+                variableName,
+                arguments.resolutionFingerprint(field).value,
+            )
+        return target.generatedProviderValue(hash)
+    }
+}
+
 internal data class FromFieldVariableProviderPlan(
     override val owner: FieldCoordinate,
     override val variableName: String,
@@ -2810,6 +2974,24 @@ private fun List<FromFieldVariableProviderPlan>.features(
         maximumVariableUseDepth = maxOfOrNull(FromFieldVariableProviderPlan::useDepth) ?: 0,
         hasAbstractProviderPath = any(FromFieldVariableProviderPlan::abstractPath),
     )
+
+private fun VariableTarget.generatedProviderValue(hash: Int): EngineInputData =
+    when (this) {
+        is ScalarVariableTarget -> scalar.generatedProviderScalar(hash)
+        is ListVariableTarget ->
+            elementNullabilities.foldRight<Boolean, EngineInputData>(
+                scalar.generatedProviderScalar(hash),
+            ) { _, value -> listOf(value) }
+    }
+
+private fun ScalarKind.generatedProviderScalar(hash: Int): EngineInputData =
+    when (this) {
+        ScalarKind.BOOLEAN -> hash and 1 == 0
+        ScalarKind.FLOAT -> hash.toDouble()
+        ScalarKind.ID -> "provider-$hash"
+        ScalarKind.INT -> hash
+        ScalarKind.STRING -> "provider-$hash"
+    }
 
 private enum class ProviderIntermediateOutcome {
     NONE,

@@ -66,6 +66,9 @@ sealed interface EngineResultCell {
     /** Suspends until activation is decided and throws when this cell is not activated. */
     suspend fun awaitActivated()
 
+    /** Suspends until activation is decided and returns that decision. */
+    suspend fun fetchActivated(): Boolean
+
     /** Throws unless this cell has already been activated. */
     fun checkActivated()
 
@@ -542,7 +545,9 @@ private fun EngineResult.containsParentBackedge(): Boolean =
         is ObjectEngineResult ->
             keys.any { key -> key is ObjectEngineResult.ParentKey } ||
                 keys.any { key ->
-                    getCell(key).getValue().get()?.containsParentBackedge() == true
+                    val cell = getCell(key)
+                    cell.implementation.isActivated &&
+                        cell.getValue().get()?.containsParentBackedge() == true
                 }
         is ListEngineResult ->
             any { cell -> cell.getValue().get()?.containsParentBackedge() == true }
@@ -656,6 +661,8 @@ private class CellImpl(
         check(activation.await()) { "Cell was not activated" }
     }
 
+    override suspend fun fetchActivated(): Boolean = activation.await()
+
     override fun checkActivated() {
         synchronized(activationLock) {
             check(activation.isCompleted && activation.get()) { "Cell is not activated" }
@@ -711,6 +718,9 @@ private class CellImpl(
         valueStore.readOrNull()?.get()
         accessResultStore.snapshot().values.forEach { promise -> promise.get() }
     }
+
+    val isActivated: Boolean
+        get() = activation.get()
 
     val completedValue: EngineResult?
         get() = checkNotNull(valueStore.readOrNull()) { "Cell has no value" }.get()
@@ -850,8 +860,9 @@ private class ObjectResultImpl(
 
     fun requireCompleted() {
         cellStore.cellEntries.forEach { (key, cell) ->
-            cell.implementation.requireCompleted()
-            if (key !is ObjectEngineResult.ParentKey) {
+            val implementation = cell.implementation
+            implementation.requireCompleted()
+            if (implementation.isActivated && key !is ObjectEngineResult.ParentKey) {
                 cell.completedValue.requireCompleted()
             }
         }
@@ -931,9 +942,9 @@ private class ObjectCellStore(
 
     fun completedCells(): Map<ObjectEngineResult.ObjectKey, EngineResultCell> =
         synchronized(lock) {
-            cells.mapValues { (_, cell) ->
-                cell.also { it.implementation.requireCompleted() }
-            }
+            cells
+                .onEach { (_, cell) -> cell.implementation.requireCompleted() }
+                .filterValues { cell -> cell.implementation.isActivated }
         }
 
     private fun mutableCell(field: ObjectEngineResult.ObjectKey): EngineResultCell =

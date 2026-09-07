@@ -9,6 +9,7 @@ import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.MaterializeSelectionForest
+import model.materializeSelectionForestOf
 import model.ObjectEngineResult
 import model.outputType
 import model.ObjectMaterializeSelection
@@ -46,7 +47,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
 ): EngineObjectData.Sync {
     val selectedValues =
         linkedMapOf<String, Pair<ViaductSchema.ObjectField, EngineOutputData?>>()
-    selections.collect(type).byResponseKey().forEach { (responseKey, selection) ->
+    selections.fetchIncluded().collect(type).byResponseKey().forEach { (responseKey, selection) ->
         val candidateKey = selection.materializedSymbolicKey()
         val storedKey = findStoredKey(candidateKey) ?: candidateKey
         val cell = getCell(storedKey)
@@ -70,6 +71,19 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
                 EngineObjectDataEntry.of(key, fieldAndValue.first, fieldAndValue.second)
             },
     )
+}
+
+context(operation: OperationContext)
+private suspend fun MaterializeSelectionForest.fetchIncluded(): MaterializeSelectionForest {
+    var included = materializeSelectionForestOf()
+    val selections = mutableListOf<model.MaterializeSelection>()
+    forEach(selections::add)
+    for (selection in selections) {
+        if (selection.inclusionCondition.fetchIncluded()) {
+            included += materializeSelectionForestOf(selection)
+        }
+    }
+    return included
 }
 
 context(operation: OperationContext)

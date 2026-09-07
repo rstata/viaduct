@@ -9,6 +9,7 @@ import model.PathComponent
 import model.SelectionForest
 import model.merge
 import semantics.shared.findStoredKey
+import semantics.shared.isIncluded
 import semantics.shared.OperationContext
 
 /**
@@ -49,6 +50,7 @@ private fun ObjectEngineResult.objectConformsToSelections(
     path: List<PathComponent>,
 ): Boolean =
     selections.merge(type).byKey().values.all { selection ->
+        if (!selection.inclusionCondition.isIncluded()) return@all true
         val key = findStoredKey(selection.key)
         key != null &&
             getCell(key)

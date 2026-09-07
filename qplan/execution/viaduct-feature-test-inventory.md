@@ -65,7 +65,7 @@ Counts overlap because one test may be blocked by more than one requirement. The
 | Arbitrary variable-provider callbacks | 10 | `VarCallbk` |
 | Likely mechanical adapter enablement | 5 | `MechAdapt` |
 | Abstract-type/runtime applicability | 5 | `Abstract` |
-| Directives | 6 | `Directive` |
+| Directives | 5 | `Directive` |
 | Mutations | 3 | `Mutation` |
 | Rich executor error preservation | 1 | `ErrorData` |
 | Nested `FromArgument` paths | 2 | `NestedArg` |

@@ -9,9 +9,11 @@ import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.MaterializeSelectionForest
+import model.materializeSelectionForestOf
 import model.ObjectEngineResult
 import model.ObjectMaterializeSelection
 import semantics.shared.fetchGroundedArguments
+import semantics.shared.fetchIncluded
 import model.outputType
 import model.PathComponent
 import model.materializedEngineObjectDataOf
@@ -42,7 +44,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObject(
 ): EngineObjectData.Sync {
     val selectedValues =
         linkedMapOf<String, Pair<ViaductSchema.ObjectField, EngineOutputData?>>()
-    selections.collect(type).byResponseKey().forEach { (responseKey, selection) ->
+    selections.fetchIncluded().collect(type).byResponseKey().forEach { (responseKey, selection) ->
         val storedKey = selection.materializedObjectKey()
         val cell = reserveCell(storedKey)
         cycleChecker.cycleCheck(reader, cell)
@@ -65,6 +67,19 @@ private suspend fun ObjectEngineResult.materializeSelectedObject(
                 EngineObjectDataEntry.of(key, fieldAndValue.first, fieldAndValue.second)
             },
     )
+}
+
+context(operation: OperationContext)
+private suspend fun MaterializeSelectionForest.fetchIncluded(): MaterializeSelectionForest {
+    var included = materializeSelectionForestOf()
+    val selections = mutableListOf<model.MaterializeSelection>()
+    forEach(selections::add)
+    for (selection in selections) {
+        if (selection.inclusionCondition.fetchIncluded()) {
+            included += materializeSelectionForestOf(selection)
+        }
+    }
+    return included
 }
 
 // Awaits every argument binding but preserves the selection's symbolic OER-cell identity.

@@ -47,6 +47,7 @@ private fun SelectionForest.mapVariables(
                             ),
                     ),
                 possibleTypes = selection.possibleTypes,
+                inclusionCondition = selection.inclusionCondition.mapVariables(transform),
                 subselections = selection.subselections.mapVariables(transform),
             ),
         )
@@ -69,6 +70,7 @@ private fun MaterializeSelectionForest.mapVariables(
                             ),
                     ),
                 possibleTypes = selection.possibleTypes,
+                inclusionCondition = selection.inclusionCondition.mapVariables(transform),
                 subselections = selection.subselections.mapVariables(transform),
             ),
         )

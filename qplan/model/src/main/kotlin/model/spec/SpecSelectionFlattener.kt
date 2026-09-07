@@ -6,6 +6,7 @@ import model.ObjectEngineResult
 import model.Assumptions
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
+import model.InclusionCondition
 import model.Selection
 import model.SelectionForest
 import model.flatMapToMaterializeSelectionForest
@@ -70,6 +71,7 @@ internal fun flattenForMaterialization(
         SelectionContext(
             nominalType = typeInScope,
             possibleTypes = typeInScope.possibleObjectTypes,
+            inclusionCondition = InclusionCondition.Always,
         )
     return flattenSelectionSet(schema, selectionSet, initialContext)
 }
@@ -90,8 +92,15 @@ private fun flattenSelectionSet(
                             nominalType = typeCondition,
                             possibleTypes =
                                 context.possibleTypes intersect typeCondition.possibleObjectTypes,
+                            inclusionCondition =
+                                context.inclusionCondition.and(selection.inclusionCondition),
                         )
-                    } ?: context
+                    } ?: SelectionContext(
+                        nominalType = context.nominalType,
+                        possibleTypes = context.possibleTypes,
+                        inclusionCondition =
+                            context.inclusionCondition.and(selection.inclusionCondition),
+                    )
                 flattenSelectionSet(schema, selection.selections, fragmentContext)
             }
         }
@@ -113,6 +122,7 @@ private fun SpecSelection.Field.flattenField(
                     SelectionContext(
                         nominalType = resultType,
                         possibleTypes = resultType.possibleObjectTypes,
+                        inclusionCondition = InclusionCondition.Always,
                     ),
                 )
             else -> error("Output field has a non-output type")
@@ -126,6 +136,7 @@ private fun SpecSelection.Field.flattenField(
                 arguments = arguments,
             ),
         possibleTypes = context.possibleTypes,
+        inclusionCondition = context.inclusionCondition.and(inclusionCondition),
         subselections = flattenedSubselections,
     )
 }
@@ -133,4 +144,5 @@ private fun SpecSelection.Field.flattenField(
 private class SelectionContext(
     val nominalType: ViaductSchema.CompositeTypeDef,
     val possibleTypes: Set<ViaductSchema.Object>,
+    val inclusionCondition: InclusionCondition,
 )

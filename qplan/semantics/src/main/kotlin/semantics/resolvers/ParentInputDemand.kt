@@ -4,6 +4,8 @@ import model.Assumptions
 import model.ObjectEngineResult
 import model.Selection
 import model.SelectionForest
+import model.InclusionCondition
+import model.guardedBy
 import model.objectKey
 import model.requireField
 import model.selectionForestOf
@@ -34,7 +36,10 @@ private fun SelectionForest.analyzeInputParentDemand(
             InputParentDemandAnalysis(
                 parentRequests =
                     parentFields.map { parentField ->
-                        ParentInputRequest(parentField, selection.subselections)
+                        ParentInputRequest(
+                            parentField,
+                            selection.subselections.guardedBy(selection.inclusionCondition),
+                        )
                     },
             )
         } else {
@@ -49,11 +54,20 @@ private fun SelectionForest.analyzeInputParentDemand(
                             key = selection.key,
                             possibleTypes = selection.possibleTypes,
                             subselections = nested.localDemand,
+                            inclusionCondition = selection.inclusionCondition,
                         ),
                     )
                 }
             val parentRequests = mutableListOf<ParentInputRequest>()
-            nested.parentRequests.forEach { request ->
+            nested.parentRequests.forEach { unguardedRequest ->
+                val request =
+                    ParentInputRequest(
+                        parentField = unguardedRequest.parentField,
+                        demand =
+                            unguardedRequest.demand.guardedBy(
+                                selection.inclusionCondition,
+                            ),
+                    )
                 val matchesProducer =
                     selection.possibleTypes.any { possibleType ->
                         val producer = possibleType.requireField(selection.key.field.name)
@@ -71,8 +85,10 @@ private fun SelectionForest.analyzeInputParentDemand(
                 if (field in world.resolverRegistry) {
                     val resolverInput =
                         field.fixedInputParentDemand(parentDemandByResolverField)
-                    localDemand += resolverInput.localDemand
-                    parentRequests += resolverInput.parentRequests
+                    val guardedResolverInput =
+                        resolverInput.guardedBy(selection.inclusionCondition)
+                    localDemand += guardedResolverInput.localDemand
+                    parentRequests += guardedResolverInput.parentRequests
                 }
             }
             InputParentDemandAnalysis(localDemand, parentRequests)
@@ -105,6 +121,20 @@ private data class InputParentDemandAnalysis(
             parentRequests = parentRequests + other.parentRequests,
         )
 }
+
+private fun InputParentDemandAnalysis.guardedBy(
+    condition: InclusionCondition,
+): InputParentDemandAnalysis =
+    InputParentDemandAnalysis(
+        localDemand = localDemand.guardedBy(condition),
+        parentRequests =
+            parentRequests.map { request ->
+                ParentInputRequest(
+                    parentField = request.parentField,
+                    demand = request.demand.guardedBy(condition),
+                )
+            },
+    )
 
 private fun SelectionForest.foldInputParentDemand(
     transform: (Selection) -> InputParentDemandAnalysis,

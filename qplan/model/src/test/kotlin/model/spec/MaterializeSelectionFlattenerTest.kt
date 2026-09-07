@@ -9,6 +9,7 @@ import model.requireType
 import model.Arguments
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
+import model.InclusionCondition
 import model.ObjectEngineResult
 import model.merge
 import model.testing.GJSchema
@@ -23,6 +24,44 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class MaterializeSelectionFlattenerTest {
+    @Test
+    fun `fragment and field directives flatten into one conjunctive condition`() {
+        val world = TestWorld.fromSDL("type Query { value: String }")
+        val schema = world.schema as GJSchema
+        val (_, selections) =
+            GJSelectionParser(schema, emptyMap())
+                .materializeSelectionsFrom(
+                    """
+                    fragment ResolverInput on Query {
+                      ... @include(if: ${'$'}outer) {
+                        value @skip(if: ${'$'}inner)
+                      }
+                    }
+                    """.trimIndent(),
+                )
+        val condition = selections.single().inclusionCondition
+        val variables = condition.usedVariables().associateBy(Arguments.Variable::variableName)
+
+        assertEquals(setOf("outer", "inner"), variables.keys)
+        assertTrue(
+            condition.include(
+                mapOf(
+                    variables.getValue("outer") to true,
+                    variables.getValue("inner") to false,
+                ),
+            ),
+        )
+        assertFalse(
+            condition.include(
+                mapOf(
+                    variables.getValue("outer") to true,
+                    variables.getValue("inner") to true,
+                ),
+            ),
+        )
+        assertFalse(condition === InclusionCondition.Always)
+    }
+
     @Test
     fun `aliases remain response keys while construction retains canonical fields`() {
         val fixture = SchemaFixture()

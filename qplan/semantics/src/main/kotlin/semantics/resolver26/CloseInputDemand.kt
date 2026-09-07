@@ -1,6 +1,7 @@
 package semantics.resolver26
 
 import model.Assumptions
+import model.InclusionCondition
 import model.MaterializeSelectionForest
 import model.ObjectEngineResult
 import model.ObjectSelection
@@ -10,6 +11,7 @@ import model.ResolverOccurrenceId
 import model.SelectionForest
 import model.materializeSelectionForestOf
 import model.merge
+import model.guardedBy
 import model.registry.FieldResolver
 import model.registry.InstantiatedFieldPathDefinition
 import model.registry.ResolverFragments
@@ -66,7 +68,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
             )
         }
 
-        newResolverSelections.forEach { (objectKey, _) ->
+        newResolverSelections.forEach { (objectKey, resolverSelection) ->
             val resolver: FieldResolver =
                 world.resolverRegistry.resolver(objectKey.field)
             val resolverOccurrenceId =
@@ -115,11 +117,20 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                     ProviderDefinitionRead(
                         definition = definition,
                         readerPath = readerPath,
+                        inclusionCondition = resolverSelection.inclusionCondition,
                     )
                 }
+            val guardedObjectFragment =
+                objectFragment.constructionSelections.guardedBy(
+                    resolverSelection.inclusionCondition,
+                )
             accumulatedDemand +=
-                objectFragment.constructionSelections +
-                    objectFragment.constructionSelections.inputParentDemand()
+                guardedObjectFragment +
+                    guardedObjectFragment.inputParentDemand() +
+                    objectFragment.constructionSelections.providerDemand(
+                        definitions = objectFragment.pathVariableDefinitions,
+                        inclusionCondition = resolverSelection.inclusionCondition,
+                    )
         }
     }
     error("Resolver26 demand closure terminated unexpectedly")
@@ -172,4 +183,5 @@ internal class CloseInputDemandResult(
 internal data class ProviderDefinitionRead(
     val definition: InstantiatedFieldPathDefinition,
     val readerPath: List<PathComponent>,
+    val inclusionCondition: InclusionCondition,
 )

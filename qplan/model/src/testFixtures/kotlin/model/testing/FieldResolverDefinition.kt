@@ -121,6 +121,7 @@ class FieldResolverDefinition private constructor(
                             responseKey = selection.responseKey,
                             key = selection.key.objectKey(expectedType),
                             possibleTypes = setOf(expectedType),
+                            inclusionCondition = selection.inclusionCondition,
                             subselections = selection.subselections,
                         ),
                     )

@@ -7,13 +7,11 @@ import execution.testing.runQPlanFeatureTest
 
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import viaduct.engine.api.mocks.EngineTestModule
 import viaduct.engine.api.mocks.createEngineObjectData
 
 class ConditionalDirectivesExecutionTest {
-    @Disabled("TODO: Directive")
     @Test
     fun `skipped inline fragment may contain only spread to pruned fragment`() {
         val hiddenValueResolverCalls = AtomicInteger()

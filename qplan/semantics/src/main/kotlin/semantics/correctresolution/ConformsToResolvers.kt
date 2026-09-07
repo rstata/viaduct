@@ -62,6 +62,7 @@ private fun ObjectEngineResult.objectConformsToResolvers(
     producerField: ViaductSchema.ObjectField?,
 ): Boolean =
     keys.all { key ->
+        if (!getCell(key).getValue().isCompleted) return@all true
         if (!key.isContextuallyGrounded()) return@all false
         val value = getCell(key).getValue().get()
         val arguments = key.groundedArguments()

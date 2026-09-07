@@ -1,0 +1,310 @@
+package semantics.resolver26
+
+import kotlinx.coroutines.runBlocking
+import java.util.Collections
+import viaduct.graphql.schema.ViaductSchema
+import model.Arguments
+import model.emptyFragmentOf
+import model.ObjectEngineResult
+import model.fragmentFrom
+import model.merge
+import model.requireObjectField
+import model.requireQueryTypeDef
+import model.testing.TestWorld
+import model.testing.fieldResolverOf
+import model.testing.fromObjectField
+import model.testing.fromQueryField
+import model.testing.fromArgument
+import semantics.correctresolution.correctResolution
+import semantics.shared.OperationContext
+import semantics.shared.RecordingResolverObserver
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+class InclusionConditionTest {
+    @Test
+    fun `equal-key alternatives invoke their tenant resolver exactly when any condition permits`() {
+        val falseWorld = alternativeWorld()
+        val falseResolution = falseWorld.resolve("query { outer(a: false, b: false) }")
+        val falseDependency = falseWorld.schema.requireObjectField("Query", "dependency")
+        val falseCell =
+            falseResolution.result.getCell(
+                ObjectEngineResult.GroundKey.of(falseDependency, emptyMap()),
+            )
+
+        assertEquals(0, falseResolution.applications.count { it == falseDependency })
+        assertFalse(runBlocking { falseCell.fetchActivated() })
+        assertTrue(falseResolution.correct)
+
+        val trueWorld = alternativeWorld()
+        val trueResolution = trueWorld.resolve("query { outer(a: false, b: true) }")
+        val trueDependency = trueWorld.schema.requireObjectField("Query", "dependency")
+        val trueCell =
+            trueResolution.result.getCell(
+                ObjectEngineResult.GroundKey.of(trueDependency, emptyMap()),
+            )
+
+        assertEquals(1, trueResolution.applications.count { it == trueDependency })
+        assertTrue(runBlocking { trueCell.fetchActivated() })
+        assertTrue(trueResolution.correct)
+    }
+
+    @Test
+    fun `aliases sharing one construction cell are materialized by source occurrence`() {
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      outer(a: Boolean!, b: Boolean!): Int!
+                      dependency: Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val outer = schema.requireObjectField("Query", "outer")
+                    val dependency = schema.requireObjectField("Query", "dependency")
+                    mapOf(
+                        outer to
+                            fieldResolverOf(
+                                schema.fragmentFrom(
+                                    """
+                                    fragment Outer on Query {
+                                      left: dependency @include(if: ${'$'}a)
+                                      right: dependency @include(if: ${'$'}b)
+                                    }
+                                    """.trimIndent(),
+                                    variableField = outer,
+                                ),
+                            ) { input, _ ->
+                                when {
+                                    input.isPresent("left") && !input.isPresent("right") -> 10
+                                    !input.isPresent("left") && input.isPresent("right") -> 1
+                                    else -> error("Unexpected conditioned aliases")
+                                }
+                            },
+                        dependency to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> 7 },
+                    )
+                },
+                variableProviders = { schema ->
+                    val outer = schema.requireObjectField("Query", "outer")
+                    mapOf(
+                        Arguments.Variable.of(outer, "a") to schema.fromArgument(outer, "a"),
+                        Arguments.Variable.of(outer, "b") to schema.fromArgument(outer, "b"),
+                    )
+                },
+            )
+        val resolution =
+            world.resolve(
+                """
+                query {
+                  first: outer(a: true, b: false)
+                  second: outer(a: false, b: true)
+                }
+                """.trimIndent(),
+            )
+        val outer = world.schema.requireObjectField("Query", "outer")
+        val dependency = world.schema.requireObjectField("Query", "dependency")
+
+        assertEquals(
+            10,
+            resolution.result
+                .getCell(ObjectEngineResult.GroundKey.of(outer, mapOf("a" to true, "b" to false)))
+                .getValue()
+                .get(),
+        )
+        assertEquals(
+            1,
+            resolution.result
+                .getCell(ObjectEngineResult.GroundKey.of(outer, mapOf("a" to false, "b" to true)))
+                .getValue()
+                .get(),
+        )
+        assertEquals(1, resolution.applications.count { it == dependency })
+        assertTrue(resolution.correct)
+    }
+
+    @Test
+    fun `a from-object-field condition provider runs before a dependent resolver is suppressed`() {
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      outer: Int!
+                      flag: Boolean!
+                      dependency: Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val outer = schema.requireObjectField("Query", "outer")
+                    val flag = schema.requireObjectField("Query", "flag")
+                    val dependency = schema.requireObjectField("Query", "dependency")
+                    mapOf(
+                        outer to
+                            fieldResolverOf(
+                                schema.fragmentFrom(
+                                    """
+                                    fragment Outer on Query {
+                                      flag
+                                      dependency @include(if: ${'$'}enabled)
+                                    }
+                                    """.trimIndent(),
+                                    variableField = outer,
+                                ),
+                            ) { _, _ -> 1 },
+                        flag to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> false },
+                        dependency to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> 7 },
+                    )
+                },
+                variableProviders = { schema ->
+                    val outer = schema.requireObjectField("Query", "outer")
+                    mapOf(
+                        Arguments.Variable.of(outer, "enabled") to
+                            schema.fromObjectField(
+                                objectFragmentSource =
+                                    "fragment Outer on Query { flag }",
+                                responsePath = listOf("flag"),
+                                variableField = outer,
+                            ),
+                    )
+                },
+            )
+        val resolution = world.resolve("query { outer }")
+        val flag = world.schema.requireObjectField("Query", "flag")
+        val dependency = world.schema.requireObjectField("Query", "dependency")
+
+        assertEquals(1, resolution.applications.count { it == flag })
+        assertEquals(0, resolution.applications.count { it == dependency })
+        assertTrue(resolution.correct)
+    }
+
+    @Test
+    fun `a from-query-field condition provider runs before a query dependency is suppressed`() {
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      outer: Int!
+                      flag: Boolean!
+                      dependency: Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val outer = schema.requireObjectField("Query", "outer")
+                    val flag = schema.requireObjectField("Query", "flag")
+                    val dependency = schema.requireObjectField("Query", "dependency")
+                    mapOf(
+                        outer to
+                            fieldResolverOf(
+                                objectFragment = schema.emptyFragmentOf("Query"),
+                                queryFragment =
+                                    schema.fragmentFrom(
+                                        """
+                                        fragment OuterQuery on Query {
+                                          flag
+                                          dependency @include(if: ${'$'}enabled)
+                                        }
+                                        """.trimIndent(),
+                                        variableField = outer,
+                                    ),
+                            ) { _, _, _ -> 1 },
+                        flag to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> false },
+                        dependency to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> 7 },
+                    )
+                },
+                variableProviders = { schema ->
+                    val outer = schema.requireObjectField("Query", "outer")
+                    mapOf(
+                        Arguments.Variable.of(outer, "enabled") to
+                            schema.fromQueryField(
+                                queryFragmentSource =
+                                    "fragment OuterQuery on Query { flag }",
+                                responsePath = listOf("flag"),
+                                variableField = outer,
+                            ),
+                    )
+                },
+            )
+        val resolution = world.resolve("query { outer }")
+        val flag = world.schema.requireObjectField("Query", "flag")
+        val dependency = world.schema.requireObjectField("Query", "dependency")
+
+        assertEquals(1, resolution.applications.count { it == flag })
+        assertEquals(0, resolution.applications.count { it == dependency })
+        assertTrue(resolution.correct)
+    }
+
+    @Test
+    fun `include and skip must both permit inclusion`() {
+        val world =
+            TestWorld.fromDSL(
+                """
+                extend type Query {
+                  outer: Int!
+                    @resolver(
+                      of: "dependency @include(if: true) @skip(if: true)"
+                      result: 1
+                    )
+                  dependency: Int! @resolver(result: 7)
+                }
+                """.trimIndent(),
+            )
+        val resolution = world.resolve("query { outer }")
+        val dependency = world.schema.requireObjectField("Query", "dependency")
+
+        assertEquals(0, world.applicationArguments.arguments(dependency).size)
+        assertTrue(resolution.correct)
+    }
+
+    private fun alternativeWorld(): TestWorld =
+        TestWorld.fromDSL(
+            """
+            extend type Query {
+              outer(a: Boolean!, b: Boolean!): Int!
+                @resolver(
+                  of: "dependency @include(if: ${'$'}a) dependency @include(if: ${'$'}b)"
+                  result: 1
+                )
+              dependency: Int! @resolver(result: 7)
+            }
+            """.trimIndent(),
+        )
+
+    private fun TestWorld.resolve(query: String): Resolution {
+        val fragment = assumptions.fragmentFrom(query.replace("query", "fragment Query on Query"))
+        val operation =
+            OperationContext(
+                world = assumptions,
+                resolverObserver = RecordingResolverObserver(),
+            )
+        val applications =
+            Collections.synchronizedList(mutableListOf<ViaductSchema.ObjectField>())
+        val result =
+            context(operation) {
+                resolveObserved(fragment.subselections) { observation ->
+                    applications += observation.field
+                }
+            }
+        val correct =
+            context(operation) {
+                result.correctResolution(
+                    fragment.subselections.merge(schema.requireQueryTypeDef()),
+                )
+            }
+        return Resolution(result, correct, applications.toList())
+    }
+
+    private data class Resolution(
+        val result: ObjectEngineResult,
+        val correct: Boolean,
+        val applications: List<ViaductSchema.ObjectField>,
+    )
+}

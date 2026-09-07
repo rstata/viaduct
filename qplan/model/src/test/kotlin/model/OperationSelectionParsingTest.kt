@@ -11,6 +11,7 @@ import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertSame
 
 class OperationSelectionParsingTest {
     @Test
@@ -115,7 +116,38 @@ class OperationSelectionParsingTest {
     }
 
     @Test
-    fun `rejects deferred operation forms`() {
+    fun `grounds operation field and fragment-spread inclusion directives`() {
+        val fixture = Fixture(ARGUMENT_SCHEMA)
+        val included =
+            fixture.decode(
+                "query(${'$'}show: Boolean!) { search @include(if: ${'$'}show) }",
+                variables = mapOf("show" to true),
+            )
+        val skipped =
+            fixture.decode(
+                """
+                query(${'$'}skip: Boolean!) {
+                  ...Search @skip(if: ${'$'}skip)
+                }
+
+                fragment Search on Query {
+                  search
+                }
+                """.trimIndent(),
+                variables = mapOf("skip" to true),
+            )
+        val conflicting =
+            fixture.decode(
+                "query { search @include(if: true) @skip(if: true) }",
+            )
+
+        assertSame(InclusionCondition.Always, included.single().inclusionCondition)
+        assertSame(InclusionCondition.Never, skipped.single().inclusionCondition)
+        assertSame(InclusionCondition.Never, conflicting.single().inclusionCondition)
+    }
+
+    @Test
+    fun `rejects unsupported operation forms`() {
         val fixture = Fixture(ARGUMENT_SCHEMA)
 
         assertFailsWith<IllegalArgumentException> {
@@ -123,15 +155,6 @@ class OperationSelectionParsingTest {
                 """
                 mutation {
                   search
-                }
-                """.trimIndent(),
-            )
-        }
-        assertFailsWith<IllegalArgumentException> {
-            fixture.decodeUnvalidated(
-                """
-                query {
-                  search @include(if: true)
                 }
                 """.trimIndent(),
             )

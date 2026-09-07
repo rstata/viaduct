@@ -144,33 +144,42 @@ fun Iterable<SelectionForest>.concatenateSelectionForests(): SelectionForest =
  * concrete runtime parent type is not yet known.
  */
 fun SelectionForest.merge(type: ViaductSchema.Object): ObjectSelectionForest {
-    val childrenByKey =
-        buildMap<ObjectEngineResult.ObjectKey, MutableList<SelectionForest>> {
+    val occurrencesByKey =
+        buildMap<ObjectEngineResult.ObjectKey, MutableList<Selection>> {
             occurrences().forEach { selection ->
                 if (type in selection.possibleTypes) {
-                    getOrPut(selection.objectKey(type), ::mutableListOf)
-                        .add(selection.subselections)
+                    getOrPut(selection.objectKey(type), ::mutableListOf).add(selection)
                 }
             }
         }
-    return normalizedObjectSelectionForest(type, childrenByKey)
+    return normalizedObjectSelectionForest(type, occurrencesByKey)
 }
 
 private fun normalizedObjectSelectionForest(
     type: ViaductSchema.Object,
-    childrenByKey: Map<ObjectEngineResult.ObjectKey, List<SelectionForest>>,
+    occurrencesByKey: Map<ObjectEngineResult.ObjectKey, List<Selection>>,
 ): ObjectSelectionForest {
     // Specialization preserves local validity; grouping establishes normalized unique keys.
     val possibleTypes = setOf(type)
     val selectionsByKey =
         buildMap {
-            childrenByKey.forEach { (key, children) ->
+            occurrencesByKey.forEach { (key, occurrences) ->
                 put(
                     key,
                     ObjectSelectionImpl(
                         key = key,
                         possibleTypes = possibleTypes,
-                        subselections = children.concatenateSelectionForests(),
+                        inclusionCondition =
+                            InclusionCondition.anyOf(
+                                occurrences.map { it.inclusionCondition },
+                            ),
+                        subselections =
+                            occurrences
+                                .map { occurrence ->
+                                    occurrence.subselections.guardedBy(
+                                        occurrence.inclusionCondition,
+                                    )
+                                }.concatenateSelectionForests(),
                     ),
                 )
             }
@@ -189,7 +198,9 @@ internal fun ObjectEngineResult.Key.instantiatedVariables(): Set<Arguments.Varia
 
 /** Returns the variable instances used recursively by this selection. */
 private fun Selection.instantiatedVariables(): Set<Arguments.Variable> =
-    key.instantiatedVariables() + subselections.instantiatedVariables()
+    key.instantiatedVariables() +
+        inclusionCondition.usedVariables().filterTo(linkedSetOf()) { it.isInstantiated } +
+        subselections.instantiatedVariables()
 
 /** Returns the variable instances used recursively by this forest. */
 fun SelectionForest.instantiatedVariables(): Set<Arguments.Variable> {
@@ -200,7 +211,7 @@ fun SelectionForest.instantiatedVariables(): Set<Arguments.Variable> {
 
 /** Returns every variable expression used recursively by this selection. */
 private fun Selection.usedVariables(): Set<Arguments.Variable> =
-    key.arguments.usedVariables() + subselections.usedVariables()
+    key.arguments.usedVariables() + inclusionCondition.usedVariables() + subselections.usedVariables()
 
 /** Returns every variable expression used recursively by this forest. */
 fun SelectionForest.usedVariables(): Set<Arguments.Variable> {
@@ -233,9 +244,9 @@ internal fun ObjectEngineResult.Key.objectKey(
  * A post-validation field-selection occurrence used for Viaduct field resolution.
  *
  * This is not a GraphQL AST selection or a description of field completion. Aliases, response
- * keys, source order, named fragments, inline-fragment nodes, and directives are absent. Inline
- * fragments have already been flattened into the field coordinate in [key] and the applicability
- * guard in [possibleTypes].
+ * keys, source order, named fragments, inline-fragment nodes, and raw directives are absent. Inline
+ * fragments have already been flattened into the field coordinate in [key], the applicability
+ * guard in [possibleTypes], and [inclusionCondition].
  *
  * ### Invariant: selection-local-coherence
  *
@@ -293,6 +304,9 @@ sealed interface Selection {
      */
     val possibleTypes: Set<ViaductSchema.Object>
 
+    /** The symbolic condition that must permit inclusion of this occurrence. */
+    val inclusionCondition: InclusionCondition
+
     /**
      * The subselections on the value this selection selects.
      *
@@ -338,6 +352,7 @@ sealed interface Selection {
             key: ObjectEngineResult.Key,
             possibleTypes: Set<ViaductSchema.Object>,
             subselections: SelectionForest,
+            inclusionCondition: InclusionCondition = InclusionCondition.Always,
         ): Selection {
             validateSelection(key, possibleTypes, subselections)
             return when (key) {
@@ -346,12 +361,14 @@ sealed interface Selection {
                         key = key,
                         possibleTypes = possibleTypes,
                         subselections = subselections,
+                        inclusionCondition = inclusionCondition,
                     )
                 else ->
                     SelectionImpl(
                         key = key,
                         possibleTypes = possibleTypes,
                         subselections = subselections,
+                        inclusionCondition = inclusionCondition,
                     )
             }
         }
@@ -361,7 +378,9 @@ sealed interface Selection {
             key: ObjectEngineResult.ObjectKey,
             possibleTypes: Set<ViaductSchema.Object>,
             subselections: SelectionForest,
-        ): ObjectSelection = ObjectSelection.of(key, possibleTypes, subselections)
+            inclusionCondition: InclusionCondition = InclusionCondition.Always,
+        ): ObjectSelection =
+            ObjectSelection.of(key, possibleTypes, subselections, inclusionCondition)
     }
 }
 
@@ -374,9 +393,10 @@ sealed interface ObjectSelection : Selection {
             key: ObjectEngineResult.ObjectKey,
             possibleTypes: Set<ViaductSchema.Object>,
             subselections: SelectionForest,
+            inclusionCondition: InclusionCondition = InclusionCondition.Always,
         ): ObjectSelection {
             validateSelection(key, possibleTypes, subselections)
-            return ObjectSelectionImpl(key, possibleTypes, subselections)
+            return ObjectSelectionImpl(key, possibleTypes, inclusionCondition, subselections)
         }
     }
 }
@@ -400,14 +420,31 @@ private fun validateSelection(
 private class SelectionImpl(
     override val key: ObjectEngineResult.Key,
     override val possibleTypes: Set<ViaductSchema.Object>,
+    override val inclusionCondition: InclusionCondition,
     override val subselections: SelectionForest,
 ) : Selection
 
 private class ObjectSelectionImpl(
     override val key: ObjectEngineResult.ObjectKey,
     override val possibleTypes: Set<ViaductSchema.Object>,
+    override val inclusionCondition: InclusionCondition,
     override val subselections: SelectionForest,
 ) : ObjectSelection
+
+/** Conjunctively guards each occurrence, distributing disjunction into concatenated occurrences. */
+fun SelectionForest.guardedBy(condition: InclusionCondition): SelectionForest =
+    condition.alternatives().flatMapToSelectionForest { alternative ->
+        flatMap { selection ->
+            selectionForestOf(
+                Selection.of(
+                    key = selection.key,
+                    possibleTypes = selection.possibleTypes,
+                    subselections = selection.subselections,
+                    inclusionCondition = alternative.and(selection.inclusionCondition),
+                ),
+            )
+        }
+    }
 
 private abstract class AbstractSelectionForest(
     val occurrences: List<Selection>,

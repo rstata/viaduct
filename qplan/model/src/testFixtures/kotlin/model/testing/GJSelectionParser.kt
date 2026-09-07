@@ -5,6 +5,9 @@ import viaduct.graphql.schema.ViaductSchema
 import graphql.GraphQLContext
 import graphql.execution.CoercedVariables
 import graphql.execution.ValuesResolver
+import graphql.execution.conditional.ConditionalNodes
+import graphql.language.BooleanValue
+import graphql.language.DirectivesContainer
 import graphql.language.Document
 import graphql.language.Field
 import graphql.language.FragmentDefinition
@@ -12,6 +15,7 @@ import graphql.language.FragmentSpread
 import graphql.language.InlineFragment
 import graphql.language.OperationDefinition
 import graphql.language.SelectionSet
+import graphql.language.VariableReference
 import graphql.introspection.Introspection
 import graphql.parser.Parser
 import graphql.schema.GraphQLCompositeType
@@ -20,7 +24,9 @@ import graphql.schema.GraphQLTypeUtil
 import graphql.validation.ValidationErrorType
 import graphql.validation.Validator
 import java.util.Locale
+import model.Arguments
 import model.EngineInputData
+import model.InclusionCondition
 import model.MaterializeSelectionForest
 import model.SourceSchemaAdapter
 import model.lowering.NODE_BRIDGE_PAYLOAD_FIELD
@@ -64,7 +70,7 @@ internal class GJSelectionParser(
             "Qplan operation decoding supports query operations only"
         }
         require(operation.directives.isEmpty()) {
-            "Applied directives are deferred from the current spec-selection model"
+            "Applied operation directives are unsupported"
         }
         val selections =
             decodeSelectionSet(
@@ -97,7 +103,7 @@ internal class GJSelectionParser(
             document.definitions.singleOrNull() as? FragmentDefinition
                 ?: throw IllegalArgumentException("Expected exactly one named fragment definition")
         require(definition.directives.isEmpty()) {
-            "Applied directives are deferred from the current spec-selection model"
+            "Fragment definitions cannot be conditional"
         }
         validateFragment(document)
 
@@ -168,9 +174,6 @@ internal class GJSelectionParser(
                     require(mode == TranslationMode.EXTERNAL_OPERATION) {
                         "Named fragment spreads must be inlined before constructing spec selections"
                     }
-                    require(selection.directives.isEmpty()) {
-                        "Applied directives are deferred from the current spec-selection model"
-                    }
                     val fragment =
                         fragmentsByName[selection.name]
                             ?: throw IllegalArgumentException(
@@ -179,6 +182,7 @@ internal class GJSelectionParser(
                     listOfNotNull(
                         decodeNamedFragment(
                             fragment = fragment,
+                            inclusionCondition = argumentDecoder.decodeCondition(selection),
                             argumentDecoder = argumentDecoder,
                             fragmentsByName = fragmentsByName,
                         ),
@@ -195,9 +199,6 @@ internal class GJSelectionParser(
         mode: TranslationMode,
         fragmentsByName: Map<String, FragmentDefinition>,
     ): SpecSelection.Field? {
-        require(field.directives.isEmpty()) {
-            "Applied directives are deferred from the current spec-selection model"
-        }
         if (mode == TranslationMode.EXTERNAL_OPERATION && field.name == "__typename") {
             return null
         }
@@ -244,6 +245,7 @@ internal class GJSelectionParser(
             field = canonicalField,
             arguments = arguments,
             subselections = canonicalSubselections,
+            inclusionCondition = argumentDecoder.decodeCondition(field),
         )
     }
 
@@ -254,9 +256,6 @@ internal class GJSelectionParser(
         mode: TranslationMode,
         fragmentsByName: Map<String, FragmentDefinition>,
     ): SpecSelection.InlineFragment? {
-        require(fragment.directives.isEmpty()) {
-            "Applied directives are deferred from the current spec-selection model"
-        }
         val typeConditionName = fragment.typeCondition?.name
         val graphQLTypeCondition =
             typeConditionName?.let {
@@ -276,17 +275,17 @@ internal class GJSelectionParser(
         return SpecSelection.InlineFragment.of(
             typeCondition = modelTypeCondition,
             selections = selections,
+            inclusionCondition = argumentDecoder.decodeCondition(fragment),
         )
     }
 
     private fun decodeNamedFragment(
         fragment: FragmentDefinition,
+        inclusionCondition: InclusionCondition,
         argumentDecoder: ArgumentDecoder,
         fragmentsByName: Map<String, FragmentDefinition>,
     ): SpecSelection.InlineFragment? {
-        require(fragment.directives.isEmpty()) {
-            "Applied directives are deferred from the current spec-selection model"
-        }
+        require(fragment.directives.isEmpty()) { "Fragment definitions cannot be conditional" }
         val typeConditionName = fragment.typeCondition.name!!
         val graphQLTypeCondition =
             schema.graphQLSchema.getType(typeConditionName) as GraphQLCompositeType
@@ -302,6 +301,7 @@ internal class GJSelectionParser(
         return SpecSelection.InlineFragment.of(
             typeCondition = schema.requireType(typeConditionName) as ViaductSchema.CompositeTypeDef,
             selections = selections,
+            inclusionCondition = inclusionCondition,
         )
     }
 
@@ -310,6 +310,8 @@ internal class GJSelectionParser(
             field: Field,
             fieldDefinition: GraphQLFieldDefinition,
         ): Map<String, Any?>
+
+        fun decodeCondition(container: DirectivesContainer<*>): InclusionCondition
     }
 
     private enum class TranslationMode {
@@ -349,6 +351,52 @@ internal class GJSelectionParser(
                     }
                 }.toMap()
         }
+
+        override fun decodeCondition(container: DirectivesContainer<*>): InclusionCondition =
+            container.directives.fold(
+                InclusionCondition.Always as InclusionCondition,
+            ) { accumulated, directive ->
+                require(directive.name == "skip" || directive.name == "include") {
+                    "Unsupported applied directive @${directive.name}"
+                }
+                val value = directive.arguments.single { it.name == "if" }.value
+                val required = directive.name == "include"
+                val condition =
+                    when (value) {
+                        is BooleanValue ->
+                            if (value.isValue == required) {
+                                InclusionCondition.Always
+                            } else {
+                                InclusionCondition.Never
+                            }
+                        is VariableReference -> {
+                            val bound = variableValues[value.name]
+                            when {
+                                variableValues.containsKey(value.name) ->
+                                    if (
+                                        requireNotNull(bound as? Boolean) {
+                                            "Directive variable ${value.name} must be Boolean"
+                                        } == required
+                                    ) {
+                                        InclusionCondition.Always
+                                    } else {
+                                        InclusionCondition.Never
+                                    }
+                                else ->
+                                    InclusionCondition.requires(
+                                        mapOf(
+                                            Arguments.Variable.of(
+                                                requireNotNull(effectiveVariableField),
+                                                value.name,
+                                            ) to required,
+                                        ),
+                                    )
+                            }
+                        }
+                        else -> error("Directive @${directive.name}(if:) must be Boolean")
+                    }
+                accumulated.and(condition)
+            }
     }
 
     private inner class CoercedArgumentDecoder(
@@ -382,6 +430,24 @@ internal class GJSelectionParser(
                             )
                     }
                 }.toMap()
+        }
+
+        override fun decodeCondition(container: DirectivesContainer<*>): InclusionCondition {
+            require(container.directives.all { it.name == "skip" || it.name == "include" }) {
+                "Unsupported applied directive"
+            }
+            return if (
+                ConditionalNodes().shouldInclude(
+                    container,
+                    variables.toMap(),
+                    schema.graphQLSchema,
+                    graphQLContext,
+                )
+            ) {
+                InclusionCondition.Always
+            } else {
+                InclusionCondition.Never
+            }
         }
     }
 

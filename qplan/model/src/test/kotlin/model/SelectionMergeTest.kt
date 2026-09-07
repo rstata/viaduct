@@ -305,6 +305,43 @@ class SelectionMergeTest {
         )
     }
 
+    @Test
+    fun `merge disjoins equal keys and pushes each occurrence condition into its children`() {
+        val fixture = Fixture()
+        val variableField = fixture.schema.requireObjectField("Query", "item")
+        val x = Arguments.Variable.of(variableField, "x")
+        val y = Arguments.Variable.of(variableField, "y")
+        val xCondition = InclusionCondition.requires(mapOf(x to true))
+        val yCondition = InclusionCondition.requires(mapOf(y to true))
+        val first =
+            fixture.selection(
+                "Query",
+                "item",
+                subselections = selectionForestOf(fixture.selection("ConcreteItem", "a")),
+                inclusionCondition = xCondition,
+            )
+        val second =
+            fixture.selection(
+                "Query",
+                "item",
+                subselections = selectionForestOf(fixture.selection("ConcreteItem", "b")),
+                inclusionCondition = yCondition,
+            )
+
+        val item = selectionForestOf(first, second).merge(fixture.query).single()
+        val children = item.subselections.merge(fixture.item).byKey().values
+        val a = children.single { selection -> selection.key.field.name == "a" }
+        val b = children.single { selection -> selection.key.field.name == "b" }
+
+        assertTrue(item.inclusionCondition.include(mapOf(x to true, y to false)))
+        assertTrue(item.inclusionCondition.include(mapOf(x to false, y to true)))
+        assertFalse(item.inclusionCondition.include(mapOf(x to false, y to false)))
+        assertTrue(a.inclusionCondition.include(mapOf(x to true, y to false)))
+        assertFalse(a.inclusionCondition.include(mapOf(x to false, y to true)))
+        assertFalse(b.inclusionCondition.include(mapOf(x to true, y to false)))
+        assertTrue(b.inclusionCondition.include(mapOf(x to false, y to true)))
+    }
+
     private class Fixture {
         val testWorld = TestWorld.fromSDL(SCHEMA)
         val world = testWorld.assumptions
@@ -320,11 +357,13 @@ class SelectionMergeTest {
             possibleTypes: Set<ViaductSchema.Object> =
                 (schema.requireType(typeName) as ViaductSchema.CompositeTypeDef).possibleObjectTypes,
             subselections: SelectionForest = selectionForestOf(),
+            inclusionCondition: InclusionCondition = InclusionCondition.Always,
         ): Selection =
             Selection.of(
                 key = ObjectEngineResult.Key.of(schema.requireField(typeName, fieldName), arguments),
                 possibleTypes = possibleTypes,
                 subselections = subselections,
+                inclusionCondition = inclusionCondition,
             )
 
         fun searchSelection(filter: Any): Selection =

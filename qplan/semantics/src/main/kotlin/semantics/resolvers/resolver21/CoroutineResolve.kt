@@ -121,6 +121,7 @@ internal class CoroutineResolve(
         unresolvedKeys.forEach { key ->
             val cell = target.reserveCell(key)
             cell.createValuePromise()
+            cell.setActivated(true)
             cycleChecker.registerWriter(
                 cell = cell,
                 writer = path + key,

@@ -66,9 +66,7 @@ internal fun ObjectEngineResult.installParentBackedges(
             if (isCellSet(key)) {
                 getCell(key)
             } else {
-                reserveCell(key).also { parentCell ->
-                    parentCell.setValue(containingParent.target)
-                }
+                setCellValue(key, containingParent.target)
             }
         check(cell.getValue().get() === containingParent.target) {
             "Parent field ${key.field.name} does not reference its containing object occurrence"

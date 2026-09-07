@@ -164,9 +164,7 @@ private fun EngineObjectData.Sync.materializePassiveFields(
                         constructionDemand = childConstructionDemand,
                         parent = occurrence,
                     )
-            occurrence.target.reserveCell(key).also { cell ->
-                cell.setValue(value)
-            }
+            occurrence.target.setCellValue(key, value)
         }
     }
 }

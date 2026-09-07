@@ -29,6 +29,7 @@ import model.testing.TestWorld
 import model.testing.VariableDeclaration
 import model.testing.fieldResolverOf
 import model.testing.nodeResolverOf
+import model.testing.selectionAwareFieldResolverOf
 import model.testing.selectiveFieldResolverOf
 import viaduct.engine.EngineConfiguration
 import viaduct.engine.api.EngineExecutionContext
@@ -86,15 +87,13 @@ fun EngineTestModule.runQPlanFeatureTest(
     engineConfig: EngineConfiguration? = null,
     block: QPlanFeatureTest.() -> Unit,
 ) {
-    if (withoutDefaultQueryNodeResolvers) {
-        TODO("Qplan feature tests do not support disabling default Query node resolvers yet")
-    }
     if (schema != null) {
         TODO("Qplan feature tests do not support a distinct executable schema yet")
     }
-    if (engineConfig != null) {
-        TODO("Qplan feature tests do not support custom engine configuration yet")
-    }
+    // EngineConfiguration controls production runtime machinery that this pre-dispatcher adapter
+    // does not construct. Accept it so source-faithful tests can exercise both production flag
+    // configurations when their qplan behavior is intentionally identical.
+    engineConfig
     val schemaSDL = qplanSchemaSDL(fullSchema)
     val context = ContextMocks(myFullSchema = fullSchema).engineExecutionContext
     val registryInputs = IdentityHashMap<QPlanSchema, QPlanRegistryInputs>()
@@ -105,7 +104,13 @@ fun EngineTestModule.runQPlanFeatureTest(
             schemaSDL = schemaSDL,
             fieldResolvers = { schema ->
                 registryInputs
-                    .getOrPut(schema) { qplanRegistryInputs(schema, context) }
+                    .getOrPut(schema) {
+                        qplanRegistryInputs(
+                            schema = schema,
+                            context = context,
+                            includeDefaultQueryNodeResolvers = !withoutDefaultQueryNodeResolvers,
+                        )
+                    }
                     .fieldResolvers
             },
             nodeResolvers = { schema ->
@@ -113,7 +118,13 @@ fun EngineTestModule.runQPlanFeatureTest(
             },
             variableProviders = { schema ->
                 registryInputs
-                    .getOrPut(schema) { qplanRegistryInputs(schema, context) }
+                    .getOrPut(schema) {
+                        qplanRegistryInputs(
+                            schema = schema,
+                            context = context,
+                            includeDefaultQueryNodeResolvers = !withoutDefaultQueryNodeResolvers,
+                        )
+                    }
                     .variableProviders
             },
         )
@@ -168,6 +179,7 @@ private data class QPlanRegistryInputs(
 private fun EngineTestModule.qplanRegistryInputs(
     schema: QPlanSchema,
     context: EngineExecutionContext,
+    includeDefaultQueryNodeResolvers: Boolean,
 ): QPlanRegistryInputs {
     val sourceSchema = SourceSchemaAdapter(schema)
     val variableRecovery = RequiredSelectionSetVariableRecovery(schema)
@@ -226,26 +238,17 @@ private fun EngineTestModule.qplanRegistryInputs(
                     )
                 }
             val resolver =
-                if (executor.isSelective) {
-                    selectiveFieldResolverOf(
-                        objectFragment = objectFragment,
-                        queryFragment = queryFragment,
-                        function = { input, queryValue, arguments, selections ->
-                            val selectionSet =
-                                (field.type.baseTypeDef as? QPlanSchema.CompositeTypeDef)?.let {
-                                    selections.toEngineSelectionSet(it, fullSchema)
-                                }
-                            invokeExecutor(input, queryValue, arguments, selectionSet)
-                        },
-                    )
-                } else {
-                    fieldResolverOf(
-                        objectFragment = objectFragment,
-                        queryFragment = queryFragment,
-                        function = { input, queryValue, arguments ->
-                            invokeExecutor(input, queryValue, arguments, null)
-                        },
-                    )
+                (if (executor.isSelective) ::selectiveFieldResolverOf else ::selectionAwareFieldResolverOf)(
+                    objectFragment,
+                    queryFragment,
+                ) { input, queryValue, arguments, selections ->
+                    val selectionSet =
+                        (field.type.baseTypeDef as? QPlanSchema.CompositeTypeDef)?.let {
+                            type ->
+                            type.takeIf { fullSchema.schema.getType(it.name) != null }
+                                ?.let { selections.toEngineSelectionSet(it, fullSchema) }
+                        }
+                    invokeExecutor(input, queryValue, arguments, selectionSet)
                 }
             field to resolver
         }
@@ -255,7 +258,13 @@ private fun EngineTestModule.qplanRegistryInputs(
         "Qplan feature tests require unique field executor coordinates"
     }
     return QPlanRegistryInputs(
-        fieldResolvers = supplied + builtInNodeFieldResolvers(schema, context, supplied.keys),
+        fieldResolvers =
+            supplied +
+                if (includeDefaultQueryNodeResolvers) {
+                    builtInNodeFieldResolvers(schema, context, supplied.keys)
+                } else {
+                    emptyMap()
+                },
         variableProviders = variableProviders,
     )
 }
@@ -341,7 +350,7 @@ private fun EngineTestModule.qplanNodeResolvers(
     schema: QPlanSchema,
     context: EngineExecutionContext,
 ): Map<QPlanSchema.Object, NodeResolverFunction> {
-    val byType =
+    val supplied =
         nodeResolverExecutors.associate { (typeName, executor) ->
             val type = schema.requireType(typeName) as QPlanSchema.Object
             type to
@@ -362,15 +371,44 @@ private fun EngineTestModule.qplanNodeResolvers(
                             ),
                         )
                     output.fold(
-                        onSuccess = { normalizeSourceObject(it) },
+                        onSuccess = { completeMissingNodeFields(typeName, normalizeSourceObject(it)) },
                         onFailure = { EngineErrorData.of(it) },
                     )
                 }
         }
-    require(nodeResolverExecutors.count() == byType.size) {
+    require(nodeResolverExecutors.count() == supplied.size) {
         "Qplan feature tests require unique node executor types"
     }
-    return byType
+    if (supplied.isEmpty()) return supplied
+
+    val nodeType = schema.types["Node"] as? QPlanSchema.Interface ?: return supplied
+    val unavailable =
+        nodeType.possibleObjectTypes
+            .filter { type -> type !in supplied }
+            .associateWith { type ->
+                nodeResolverOf { model.engineObjectDataOf(type) }
+            }
+    return supplied + unavailable
+}
+
+private fun EngineTestModule.completeMissingNodeFields(
+    typeName: String,
+    value: EngineObjectData.Sync,
+): EngineObjectData.Sync {
+    val type = requireNotNull(fullSchema.schema.getObjectType(typeName))
+    val fields = value.getSelections().associateWith(value::get).toMutableMap()
+    type.fieldDefinitions.forEach { field ->
+        if (
+            field.name !in fields &&
+            field.type !is GraphQLNonNull &&
+            fieldResolverExecutors.none { (coordinate, _) ->
+                coordinate == (typeName to field.name)
+            }
+        ) {
+            fields[field.name] = null
+        }
+    }
+    return ResolvedEngineObjectData(type, fields)
 }
 
 private fun normalizeSourceOutput(
@@ -458,7 +496,13 @@ private fun normalizeSourceObject(
                     "Executor output ${type.name} has no field named $selection"
                 }
             normalizeSourceOutput(field.type, value.get(selection))
-        }
+        }.toMutableMap()
+    if (
+        type.interfaces.any { it.name == "Node" } &&
+        "id" !in fields
+    ) {
+        fields["id"] = "__qplan_inline_node__"
+    }
     return ResolvedEngineObjectData(type, fields)
 }
 

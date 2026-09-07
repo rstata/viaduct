@@ -188,7 +188,6 @@ class RequiredSelectionsTest {
                 .assertJson("""{"data": {"foo": 6}}""")
         }
 
-    @Disabled("TODO: MechAdapt")
     @Test
     fun `child RSS keeps pruned fragments separate from operation fragments`() {
         val module = EngineTestModule(

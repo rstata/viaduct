@@ -340,6 +340,43 @@ class FieldResolver private constructor(
             )
         }
 
+        /**
+         * Constructs a resolver whose executor receives demand metadata while its output is still
+         * projected according to the nonselective resolver contract.
+         *
+         * This exists for integration adapters whose executor SPI supplies requested selections
+         * to every invocation independently of the executor's selectivity declaration.
+         */
+        fun ofSelectionAwareNonselective(
+            field: ViaductSchema.ObjectField,
+            objectFragment: MaterializeSelectionForest,
+            queryFragment: MaterializeSelectionForest,
+            queryType: ViaductSchema.Object,
+            variables: Map<Arguments.Variable, VariableDefinition>,
+            function: SelectiveFieldResolverFunction,
+            projectionDemand: (SelectionForest) -> SelectionForest = { it },
+            applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
+        ): FieldResolver {
+            validateFactoryArguments(
+                field = field,
+                objectFragment = objectFragment,
+                queryFragment = queryFragment,
+                queryType = queryType,
+                variables = variables,
+            )
+            return FieldResolver(
+                field = field,
+                objectFragmentTemplate = objectFragment,
+                queryFragmentTemplate = queryFragment,
+                queryType = queryType,
+                variables = variables,
+                function = function,
+                projectNonselectiveOutput = true,
+                projectionDemand = projectionDemand,
+                applicationObserver = applicationObserver,
+            )
+        }
+
         fun of(
             field: ViaductSchema.ObjectField,
             objectFragment: SelectionForest,

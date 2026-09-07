@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.launch
 import model.Arguments
 import model.Assumptions
+import model.InclusionCondition
 import model.ObjectEngineResult
 import model.ObjectSelectionForest
 import model.requireQueryTypeDef
@@ -87,7 +88,10 @@ internal class ObjectOrchestrationTask(
 
     // Checks that passive values selected by closed demand were installed before task dispatch.
     private fun validatePassiveFields(closed: CloseInputDemandResult) {
-        closed.demand.byKey().forEach { (objectKey, _) ->
+        closed.demand.byKey().forEach { (objectKey, selection) ->
+            if (selection.inclusionCondition === InclusionCondition.Never) {
+                return@forEach
+            }
             if (objectKey !in closed.fieldResolverOccurrenceContexts) {
                 check(
                     objectKey is ObjectEngineResult.GroundKey &&

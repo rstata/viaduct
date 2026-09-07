@@ -32,6 +32,7 @@ class FieldResolverDefinition private constructor(
     val queryFragment: Fragment?,
     private val function: SelectiveFieldResolverFunction,
     private val selective: Boolean,
+    private val passesDemand: Boolean,
     private val projectionDemand: (SelectionForest) -> SelectionForest,
     private val applicationObserver: FieldResolverApplicationObserver,
 ) {
@@ -45,6 +46,7 @@ class FieldResolverDefinition private constructor(
                 transform(function(input, queryValue, arguments, selections))
             },
             selective = selective,
+            passesDemand = passesDemand,
             projectionDemand = projectionDemand,
             applicationObserver = applicationObserver,
         )
@@ -57,6 +59,7 @@ class FieldResolverDefinition private constructor(
             queryFragment = queryFragment,
             function = function,
             selective = selective,
+            passesDemand = passesDemand,
             projectionDemand = { demand -> transform(projectionDemand(demand)) },
             applicationObserver = applicationObserver,
         )
@@ -67,6 +70,7 @@ class FieldResolverDefinition private constructor(
             queryFragment = queryFragment,
             function = function,
             selective = selective,
+            passesDemand = passesDemand,
             projectionDemand = projectionDemand,
             applicationObserver = applicationObserver,
         )
@@ -77,6 +81,7 @@ class FieldResolverDefinition private constructor(
             queryFragment = queryFragment?.let(transform),
             function = function,
             selective = selective,
+            passesDemand = passesDemand,
             projectionDemand = projectionDemand,
             applicationObserver = applicationObserver,
         )
@@ -89,6 +94,7 @@ class FieldResolverDefinition private constructor(
             queryFragment = queryFragment,
             function = function,
             selective = selective,
+            passesDemand = passesDemand,
             projectionDemand = projectionDemand,
             applicationObserver = { input, arguments, selections ->
                 applicationObserver(input, arguments, selections)
@@ -151,6 +157,18 @@ class FieldResolverDefinition private constructor(
                 },
                 applicationObserver = applicationObserver,
             )
+        } else if (passesDemand) {
+            FieldResolver.ofSelectionAwareNonselective(
+                field = field,
+                objectFragment = normalizedObjectFragment,
+                queryFragment = normalizedQueryFragment,
+                queryType = queryType,
+                variables = variables,
+                function = { input, queryValue, arguments, selections ->
+                    function(input, queryValue, arguments, projectionDemand(selections))
+                },
+                applicationObserver = applicationObserver,
+            )
         } else {
             FieldResolver.of(
                 field = field,
@@ -180,6 +198,7 @@ class FieldResolverDefinition private constructor(
                     function(input, queryValue, arguments)
                 },
                 selective = false,
+                passesDemand = false,
                 projectionDemand = { it },
                 applicationObserver = { _, _, _ -> },
             )
@@ -194,6 +213,7 @@ class FieldResolverDefinition private constructor(
                 queryFragment = queryFragment,
                 function = function,
                 selective = true,
+                passesDemand = true,
                 projectionDemand = { it },
                 applicationObserver = { _, _, _ -> },
             )
@@ -207,7 +227,21 @@ class FieldResolverDefinition private constructor(
                 queryFragment = null,
                 function = { input, _, arguments -> function(input, arguments) },
             )
-    }
+        fun ofSelectionAwareNonselective(
+            objectFragment: Fragment,
+            queryFragment: Fragment?,
+            function: SelectiveFieldResolverFunction,
+        ): FieldResolverDefinition =
+            FieldResolverDefinition(
+                objectFragment = objectFragment,
+                queryFragment = queryFragment,
+                function = function,
+                selective = false,
+                passesDemand = true,
+                projectionDemand = { it },
+                applicationObserver = { _, _, _ -> },
+            )
+        }
 }
 
 fun fieldResolverOf(
@@ -228,6 +262,17 @@ fun selectiveFieldResolverOf(
     function: SelectiveFieldResolverFunction,
 ): FieldResolverDefinition =
     FieldResolverDefinition.ofSelective(objectFragment, queryFragment, function)
+
+fun selectionAwareFieldResolverOf(
+    objectFragment: Fragment,
+    queryFragment: Fragment,
+    function: SelectiveFieldResolverFunction,
+): FieldResolverDefinition =
+    FieldResolverDefinition.ofSelectionAwareNonselective(
+        objectFragment,
+        queryFragment,
+        function,
+    )
 
 fun selectiveFieldResolverOf(
     objectFragment: Fragment,

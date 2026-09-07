@@ -103,6 +103,7 @@ private fun ViaductSchema.ObjectField.fixedInputParentDemand(
         ?: world.resolverRegistry
             .resolver(this)
             .objectFragment
+            .withoutInclusionConditions()
             .analyzeInputParentDemand(parentDemandByResolverField)
             .also { demand -> parentDemandByResolverField[this] = demand }
 
@@ -143,3 +144,16 @@ private fun SelectionForest.foldInputParentDemand(
     forEach { selection -> result += transform(selection) }
     return result
 }
+
+/** Fixed descendant demand is lifted before occurrence-local condition bindings can exist. */
+private fun SelectionForest.withoutInclusionConditions(): SelectionForest =
+    flatMap { selection ->
+        selectionForestOf(
+            Selection.of(
+                key = selection.key,
+                possibleTypes = selection.possibleTypes,
+                inclusionCondition = InclusionCondition.Always,
+                subselections = selection.subselections.withoutInclusionConditions(),
+            ),
+        )
+    }

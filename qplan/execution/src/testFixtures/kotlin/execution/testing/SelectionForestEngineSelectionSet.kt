@@ -4,6 +4,8 @@ import graphql.GraphQLContext
 import graphql.execution.ValuesResolver
 import graphql.language.Argument
 import graphql.language.AstPrinter
+import graphql.language.BooleanValue
+import graphql.language.Directive
 import graphql.language.Field
 import graphql.language.InlineFragment
 import graphql.language.SelectionSet
@@ -11,6 +13,7 @@ import graphql.language.TypeName
 import graphql.schema.InputValueWithState
 import java.util.Locale
 import model.Arguments
+import model.InclusionCondition
 import model.Selection
 import model.SelectionForest
 import viaduct.engine.api.EngineSelectionSet
@@ -29,9 +32,9 @@ import viaduct.graphql.utils.ParsedSelections
  * concrete object type and lets the existing Engine API implementation provide its convenience
  * operations.
  *
- * This conversion preserves field coordinates, concrete applicability, nested demand, and resolved
- * arguments. It cannot recover source aliases, directives, named fragments, or their spelling;
- * those are not carried by [SelectionForest].
+ * This conversion preserves field coordinates, concrete applicability, nested demand, resolved
+ * arguments, and statically excluded result keys. It cannot recover source aliases, named
+ * fragments, or directive spelling.
  */
 internal fun SelectionForest.toEngineSelectionSet(
     type: QPlanSchema.CompositeTypeDef,
@@ -96,20 +99,31 @@ private fun Selection.toField(
                 "EngineSelectionSet demand requires resolved arguments for " +
                     "${key.field.containingDef.name}.$loweredFieldName",
             )
+    val field = Field.newField(fieldName)
+    if (inclusionCondition === InclusionCondition.Never) {
+        field.directive(
+            Directive.newDirective()
+                .name("skip")
+                .argument(
+                    Argument.newArgument()
+                        .name("if")
+                        .value(BooleanValue.newBooleanValue(true).build())
+                        .build(),
+                ).build(),
+        )
+    }
     if (fieldName == "__typename") {
         require(arguments.fieldValues.isEmpty()) {
             "Lowered __typename demand must be argumentless"
         }
-        return Field.newField(fieldName).build()
+        return field.build()
     }
     val sourceField =
         schema.schema.getFieldDefinition((concreteType.name to fieldName).gj)
             ?: throw IllegalArgumentException(
                 "Qplan field ${concreteType.name}.$fieldName is absent from the Engine schema",
             )
-    val field =
-        Field.newField(fieldName)
-            .arguments(
+    field.arguments(
                 arguments.fieldValues
                     .toSortedMap()
                     .map { (name, value) ->

@@ -249,7 +249,6 @@ class SelectiveFieldResolversExecutionTest {
 
     @Nested
     inner class ParentFields {
-        @Disabled("TODO: ParentFld")
         @Test
         fun `selective child object can read its non-selective parent`() {
             MockTenantModuleBootstrapper(
@@ -293,7 +292,6 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: ParentFld")
         @Test
         fun `parent traversal resolves a selective child field`() {
             MockTenantModuleBootstrapper(
@@ -355,7 +353,6 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: ParentFld")
         @Test
         fun `non-selective resolver restores parent traversal below selective ancestor`() {
             MockTenantModuleBootstrapper(

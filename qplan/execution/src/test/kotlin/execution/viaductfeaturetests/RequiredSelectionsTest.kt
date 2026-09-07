@@ -188,7 +188,7 @@ class RequiredSelectionsTest {
                 .assertJson("""{"data": {"foo": 6}}""")
         }
 
-    @Disabled("TODO: Directive MechAdapt")
+    @Disabled("TODO: MechAdapt")
     @Test
     fun `child RSS keeps pruned fragments separate from operation fragments`() {
         val module = EngineTestModule(
@@ -832,7 +832,7 @@ class RequiredSelectionsTest {
         assertEquals(setOf("fr"), resolvedNameLocales)
     }
 
-    @Disabled("TODO: ParentFld VarCallbk Directive")
+    @Disabled("TODO: ParentFld VarCallbk")
     @Test
     fun `parent field selections honor conditional directives`() {
         val companyNameCount = AtomicInteger()
@@ -1186,7 +1186,7 @@ class RequiredSelectionsTest {
         }
     }
 
-    @Disabled("TODO: Abstract VarCallbk Directive MechAdapt")
+    @Disabled("TODO: Abstract VarCallbk MechAdapt")
     @Test
     fun `required selection with impossible sibling implementation dependency can be resolved`() {
         // Foo.x has an object RSS rooted at Foo. The outer `... on Node` branch can match Foo,
@@ -2033,7 +2033,7 @@ class RequiredSelectionsTest {
                 .assertJson("""{"data": {"userGreeting": "Hello, Alice!"}}""")
         }
 
-    @Disabled("TODO: Directive VarCallbk")
+    @Disabled("TODO: VarCallbk")
     @Test
     fun `objectSelections conditional directives honor per-item variables`() {
         val selectedValueCount = AtomicInteger()
@@ -2462,7 +2462,7 @@ class RequiredSelectionsTest {
         assertTrue(err.message.orEmpty().contains("Invalid GraphQL fragment"), err.message.orEmpty())
     }
 
-    @Disabled("TODO: VarCallbk Directive")
+    @Disabled("TODO: VarCallbk")
     @Test
     fun `query rss variable resolver is planned when repeated fragment spread has runtime directive`() {
         // Query.a has a query RSS that spreads the same fragment twice: once behind a runtime

@@ -517,7 +517,6 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Directive")
         @Test
         fun `selective field is skipped in RSS but selected in query`() {
             // This creates two planned executions of Query.a:
@@ -905,7 +904,6 @@ class SelectiveFieldResolversExecutionTest {
             assertEquals(2, fooCalls.get())
         }
 
-        @Disabled("TODO: Directive")
         @Test
         fun `fully skipped selective field still resolves rss reads`() {
             // The client selects the selective field `foo` with a single aliased selection that a
@@ -1606,7 +1604,6 @@ class SelectiveFieldResolversExecutionTest {
 
     @Nested
     inner class VariablesTests {
-        @Disabled("TODO: Directive")
         @Test
         fun `materialization preserves client directive variables`() {
             MockTenantModuleBootstrapper(
@@ -1831,7 +1828,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Directive")
+        @Disabled("TODO: VarCallbk")
         @Test
         fun `variable rss does not use skipped child object plan`() {
             // Query.b has a runtime-dependent object RSS field whose variable resolver needs
@@ -3441,7 +3438,7 @@ class SelectiveFieldResolversExecutionTest {
             )
         }
 
-        @Disabled("TODO: Directive")
+        @Disabled("TODO: MechAdapt")
         @Test
         fun `materialization preserves resolver selection directives`() {
             MockTenantModuleBootstrapper(

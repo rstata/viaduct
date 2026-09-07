@@ -17,6 +17,7 @@ import model.SelectionForest
 import model.emptyFragmentOf
 import model.engineObjectDataOf
 import model.fragmentFrom
+import model.materializeSelectionForestOf
 import model.objectOf
 import model.outputValue
 import model.schemaType
@@ -139,6 +140,59 @@ class ResolverRegistryTest {
                 )
             }
 
+        assertEquals(setOf("name"), assertIs<EngineObjectData.Sync>(output).getSelections().toSet())
+    }
+
+    @Test
+    fun `selection-aware nonselective resolver receives demand and projects output`() {
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type User {
+                      name: String!
+                      age: Int!
+                    }
+
+                    type Query {
+                      user: User!
+                    }
+                    """.trimIndent(),
+            )
+        val schema = world.schema
+        val query = schema.requireQueryTypeDef()
+        val userField = schema.requireObjectField("Query", "user")
+        val demand =
+            schema.fragmentFrom(
+                "fragment ignored on User { name }",
+            ).subselections
+        var observedDemand: SelectionForest? = null
+        val resolver =
+            FieldResolver.ofSelectionAwareNonselective(
+                field = userField,
+                objectFragment = materializeSelectionForestOf(),
+                queryFragment = materializeSelectionForestOf(),
+                queryType = query,
+                variables = emptyMap(),
+                function = { _, _, _, selections ->
+                    observedDemand = selections
+                    schema.objectOf("User") {
+                        "name" setTo "Ada"
+                        "age" setTo 37
+                    }
+                },
+            )
+
+        val output =
+            context(world.assumptions) {
+                resolver(
+                    input = engineObjectDataOf(query),
+                    arguments = Arguments.Resolved.of(userField, emptyMap()),
+                    selections = demand,
+                )
+            }
+
+        assertSame(demand, observedDemand)
         assertEquals(setOf("name"), assertIs<EngineObjectData.Sync>(output).getSelections().toSet())
     }
 

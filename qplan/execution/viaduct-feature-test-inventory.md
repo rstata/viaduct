@@ -63,7 +63,7 @@ Counts overlap because one test may be blocked by more than one requirement. The
 | Parent-field semantics | 7 | `ParentFld` |
 | Checkers / access checks | 8 | `AccessChk` |
 | Arbitrary variable-provider callbacks | 10 | `VarCallbk` |
-| Likely mechanical adapter enablement | 5 | `MechAdapt` |
+| Likely mechanical adapter enablement | 4 | `MechAdapt` |
 | Abstract-type/runtime applicability | 5 | `Abstract` |
 | Directives | 0 | `Directive` |
 | Mutations | 3 | `Mutation` |

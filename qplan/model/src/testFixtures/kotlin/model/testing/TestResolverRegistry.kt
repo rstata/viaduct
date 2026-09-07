@@ -756,7 +756,10 @@ private class TestResolverRegistry(
                 ?.takeIf { it in sourceFieldResolvers }
                 ?.let { add(DependencyVertex.Field(it as ViaductSchema.ObjectField)) }
         }
-        selection.key.arguments.variableTemplates().forEach { variable ->
+        (
+            selection.key.arguments.variableTemplates() +
+                selection.inclusionCondition.usedVariables()
+        ).forEach { variable ->
             require(variable in variableDefinitions) {
                 "Missing variable definition: \$${variable.variableName}"
             }

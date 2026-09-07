@@ -54,7 +54,7 @@ The following source files are intentionally not copied because every test in ea
 
 ## Grouped Blocker Counts
 
-Counts overlap because one test may be blocked by more than one requirement. They cover the eleven synchronized ports and exclude the two incomplete ports listed above. Labels appear space-separated in actionable `@Disabled("TODO: ...")` reasons; `IntentDiff` identifies the two intentional incompatibilities whose specific prose reasons are retained. `AccessChk` includes checker and type-checker executors together with their object- and Query-rooted required selections; checker Query fragments carry no additional blocker.
+Counts overlap because one test may be blocked by more than one requirement. They cover the eleven synchronized ports and exclude the two incomplete ports listed above. Labels appear space-separated in actionable `@Disabled("TODO: ...")` reasons; `IntentDiff` identifies the three intentional incompatibilities whose specific prose reasons are retained. `AccessChk` includes checker and type-checker executors together with their object- and Query-rooted required selections; checker Query fragments carry no additional blocker.
 
 | Group | Count | Label |
 | --- | ---: | --- |
@@ -65,11 +65,11 @@ Counts overlap because one test may be blocked by more than one requirement. The
 | Arbitrary variable-provider callbacks | 10 | `VarCallbk` |
 | Likely mechanical adapter enablement | 5 | `MechAdapt` |
 | Abstract-type/runtime applicability | 5 | `Abstract` |
-| Directives | 5 | `Directive` |
+| Directives | 0 | `Directive` |
 | Mutations | 3 | `Mutation` |
 | Rich executor error preservation | 1 | `ErrorData` |
 | Nested `FromArgument` paths | 2 | `NestedArg` |
-| Intentional semantic incompatibilities | 2 | `IntentDiff` |
+| Intentional semantic incompatibilities | 3 | `IntentDiff` |
 | Private-field schema adaptation | 1 | `PrivateFld` |
 | Node fragment/lowering behavior | 1 | `NodeLower` |
 

@@ -463,7 +463,7 @@ class FromFieldVariablesFeatureTest {
             runQuery("{x, y}").assertJson("{data: {x: 10, y: 6}}")
         }
 
-    @Disabled("TODO: Directive")
+    @Disabled("ALT: Production exposes a conditionally excluded RSS field as present-null; qplan exposes it as absent")
     @Test
     fun `from object field -- variable used in conditional directive`() {
         var yResolved = false

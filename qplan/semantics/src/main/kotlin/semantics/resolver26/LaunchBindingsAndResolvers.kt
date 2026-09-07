@@ -3,30 +3,26 @@ package semantics.resolver26
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import model.ObjectEngineResult
-import model.ObjectSelection
-import semantics.shared.fetchGroundedArguments
 import model.requireQueryTypeDef
-import model.registry.VariableDefinition
-import model.usedVariables
-import model.variableArgumentNames
 import semantics.correctresolution.argumentsContainErrorValue
 
 /**
  * Reads object-path providers and installs every local field resolver.
  *
- * Each installation resolves its invocation arguments, completes argument bindings unlocked by
- * that resolution, claims the original symbolic target cell, and registers its writer for cycle
- * detection. This function waits for all installations before returning so the enclosing
- * orchestration can freeze the target, while the launched field-resolver tasks may continue
- * afterward. Freezing the target without waiting for installation would race with those
- * installations reserving their cells.
+ * Each installation claims the original symbolic target cell and registers its writer for cycle
+ * detection before launching the field-resolver task. This function waits for all installations
+ * before returning so the enclosing orchestration can freeze the target, while argument grounding
+ * and the rest of the launched field-resolver tasks may continue afterward. Freezing the target
+ * without waiting for installation would race with those installations reserving their cells.
  */
 internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
     closed: CloseInputDemandResult,
 ) {
     context(operation) {
-        closed.expansions.values.forEach { expansion ->
-            operation.queryValuesState.declare(expansion.resolverOccurrenceId)
+        closed.fieldResolverOccurrenceContexts.values.forEach { fieldResolverOccurrenceContext ->
+            operation.queryValuesState.declare(
+                fieldResolverOccurrenceContext.resolverOccurrenceId,
+            )
         }
         coroutineScope {
             launch {
@@ -34,8 +30,8 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
                     reads = closed.objectProviderReads,
                 )
             }
-            val demandByKey = closed.demand.byKey()
-            closed.expansions.forEach { (objectKey, expansion) ->
+            closed.fieldResolverOccurrenceContexts.forEach {
+                    (objectKey, fieldResolverOccurrenceContext) ->
                 launch {
                     val queryValue =
                         if (
@@ -44,19 +40,19 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
                         ) {
                             model.engineObjectDataOf(operation.schema.requireQueryTypeDef())
                         } else {
-                            expansion.fragments.queryFragment.resolveQueryFragment(
-                                coordinate = occurrence.coordinate(objectKey),
-                            )
+                            fieldResolverOccurrenceContext.fragments.queryFragment
+                                .resolveQueryFragment(
+                                    coordinate = occurrence.coordinate(objectKey),
+                                )
                         }
                     operation.queryValuesState.complete(
-                        expansion.resolverOccurrenceId,
+                        fieldResolverOccurrenceContext.resolverOccurrenceId,
                         queryValue,
                     )
                 }
                 launch {
                     installAndLaunchFieldResolver(
-                        selection = demandByKey.getValue(objectKey),
-                        expansion = expansion,
+                        fieldResolverOccurrenceContext = fieldResolverOccurrenceContext,
                     )
                 }
             }
@@ -64,29 +60,18 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
     }
 }
 
-// Resolves one active selection's invocation arguments while retaining its symbolic cell key.
-private suspend fun ObjectOrchestrationTask.installAndLaunchFieldResolver(
-    selection: ObjectSelection,
-    expansion: ResolverExpansion,
+// Installs one active selection while retaining its symbolic cell key.
+private fun ObjectOrchestrationTask.installAndLaunchFieldResolver(
+    fieldResolverOccurrenceContext: FieldResolverOccurrenceContext,
 ) {
     context(operation) {
-        val variableArgumentCount = selection.key.arguments.variableArgumentNames().size
-        val variableResolverOccurrenceIds =
-            selection.key.arguments
-                .usedVariables()
-                .mapNotNullTo(linkedSetOf()) { variable ->
-                    variable.instanceId?.resolverOccurrenceId
-                }
-        val objectKey = selection.key
-        val groundedArguments = objectKey.fetchGroundedArguments()
+        val objectKey = fieldResolverOccurrenceContext.selection.key
         check(objectKey.field in operation.resolverRegistry) {
             "Resolver26 attempted to install passive key $objectKey"
         }
         check(!source.isPresent(objectKey.field.name)) {
             "Resolver26 attempted to install source-provided key $objectKey"
         }
-        completeFromArgumentBindings(expansion, groundedArguments)
-
         val cell = occurrence.target.reserveCell(objectKey)
         cell.createValuePromise()
         operation.cycleChecker.registerWriter(
@@ -95,39 +80,13 @@ private suspend fun ObjectOrchestrationTask.installAndLaunchFieldResolver(
         )
         val fieldResolverTask =
             FieldResolverTask(
-                operation = operation,
-                occurrence = occurrence,
-                selection = selection,
-                groundedArguments = groundedArguments,
-                resolver = expansion.resolver,
-                resolverOccurrenceId = expansion.resolverOccurrenceId,
-                inputMaterializeSelections = expansion.inputMaterializeSelections,
+                operationContext = operation,
+                oerOccurrenceContext = occurrence,
+                fieldResolverOccurrenceContext = fieldResolverOccurrenceContext,
                 cell = cell,
-                variableArgumentCount = variableArgumentCount,
-                variableResolverOccurrenceIds = variableResolverOccurrenceIds,
             )
         operation.requestScope.launch {
             fieldResolverTask.run()
         }
-    }
-}
-
-// Fills FromArgument bindings that were declared while their owning resolver key was symbolic.
-// Bindings for already-ground owners received their values during binding declaration.
-private fun ObjectOrchestrationTask.completeFromArgumentBindings(
-    expansion: ResolverExpansion,
-    groundedArguments: model.Arguments.Ground,
-) {
-    if (expansion.ownerKey is ObjectEngineResult.GroundKey) return
-    expansion.variableDefinitions.forEach { variableDefinition ->
-        if (variableDefinition.definition !is VariableDefinition.FromArgument) {
-            return@forEach
-        }
-        val definition =
-            variableDefinition.definition as VariableDefinition.FromArgument
-        operation.variableBindingsState.completeBinding(
-            requireNotNull(variableDefinition.variable.instanceId),
-            bindingFor(groundedArguments, definition),
-        )
     }
 }

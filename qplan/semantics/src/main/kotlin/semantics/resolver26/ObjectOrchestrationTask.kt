@@ -75,7 +75,7 @@ internal class ObjectOrchestrationTask(
             }
         validatePassiveFields(closed)
 
-        if (closed.expansions.isNotEmpty()) {
+        if (closed.fieldResolverOccurrenceContexts.isNotEmpty()) {
             operation.requestScope.launch {
                 this@ObjectOrchestrationTask.launchBindingsAndResolvers(closed)
                 occurrence.target.freeze()
@@ -88,7 +88,7 @@ internal class ObjectOrchestrationTask(
     // Checks that passive values selected by closed demand were installed before task dispatch.
     private fun validatePassiveFields(closed: CloseInputDemandResult) {
         closed.demand.byKey().forEach { (objectKey, _) ->
-            if (objectKey !in closed.expansions) {
+            if (objectKey !in closed.fieldResolverOccurrenceContexts) {
                 check(
                     objectKey is ObjectEngineResult.GroundKey &&
                         occurrence.target.isCellSet(objectKey),
@@ -140,15 +140,16 @@ private fun declareBindings(closed: CloseInputDemandResult) {
         "Resolver26 closed demand attempted to declare its bindings twice"
     }
     closed.bindingDeclarationStarted = true
-    closed.expansions.values.forEach { expansion ->
-        expansion.variableDefinitions.forEach { variableDefinition ->
+    closed.fieldResolverOccurrenceContexts.values.forEach { fieldResolverOccurrenceContext ->
+        val ownerKey = fieldResolverOccurrenceContext.selection.key
+        fieldResolverOccurrenceContext.variableDefinitions.forEach { variableDefinition ->
             val variableId = requireNotNull(variableDefinition.variable.instanceId)
             when (val definition = variableDefinition.definition) {
                 is VariableDefinition.FromArgument ->
-                    if (expansion.ownerKey is ObjectEngineResult.GroundKey) {
+                    if (ownerKey is ObjectEngineResult.GroundKey) {
                         operation.variableBindingsState.bindVariable(
                             variableId,
-                            bindingFor(expansion.ownerKey.arguments, definition),
+                            bindingFor(ownerKey.arguments, definition),
                         )
                     } else {
                         operation.variableBindingsState.declareBinding(variableId)
@@ -163,8 +164,8 @@ private fun declareBindings(closed: CloseInputDemandResult) {
             requireNotNull(read.definition.variable.instanceId),
         )
     }
-    closed.expansions.values
-        .flatMap { expansion -> expansion.fragments.queryFragment.pathVariableDefinitions }
+    closed.fieldResolverOccurrenceContexts.values
+        .flatMap { context -> context.fragments.queryFragment.pathVariableDefinitions }
         .forEach { definition ->
             operation.variableBindingsState.declareBinding(
                 requireNotNull(definition.variable.instanceId),

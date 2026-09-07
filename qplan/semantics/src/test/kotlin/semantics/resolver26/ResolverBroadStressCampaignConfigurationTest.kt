@@ -12,6 +12,7 @@ import semantics.arbitrary.ObjectFieldCount
 import semantics.arbitrary.ParentFieldsEnabled
 import semantics.arbitrary.ResolverFromFieldVariableOwnerLimit
 import semantics.arbitrary.ResolverFromFieldVariableOwnerUseWeight
+import semantics.arbitrary.ResolverFromProviderVariablesEnabled
 import semantics.arbitrary.ResolverFromQueryFieldVariablesEnabled
 import semantics.arbitrary.ResolverLiteralVariableConvergenceWeight
 import semantics.arbitrary.ResolverQueryFragmentsEnabled
@@ -85,6 +86,11 @@ class ResolverBroadStressCampaignConfigurationTest {
         assertTrue(
             Resolver26BroadStressProfile.entries.all { profile ->
                 profile.config[ResolverFromQueryFieldVariablesEnabled]
+            },
+        )
+        assertTrue(
+            Resolver26BroadStressProfile.entries.all { profile ->
+                profile.config[ResolverFromProviderVariablesEnabled]
             },
         )
         assertTrue(

@@ -17,8 +17,85 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
+import model.registry.VariableDefinition
 
 class GeneratorTest {
+    @Test
+    fun `fromProvider variable generation is independently configurable and assembled`() {
+        val baseConfig =
+            Config.default +
+                (SchemaObjectCount to 4..6) +
+                (ObjectFieldCount to 4..6) +
+                (FieldArgumentWeight to 1.0) +
+                (ExplicitFieldResolverWeight to 1.0) +
+                (NodeResolversEnabled to false) +
+                (ResolverFragmentsEnabled to true) +
+                (ResolverFragmentWeight to 1.0) +
+                (ResolverFragmentArgumentFieldWeight to 1.0) +
+                (ResolverFromArgumentVariablesEnabled to false) +
+                (ResolverVariablesEnabled to false) +
+                (ResolverVariableWeight to 1.0)
+        val disabledRandom = RandomSource.seeded(2026090701L)
+        val enabledRandom = RandomSource.seeded(2026090701L)
+        var generatedVariables = 0
+        var argumentSensitiveVariables = 0
+        var roundTrippedProviderPlans = false
+
+        repeat(100) {
+            val disabledSchema = Arb.schema(baseConfig).next(disabledRandom)
+            val disabledRegistry = disabledSchema.registry(baseConfig).next(disabledRandom)
+            assertEquals(0, disabledRegistry.features.fromProviderVariableCount)
+
+            val enabledConfig =
+                baseConfig + (ResolverFromProviderVariablesEnabled to true)
+            val enabledSchema = Arb.schema(enabledConfig).next(enabledRandom)
+            val enabledRegistry = enabledSchema.registry(enabledConfig).next(enabledRandom)
+            val world = enabledRegistry.world(enabledSchema)
+
+            assertEquals(
+                enabledRegistry.features.fromProviderVariableCount,
+                enabledRegistry.features.variableCount,
+            )
+            assertTrue(
+                enabledRegistry.variableProviders.all {
+                    it is FromProviderVariableProviderPlan
+                },
+            )
+            enabledRegistry.fromProviderVariableOwnerFields.forEach { owner ->
+                val field = world.schema.requireObjectField(owner.typeName, owner.fieldName)
+                val resolver = world.resolverRegistry.resolver(field)
+                val providerNames =
+                    resolver.variables
+                        .filterValues { definition ->
+                            definition == VariableDefinition.FromProvider
+                        }.keys
+                        .mapTo(linkedSetOf(), Arguments.Variable::variableName)
+                assertTrue(providerNames.isNotEmpty())
+                assertTrue(resolver.variablesProvider != null)
+            }
+            generatedVariables += enabledRegistry.features.fromProviderVariableCount
+            argumentSensitiveVariables +=
+                enabledRegistry.features.fromProviderArgumentSensitiveVariableCount
+            if (
+                !roundTrippedProviderPlans &&
+                enabledRegistry.features.fromProviderVariableCount > 0
+            ) {
+                val decoded =
+                    ResolverBenchmarkCorpus.decode(
+                        schemaSDL = enabledSchema.sdl,
+                        registryJson = enabledRegistry.encodeResolverBenchmarkCorpus(enabledSchema),
+                    )
+                assertEquals(enabledRegistry.features, decoded.registry.features)
+                decoded.world()
+                roundTrippedProviderPlans = true
+            }
+        }
+
+        assertTrue(generatedVariables > 0)
+        assertTrue(argumentSensitiveVariables > 0)
+        assertTrue(roundTrippedProviderPlans)
+    }
+
     @Test
     fun `parent result rank follows its fixed ancestor dependency`() {
         val unrelatedBefore = FieldCoordinate("Object0", "field0")

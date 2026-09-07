@@ -17,6 +17,7 @@ internal enum class Resolver26StructuralSignature {
     LIST_SYMBOLIC_RESOLVER_INSTANCE,
     EQUAL_SYMBOLIC_ARGUMENTS,
     OBJECT_PATH_VARIABLE_OWNER,
+    PROVIDER_VARIABLE_OWNER,
     NESTED_VARIABLE_USE,
     PASSIVE_DESCENDANT_VARIABLE_USE,
     MIXED_BINDING_SOURCES,
@@ -77,6 +78,9 @@ internal fun resolver26StructuralSignatures(
     }
     if (activeObjectPathOwners.isNotEmpty()) {
         signatures += Resolver26StructuralSignature.OBJECT_PATH_VARIABLE_OWNER
+    }
+    if (activeSourceFields.any { sourceField -> sourceField in registry.fromProviderVariableOwnerFields }) {
+        signatures += Resolver26StructuralSignature.PROVIDER_VARIABLE_OWNER
     }
     if (
         activeSourceFields.any { sourceField ->

@@ -2,6 +2,7 @@ package semantics.contract
 
 import kotlinx.coroutines.runBlocking
 import model.testing.TestWorld
+import model.requireObjectField
 import org.junit.jupiter.api.Test
 import semantics.arbitrary.ArbitraryRegistry
 import semantics.arbitrary.Config
@@ -19,9 +20,11 @@ import semantics.arbitrary.ObjectFieldCount
 import semantics.arbitrary.QueryFieldCount
 import semantics.arbitrary.ResolverApplicationRecord
 import semantics.arbitrary.ResolverFragmentWeight
+import semantics.arbitrary.ResolverFragmentArgumentFieldWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
 import semantics.arbitrary.ResolverFromArgumentNestedPathWeight
 import semantics.arbitrary.ResolverFromArgumentVariablesEnabled
+import semantics.arbitrary.ResolverFromProviderVariablesEnabled
 import semantics.arbitrary.ResolverFromFieldProviderArgumentVariableWeight
 import semantics.arbitrary.ResolverFromQueryFieldVariablesEnabled
 import semantics.arbitrary.ResolverNestedProviderPathWeight
@@ -37,6 +40,7 @@ import semantics.arbitrary.SometimesPassiveFieldWeight
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import semantics.shared.ResolverObservations
 
@@ -612,6 +616,118 @@ interface ObjectFragmentFromObjectPathGeneratedResolverContract : GeneratedCaseA
             run.assertAggregate(
                 activatedProviderArgumentApplications > 0,
                 "Generated FromObjectField profile activated no provider-argument dependency",
+            )
+        }
+}
+
+/** Generated contract isolating variables returned by the resolver's one-shot provider. */
+interface FromProviderGeneratedResolverContract : GeneratedCaseAssertionPolicy {
+    @Test
+    fun `generated fromProvider variable worlds resolve correctly`(): Unit =
+        runBlocking {
+            var generatedVariables = 0
+            var generatedArgumentSensitiveVariables = 0
+            var activatedApplications = 0
+            var activatedArgumentSensitiveApplications = 0
+            var observedArgumentSensitiveValues = 0
+            val config =
+                Config.default +
+                    (SchemaObjectCount to 4..6) +
+                    (ObjectFieldCount to 4..6) +
+                    (FieldArgumentWeight to 1.0) +
+                    (ExplicitFieldResolverWeight to 1.0) +
+                    (NodeResolversEnabled to false) +
+                    (QueryFieldCount to 6..6) +
+                    (RootQueryFieldCount to 10..10) +
+                    (ResolverFragmentsEnabled to true) +
+                    (ResolverFragmentWeight to 1.0) +
+                    (ResolverFragmentArgumentFieldWeight to 1.0) +
+                    (ResolverFromArgumentVariablesEnabled to false) +
+                    (ResolverFromProviderVariablesEnabled to true) +
+                    (ResolverVariableCount to 2..4) +
+                    (ResolverVariableWeight to 1.0) +
+                    (ResolverVariablesEnabled to false) +
+                    generatedResolverConfigOverrides
+
+            val run =
+                checkGeneratedProfile(
+                    "from-provider",
+                    config,
+                ) { testWorld, testCase ->
+                    val features = testCase.registry.features
+                    assertEquals(features.fromProviderVariableCount, features.variableCount)
+                    generatedVariables += features.fromProviderVariableCount
+                    generatedArgumentSensitiveVariables +=
+                        features.fromProviderArgumentSensitiveVariableCount
+
+                    val observation =
+                        observeGeneratedCaseWithCurrentAssertions(testWorld, testCase)
+                    activatedApplications +=
+                        observation.ordinaryApplications.count { application ->
+                            testCase.registry.sourceResolverHasFromProviderVariables(
+                                application.key.field,
+                            )
+                        }
+                    activatedArgumentSensitiveApplications +=
+                        observation.ordinaryApplications.count { application ->
+                            val source =
+                                testCase.registry.sourceResolverCoordinate(application.key.field)
+                            source in testCase.registry.fromProviderVariableOwnerFields &&
+                                application.key.arguments.fieldValues.isNotEmpty()
+                        }
+                    observation.ordinaryApplications
+                        .filter { application ->
+                            testCase.registry.sourceResolverHasFromProviderVariables(
+                                application.key.field,
+                            )
+                        }.groupBy { application ->
+                            testCase.registry.sourceResolverCoordinate(application.key.field)
+                        }.forEach { (source, applications) ->
+                            val arguments =
+                                applications
+                                    .map { application -> application.key.arguments }
+                                    .distinct()
+                            if (arguments.size < 2) return@forEach
+                            val field =
+                                observation.ordinary.world.schema.requireObjectField(
+                                    source.typeName,
+                                    source.fieldName,
+                                )
+                            val provider =
+                                requireNotNull(
+                                    observation.ordinary.world.resolverRegistry
+                                        .resolver(field)
+                                        .variablesProvider,
+                                )
+                            val first = provider(arguments[0])
+                            assertEquals(first, provider(arguments[0]))
+                            val second = provider(arguments[1])
+                            if (first != second) {
+                                assertNotEquals(first, second)
+                                observedArgumentSensitiveValues += 1
+                            }
+                        }
+                }
+
+            run.assertAggregate(
+                generatedVariables > 0,
+                "Generated FromProvider profile produced no provider variables",
+            )
+            run.assertAggregate(
+                generatedArgumentSensitiveVariables > 0,
+                "Generated FromProvider profile produced no argument-sensitive providers",
+            )
+            run.assertAggregate(
+                activatedApplications > 0,
+                "Generated FromProvider profile activated no provider-bearing resolvers",
+            )
+            run.assertAggregate(
+                activatedArgumentSensitiveApplications > 0,
+                "Generated FromProvider profile activated no argument-sensitive provider",
+            )
+            run.assertAggregate(
+                observedArgumentSensitiveValues > 0,
+                "Generated FromProvider profile observed no argument-dependent callback values",
             )
         }
 }

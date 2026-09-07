@@ -333,6 +333,9 @@ private data class VariableProviderDocument(
     val literalConvergence: Boolean,
     val argumentPath: List<String> = emptyList(),
     val nullableTraversal: Boolean = false,
+    val providerScalar: ScalarKind? = null,
+    val providerElementNullabilities: List<Boolean> = emptyList(),
+    val argumentSensitive: Boolean = false,
 )
 
 private fun ArbitrarySchema.toDocument(): SchemaDocument =
@@ -842,6 +845,29 @@ private fun VariableProviderPlan.toDocument(): VariableProviderDocument =
                 argumentPath = argumentPath,
                 nullableTraversal = nullableTraversal,
             )
+        is FromProviderVariableProviderPlan ->
+            VariableProviderDocument(
+                kind = "from-provider",
+                owner = owner.toDocument(),
+                variableName = variableName,
+                argumentName = null,
+                selection = null,
+                nestedInput = nestedInput,
+                listValue = listValue,
+                nullable = nullable,
+                abstractPath = null,
+                useDepth = null,
+                topLevelUseField = null,
+                literalConvergence = literalConvergence,
+                providerScalar =
+                    when (val providerTarget = target) {
+                        is ScalarVariableTarget -> providerTarget.scalar
+                        is ListVariableTarget -> providerTarget.scalar
+                    },
+                providerElementNullabilities =
+                    (target as? ListVariableTarget)?.elementNullabilities.orEmpty(),
+                argumentSensitive = argumentSensitive,
+            )
         is FromFieldVariableProviderPlan ->
             VariableProviderDocument(
                 kind =
@@ -897,6 +923,26 @@ private fun VariableProviderDocument.toVariableProviderPlan(): VariableProviderP
                 useDepth = requireNotNull(useDepth),
                 topLevelUseField = requireNotNull(topLevelUseField).toCoordinate(),
                 literalConvergence = literalConvergence,
+            )
+        "from-provider" ->
+            FromProviderVariableProviderPlan(
+                owner = owner.toCoordinate(),
+                variableName = variableName,
+                target =
+                    if (listValue) {
+                        ListVariableTarget(
+                            scalar = requireNotNull(providerScalar),
+                            nullable = nullable,
+                            elementNullabilities = providerElementNullabilities,
+                        )
+                    } else {
+                        ScalarVariableTarget(
+                            scalar = requireNotNull(providerScalar),
+                            nullable = nullable,
+                        )
+                    },
+                nestedInput = nestedInput,
+                argumentSensitive = argumentSensitive,
             )
         else -> error("Unknown variable provider kind $kind")
     }

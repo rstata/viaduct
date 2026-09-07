@@ -27,6 +27,7 @@ import semantics.contract.SometimesPassiveObjectPathResolverContract
 import semantics.contract.SometimesPassiveResolverContract
 import semantics.contract.SometimesPassiveSelectiveResolverContract
 import semantics.contract.VariableSelectionIdentityResolverContract
+import semantics.contract.VariablesProviderResolverContract
 
 class ResolverContractTest :
     EmptyObjectFragmentResolverContract,
@@ -45,6 +46,7 @@ class ResolverContractTest :
     SometimesPassiveSelectiveResolverContract,
     ProductionDeadlockResolverContract,
     VariableSelectionIdentityResolverContract,
+    VariablesProviderResolverContract,
     LateObjectPathDemandResolverContract,
     SelectiveResolverOutputPolicyContract,
     SelectiveObjectFragmentOutputPolicyContract,

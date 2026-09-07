@@ -19,6 +19,7 @@ import model.Fragment
 import model.SelectionForest
 import model.SourceSchemaAdapter
 import model.emptyFragmentOf
+import model.engineObjectDataOf
 import model.fragmentFrom
 import model.fragmentFromDocument
 import model.requireQueryTypeDef
@@ -197,14 +198,15 @@ private fun EngineTestModule.qplanRegistryInputs(
                     .getFieldDefinition(coordinate.second)
             val objectFragment = executor.objectFragment(schema, field)
             val queryFragment = executor.queryFragment(schema, field)
-            variableRecovery
-                .recover(
+            val recoveredVariables =
+                variableRecovery.recover(
                     field = field,
                     objectFragment = objectFragment,
                     objectRequiredSelectionSet = executor.objectSelectionSet,
                     queryFragment = queryFragment,
                     queryRequiredSelectionSet = executor.querySelectionSet,
                 )
+            recoveredVariables.declarations
                 .forEach { (variable, declaration) ->
                     require(variableProviders.put(variable, declaration) == null) {
                         "Duplicate variable provider \$${variable.variableName} for ${coordinate.render()}"
@@ -250,7 +252,19 @@ private fun EngineTestModule.qplanRegistryInputs(
                         }
                     invokeExecutor(input, queryValue, arguments, selectionSet)
                 }
-            field to resolver
+            val resolverWithVariablesProvider =
+                recoveredVariables.variablesProvider?.let { provider ->
+                    resolver.withVariablesProvider(provider.variableNames) { arguments ->
+                        provider.resolve(
+                            viaduct.engine.api.VariablesResolver.ResolveCtx(
+                                objectData = engineObjectDataOf(field.containingDef),
+                                arguments = arguments.fieldValues,
+                            ),
+                            context,
+                        )
+                    }
+                } ?: resolver
+            field to resolverWithVariablesProvider
         }
 
     val duplicateCount = fieldResolverExecutors.count() - supplied.size

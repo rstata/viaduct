@@ -6,11 +6,14 @@ import model.Arguments
 import model.ObjectEngineResult
 import graphql.language.ArrayValue
 import graphql.language.AstPrinter
+import graphql.language.BooleanValue
 import graphql.language.Definition
 import graphql.language.Directive
 import graphql.language.Document
+import graphql.language.EnumValue
 import graphql.language.Field
 import graphql.language.FieldDefinition
+import graphql.language.FloatValue
 import graphql.language.IntValue
 import graphql.language.NullValue
 import graphql.language.Node
@@ -132,7 +135,12 @@ internal class ResolverTestDsl private constructor(
                     .forEach { directive ->
                         requireOnlyArguments(
                             directive,
-                            setOf(OF_ARGUMENT, PATH_VARS_ARGUMENT, RESULT_ARGUMENT),
+                            setOf(
+                                OF_ARGUMENT,
+                                PATH_VARS_ARGUMENT,
+                                PROVIDER_VARS_ARGUMENT,
+                                RESULT_ARGUMENT,
+                            ),
                         )
                         val result = directive.requiredArgument(RESULT_ARGUMENT)
                         val of =
@@ -146,12 +154,17 @@ internal class ResolverTestDsl private constructor(
                             directive.argument(PATH_VARS_ARGUMENT)
                                 ?.let(::parsePathVariables)
                                 .orEmpty()
+                        val providerVariables =
+                            directive.argument(PROVIDER_VARS_ARGUMENT)
+                                ?.let(::parseProviderVariables)
+                                .orEmpty()
                         fields +=
                             DslFieldResolver(
                                 typeName = typeName,
                                 fieldName = field.name,
                                 of = of,
                                 pathVariables = pathVariables,
+                                providerVariables = providerVariables,
                                 result = result,
                             )
                     }
@@ -217,6 +230,19 @@ internal class ResolverTestDsl private constructor(
             }.also { definitions ->
                 require(definitions.map { it.name }.distinct().size == definitions.size) {
                     "$PATH_VARS_ARGUMENT variable names must be unique"
+                }
+            }
+        }
+
+        private fun parseProviderVariables(
+            value: GraphQLValue<*>,
+        ): Map<String, GraphQLValue<*>> {
+            require(value is ObjectValue) {
+                "@$RESOLVER_DIRECTIVE.$PROVIDER_VARS_ARGUMENT must be an object"
+            }
+            return value.uniqueFields(PROVIDER_VARS_ARGUMENT).also { variables ->
+                require(variables.isNotEmpty()) {
+                    "@$RESOLVER_DIRECTIVE.$PROVIDER_VARS_ARGUMENT must not be empty"
                 }
             }
         }
@@ -330,7 +356,7 @@ private class Compiler(
                         "${definition.typeName}.${definition.fieldName}"
                 }
                 val fragment = objectFragment(field, definition.of)
-                compiled[field] =
+                val resolver =
                     fieldResolverOf(fragment) { input, arguments ->
                         evaluator.evaluateFieldResult(
                             field = field,
@@ -338,6 +364,18 @@ private class Compiler(
                             input = input,
                             arguments = arguments,
                         )
+                    }
+                compiled[field] =
+                    if (definition.providerVariables.isEmpty()) {
+                        resolver
+                    } else {
+                        resolver.withVariablesProvider(definition.providerVariables.keys) { arguments ->
+                            evaluator.evaluateProviderVariables(
+                                field = field,
+                                variables = definition.providerVariables,
+                                arguments = arguments,
+                            )
+                        }
                     }
             }
 
@@ -367,9 +405,16 @@ private class Compiler(
                 require(field is ViaductSchema.ObjectField)
                 val argumentNames = field.args.mapTo(linkedSetOf(), ViaductSchema.FieldArg::name)
                 val pathVariables = definition.pathVariables.associateBy(DslPathVariable::name)
+                val providerVariableNames = definition.providerVariables.keys
                 require(pathVariables.keys.intersect(argumentNames).isEmpty()) {
                     "${definition.typeName}.${definition.fieldName} $PATH_VARS_ARGUMENT may not " +
                         "redefine field arguments"
+                }
+                require(
+                    providerVariableNames.intersect(argumentNames + pathVariables.keys).isEmpty(),
+                ) {
+                    "${definition.typeName}.${definition.fieldName} $PROVIDER_VARS_ARGUMENT may " +
+                        "not redefine field arguments or $PATH_VARS_ARGUMENT variables"
                 }
                 val usedVariables = variablesIn(definition, field)
                 val unusedPathVariables = pathVariables.keys - usedVariables
@@ -377,13 +422,18 @@ private class Compiler(
                     "Unused $PATH_VARS_ARGUMENT variables on ${definition.typeName}." +
                         "${definition.fieldName}: ${unusedPathVariables.sorted().joinToString()}"
                 }
+                val unusedProviderVariables = providerVariableNames - usedVariables
+                require(unusedProviderVariables.isEmpty()) {
+                    "Unused $PROVIDER_VARS_ARGUMENT variables on ${definition.typeName}." +
+                        "${definition.fieldName}: ${unusedProviderVariables.sorted().joinToString()}"
+                }
                 usedVariables.forEach { name ->
                     val variable = Arguments.Variable.of(field, name)
-                    put(
-                        variable,
-                        when {
-                            name in argumentNames -> schema.fromArgument(field, name)
-                            name in pathVariables ->
+                    when {
+                        name in argumentNames -> put(variable, schema.fromArgument(field, name))
+                        name in pathVariables ->
+                            put(
+                                variable,
                                 preparedObjectFragment(field, definition.of).let { fragment ->
                                     schema.fromObjectField(
                                         objectFragmentSource = fragment.source,
@@ -391,15 +441,17 @@ private class Compiler(
                                         variableField = field,
                                         bindings = fragment.bindings,
                                     )
-                                }
-                            else ->
-                                throw IllegalArgumentException(
-                                    "Variable \$$name on ${definition.typeName}." +
-                                        "${definition.fieldName} is neither an argument nor a " +
-                                        "$PATH_VARS_ARGUMENT definition",
-                                )
-                        },
-                    )
+                                },
+                            )
+                        name in providerVariableNames -> Unit
+                        else ->
+                            throw IllegalArgumentException(
+                                "Variable \$$name on ${definition.typeName}." +
+                                    "${definition.fieldName} is neither an argument, a " +
+                                    "$PATH_VARS_ARGUMENT definition, nor a " +
+                                    "$PROVIDER_VARS_ARGUMENT definition",
+                            )
+                    }
                 }
             }
         }
@@ -489,6 +541,47 @@ private class ResultEvaluator(
             source = result,
             context = EvaluationContext(input, arguments, field),
         )
+
+    fun evaluateProviderVariables(
+        field: ViaductSchema.ObjectField,
+        variables: Map<String, GraphQLValue<*>>,
+        arguments: Arguments.Resolved,
+    ): Map<String, EngineInputData?> {
+        val context =
+            EvaluationContext(
+                schema.objectOf(field.containingDef.name),
+                arguments,
+                field,
+            )
+        return variables.mapValues { (_, value) -> evaluateProviderValue(value, context) }
+    }
+
+    private fun evaluateProviderValue(
+        source: GraphQLValue<*>,
+        context: EvaluationContext,
+    ): EngineInputData? =
+        when (source) {
+            is NullValue -> null
+            is IntValue -> source.value.toIntExact("provider variable")
+            is FloatValue -> source.value.toDouble()
+            is BooleanValue -> source.isValue
+            is EnumValue -> source.name
+            is StringValue -> {
+                val value = source.requiredValue()
+                require(value != ERROR_SENTINEL) {
+                    "$ERROR_SENTINEL is reserved as a variables-provider error sentinel"
+                }
+                if (EXPRESSION.matches(value)) evaluateExpression(value, context) else value
+            }
+            is ArrayValue -> source.values.map { value -> evaluateProviderValue(value, context) }
+            is ObjectValue ->
+                source.uniqueFields("$PROVIDER_VARS_ARGUMENT value")
+                    .mapValues { (_, value) -> evaluateProviderValue(value, context) }
+            else ->
+                throw IllegalArgumentException(
+                    "Unsupported $PROVIDER_VARS_ARGUMENT value: $source",
+                )
+        }
 
     fun evaluateNodeResult(entry: CompiledNodeResult): EngineOutputData? =
         evaluate(
@@ -854,6 +947,7 @@ private data class DslFieldResolver(
     val fieldName: String,
     val of: String,
     val pathVariables: List<DslPathVariable>,
+    val providerVariables: Map<String, GraphQLValue<*>>,
     val result: GraphQLValue<*>,
 )
 
@@ -905,6 +999,7 @@ private const val NODE_RESOLVER_DIRECTIVE = "nodeResolver"
 private const val RESULT_ARGUMENT = "result"
 private const val OF_ARGUMENT = "of"
 private const val PATH_VARS_ARGUMENT = "pathVars"
+private const val PROVIDER_VARS_ARGUMENT = "providerVars"
 private const val NAME_FIELD = "name"
 private const val PATH_FIELD = "path"
 private const val ID_FIELD = "id"

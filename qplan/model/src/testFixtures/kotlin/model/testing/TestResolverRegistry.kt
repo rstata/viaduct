@@ -36,6 +36,7 @@ import model.registry.ResolverRegistry
 import model.registry.VariableDefinition
 import model.selectionForestOf
 import model.toSelectionForest
+import model.usedVariables
 import model.variableTemplates
 import viaduct.engine.api.EngineObjectData
 import viaduct.graphql.utils.GraphQLTypeRelation
@@ -66,8 +67,18 @@ internal fun resolverRegistryOf(
     applicationObserver: CanonicalFieldResolverApplicationObserver?,
 ): ResolverRegistry {
     val lowering = NodeResolverLowering(schema, nodeResolvers, fieldResolvers)
+    val variablesProviderTemplates =
+        lowering.fieldResolvers.flatMap { (field, resolver) ->
+            resolver.variablesProviderNames.map { name ->
+                Arguments.Variable.of(field as ViaductSchema.ObjectField, name)
+            }
+        }
+    val allVariableTemplates = variableProviders.keys + variablesProviderTemplates
+    require(allVariableTemplates.size == variableProviders.size + variablesProviderTemplates.size) {
+        "A variable cannot have both a recipe and a variables provider"
+    }
     val variablesByField =
-        variableProviders.keys
+        allVariableTemplates
             .groupBy(Arguments.Variable::field)
             .mapValues { (_, variables) ->
                 variables.associateBy(Arguments.Variable::variableName)
@@ -415,6 +426,12 @@ private class TestResolverRegistry(
 ) : ResolverRegistry {
     private val sourceFieldResolvers = fieldResolverDefinitions
     private val fieldResolvers: Map<ViaductSchema.Field, FieldResolver>
+    private val variablesProviderTemplates =
+        fieldResolverDefinitions.flatMap { (field, resolver) ->
+            resolver.variablesProviderNames.map { name ->
+                Arguments.Variable.of(field as ViaductSchema.ObjectField, name)
+            }
+        }
     private val variableDefinitions =
         variableDeclarations.mapValues { (_, declaration) ->
             when (declaration) {
@@ -429,7 +446,7 @@ private class TestResolverRegistry(
                         path = declaration.keyPath,
                     )
             }
-        }
+        } + variablesProviderTemplates.associateWith { VariableDefinition.FromProvider }
     private val outgoing: Map<DependencyVertex, Set<DependencyVertex>>
 
     init {
@@ -520,6 +537,18 @@ private class TestResolverRegistry(
                 }
             }
         }
+        variablesProviderTemplates.forEach { variable ->
+            validateCanonicalField(variable.field, "variables-provider field")
+            val resolver = fieldResolverDefinitions.getValue(variable.field)
+            val usedVariables =
+                listOfNotNull(resolver.objectFragment, resolver.queryFragment)
+                    .flatMap { fragment -> fragment.subselections.usedVariables() }
+                    .toSet()
+            require(variable in usedVariables) {
+                "Variables provider declares unused variable ${variable.variableName} for " +
+                    "${variable.field.containingDef.name}/${variable.field.name}"
+            }
+        }
 
         val objectFieldResolvers =
             fieldResolverDefinitions.mapKeys { (field, _) -> field as ViaductSchema.ObjectField }
@@ -536,6 +565,7 @@ private class TestResolverRegistry(
                     put(
                         DependencyVertex.Variable(variable),
                         when (definition) {
+                            VariableDefinition.FromProvider -> emptySet<DependencyVertex>()
                             is VariableDefinition.FromArgument -> emptySet<DependencyVertex>()
                             is VariableDefinition.FromField -> {
                                 val providerType =

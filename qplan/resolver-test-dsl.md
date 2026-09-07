@@ -45,6 +45,7 @@ input NodeResult {
 directive @resolver(
   of: String
   pathVars: [VariableDefinition!]! = []
+  providerVars: JSON
   result: JSON
 ) on FIELD_DEFINITION
 
@@ -84,9 +85,10 @@ type Item {
 Every variable used by `of` is defined exactly once:
 
 - A variable whose name matches an argument of the resolver field is inferred as `FromArgument`.
-- Every other variable requires one `pathVars` entry.
-- A `pathVars` name may not shadow a field argument.
-- Unused, missing, and duplicate path-variable definitions are rejected.
+- A name in `pathVars` is compiled as `FromObjectField`.
+- A name in the `providerVars` object is compiled as `FromProvider` and returned by the resolver's one variables-provider function.
+- `pathVars` and `providerVars` names may not shadow field arguments or each other.
+- Unused, missing, and duplicate variable definitions are rejected.
 
 ```graphql
 extend type Query {
@@ -107,6 +109,22 @@ extend type Query {
 Using `$seed` in a result expression reads the field argument directly and does not define a registry variable. Only a use inside `of` creates an inferred `FromArgument` definition.
 
 `pathVars.path` follows the existing qplan `FromObjectField` restrictions. In particular, an intermediate path component cannot cross a list. This restriction is unrelated to field paths in result expressions.
+
+`providerVars` must be a nonempty object when present. Its values are GraphQL literals; string values matching the ordinary `value`, `sum`, or `sumplus1` expression syntax are evaluated when the provider runs and may reference resolver arguments. The provider is invoked once for each active resolver occurrence after that occurrence's arguments are grounded. The string `"ERROR"` is reserved as a provider-failure sentinel.
+
+```graphql
+extend type Query {
+  result(seed: Int!): Int!
+    @resolver(
+      of: "consume(value: $provided)"
+      providerVars: {provided: "sum($seed, $seed)"}
+      result: "sum(consume)"
+    )
+
+  consume(value: Int!): Int!
+    @resolver(result: "sum($value)")
+}
+```
 
 ## Result Shapes
 

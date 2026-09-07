@@ -64,8 +64,9 @@ A variable recipe determines where one resolver-occurrence binding is produced. 
 | `FromArgument` | A path rooted at an argument of the defining resolver occurrence | Object fragment, Query fragment, or both |
 | `FromObjectField` | A provider path in the defining resolver's object fragment | Object fragment, Query fragment, or both |
 | `FromQueryField` | A provider path in the defining resolver's Query fragment | Object fragment, Query fragment, or both |
+| `FromProvider` | The defining resolver's one-shot tenant variables-provider function | Object fragment, Query fragment, or both |
 
-Producer/consumer legality is distinct from current implementation support. `FromArgument` is implemented by every maintained resolver, while Resolver26 implements `FromObjectField` and `FromQueryField`. Resolver26 permits either from-field binding to be consumed by its object fragment, Query fragment, or both.
+Producer/consumer legality is distinct from current implementation support. `FromArgument` is implemented by every maintained resolver, while Resolver26 implements `FromObjectField`, `FromQueryField`, and `FromProvider`. Resolver26 invokes a provider once per active resolver occurrence after grounding that occurrence's arguments; every provider binding may be consumed by the object fragment, Query fragment, or both.
 
 ## Publication
 

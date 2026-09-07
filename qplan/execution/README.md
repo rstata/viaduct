@@ -53,7 +53,7 @@ In keeping with the architecture of qplan, the adapter translates node executors
 
 `FromFieldVariablesResolver(name, path, requiredSelectionSet)` recovery treats `path` as an alias-preserving response-key path. Because the Engine API type does not retain whether it came from `fromObjectField` or `fromQueryField`, recovery reconstructs the origin by requiring its nested RSS to equal exactly one of the executor's object or Query RSSes filtered to that path. It recursively checks nested RSS variable dependencies against both root fragments, requires repeated provider recipes to agree, and emits `schema.fromObjectField(objectFragment, path)` or `schema.fromQueryField(queryFragment, path)`. A provider that matches both fragments is rejected as ambiguous rather than guessed.
 
-Recovery requires exact agreement between both fragments' variable occurrences and the RSS provider names. It rejects missing, unused, duplicate, inconsistent, or ambiguous providers; nested argument paths; field paths not proven by either root RSS; and arbitrary provider callbacks.
+All disjoint no-RSS `VariablesResolver` callbacks that remain after unwrapping production `Validated` decorators are composed as the field resolver's tenant variables provider. The composed suspending function is attached directly to the qplan resolver, receives the occurrence's grounded arguments, and is invoked once even when both object and Query fragments consume its bindings. Recovery requires exact agreement between both fragments' variable occurrences and all provider names. It rejects missing, unused, duplicate, inconsistent, or ambiguous providers; nested argument paths; field paths not proven by either root RSS; overlapping callback variable names; and callbacks with their own required selections.
 
 ## Feature Test Guidelines
 
@@ -91,7 +91,7 @@ The feature-test adapter currently supports:
 The adapter rejects or does not yet model:
 
 - Nested input-object paths for from-argument variables.
-- Arbitrary callback variable providers and from-field providers whose erased production representation ambiguously matches both resolver fragments.
+- Callback providers with overlapping variable names or their own required selections, and from-field providers whose erased production representation ambiguously matches both resolver fragments.
 - Batched field resolvers, and batched or selective node resolvers.
 - Inline object values from a Node-valued field; qplan currently requires every Node value to be resolved by its node resolver.
 - Checker and type-checker executors, including their object- and Query-rooted required selections.
@@ -139,7 +139,7 @@ Run the complete execution suite with `./gradlew :execution:test`, and run every
 
 ## Next Steps
 
-Nested input-object argument paths need deliberate adapter decoding before multi-segment `FromArgument.path` values can be recovered into qplan's existing canonical path representation. Custom or mock `VariablesResolver` implementations should remain explicit rejection cases until each has both a model and adapter tests.
+Nested input-object argument paths need deliberate adapter decoding before multi-segment `FromArgument.path` values can be recovered into qplan's existing canonical path representation. Callback resolvers with their own RSS remain explicit rejection cases until qplan models their additional object-data dependency.
 
 After variables, useful incremental steps are structured executor error metadata beyond the retained causal throwable, asynchronous EOD support, and a deliberate batching design. Selective integration still has distinct follow-up work around production/rematerialization policy, directives, custom engine configuration, and Resolver26 demand-shape differences; these are recorded as specific feature-test blockers rather than part of basic requested-selection plumbing. Dispatcher and data-loader integration should remain a separate decision because Resolver26 already owns dependency scheduling and should not accidentally inherit a second scheduler.
 

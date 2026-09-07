@@ -27,7 +27,6 @@ import viaduct.engine.runtime.execution.DefaultCoroutineInterop
 
 @ExperimentalCoroutinesApi
 class VariablesResolverTest {
-    @Disabled("TODO: VarCallbk")
     @Test
     fun `variables provider -- const`() =
         EngineTestModule("extend type Query { foo: Int, bar(x: Int!): Int! }") {
@@ -48,7 +47,6 @@ class VariablesResolverTest {
             runQuery("{ foo }").assertJson("{data: {foo: 30}}")
         }
 
-    @Disabled("TODO: VarCallbk")
     @Test
     fun `variables provider -- transform dependent field arg`() =
         EngineTestModule("extend type Query { foo(y: Int!): Int!, bar(x:Int!): Int! }") {
@@ -69,7 +67,6 @@ class VariablesResolverTest {
             runQuery("{foo(y:1)}").assertJson("{data: {foo: 30}}")
         }
 
-    @Disabled("TODO: VarCallbk")
     @Test
     fun `variables provider -- returns extra variables`() =
         EngineTestModule("extend type Query { foo: Int!, bar(x:Int!): Int! }") {
@@ -92,7 +89,6 @@ class VariablesResolverTest {
             }
         }
 
-    @Disabled("TODO: VarCallbk")
     @Test
     fun `variables provider -- returns null value`() =
         EngineTestModule("extend type Query { foo: Int!, bar(x:Int): Int! }") {
@@ -113,7 +109,6 @@ class VariablesResolverTest {
             runQuery("{foo}").assertJson("{data: {foo:10}}")
         }
 
-    @Disabled("TODO: VarCallbk")
     @Test
     fun `variables provider -- does not return declared variable value`() =
         EngineTestModule("extend type Query { foo: Int!, bar(x:Int!): Int! }") {
@@ -136,7 +131,6 @@ class VariablesResolverTest {
             }
         }
 
-    @Disabled("TODO: VarCallbk")
     @Test
     fun `variables provider -- variable name overlaps with unbound field arg`() =
         // this test defines a variable provider that defines a variable with a name that overlaps with
@@ -178,7 +172,7 @@ class VariablesResolverTest {
         }
     }
 
-    @Disabled("TODO: VarCallbk")
+    @Disabled("ALT: Production permits object and Query RSS callbacks to bind the same variable name independently; qplan gives each resolver variable name one occurrence-local binding")
     @Test
     fun `variables are coerced`() {
         EngineTestModule("extend type Query { foo: Int, bar(x: [Int!]): Int! }") {
@@ -203,7 +197,31 @@ class VariablesResolverTest {
         }
     }
 
-    @Disabled("TODO: VarCallbk")
+    @Test
+    fun `ALTERNATIVE variables are coerced`() {
+        EngineTestModule("extend type Query { foo: Int, bar(x: [Int!]): Int! }") {
+            field("Query" to "foo") {
+                resolver {
+                    objectSelections("bar(x:\$varx)") {
+                        variables("varx") { _, _ -> mapOf("varx" to 2) }
+                    }
+                    querySelections("bar(x:\$vary)") {
+                        variables("vary") { _, _ -> mapOf("vary" to 3) }
+                    }
+                    fn { _, obj, q, _, _ -> obj.fetchAs<Int>("bar") + q.fetchAs<Int>("bar") }
+                }
+            }
+            field("Query" to "bar") {
+                resolver {
+                    fn { args, _, _, _, _ -> args.getAs<List<Int>>("x").sum() * 5 }
+                }
+            }
+        }.runQPlanFeatureTest {
+            runQuery("{ foo }").assertJson("{data: {foo: 25}}")
+        }
+    }
+
+    @Disabled("TODO: Directive")
     @Test
     fun `variables resolver rss without a selection reference is missing from query plan index`() {
         var variableResolverCalls = 0
@@ -230,7 +248,6 @@ class VariablesResolverTest {
         }
     }
 
-    @Disabled("TODO: VarCallbk")
     @Test
     fun `variables resolver throwing surfaces as error at resolver field`() {
         // Covers the catch (e: Exception) branch in FieldResolver.launchQueryPlan, which

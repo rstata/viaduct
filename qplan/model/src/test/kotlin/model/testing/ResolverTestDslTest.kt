@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import viaduct.engine.api.EngineObjectData
 
@@ -100,6 +101,76 @@ class ResolverTestDslTest {
             ProviderFragment.OBJECT,
             assertIs<VariableDefinition.FromField>(resolver.variables.getValue(fromSource)).providerFragment,
         )
+    }
+
+    @Test
+    fun `compiles provider variables from resolver test DSL`() {
+        val world =
+            TestWorld.fromDSL(
+                """
+                extend type Query {
+                  result(seed: Int!): Int!
+                    @resolver(
+                      of: "consume(value: ${'$'}provided) consumeOther(value: ${'$'}constant)"
+                      providerVars: {
+                        provided: "sum(${'$'}seed, ${'$'}seed)"
+                        constant: 3
+                      }
+                      result: "sum(consume, consumeOther)"
+                    )
+                  consume(value: Int!): Int! @resolver(result: "sum(${ '$' }value)")
+                  consumeOther(value: Int!): Int! @resolver(result: "sum(${ '$' }value)")
+                }
+                """.trimIndent(),
+            )
+        val result = world.schema.requireObjectField("Query", "result")
+        val resolver = world.resolverRegistry.resolver(result)
+
+        assertIs<VariableDefinition.FromProvider>(
+            resolver.variables.getValue(Arguments.Variable.of(result, "provided")),
+        )
+        assertIs<VariableDefinition.FromProvider>(
+            resolver.variables.getValue(Arguments.Variable.of(result, "constant")),
+        )
+        assertNotNull(resolver.variablesProvider)
+    }
+
+    @Test
+    fun `rejects provider variables that redefine another source`() {
+        val exception =
+            assertThrows<IllegalArgumentException> {
+                TestWorld.fromDSL(
+                    """
+                    extend type Query {
+                      result(value: Int!): Int!
+                        @resolver(
+                          of: "consume(value: ${'$'}value)"
+                          providerVars: {value: 3}
+                          result: "sum(consume)"
+                        )
+                      consume(value: Int!): Int! @resolver(result: "sum(${ '$' }value)")
+                    }
+                    """.trimIndent(),
+                )
+            }
+
+        assertEquals(true, exception.message.orEmpty().contains("may not redefine"))
+    }
+
+    @Test
+    fun `rejects unused provider variables`() {
+        val exception =
+            assertThrows<IllegalArgumentException> {
+                TestWorld.fromDSL(
+                    """
+                    extend type Query {
+                      result: Int! @resolver(providerVars: {unused: 3}, result: 1)
+                    }
+                    """.trimIndent(),
+                )
+            }
+
+        assertEquals(true, exception.message.orEmpty().contains("Unused providerVars variables"))
     }
 
     @Test

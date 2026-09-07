@@ -120,7 +120,12 @@ class ParentCoverageMetricsTest {
 
     @Test
     fun `reports all nine criteria for each parent-focused slice`() {
-        val sources = ParentVariableSource.entries.toSet()
+        val sources =
+            setOf(
+                ParentVariableSource.ARGUMENT,
+                ParentVariableSource.OBJECT_FIELD,
+                ParentVariableSource.QUERY_FIELD,
+            )
         val fragments = ParentResolverInputFragment.entries.toSet()
         val complete =
             ParentFocusedCoverageSnapshot(

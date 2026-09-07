@@ -1,6 +1,7 @@
 package execution
 
 import execution.testing.runQPlanFeatureTest
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -8,6 +9,8 @@ import kotlin.test.assertTrue
 import viaduct.engine.api.mocks.EngineTestModule
 import viaduct.engine.api.mocks.MockFieldBatchResolverExecutor
 import viaduct.engine.api.mocks.MockFieldUnbatchedResolverExecutor
+import viaduct.engine.api.mocks.MockVariablesResolver
+import viaduct.engine.api.mocks.createRSS
 import viaduct.engine.api.mocks.createEngineObjectData
 
 class EngineTestModuleQPlanFeatureTest {
@@ -57,6 +60,58 @@ class EngineTestModuleQPlanFeatureTest {
         }.runQPlanFeatureTest {
             runQuery("{ total }").assertJson("{data: {total: 9}}")
         }
+    }
+
+    @Test
+    fun `composes variable providers once per occurrence across both fragments`() {
+        val factorCalls = AtomicInteger()
+        val offsetCalls = AtomicInteger()
+        val factorProvider =
+            MockVariablesResolver("factor") { variables, _ ->
+                factorCalls.incrementAndGet()
+                mapOf("factor" to (variables.arguments.getValue("multiplier") as Int) * 2)
+            }
+        val offsetProvider =
+            MockVariablesResolver("offset") { variables, _ ->
+                offsetCalls.incrementAndGet()
+                mapOf("offset" to (variables.arguments.getValue("multiplier") as Int) + 1)
+            }
+        EngineTestModule(
+            """
+            extend type Query {
+              left(x: Int!): Int!
+              right(x: Int!): Int!
+              total(multiplier: Int!): Int!
+            }
+            """.trimIndent(),
+        ) {
+            field("Query" to "left") {
+                resolver { fn { args, _, _, _, _ -> args.getValue("x") } }
+            }
+            field("Query" to "right") {
+                resolver { fn { args, _, _, _, _ -> args.getValue("x") } }
+            }
+            field("Query" to "total") {
+                resolverExecutor {
+                    MockFieldUnbatchedResolverExecutor(
+                        objectSelectionSet =
+                            createRSS("Query", "left(x: \$factor)", listOf(factorProvider)),
+                        querySelectionSet =
+                            createRSS("Query", "right(x: \$offset)", listOf(offsetProvider)),
+                        resolverId = resolverId,
+                        unbatchedResolveFn = { _, objectValue, queryValue, _, _ ->
+                            objectValue.get("left") as Int + queryValue.get("right") as Int
+                        },
+                    )
+                }
+            }
+        }.runQPlanFeatureTest {
+            runQuery("{ a: total(multiplier: 3), b: total(multiplier: 4) }")
+                .assertJson("{data: {a: 10, b: 13}}")
+        }
+
+        assertEquals(2, factorCalls.get())
+        assertEquals(2, offsetCalls.get())
     }
 
     @Test

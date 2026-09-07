@@ -6,6 +6,7 @@ import model.ObjectEngineResult
 
 import model.Assumptions
 import model.EngineErrorDataReadException
+import model.EngineInputData
 import model.EngineOutputData
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
@@ -44,6 +45,10 @@ typealias SelectiveFieldResolverFunction =
         SelectionForest,
     ) -> EngineOutputData?
 
+/** Computes all tenant-provided variables once for one field-resolver occurrence. */
+typealias VariablesProviderFunction =
+    suspend (Arguments.Resolved) -> Map<String, EngineInputData?>
+
 /** Observes one complete (null demand) or selective field-resolver application boundary. */
 typealias FieldResolverApplicationObserver =
     (EngineObjectData.Sync, Arguments.Resolved, SelectionForest?) -> Unit
@@ -71,7 +76,8 @@ data class ResolverFragments(
  * [objectFragment] is the direct parent-object input requirement. [queryFragment] is the
  * independently resolved Query-rooted input requirement. In a canonical registry entry,
  * [variables] maps every variable template defined by this resolver and used by either fragment
- * to its argument or nonempty alias-free object- or Query-field path definition.
+ * to its argument, nonempty alias-free object- or Query-field path, or the resolver's single
+ * [variablesProvider].
  *
  * ### Invariant: resolver-fixed-object-fragment-shape
  *
@@ -85,7 +91,9 @@ data class ResolverFragments(
  * [VariableDefinition.FromField] supplied by [ProviderFragment.OBJECT] is a valid selection path
  * relative to that field's containing type and is structurally contained by [objectFragment]. A
  * definition supplied by [ProviderFragment.QUERY] satisfies the same path invariant relative to
- * Query and is structurally contained by [queryFragment].
+ * Query and is structurally contained by [queryFragment]. A
+ * [VariableDefinition.FromProvider] requires [variablesProvider], and the provider must return
+ * exactly the declared provider-variable names for every invocation.
  *
  * Neither input fragment may use a variable on any concrete branch reachable beneath an `@parent`
  * selection. A variable guarded by a concrete branch disjoint from every parent retarget remains
@@ -97,6 +105,7 @@ class FieldResolver private constructor(
     private val queryFragmentTemplate: MaterializeSelectionForest,
     private val queryType: ViaductSchema.Object,
     val variables: Map<Arguments.Variable, VariableDefinition>,
+    val variablesProvider: VariablesProviderFunction?,
     private val function: SelectiveFieldResolverFunction,
     private val projectNonselectiveOutput: Boolean,
     private val projectionDemand: (SelectionForest) -> SelectionForest,
@@ -282,6 +291,7 @@ class FieldResolver private constructor(
             function: NonselectiveFieldResolverFunction,
             projectionDemand: (SelectionForest) -> SelectionForest = { it },
             applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
+            variablesProvider: VariablesProviderFunction? = null,
         ): FieldResolver {
             validateFactoryArguments(
                 field = field,
@@ -289,6 +299,7 @@ class FieldResolver private constructor(
                 queryFragment = queryFragment,
                 queryType = queryType,
                 variables = variables,
+                variablesProvider = variablesProvider,
             )
             return FieldResolver(
                 field = field,
@@ -296,6 +307,7 @@ class FieldResolver private constructor(
                 queryFragmentTemplate = queryFragment,
                 queryType = queryType,
                 variables = variables,
+                variablesProvider = variablesProvider,
                 function = { input, queryValue, arguments, _ ->
                     function(input, queryValue, arguments)
                 },
@@ -319,6 +331,7 @@ class FieldResolver private constructor(
             variables: Map<Arguments.Variable, VariableDefinition>,
             function: SelectiveFieldResolverFunction,
             applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
+            variablesProvider: VariablesProviderFunction? = null,
         ): FieldResolver {
             validateFactoryArguments(
                 field = field,
@@ -326,6 +339,7 @@ class FieldResolver private constructor(
                 queryFragment = queryFragment,
                 queryType = queryType,
                 variables = variables,
+                variablesProvider = variablesProvider,
             )
             return FieldResolver(
                 field = field,
@@ -333,6 +347,7 @@ class FieldResolver private constructor(
                 queryFragmentTemplate = queryFragment,
                 queryType = queryType,
                 variables = variables,
+                variablesProvider = variablesProvider,
                 function = function,
                 projectNonselectiveOutput = false,
                 projectionDemand = { it },
@@ -356,6 +371,7 @@ class FieldResolver private constructor(
             function: SelectiveFieldResolverFunction,
             projectionDemand: (SelectionForest) -> SelectionForest = { it },
             applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
+            variablesProvider: VariablesProviderFunction? = null,
         ): FieldResolver {
             validateFactoryArguments(
                 field = field,
@@ -363,6 +379,7 @@ class FieldResolver private constructor(
                 queryFragment = queryFragment,
                 queryType = queryType,
                 variables = variables,
+                variablesProvider = variablesProvider,
             )
             return FieldResolver(
                 field = field,
@@ -370,6 +387,7 @@ class FieldResolver private constructor(
                 queryFragmentTemplate = queryFragment,
                 queryType = queryType,
                 variables = variables,
+                variablesProvider = variablesProvider,
                 function = function,
                 projectNonselectiveOutput = true,
                 projectionDemand = projectionDemand,
@@ -386,6 +404,7 @@ class FieldResolver private constructor(
             function: NonselectiveFieldResolverFunction,
             projectionDemand: (SelectionForest) -> SelectionForest = { it },
             applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
+            variablesProvider: VariablesProviderFunction? = null,
         ): FieldResolver =
             of(
                 field = field,
@@ -396,6 +415,7 @@ class FieldResolver private constructor(
                 function = function,
                 projectionDemand = projectionDemand,
                 applicationObserver = applicationObserver,
+                variablesProvider = variablesProvider,
             )
 
         fun ofSelective(
@@ -406,6 +426,7 @@ class FieldResolver private constructor(
             variables: Map<Arguments.Variable, VariableDefinition>,
             function: SelectiveFieldResolverFunction,
             applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
+            variablesProvider: VariablesProviderFunction? = null,
         ): FieldResolver =
             ofSelective(
                 field = field,
@@ -415,6 +436,7 @@ class FieldResolver private constructor(
                 variables = variables,
                 function = function,
                 applicationObserver = applicationObserver,
+                variablesProvider = variablesProvider,
             )
 
         private fun validateFactoryArguments(
@@ -423,6 +445,7 @@ class FieldResolver private constructor(
             queryFragment: MaterializeSelectionForest,
             queryType: ViaductSchema.Object,
             variables: Map<Arguments.Variable, VariableDefinition>,
+            variablesProvider: VariablesProviderFunction?,
         ) {
             require(
                 objectFragment.all { selection ->
@@ -443,6 +466,13 @@ class FieldResolver private constructor(
             require(queryType.name == "Query") {
                 "Query fragment type must be Query"
             }
+            val providerVariables =
+                variables.filterValues { definition ->
+                    definition == VariableDefinition.FromProvider
+                }
+            require((variablesProvider != null) == providerVariables.isNotEmpty()) {
+                "A variables provider and its declared variables must be supplied together"
+            }
             objectFragment.requireNoVariablesBeneathParent(field)
             queryFragment.requireNoVariablesBeneathParent(field)
             objectFragment.collect(field.containingDef)
@@ -456,6 +486,7 @@ class FieldResolver private constructor(
                         "${field.containingDef.name}/${field.name}"
                 }
                 when (definition) {
+                    VariableDefinition.FromProvider -> Unit
                     is VariableDefinition.FromArgument -> {
                         val argument = definition.argument
                         require(

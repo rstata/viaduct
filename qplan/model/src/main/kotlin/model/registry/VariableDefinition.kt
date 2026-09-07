@@ -21,6 +21,9 @@ enum class ProviderFragment {
  * and [FromField.path], respectively.
  */
 sealed interface VariableDefinition {
+    /** A variable whose value is returned by its field resolver's one-shot variables provider. */
+    data object FromProvider : VariableDefinition
+
     /** A variable whose value is read from an input path rooted at one resolver argument. */
     sealed interface FromArgument : VariableDefinition {
         val argument: ViaductSchema.FieldArg

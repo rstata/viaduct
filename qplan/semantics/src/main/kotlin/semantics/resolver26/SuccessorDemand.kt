@@ -9,6 +9,7 @@ import model.Selection
 import model.SelectionForest
 import model.containsErrorValue
 import model.flatMapToSelectionForest
+import model.guardedBy
 import model.objectKey
 import model.merge
 import model.requireField
@@ -31,8 +32,12 @@ private fun SelectionForest.liftParentDemand(): SelectionForest =
                 key = selection.key,
                 possibleTypes = selection.possibleTypes,
                 subselections = nested,
+                inclusionCondition = selection.inclusionCondition,
             )
-        val lifted = selection.liftedParentDemand(nested)
+        val lifted =
+            selection
+                .liftedParentDemand(nested)
+                .guardedBy(selection.inclusionCondition)
         selectionForestOf(requested) + lifted
     }
 
@@ -83,6 +88,7 @@ private fun SelectionForest.successorDemandWithMemo(
                         Selection.of(
                             key = objectKey,
                             possibleTypes = setOf(possibleType),
+                            inclusionCondition = selection.inclusionCondition,
                             subselections =
                                 selection.subselections.successorDemandWithMemo(
                                     passiveDemandByResolverField,
@@ -133,6 +139,7 @@ private fun SelectionForest.passivePredecessorDemand(
                             Selection.of(
                                 key = objectKey,
                                 possibleTypes = setOf(possibleType),
+                                inclusionCondition = selection.inclusionCondition,
                                 subselections =
                                     selection.subselections.successorDemandWithMemo(
                                         passiveDemandByResolverField,
@@ -154,6 +161,7 @@ private fun SelectionForest.passivePredecessorDemand(
                     Selection.of(
                         key = objectKey,
                         possibleTypes = setOf(possibleType),
+                        inclusionCondition = selection.inclusionCondition,
                         subselections =
                             selection.subselections.passivePredecessorDemand(
                                 passiveDemandByResolverField,

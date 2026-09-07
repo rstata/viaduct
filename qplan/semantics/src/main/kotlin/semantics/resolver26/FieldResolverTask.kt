@@ -7,11 +7,13 @@ import model.EngineOutputData
 import model.EngineResult
 import model.EngineResultCell
 import model.ErrorEngineResult
+import model.InclusionCondition
 import model.ObjectEngineResult
 import model.PathComponent
 import model.ResolverOccurrenceId
 import model.SelectionForest
 import model.engineObjectDataOf
+import model.guardedBy
 import model.outputType
 import model.requireQueryTypeDef
 import model.registry.ResolverFragment
@@ -21,6 +23,7 @@ import model.usedVariables
 import model.variableArgumentNames
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.shared.fetchGroundedArguments
+import semantics.shared.fetchIncluded
 import viaduct.engine.api.EngineObjectData
 
 /** Invokes and publishes one already-installed field resolver instance. */
@@ -58,11 +61,13 @@ internal class FieldResolverTask(
 
     suspend fun run() {
         context(operationContext, world, operationContext.cycleChecker) {
-            cell.setActivated(true)
             val selection = fieldResolverOccurrenceContext.selection
             val objectKey = selection.key
             val groundedArguments = objectKey.fetchGroundedArguments()
             completeFromArgumentBindings(groundedArguments)
+            val activated = selection.inclusionCondition.fetchIncluded()
+            cell.setActivated(activated)
+            if (!activated) return
             if (groundedArguments.argumentsContainErrorValue()) {
                 val errorResult = ErrorEngineResult.of(EngineErrorData.of())
                 cell.getValue().complete(errorResult)
@@ -150,12 +155,18 @@ internal class FieldResolverTask(
 context(operation: Resolver26OperationContext)
 internal suspend fun ResolverFragment.resolveQueryFragment(
     coordinate: List<PathComponent>,
+    inclusionCondition: InclusionCondition,
 ): EngineObjectData.Sync {
     if (constructionSelections.isEmpty()) {
         return engineObjectDataOf(operation.schema.requireQueryTypeDef())
     }
 
-    val symbolicSelections = materializeSelections
+    val symbolicSelections = materializeSelections.guardedBy(inclusionCondition)
+    val providerDemand =
+        constructionSelections.providerDemand(
+            definitions = pathVariableDefinitions,
+            inclusionCondition = inclusionCondition,
+        )
     val source = operation.resolverRegistry.createRootQueryInput()
     val queryResult =
         ObjectEngineResult.of(
@@ -172,7 +183,7 @@ internal suspend fun ResolverFragment.resolveQueryFragment(
                     target = queryResult,
                 ),
             source = source,
-            initialDemand = symbolicSelections.constructionSelections(),
+            initialDemand = symbolicSelections.constructionSelections() + providerDemand,
     )
     orchestration.prepare()
     operation.resolverObserver.onQueryFragmentResult(resolverOccurrenceId, queryResult)
@@ -180,7 +191,11 @@ internal suspend fun ResolverFragment.resolveQueryFragment(
     queryResult.completeProviderBindings(
         reads =
             pathVariableDefinitions.map { definition ->
-                ProviderDefinitionRead(definition, coordinate)
+                ProviderDefinitionRead(
+                    definition = definition,
+                    readerPath = coordinate,
+                    inclusionCondition = inclusionCondition,
+                )
             },
     )
     return context(operation.cycleChecker) {

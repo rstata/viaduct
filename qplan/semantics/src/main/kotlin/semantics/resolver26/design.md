@@ -34,6 +34,8 @@ Task completion is not a cross-task readiness protocol. Cross-task reads use OER
 
 Closure repeatedly expands each newly seen resolver `ObjectKey` whose field is absent from the source EOD with that resolver's complete object fragment instantiated at the resolver path. As part of the same fixed point, it analyzes parent selections in requested descendants and reachable resolver inputs, transposes their variable-free demand across the matching producer edge, and adds the resulting ancestor demand to the containing OER. A source-present argumentless field remains unexpanded and is materialized from the source even when the registry contains its standard resolver. Expansion does not await argument bindings. It records the resolver template, its fixed input demand, and one definition for each instantiated variable.
 
+Every source occurrence carries a conjunctive inclusion condition. Merging equal keys disjoins those occurrence conditions locally and pushes each occurrence's condition into only its own descendants. Closure therefore remains unconditional and structural: it discovers and installs every possibly needed resolver task before any condition binding must be ready. Provider paths are additionally retained without their own conditions when they produce variables consumed by conditions, preventing a condition from waiting on a provider cell whose activation depends on that same condition.
+
 Every resolver key in closed demand is represented either by the expansion map or by an argumentless source-provided field. Successor-demand construction still transposes parent selections into selective producer output before returned objects exist, while input-demand closure independently ensures the required ancestor cells have writers. Repeating the one-level transposition through input analysis handles grandparents without recursively traversing parent backedges as structural children or reopening an ancestor task.
 
 An open resolver key contributes its object-fragment dependencies before its arguments ground. If those arguments later become an error, those dependencies may have executed speculatively. That imprecision is accepted by the current model.
@@ -64,29 +66,33 @@ After passive children have launched, the parent launch validates its materializ
 
 ## Active Installation And Freeze
 
-Each active selection awaits only its declared argument bindings and derives one `Arguments.Ground` value for invocation. Installation requires the original `ObjectEngineResult.ObjectKey` to be contextually grounded, completes any delayed `FromArgument` bindings used by either resolver fragment from the resolved argument tuple, reserves the target cell under that original key, claims the value promise, registers the writer, and launches one field-resolution task carrying cell identity and invocation arguments separately.
+The orchestrator reserves each closed active selection's original symbolic cell, claims its value promise, registers its writer, and launches one field-resolution task before freezing the OER. The task then awaits argument bindings, derives the invocation `Arguments.Ground`, completes delayed `FromArgument` bindings, and evaluates the selection's merged inclusion condition. Negative activation returns without invoking tenant code; positive activation permits the already-claimed promise to be used. Keeping reservation and writer registration synchronous preserves discoverability before freeze while moving readiness work into the conservatively launched task.
 
 Resolver26's `CycleCheckState` is explicit operation state. Installation registers each active cell's exact writer through `operation.cycleChecker`, and provider and resolver-input reads record their dependency through the same property. Other resolvers and correctness materialization may supply a separate state or the NOP implementation; `Resolver26OperationContext` does not masquerade as a cycle checker.
 
 `reserveCell` explicitly creates an unclaimed cell placeholder when needed. `Cell.createValuePromise` claims that placeholder for the writer. Strict claiming makes disagreement between readers and writers observable.
 
-After every local active key is contextually grounded and has claimed its symbolic cell, the orchestrator calls `freeze`. Freezing seals the OER key set and fails any unclaimed value placeholders. Claimed promises may complete after the OER is frozen.
+After every local active key has claimed its symbolic cell, the orchestrator calls `freeze`. Freezing seals the OER key set and fails any unclaimed value placeholders. Claimed promises may complete or their cells may be negatively activated after the OER is frozen.
 
 ## Field Resolution
 
 The field-resolution task:
 
-1. derives invocation successor demand from the key's closed construction demand;
-2. materializes the resolver's fixed input demand from exact OER cells;
-3. awaits the independently orchestrated Query-rooted input;
-4. records the occurrence-aware application observation;
-5. invokes the selective resolver once;
-6. builds the passive result shape while synchronously launching one orchestration lifecycle per OER; and
-7. publishes the containing value.
+1. grounds its arguments and completes any delayed `FromArgument` bindings;
+2. awaits and evaluates its inclusion condition, negatively activating the cell and returning when false;
+3. materializes the resolver's condition-filtered input demand from exact OER cells;
+4. derives invocation successor demand from the key's closed construction demand;
+5. awaits the independently orchestrated Query-rooted input;
+6. records the occurrence-aware application observation;
+7. invokes the selective resolver once;
+8. builds the passive result shape while synchronously launching one orchestration lifecycle per OER; and
+9. publishes the containing value.
 
 Parent publication does not wait for descendant orchestration to finish. Readers independently derive and reserve the same symbolic child keys; variable-instance equality and strict reservation rules make disagreement fail rather than silently create another identity.
 
 Query fragments reuse the defining resolver occurrence's variable bindings, retain their complete response-preserving symbolic selection tree, and use an ordinary `ObjectOrchestrationTask` rooted at an otherwise independent Query OER. Their orchestration starts alongside object-path provider readers and active field installation so a `FromQueryField` binding can ground the object fragment and a `FromObjectField` binding can ground the Query fragment without imposing an artificial fragment order. Query-provider readers complete their bindings as soon as their exact paths resolve; the owning field resolver separately awaits materialization of the complete Query input. A Query-only `FromArgument` use binds directly from the owning resolver arguments, while a binding used by both fragments is declared and completed only once. Materialization resolves arguments only to establish contextual grounding and invocation values. The OER is retained as a correctness witness under the owning resolver's exact result path.
+
+The owning selection condition guards ordinary Query-fragment construction demand and provider reads, while explicit provider-path demand keeps the values needed to evaluate nested Query-fragment conditions available. Query-fragment materialization removes false source occurrences before response-key collection. Thus a conservatively launched Query task may produce an empty resolver-visible object and physical inactive cells without invoking the suppressed dependency resolvers.
 
 Argument errors complete the value slot with `ErrorEngineResult` without invoking the resolver. Successful values complete the value slot once. Resolver26 does not publish access-result slots: access-check execution and its validation are future work, and the `true` access results written by some earlier resolver experiments are not part of the current resolver contract.
 

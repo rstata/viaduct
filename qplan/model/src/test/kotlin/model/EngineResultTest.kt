@@ -179,9 +179,13 @@ class EngineResultTest {
             val result = ObjectEngineResult.of(schema.requireQueryTypeDef(), mutable = true)
             val cell = result.reserveCell(key)
             val promise = cell.createValuePromise()
+            val activation = async { cell.fetchActivated() }
+
+            assertFalse(activation.isCompleted)
 
             cell.setActivated(false)
 
+            assertFalse(activation.await())
             assertFailsWith<IllegalStateException> { cell.checkActivated() }
             assertFailsWith<IllegalStateException> { promise.get() }
             assertFailsWith<IllegalStateException> { promise.complete("excluded") }
@@ -201,6 +205,22 @@ class EngineResultTest {
         cell.checkActivated()
         assertEquals("ready", cell.getValue().get())
         assertFailsWith<IllegalStateException> { cell.setValue("again") }
+    }
+
+    @Test
+    fun `completed-result comparison treats a not-activated cell as absent`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val key = schema.key("Query", "first")
+        val withInactiveCell =
+            ObjectEngineResult.of(schema.requireQueryTypeDef(), mutable = true)
+        withInactiveCell.reserveCell(key).also { cell ->
+            cell.createValuePromise()
+            cell.setActivated(false)
+        }
+        withInactiveCell.freeze()
+        val withoutCell = ObjectEngineResult.of(schema.requireQueryTypeDef())
+
+        assertTrue(withInactiveCell.sameCompletedResultAs(withoutCell))
     }
 
     @Test

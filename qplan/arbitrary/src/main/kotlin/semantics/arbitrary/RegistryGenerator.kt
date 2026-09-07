@@ -2491,12 +2491,14 @@ private fun List<FragmentSelectionPlan>.materialize(
                         responseKey = materializedSelection.responseKey,
                         key = materializedSelection.key,
                         possibleTypes = materializedSelection.possibleTypes,
+                        inclusionCondition = materializedSelection.inclusionCondition,
                         subselections =
                             materializeSelectionForestOf(
                                 MaterializeSelection.of(
                                     responseKey = payload.responseKey,
                                     key = payload.key,
                                     possibleTypes = payload.possibleTypes,
+                                    inclusionCondition = payload.inclusionCondition,
                                     subselections =
                                         plan.subselections.materialize(
                                             schema,
@@ -2510,6 +2512,7 @@ private fun List<FragmentSelectionPlan>.materialize(
                     responseKey = materializedSelection.responseKey,
                     key = materializedSelection.key,
                     possibleTypes = selection.possibleTypes,
+                    inclusionCondition = materializedSelection.inclusionCondition,
                     subselections =
                         plan.subselections.materialize(schema, selection.subselections),
                 )

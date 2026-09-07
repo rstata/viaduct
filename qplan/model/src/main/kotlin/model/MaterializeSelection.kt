@@ -25,6 +25,9 @@ sealed interface MaterializeSelection {
     /** The concrete runtime parent types for which this source occurrence applies. */
     val possibleTypes: Set<ViaductSchema.Object>
 
+    /** The symbolic condition that must permit inclusion of this source occurrence. */
+    val inclusionCondition: InclusionCondition
+
     /** Response-key-preserving selections on this field's result. */
     val subselections: MaterializeSelectionForest
 
@@ -44,6 +47,7 @@ sealed interface MaterializeSelection {
             key: ObjectEngineResult.Key,
             possibleTypes: Set<ViaductSchema.Object>,
             subselections: MaterializeSelectionForest,
+            inclusionCondition: InclusionCondition = InclusionCondition.Always,
         ): MaterializeSelection {
             require(responseKey.isNotEmpty()) {
                 "A materialize selection requires a non-empty response key"
@@ -62,6 +66,7 @@ sealed interface MaterializeSelection {
                 responseKey = responseKey,
                 key = key,
                 possibleTypes = possibleTypes,
+                inclusionCondition = inclusionCondition,
                 subselections = subselections,
             )
         }
@@ -105,7 +110,9 @@ sealed interface MaterializeSelectionForest {
     fun constructionSelections(): SelectionForest
 
     /**
-     * Filters this forest to [type] and collects co-applicable occurrences by response key.
+     * Filters this forest to [type] and collects co-applicable occurrences by response key. The
+     * caller must first remove occurrences whose [MaterializeSelection.inclusionCondition] is
+     * false in its variable-binding environment.
      *
      * Collection happens before argument binding. Members of one response-key group must select
      * the same concrete field with syntactically equal open arguments. Their subselection
@@ -179,6 +186,7 @@ fun SelectionForest.toCanonicalMaterializeSelectionForest(): MaterializeSelectio
                 responseKey = selection.key.field.name,
                 key = selection.key,
                 possibleTypes = selection.possibleTypes,
+                inclusionCondition = selection.inclusionCondition,
                 subselections =
                     selection.subselections.toCanonicalMaterializeSelectionForest(),
             )
@@ -186,10 +194,29 @@ fun SelectionForest.toCanonicalMaterializeSelectionForest(): MaterializeSelectio
     return selections.toMaterializeSelectionForest()
 }
 
+/** Conjunctively guards each source occurrence, distributing disjunction into occurrences. */
+fun MaterializeSelectionForest.guardedBy(
+    condition: InclusionCondition,
+): MaterializeSelectionForest =
+    condition.alternatives().flatMapToMaterializeSelectionForest { alternative ->
+        flatMap { selection ->
+            materializeSelectionForestOf(
+                MaterializeSelection.of(
+                    responseKey = selection.responseKey,
+                    key = selection.key,
+                    possibleTypes = selection.possibleTypes,
+                    subselections = selection.subselections,
+                    inclusionCondition = alternative.and(selection.inclusionCondition),
+                ),
+            )
+        }
+    }
+
 private class MaterializeSelectionImpl(
     override val responseKey: String,
     override val key: ObjectEngineResult.Key,
     override val possibleTypes: Set<ViaductSchema.Object>,
+    override val inclusionCondition: InclusionCondition,
     override val subselections: MaterializeSelectionForest,
 ) : MaterializeSelection
 
@@ -235,6 +262,7 @@ private class MaterializeSelectionForestImpl(
                 Selection.of(
                     key = selection.key,
                     possibleTypes = selection.possibleTypes,
+                    inclusionCondition = selection.inclusionCondition,
                     subselections = selection.subselections.constructionSelections(),
                 )
             }.toSelectionForest()

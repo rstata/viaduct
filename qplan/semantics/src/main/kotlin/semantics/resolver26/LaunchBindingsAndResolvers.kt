@@ -43,6 +43,8 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
                             fieldResolverOccurrenceContext.fragments.queryFragment
                                 .resolveQueryFragment(
                                     coordinate = occurrence.coordinate(objectKey),
+                                    inclusionCondition =
+                                        fieldResolverOccurrenceContext.selection.inclusionCondition,
                                 )
                         }
                     operation.queryValuesState.complete(

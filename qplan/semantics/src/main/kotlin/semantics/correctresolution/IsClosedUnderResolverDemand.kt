@@ -57,6 +57,7 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
     val registry = operation.resolverRegistry
 
     return keys.all { key ->
+        if (!getCell(key).getValue().isCompleted) return@all true
         if (!key.isContextuallyGrounded()) return@all false
         val arguments = key.groundedArguments()
         val value = getCell(key).getValue().get()

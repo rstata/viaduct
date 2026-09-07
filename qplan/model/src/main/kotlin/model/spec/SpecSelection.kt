@@ -4,15 +4,15 @@ import viaduct.graphql.schema.ViaductSchema
 
 import model.Assumptions
 import model.Arguments
+import model.InclusionCondition
 
 /**
  * A post-validation selection in a GraphQL-spec selection set.
  *
  * This model retains the recursive shape of GraphQL selections: fields descend into their result
  * values, while inline fragments add nested type conditions without descending. Named fragment
- * spreads are absent because modeled inputs have already inlined them. Applied directives,
- * including `@skip` and `@include`, are in the project's eventual scope but deferred from this
- * current selection model.
+ * spreads are absent because modeled inputs have already inlined them. `@skip` and `@include`
+ * directives are lowered into [inclusionCondition].
  *
  * ### Invariant: spec-selection-well-foundedness
  *
@@ -24,6 +24,8 @@ import model.Arguments
  * spec selections can or need to be compared.
  */
 sealed interface SpecSelection {
+    val inclusionCondition: InclusionCondition
+
     /**
      * A GraphQL field selection.
      *
@@ -76,6 +78,7 @@ sealed interface SpecSelection {
                 field: ViaductSchema.Field,
                 arguments: Map<String, Any?>,
                 subselections: List<SpecSelection>?,
+                inclusionCondition: InclusionCondition = InclusionCondition.Always,
             ): Field {
                 when (field.type.baseTypeDef) {
                     is ViaductSchema.SimpleTypeDef ->
@@ -95,6 +98,7 @@ sealed interface SpecSelection {
                     field,
                     Arguments.of(field, arguments),
                     subselections,
+                    inclusionCondition,
                 )
             }
         }
@@ -104,7 +108,7 @@ sealed interface SpecSelection {
      * A GraphQL inline fragment.
      *
      * This node does not descend into the object-value tree. It only nests [selections] beneath an
-     * optional type condition. Applied directives are not represented.
+     * optional type condition and an inclusion condition.
      */
     sealed interface InlineFragment : SpecSelection {
         /**
@@ -139,11 +143,12 @@ sealed interface SpecSelection {
             fun of(
                 typeCondition: ViaductSchema.CompositeTypeDef?,
                 selections: List<SpecSelection>,
+                inclusionCondition: InclusionCondition = InclusionCondition.Always,
             ): InlineFragment {
                 require(selections.isNotEmpty()) {
                     "Inline fragment requires a non-empty selection set"
                 }
-                return InlineFragmentImpl(typeCondition, selections)
+                return InlineFragmentImpl(typeCondition, selections, inclusionCondition)
             }
         }
     }
@@ -154,9 +159,11 @@ private class FieldImpl(
     override val schemaField: ViaductSchema.Field,
     override val arguments: Arguments,
     override val subselections: List<SpecSelection>?,
+    override val inclusionCondition: InclusionCondition,
 ) : SpecSelection.Field
 
 private class InlineFragmentImpl(
     override val typeCondition: ViaductSchema.CompositeTypeDef?,
     override val selections: List<SpecSelection>,
+    override val inclusionCondition: InclusionCondition,
 ) : SpecSelection.InlineFragment

@@ -141,7 +141,10 @@ private fun EngineResult?.completedOutputDemand(): SelectionForest =
     when (this) {
         is ObjectEngineResult ->
             keys
-                .filterNot { key -> key is ObjectEngineResult.ParentKey }
+                .filter { key ->
+                    key !is ObjectEngineResult.ParentKey &&
+                        getCell(key).getValue().isCompleted
+                }
                 .map { key ->
                     selectionForestOf(
                         Selection.of(

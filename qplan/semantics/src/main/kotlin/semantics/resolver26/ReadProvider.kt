@@ -12,6 +12,7 @@ import model.PathComponent
 import model.Selection
 import model.VariableBinding
 import semantics.shared.fetchGroundedArguments
+import semantics.shared.fetchIncluded
 import model.objectKey
 import model.outputType
 import model.registry.InstantiatedFieldPathDefinition
@@ -34,6 +35,7 @@ internal suspend fun ObjectEngineResult.completeProviderBindings(
     coroutineScope {
         reads.forEach { read ->
             launch {
+                if (!read.inclusionCondition.fetchIncluded()) return@launch
                 val binding =
                     readProvider(
                         definition = read.definition,

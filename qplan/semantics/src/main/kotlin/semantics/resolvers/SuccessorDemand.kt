@@ -6,6 +6,7 @@ import model.ObjectEngineResult
 import model.Selection
 import model.SelectionForest
 import model.flatMapToSelectionForest
+import model.guardedBy
 import model.merge
 import model.objectKey
 import model.requireField
@@ -32,6 +33,7 @@ private fun SelectionForest.successorDemandWithoutParentLifting(): SelectionFore
                 key = selection.key,
                 possibleTypes = selection.possibleTypes,
                 subselections = nestedDemand,
+                inclusionCondition = selection.inclusionCondition,
             )
         val resolverInputDemand =
             selection.possibleTypes.flatMapToSelectionForest { possibleType ->
@@ -70,6 +72,7 @@ private fun SelectionForest.successorBoundaryDemandWithoutParentLifting(): Selec
                 key = selection.key,
                 possibleTypes = selection.possibleTypes,
                 subselections = selection.subselections.successorBoundaryDemand(),
+                inclusionCondition = selection.inclusionCondition,
             )
 
         selectionForestOf(requested) + selection.successorInputBoundaries()
@@ -91,6 +94,7 @@ internal fun SelectionForest.liftParentDemand(): SelectionForest =
                 key = selection.key,
                 possibleTypes = selection.possibleTypes,
                 subselections = nestedDemand,
+                inclusionCondition = selection.inclusionCondition,
             )
         val lifted =
             selection.possibleTypes.flatMapToSelectionForest { possibleType ->
@@ -112,7 +116,7 @@ internal fun SelectionForest.liftParentDemand(): SelectionForest =
                     }
                     .toSelectionForest()
             }
-        selectionForestOf(requested) + lifted
+        selectionForestOf(requested) + lifted.guardedBy(selection.inclusionCondition)
     }
 
 context(operation: OperationContext)
@@ -155,6 +159,7 @@ private fun SelectionForest.boundarySkeleton(): SelectionForest =
                     key = selection.key,
                     possibleTypes = selection.possibleTypes,
                     subselections = nested,
+                    inclusionCondition = selection.inclusionCondition,
                 ),
             )
         } else {
@@ -190,6 +195,7 @@ private fun SelectionForest.substitute(
                             ),
                     ),
                 possibleTypes = selection.possibleTypes,
+                inclusionCondition = selection.inclusionCondition,
                 subselections = selection.subselections.substitute(bindings),
             ),
         )

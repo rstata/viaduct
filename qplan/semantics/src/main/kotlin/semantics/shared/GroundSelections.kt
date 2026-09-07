@@ -6,6 +6,8 @@ import model.ObjectSelection
 import model.ObjectSelectionForest
 import model.SelectionForest
 import model.concatenateSelectionForests
+import model.guardedBy
+import model.InclusionCondition
 import model.merge
 import viaduct.graphql.schema.ViaductSchema
 
@@ -32,25 +34,33 @@ fun SelectionForest.applicableGroundSelections(
 private inline fun ObjectSelectionForest.groundSelections(
     groundArguments: (ObjectSelection) -> Arguments.Ground,
 ): ObjectSelectionForest {
-    val childrenByKey =
-        buildMap<ObjectEngineResult.GroundKey, MutableList<SelectionForest>> {
+    val selectionsByKey =
+        buildMap<ObjectEngineResult.GroundKey, MutableList<ObjectSelection>> {
             byKey().values.forEach { selection ->
                 val key =
                     ObjectEngineResult.GroundKey.of(
                         field = selection.key.field,
                         arguments = groundArguments(selection),
                     )
-                getOrPut(key, ::mutableListOf).add(selection.subselections)
+                getOrPut(key, ::mutableListOf).add(selection)
             }
         }
     return ObjectSelectionForest.of(
         type = type,
         selections =
-            childrenByKey.map { (key, children) ->
+            selectionsByKey.map { (key, selections) ->
                 ObjectSelection.of(
                     key = key,
                     possibleTypes = setOf(type),
-                    subselections = children.concatenateSelectionForests(),
+                    inclusionCondition =
+                        InclusionCondition.anyOf(
+                            selections.map { selection -> selection.inclusionCondition },
+                        ),
+                    subselections =
+                        selections
+                            .map { selection ->
+                                selection.subselections.guardedBy(selection.inclusionCondition)
+                            }.concatenateSelectionForests(),
                 )
             },
     )

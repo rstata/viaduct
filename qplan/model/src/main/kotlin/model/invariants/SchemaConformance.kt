@@ -94,10 +94,15 @@ private fun EngineResult.conformsToSchema(
         is ObjectEngineResult ->
             result.keys.all { key ->
                 val cell = result.getCell(key)
+                if (
+                    key.field.containingDef != result.type ||
+                    !key.conformsToSchema()
+                ) {
+                    return@all false
+                }
+                if (!cell.getValue().isCompleted) return@all true
                 val value = cell.getValue().get()
-                key.field.containingDef == result.type &&
-                    key.conformsToSchema() &&
-                    value.conformsToResultSchemaType(key.field.outputType) &&
+                value.conformsToResultSchemaType(key.field.outputType) &&
                     if (key is ObjectEngineResult.ParentKey) {
                         world.parentFieldRelations[key.field]?.let { producerField ->
                             val ancestor = ancestors.lastOrNull()

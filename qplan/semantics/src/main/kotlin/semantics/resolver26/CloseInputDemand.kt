@@ -15,7 +15,6 @@ import model.registry.InstantiatedFieldPathDefinition
 import model.registry.ResolverFragments
 import model.registry.VariableInstanceDefinition
 import model.schemaType
-import model.selectionForestOf
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.resolvers.inputParentDemand
 import viaduct.engine.api.EngineObjectData
@@ -29,7 +28,8 @@ internal fun EngineObjectData.Sync.closeInputDemand(
 ): CloseInputDemandResult {
     var accumulatedDemand: SelectionForest =
         initialDemand + initialDemand.inputParentDemand()
-    val expansions: MutableMap<ObjectEngineResult.ObjectKey, ResolverExpansion> =
+    val expansionAccumulators:
+        MutableMap<ObjectEngineResult.ObjectKey, ResolverExpansionAccumulator> =
         linkedMapOf()
     val objectProviderReads: MutableList<ProviderDefinitionRead> =
         mutableListOf()
@@ -42,7 +42,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                 .byKey()
                 .filter { (objectKey, _) ->
                     requiresStandardResolution(objectKey) &&
-                        objectKey !in expansions
+                        objectKey !in expansionAccumulators
                 }
         if (newResolverSelections.isEmpty()) {
             check(
@@ -50,13 +50,18 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                     .byKey()
                     .filterKeys { objectKey ->
                         requiresStandardResolution(objectKey)
-                    }.keys == expansions.keys,
+                    }.keys == expansionAccumulators.keys,
             ) {
                 "Resolver26 closed demand and resolver expansions are misaligned"
             }
             return CloseInputDemandResult(
                 demand = mergedDemand,
-                expansions = expansions,
+                fieldResolverOccurrenceContexts =
+                    expansionAccumulators.mapValues { (objectKey, accumulator) ->
+                        accumulator.toFieldResolverOccurrenceContext(
+                            selection = mergedDemand.byKey().getValue(objectKey),
+                        )
+                    },
                 objectProviderReads = objectProviderReads,
             )
         }
@@ -75,13 +80,11 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                 objectKey.arguments.argumentsContainErrorValue()
             ) {
                 check(
-                    expansions.put(
+                    expansionAccumulators.put(
                         objectKey,
-                        ResolverExpansion(
-                            ownerKey = objectKey,
+                        ResolverExpansionAccumulator(
                             resolverOccurrenceId = resolverOccurrenceId,
                             resolver = resolver,
-                            inputDemand = selectionForestOf(),
                             inputMaterializeSelections = materializeSelectionForestOf(),
                             variableDefinitions = fragments.queryFragment.variableDefinitions,
                             fragments = fragments,
@@ -95,17 +98,15 @@ internal fun EngineObjectData.Sync.closeInputDemand(
             val readerPath = occurrence.coordinate(objectKey)
             val objectFragment = fragments.objectFragment
             val expansion =
-                ResolverExpansion(
-                    ownerKey = objectKey,
+                ResolverExpansionAccumulator(
                     resolverOccurrenceId = resolverOccurrenceId,
                     resolver = resolver,
-                    inputDemand = objectFragment.constructionSelections,
                     inputMaterializeSelections = objectFragment.materializeSelections,
                     variableDefinitions =
                         resolver.instantiatedVariableDefinitions(resolverOccurrenceId),
                     fragments = fragments,
                 )
-            check(expansions.put(objectKey, expansion) == null) {
+            check(expansionAccumulators.put(objectKey, expansion) == null) {
                 "Resolver26 expanded object key twice: $objectKey"
             }
 
@@ -139,19 +140,30 @@ private fun EngineObjectData.Sync.requiresStandardResolution(
     return false
 }
 
-internal data class ResolverExpansion(
-    val ownerKey: ObjectEngineResult.ObjectKey,
+private data class ResolverExpansionAccumulator(
     val resolverOccurrenceId: ResolverOccurrenceId,
     val resolver: FieldResolver,
-    val inputDemand: SelectionForest,
     val inputMaterializeSelections: MaterializeSelectionForest,
     val variableDefinitions: List<VariableInstanceDefinition>,
     val fragments: ResolverFragments,
-)
+) {
+    fun toFieldResolverOccurrenceContext(
+        selection: ObjectSelection,
+    ): FieldResolverOccurrenceContext =
+        FieldResolverOccurrenceContext(
+            selection = selection,
+            resolverOccurrenceId = resolverOccurrenceId,
+            resolver = resolver,
+            inputMaterializeSelections = inputMaterializeSelections,
+            variableDefinitions = variableDefinitions,
+            fragments = fragments,
+        )
+}
 
 internal class CloseInputDemandResult(
     val demand: ObjectSelectionForest,
-    val expansions: Map<ObjectEngineResult.ObjectKey, ResolverExpansion>,
+    val fieldResolverOccurrenceContexts:
+        Map<ObjectEngineResult.ObjectKey, FieldResolverOccurrenceContext>,
     val objectProviderReads: List<ProviderDefinitionRead>,
 ) {
     var bindingDeclarationStarted: Boolean = false

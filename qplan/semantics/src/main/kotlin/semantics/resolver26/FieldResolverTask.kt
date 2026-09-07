@@ -7,40 +7,36 @@ import model.EngineOutputData
 import model.EngineResult
 import model.EngineResultCell
 import model.ErrorEngineResult
-import model.MaterializeSelectionForest
 import model.ObjectEngineResult
-import model.ObjectSelection
 import model.PathComponent
 import model.ResolverOccurrenceId
 import model.SelectionForest
 import model.engineObjectDataOf
 import model.outputType
 import model.requireQueryTypeDef
-import model.registry.FieldResolver
 import model.registry.ResolverFragment
+import model.registry.VariableDefinition
 import model.schemaType
+import model.usedVariables
+import model.variableArgumentNames
 import semantics.correctresolution.argumentsContainErrorValue
+import semantics.shared.fetchGroundedArguments
 import viaduct.engine.api.EngineObjectData
 
 /** Invokes and publishes one already-installed field resolver instance. */
 internal class FieldResolverTask(
-    private val operation: Resolver26OperationContext,
-    private val occurrence: OEROccurrenceContext,
-    private val selection: ObjectSelection,
-    private val groundedArguments: Arguments.Ground,
-    private val resolver: FieldResolver,
-    private val resolverOccurrenceId: ResolverOccurrenceId,
-    private val inputMaterializeSelections: MaterializeSelectionForest,
+    private val operationContext: Resolver26OperationContext,
+    private val oerOccurrenceContext: OEROccurrenceContext,
+    private val fieldResolverOccurrenceContext: FieldResolverOccurrenceContext,
     private val cell: EngineResultCell,
-
-    // The following arguments are passed for instrumentation-purposes only
-    private val variableArgumentCount: Int,
-    private val variableResolverOccurrenceIds: Set<ResolverOccurrenceId>,
 ) {
-    private val world: Assumptions = operation.world
+    private val world: Assumptions = operationContext.world
 
     init {
-        require(selection.key.field.containingDef == occurrence.target.type) {
+        val selection = fieldResolverOccurrenceContext.selection
+        val resolver = fieldResolverOccurrenceContext.resolver
+        val resolverOccurrenceId = fieldResolverOccurrenceContext.resolverOccurrenceId
+        require(selection.key.field.containingDef == oerOccurrenceContext.target.type) {
             "Resolver selection does not belong to its target occurrence"
         }
         require(resolver.field == selection.key.field) {
@@ -49,55 +45,70 @@ internal class FieldResolverTask(
         require(
             resolverOccurrenceId ==
                 ResolverOccurrenceId.at(
-                    occurrence.root,
-                    occurrence.coordinate(selection.key),
+                    oerOccurrenceContext.root,
+                    oerOccurrenceContext.coordinate(selection.key),
                 ),
         ) {
             "Resolver occurrence ID does not match its target occurrence and selection"
         }
-        require(occurrence.target.getCell(selection.key) === cell) {
+        require(oerOccurrenceContext.target.getCell(selection.key) === cell) {
             "Resolver cell does not belong to its target occurrence and selection"
         }
     }
 
     suspend fun run() {
-        context(operation, world, operation.cycleChecker) {
+        context(operationContext, world, operationContext.cycleChecker) {
+            val selection = fieldResolverOccurrenceContext.selection
             val objectKey = selection.key
+            val groundedArguments = objectKey.fetchGroundedArguments()
+            completeFromArgumentBindings(groundedArguments)
             if (groundedArguments.argumentsContainErrorValue()) {
                 val errorResult = ErrorEngineResult.of(EngineErrorData.of())
                 cell.getValue().complete(errorResult)
                 return
             }
 
-            val coordinate = occurrence.coordinate(objectKey)
+            val coordinate = oerOccurrenceContext.coordinate(objectKey)
             val input: EngineObjectData.Sync =
-                occurrence.target.materializeResolverInput(
-                    selections = inputMaterializeSelections,
+                oerOccurrenceContext.target.materializeResolverInput(
+                    selections = fieldResolverOccurrenceContext.inputMaterializeSelections,
                     reader = coordinate,
-                    resultPath = occurrence.path,
+                    resultPath = oerOccurrenceContext.path,
                 )
 
             val resolverArguments = groundedArguments as Arguments.Resolved
             val constructionDemand: SelectionForest = selection.subselections
             val invocationDemand: SelectionForest = constructionDemand.successorDemand()
-            val queryValue = operation.queryValuesState.fetch(resolverOccurrenceId)
+            val queryValue =
+                operationContext.queryValuesState.fetch(
+                    fieldResolverOccurrenceContext.resolverOccurrenceId,
+                )
+            val variableArgumentCount =
+                selection.key.arguments.variableArgumentNames().size
+            val variableResolverOccurrenceIds =
+                selection.key.arguments
+                    .usedVariables()
+                    .mapNotNullTo(linkedSetOf()) { variable ->
+                        variable.instanceId?.resolverOccurrenceId
+                    }
 
-            operation.resolverObserver.onResolverApplication(
+            operationContext.resolverObserver.onResolverApplication(
                 Resolver26ApplicationObservation(
                     occurrencePath = coordinate,
                     field = objectKey.field,
                     input = input,
-                    inputSelections = inputMaterializeSelections,
+                    inputSelections = fieldResolverOccurrenceContext.inputMaterializeSelections,
                     arguments = resolverArguments,
                     suppliedDemand = invocationDemand,
-                    resolverOccurrenceId = resolverOccurrenceId,
+                    resolverOccurrenceId =
+                        fieldResolverOccurrenceContext.resolverOccurrenceId,
                     variableArgumentCount = variableArgumentCount,
                     variableResolverOccurrenceIds = variableResolverOccurrenceIds,
                 ),
             )
 
             val fieldValue: EngineOutputData? =
-                resolver(
+                fieldResolverOccurrenceContext.resolver(
                     input = input,
                     queryValue = queryValue,
                     arguments = resolverArguments,
@@ -106,15 +117,31 @@ internal class FieldResolverTask(
 
             val passiveValue: EngineResult? =
                 fieldValue.resolvePassiveValues(
-                    root = occurrence.root,
+                    root = oerOccurrenceContext.root,
                     expectedType = objectKey.field.outputType,
                     path = coordinate,
                     invocationDemand = invocationDemand,
                     constructionDemand = constructionDemand,
-                    parent = occurrence,
+                    parent = oerOccurrenceContext,
                 )
 
             cell.getValue().complete(passiveValue)
+        }
+    }
+
+    // Fills FromArgument bindings that were declared while their owning resolver key was symbolic.
+    // Bindings for already-ground owners received their values during binding declaration.
+    private fun completeFromArgumentBindings(groundedArguments: Arguments.Ground) {
+        if (fieldResolverOccurrenceContext.selection.key is ObjectEngineResult.GroundKey) return
+        fieldResolverOccurrenceContext.variableDefinitions.forEach { variableDefinition ->
+            if (variableDefinition.definition !is VariableDefinition.FromArgument) {
+                return@forEach
+            }
+            val definition = variableDefinition.definition as VariableDefinition.FromArgument
+            operationContext.variableBindingsState.completeBinding(
+                requireNotNull(variableDefinition.variable.instanceId),
+                bindingFor(groundedArguments, definition),
+            )
         }
     }
 }

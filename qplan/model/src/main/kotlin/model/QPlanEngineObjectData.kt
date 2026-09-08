@@ -3,7 +3,7 @@ package model
 import viaduct.graphql.schema.ViaductSchema
 
 import graphql.schema.GraphQLObjectType
-import model.invariants.conformsToOutputSchemaType
+import model.invariants.conformsToResolverOutputSchemaType
 import viaduct.apiannotations.InternalApi
 import viaduct.engine.api.EngineObjectData
 import viaduct.errors.UnsetFieldException
@@ -13,18 +13,19 @@ import viaduct.utils.collections.HMap
 /**
  * One construction-time EOD entry whose selection may be a field name or response alias.
  *
- * The schema field is retained through validation and then forgotten by the constructed EOD.
+ * The schema field is retained through resolver-output validation and then forgotten by the
+ * constructed EOD.
  */
 sealed interface EngineObjectDataEntry {
     val selection: String
     val field: ViaductSchema.ObjectField
-    val value: EngineOutputData?
+    val value: ResolverOutputData?
 
     companion object {
         fun of(
             selection: String,
             field: ViaductSchema.ObjectField,
-            value: EngineOutputData?,
+            value: ResolverOutputData?,
         ): EngineObjectDataEntry = EngineObjectDataEntryImpl(selection, field, value)
     }
 }
@@ -36,7 +37,7 @@ sealed interface EngineObjectDataEntry {
  */
 fun engineObjectDataOf(
     schemaType: ViaductSchema.Object,
-    fields: Map<String, EngineOutputData?> = emptyMap(),
+    fields: Map<String, ResolverOutputData?> = emptyMap(),
 ): EngineObjectData.Sync =
     engineObjectDataOf(
         schemaType = schemaType,
@@ -96,7 +97,7 @@ private fun engineObjectDataOf(
             "${schemaType.name} cannot contain output field " +
                 "${entry.field.containingDef.name}/${entry.field.name}"
         }
-        require(entry.value.conformsToOutputSchemaType(entry.field.outputType)) {
+        require(entry.value.conformsToResolverOutputSchemaType(entry.field.outputType)) {
             "${schemaType.name}/${entry.field.name} value does not conform to " +
                 entry.field.type
         }
@@ -120,16 +121,16 @@ private fun engineObjectDataOf(
     )
 }
 
-private fun EngineObjectDataEntry.sourceFacingValue(): EngineOutputData? =
+private fun EngineObjectDataEntry.sourceFacingValue(): ResolverOutputData? =
     if (field.name.endsWith(NODE_BRIDGE_FIELD_SUFFIX)) {
         value.unwrapNodeBridge(field.outputType)
     } else {
         value
     }
 
-private fun EngineOutputData?.unwrapNodeBridge(
+private fun ResolverOutputData?.unwrapNodeBridge(
     type: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
-): EngineOutputData? {
+): ResolverOutputData? {
     if (this == null || this is EngineErrorData) return this
     val elementType = type.unwrapList()
     if (elementType != null) {
@@ -175,7 +176,7 @@ internal val EngineObjectData.Sync.qplanSchemaTypeOrNull: ViaductSchema.Object?
     get() = (this as? QPlanEngineObjectData)?.schemaType
 
 /**
- * Returns a qplan-owned selection in the engine output domain without applying resolver-read
+ * Returns a qplan-owned selection in the resolver-output domain without applying resolver-read
  * error behavior.
  *
  * This is a temporary workaround for [EngineObjectData.Sync.get] and [EngineObjectData.fetch]
@@ -183,7 +184,7 @@ internal val EngineObjectData.Sync.qplanSchemaTypeOrNull: ViaductSchema.Object?
  * [EngineErrorData], leaving the Tenant API implementation responsible for converting an erroneous
  * field read into a tenant-visible exception.
  */
-fun EngineObjectData.Sync.outputValue(selection: String): EngineOutputData? {
+fun EngineObjectData.Sync.outputValue(selection: String): ResolverOutputData? {
     require(this is QPlanEngineObjectData) {
         "Engine object data for ${type.name} is not owned by qplan"
     }
@@ -193,13 +194,13 @@ fun EngineObjectData.Sync.outputValue(selection: String): EngineOutputData? {
 private data class EngineObjectDataEntryImpl(
     override val selection: String,
     override val field: ViaductSchema.ObjectField,
-    override val value: EngineOutputData?,
+    override val value: ResolverOutputData?,
 ) : EngineObjectDataEntry
 
 internal interface QPlanEngineObjectData : EngineObjectData.Sync {
     val schemaType: ViaductSchema.Object
 
-    fun outputValue(selection: String): EngineOutputData?
+    fun outputValue(selection: String): ResolverOutputData?
 }
 
 internal class EngineErrorDataReadException(
@@ -210,7 +211,7 @@ internal class EngineErrorDataReadException(
 private class QPlanEngineObjectDataImpl(
     override val type: GraphQLObjectType,
     override val schemaType: ViaductSchema.Object,
-    private val values: Map<String, EngineOutputData?>,
+    private val values: Map<String, ResolverOutputData?>,
 ) : QPlanEngineObjectData {
     override suspend fun fetch(selection: String): Any? = get(selection)
 
@@ -226,7 +227,7 @@ private class QPlanEngineObjectDataImpl(
         return value
     }
 
-    override fun outputValue(selection: String): EngineOutputData? {
+    override fun outputValue(selection: String): ResolverOutputData? {
         if (!isPresent(selection)) {
             throw UnsetFieldException(
                 selection,
@@ -247,7 +248,7 @@ private class QPlanEngineObjectDataImpl(
     override fun toString(): String = "type=${type.name} values=$values"
 }
 
-private fun EngineOutputData?.firstErrorDataOrNull(): EngineErrorData? =
+private fun ResolverOutputData?.firstErrorDataOrNull(): EngineErrorData? =
     when (this) {
         is EngineErrorData -> this
         is List<*> -> firstNotNullOfOrNull { value -> value.firstErrorDataOrNull() }

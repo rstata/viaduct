@@ -1,10 +1,11 @@
 package execution.viaductfeaturetests
 
 // core/engine/runtime/src/test/kotlin/viaduct/engine/runtime/RootFieldReferenceResolutionTest.kt
-// Copied 21 out of 23 tests as of 2026-09-01
+// Copied 23 out of 23 tests as of 2026-09-08
 
 import execution.testing.runQPlanFeatureTest
 
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
+import viaduct.engine.api.Caller
 import viaduct.engine.api.CheckerResult
 import viaduct.engine.api.EngineObjectData
 import viaduct.engine.api.mocks.EngineTestModule
@@ -22,9 +24,124 @@ import viaduct.graphql.test.assertJson
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RootFieldReferenceResolutionTest {
-    @Disabled("TODO: RootRef")
+    @Disabled("Qplan caller attribution is an independent execution-adapter blocker")
+    @Test
+    fun `caller is derived from resolver object traversal`() {
+        var caller: Caller? = null
+
+        EngineTestModule(
+            """
+            type UGCText {
+                localizedString: String @resolver
+            }
+            extend type Query {
+                description: UGCText @resolver
+            }
+        """
+        ) {
+            field("UGCText" to "localizedString") {
+                resolver {
+                    fn { _, _, _, _, ctx ->
+                        caller = ctx.fieldScope.caller
+                        "localized"
+                    }
+                }
+            }
+            field("Query" to "description") {
+                resolver {
+                    fn { _, _, _, _, _ ->
+                        createEngineObjectData(
+                            schema.schema.getObjectType("UGCText"),
+                            emptyMap(),
+                        )
+                    }
+                }
+            }
+        }.runQPlanFeatureTest {
+            runQuery("{ description { localizedString } }")
+                .assertJson("""{"data": {"description": {"localizedString": "localized"}}}""")
+        }
+
+        assertEquals(
+            Caller(null, "Query", "description"),
+            caller,
+        )
+    }
+
+    @Disabled("Qplan caller attribution is an independent execution-adapter blocker")
     @Test
     fun `factory backing data remains available to child resolver RSS without duplicate execution`() {
+        val factoryCalls = AtomicInteger()
+        val localizedStringCalls = AtomicInteger()
+        var factoryCaller: Caller? = null
+        var localizedStringCaller: Caller? = null
+
+        EngineTestModule(
+            """
+            type UGCText {
+                translationConfig: String
+                localizedString: String @resolver
+            }
+            type UGCTextFactory @namespaceType {
+                create: UGCText @resolver
+            }
+            extend type Query {
+                ugcTextFactory: UGCTextFactory
+                description: UGCText @resolver
+            }
+        """
+        ) {
+            field("UGCTextFactory" to "create") {
+                resolver {
+                    fn { _, _, _, _, ctx ->
+                        factoryCalls.incrementAndGet()
+                        factoryCaller = ctx.fieldScope.caller
+                        createEngineObjectData(
+                            schema.schema.getObjectType("UGCText"),
+                            mapOf("translationConfig" to "French")
+                        )
+                    }
+                }
+            }
+            field("UGCText" to "localizedString") {
+                resolver {
+                    objectSelections("translationConfig")
+                    fn { _, obj, _, _, ctx ->
+                        localizedStringCalls.incrementAndGet()
+                        localizedStringCaller = ctx.fieldScope.caller
+                        "Localized with ${obj.fetchAs<String>("translationConfig")}"
+                    }
+                }
+            }
+            field("Query" to "description") {
+                resolver {
+                    fn { _, _, _, _, ctx ->
+                        ctx.createRootFieldReference(
+                            rootFieldPath = listOf("ugcTextFactory", "create"),
+                            type = schema.schema.getObjectType("UGCText"),
+                            args = emptyMap(),
+                        )
+                    }
+                }
+            }
+        }.runQPlanFeatureTest {
+            runQuery("{ description { localizedString } }")
+                .assertJson("""{"data": {"description": {"localizedString": "Localized with French"}}}""")
+        }
+
+        assertEquals(1, factoryCalls.get())
+        assertEquals(1, localizedStringCalls.get())
+        val expectedCaller = Caller(
+            tenantName = null,
+            typeName = "Query",
+            fieldName = "description",
+        )
+        assertEquals(expectedCaller, factoryCaller)
+        assertEquals(expectedCaller, localizedStringCaller)
+    }
+
+    @Test
+    fun `ALTERNATIVE factory backing data remains available to child resolver RSS without duplicate execution`() {
         val factoryCalls = AtomicInteger()
         val localizedStringCalls = AtomicInteger()
 
@@ -83,7 +200,96 @@ class RootFieldReferenceResolutionTest {
         assertEquals(1, localizedStringCalls.get())
     }
 
-    @Disabled("TODO: RootRef")
+    @Disabled("Qplan caller attribution is an independent execution-adapter blocker")
+    @Test
+    fun `caller survives a chain of resolver RSS dependencies`() {
+        val callers = ConcurrentHashMap<String, Caller>()
+
+        EngineTestModule(
+            """
+            type UGCText {
+                sourceText: String
+                normalizedText: String @resolver
+                renderedText: String @resolver
+                localizedString: String @resolver
+            }
+            type UGCTextFactory @namespaceType {
+                create: UGCText @resolver
+            }
+            extend type Query {
+                ugcTextFactory: UGCTextFactory
+                description: UGCText @resolver
+            }
+        """
+        ) {
+            field("UGCTextFactory" to "create") {
+                resolver {
+                    fn { _, _, _, _, _ ->
+                        createEngineObjectData(
+                            schema.schema.getObjectType("UGCText"),
+                            mapOf("sourceText" to "hello"),
+                        )
+                    }
+                }
+            }
+            field("UGCText" to "normalizedText") {
+                resolver {
+                    objectSelections("sourceText")
+                    fn { _, obj, _, _, ctx ->
+                        callers["normalizedText"] = requireNotNull(ctx.fieldScope.caller)
+                        obj.fetchAs<String>("sourceText").uppercase()
+                    }
+                }
+            }
+            field("UGCText" to "renderedText") {
+                resolver {
+                    objectSelections("normalizedText")
+                    fn { _, obj, _, _, ctx ->
+                        callers["renderedText"] = requireNotNull(ctx.fieldScope.caller)
+                        "[${obj.fetchAs<String>("normalizedText")}]"
+                    }
+                }
+            }
+            field("UGCText" to "localizedString") {
+                resolver {
+                    objectSelections("renderedText")
+                    fn { _, obj, _, _, ctx ->
+                        callers["localizedString"] = requireNotNull(ctx.fieldScope.caller)
+                        obj.fetchAs<String>("renderedText")
+                    }
+                }
+            }
+            field("Query" to "description") {
+                resolver {
+                    fn { _, _, _, _, ctx ->
+                        ctx.createRootFieldReference(
+                            rootFieldPath = listOf("ugcTextFactory", "create"),
+                            type = schema.schema.getObjectType("UGCText"),
+                            args = emptyMap(),
+                        )
+                    }
+                }
+            }
+        }.runQPlanFeatureTest {
+            runQuery("{ description { localizedString } }")
+                .assertJson("""{"data": {"description": {"localizedString": "[HELLO]"}}}""")
+        }
+
+        val expectedCaller = Caller(
+            tenantName = null,
+            typeName = "Query",
+            fieldName = "description",
+        )
+        assertEquals(
+            mapOf(
+                "normalizedText" to expectedCaller,
+                "renderedText" to expectedCaller,
+                "localizedString" to expectedCaller,
+            ),
+            callers,
+        )
+    }
+
     @Test
     fun `factory function with nested namespace types resolves correctly`() {
         EngineTestModule(
@@ -131,7 +337,6 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("TODO: RootRef")
     @Test
     fun `factory function error propagation`() {
         EngineTestModule(
@@ -173,7 +378,7 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("TODO: RootRef")
+    @Disabled("Qplan access-check execution is an independent migration blocker")
     @Test
     fun `factory field access check failure is propagated`() {
         EngineTestModule(
@@ -225,7 +430,7 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("TODO: RootRef")
+    @Disabled("Qplan access-check execution is an independent migration blocker")
     @Test
     fun `namespace access check failure prevents factory field execution`() {
         val factoryCalls = AtomicInteger()
@@ -284,7 +489,7 @@ class RootFieldReferenceResolutionTest {
         assertEquals(0, factoryCalls.get())
     }
 
-    @Disabled("TODO: RootRef")
+    @Disabled("Qplan intentionally gives each equivalent reference occurrence a fresh Query root")
     @Test
     fun `equivalent factory references share execution while distinct arguments resolve independently`() {
         val factoryCalls = AtomicInteger()
@@ -345,7 +550,66 @@ class RootFieldReferenceResolutionTest {
         assertEquals(2, factoryCalls.get())
     }
 
-    @Disabled("TODO: RootRef")
+    @Test
+    fun `ALTERNATIVE equivalent factory references share execution while distinct arguments resolve independently`() {
+        val factoryCalls = AtomicInteger()
+
+        EngineTestModule(
+            """
+            type Color {
+                name: String
+            }
+            type ColorFactory @namespaceType {
+                create(name: String!): Color @resolver
+            }
+            extend type Query {
+                colorFactory: ColorFactory
+                colors: [Color] @resolver
+            }
+        """
+        ) {
+            field("ColorFactory" to "create") {
+                resolver {
+                    fn { args, _, _, _, _ ->
+                        factoryCalls.incrementAndGet()
+                        createEngineObjectData(
+                            schema.schema.getObjectType("Color"),
+                            mapOf("name" to args.getAs<String>("name"))
+                        )
+                    }
+                }
+            }
+            field("Query" to "colors") {
+                resolver {
+                    fn { _, _, _, _, ctx ->
+                        listOf(
+                            ctx.createRootFieldReference(
+                                rootFieldPath = listOf("colorFactory", "create"),
+                                type = schema.schema.getObjectType("Color"),
+                                args = mapOf("name" to "Red"),
+                            ),
+                            ctx.createRootFieldReference(
+                                rootFieldPath = listOf("colorFactory", "create"),
+                                type = schema.schema.getObjectType("Color"),
+                                args = mapOf("name" to "Red"),
+                            ),
+                            ctx.createRootFieldReference(
+                                rootFieldPath = listOf("colorFactory", "create"),
+                                type = schema.schema.getObjectType("Color"),
+                                args = mapOf("name" to "Blue"),
+                            ),
+                        )
+                    }
+                }
+            }
+        }.runQPlanFeatureTest {
+            runQuery("{ colors { name } }")
+                .assertJson("""{"data": {"colors": [{"name": "Red"}, {"name": "Red"}, {"name": "Blue"}]}}""")
+        }
+
+        assertEquals(3, factoryCalls.get())
+    }
+
     @Test
     fun `factory function alongside node reference`() {
         EngineTestModule(
@@ -410,7 +674,6 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("TODO: RootRef")
     @Test
     fun `root field reference nested inside resolver response`() {
         EngineTestModule(
@@ -464,7 +727,6 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("TODO: RootRef")
     @Test
     fun `nested root field reference failure preserves sibling fields`() {
         EngineTestModule(
@@ -519,7 +781,6 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("TODO: RootRef")
     @Test
     fun `concurrent root field references with one failure and one success`() {
         EngineTestModule(
@@ -592,7 +853,6 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("TODO: RootRef")
     @Test
     fun `factory function returns data with explicit null fields`() {
         EngineTestModule(
@@ -637,7 +897,6 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("TODO: RootRef")
     @Test
     fun `operation variables in directives and field args are forwarded through root field reference`() {
         EngineTestModule(
@@ -701,7 +960,6 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("TODO: RootRef")
     @Test
     fun `include directive variable excludes field through root field reference`() {
         EngineTestModule(
@@ -748,7 +1006,6 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("TODO: RootRef")
     @Test
     fun `root field reference args do not collide with operation variables`() {
         EngineTestModule(
@@ -813,7 +1070,6 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("TODO: RootRef")
     @Test
     fun `querySelections with variable referencing root field reference`() {
         EngineTestModule(
@@ -884,7 +1140,6 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("TODO: RootRef")
     @Test
     fun `factory returns a node reference`() {
         EngineTestModule(
@@ -934,7 +1189,7 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("TODO: RootRef")
+    @Disabled("Qplan cannot yet lower a Node resolver's root-reference result through its inline Node bridge")
     @Test
     fun `node resolver returns a root field reference`() {
         EngineTestModule(
@@ -981,7 +1236,6 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("TODO: RootRef")
     @Test
     fun `factory returns a root field reference`() {
         EngineTestModule(
@@ -1041,7 +1295,7 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("TODO: RootRef")
+    @Disabled("Qplan root-field-reference targets intentionally do not support object required selections")
     @Test
     fun `factory resolver reads object and query selection sets`() {
         EngineTestModule(
@@ -1103,7 +1357,69 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("TODO: RootRef")
+    @Test
+    fun `ALTERNATIVE factory resolver reads object and query selection sets`() {
+        EngineTestModule(
+            """
+            type Product {
+                objectName: String
+                queryName: String
+            }
+            type ProductFactory @namespaceType {
+                defaultName: String @resolver
+                create: Product @resolver
+            }
+            extend type Query {
+                defaultProductName: String @resolver
+                productFactory: ProductFactory
+                product: Product @resolver
+            }
+        """
+        ) {
+            field("ProductFactory" to "defaultName") {
+                resolver {
+                    fn { _, _, _, _, _ -> "DefaultWidget" }
+                }
+            }
+            field("Query" to "defaultProductName") {
+                resolver {
+                    fn { _, _, _, _, _ -> "QueryWidget" }
+                }
+            }
+            field("ProductFactory" to "create") {
+                resolver {
+                    querySelections("productFactory { defaultName } defaultProductName")
+                    fn { _, _, qry, _, _ ->
+                        val productFactory =
+                            qry.fetchAs<EngineObjectData>("productFactory")
+                        createEngineObjectData(
+                            schema.schema.getObjectType("Product"),
+                            mapOf(
+                                "objectName" to productFactory.fetchAs<String>("defaultName"),
+                                "queryName" to qry.fetchAs<String>("defaultProductName"),
+                            )
+                        )
+                    }
+                }
+            }
+            field("Query" to "product") {
+                resolver {
+                    fn { _, _, _, _, ctx ->
+                        ctx.createRootFieldReference(
+                            rootFieldPath = listOf("productFactory", "create"),
+                            type = schema.schema.getObjectType("Product"),
+                            args = emptyMap(),
+                        )
+                    }
+                }
+            }
+        }.runQPlanFeatureTest {
+            runQuery("{ product { objectName queryName } }")
+                .assertJson("""{"data": {"product": {"objectName": "DefaultWidget", "queryName": "QueryWidget"}}}""")
+        }
+    }
+
+    @Disabled("Qplan access-check execution is an independent migration blocker")
     @Test
     fun `root field reference resolves to null`() {
         EngineTestModule(
@@ -1155,7 +1471,7 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("TODO: RootRef")
+    @Disabled("Qplan access-check execution is an independent migration blocker")
     @Test
     fun `root field reference to non-null field resolves to null propagates field error`() {
         EngineTestModule(

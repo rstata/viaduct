@@ -16,6 +16,8 @@ import model.ErrorEngineResult
 import model.CoercedDefaultValue
 import model.ListEngineResult
 import model.ObjectEngineResult
+import model.RootFieldReferenceData
+import model.ResolverOutputData
 import model.canContainPure
 import model.conformsToArgumentDefinition
 import model.inputType
@@ -199,8 +201,19 @@ private fun EngineInputData.asEngineInputObjectDataOrNull(): EngineInputObjectDa
     return fields as EngineInputObjectData
 }
 
+/** Whether ordinary engine output recursively conforms to [typeExpr]. */
 fun EngineOutputData?.conformsToOutputSchemaType(
     typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
+): Boolean = conformsToOutputSchemaType(typeExpr, rootFieldReferencesAllowed = false)
+
+/** Whether resolver output, including symbolic root-field references, conforms to [typeExpr]. */
+fun ResolverOutputData?.conformsToResolverOutputSchemaType(
+    typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
+): Boolean = conformsToOutputSchemaType(typeExpr, rootFieldReferencesAllowed = true)
+
+private fun Any?.conformsToOutputSchemaType(
+    typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
+    rootFieldReferencesAllowed: Boolean,
 ): Boolean =
     when (this) {
         null -> typeExpr.isNullable
@@ -208,8 +221,19 @@ fun EngineOutputData?.conformsToOutputSchemaType(
         is List<*> ->
             typeExpr.unwrapList()
                 ?.let { elementType ->
-                    all { value -> value.conformsToOutputSchemaType(elementType) }
+                    all { value ->
+                        value.conformsToOutputSchemaType(
+                            elementType,
+                            rootFieldReferencesAllowed,
+                        )
+                    }
                 } ?: false
+        is RootFieldReferenceData ->
+            rootFieldReferencesAllowed &&
+                !typeExpr.isList &&
+                (typeExpr.baseTypeDef as? ViaductSchema.CompositeTypeDef)
+                    ?.possibleObjectTypes
+                    ?.contains(type) == true
         is EngineObjectData.Sync ->
             if (typeExpr.isList) {
                 false

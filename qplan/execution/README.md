@@ -43,6 +43,8 @@ The adapter translates field executors into qplan `FieldResolverDefinition` valu
 
 The mock field-executor surface returns `Any?`, permits a raw map or source-shaped EOD as the source for a concrete GraphQL object field, and relies on GraphQL completion to serialize built-in scalar results. Qplan's `EngineOutputData` contract is stricter: object output must be a conforming `EngineObjectData.Sync`, and scalar output must already inhabit its canonical runtime domain. The adapter therefore uses the declared concrete object type to recursively materialize those object sources and applies the source scalar's GraphQL-Java serialization before values cross into qplan. It does not accept raw maps for interface or union outputs because those values do not provide the concrete runtime type needed for an unambiguous conversion.
 
+Production `RootFieldReference` values are normalized recursively into qplan-owned `RootFieldReferenceData`, including direct executor results and references nested in EOD fields or lists. `ResolverOutputData` is the resolver-facing union of ordinary `EngineOutputData` and this symbolic reference carrier; references are not members of the engine-data domain supplied as resolver input. The adapter does not call production root-reference resolution. It supplies dependency-free empty objects for unsupplied namespace fields so ordinary Query fragments may traverse namespace paths. Resolver26 gives every reference occurrence and direct-result tail hop its own fresh empty Query-rooted identity OER; those roots contain no namespace execution, are distinct from resolver Query-fragment roots, and are not shared across equivalent descriptors. A referenced target with object RSS is rejected; tenant code must express the corresponding dependency as Query RSS with its namespace path prefixed.
+
 In keeping with the architecture of qplan, the adapter translates node executors into field resolvers on fields that return Node types.  This is a process called "lowering:" the schema used for field resolution is slightly modified ("lowered") to conveniently support node-resolvers-as-field resolvers, and similarly node-resolver executors are modified to be put into the resolver registry as field resolvers. A raw node-executor payload may omit the repeated `id`: shared fixture lowering combines its fields with the authoritative ID supplied by the Node-valued fringe before the effective object enters qplan. The adapter also supplies local equivalents of built-in `Query.node` and `Query.nodes` when the module does not provide those executors.
 
 ### Required-Selection Variables
@@ -84,6 +86,7 @@ The feature-test adapter currently supports:
 - Top-level from-argument variables in object or Query required selections, including variable names that differ from their source argument names.
 - From-object-field and from-Query-field paths through singular objects to scalar, enum, or scalar-list terminals, including aliases, nullable traversal, multiple variables, non-root resolver owners, cross-fragment consumption, and argument-bearing provider keys grounded from literals, defaults, owner arguments, or other acyclic from-field bindings.
 - Synchronous scalar, enum, list, object, and `NodeReference` outputs, including raw map sources for concrete object fields.
+- Direct and recursively nested `RootFieldReference` outputs, including namespace paths, arguments, lists, and referenced resolvers with Query required selections.
 - Partially populated Query executor maps, with missing nullable fields resolving to null and missing non-null fields resolving to an error.
 - Node-valued fields and built-in `Query.node` and `Query.nodes`.
 - `__typename` through canonical qplan lowering and GraphQL-Java completion.
@@ -94,6 +97,8 @@ The adapter rejects or does not yet model:
 - Callback providers with overlapping variable names or their own required selections, and from-field providers whose erased production representation ambiguously matches both resolver fragments.
 - Batched field resolvers, and batched or selective node resolvers.
 - Inline object values from a Node-valued field; qplan currently requires every Node value to be resolved by its node resolver.
+- Root-field references returned by node resolvers, which still cross the unsupported inline Node bridge; ordinary root-field resolvers may return node references or another root-field reference.
+- Object required selections and `FromObjectField` variables on resolvers invoked as root-field-reference targets; use Query required selections with the namespace path prefixed.
 - Checker and type-checker executors, including their object- and Query-rooted required selections.
 - Mutations, subscriptions, and custom scalars, which remain outside the current qplan scope.
 

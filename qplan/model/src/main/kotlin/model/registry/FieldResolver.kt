@@ -7,7 +7,7 @@ import model.ObjectEngineResult
 import model.Assumptions
 import model.EngineErrorDataReadException
 import model.EngineInputData
-import model.EngineOutputData
+import model.ResolverOutputData
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
 import model.Arguments
@@ -28,7 +28,7 @@ import viaduct.engine.api.EngineObjectData
 
 /** A deterministic partial map from resolved object and Query fragments plus arguments to an output value. */
 typealias NonselectiveFieldResolverFunction =
-    (EngineObjectData.Sync, EngineObjectData.Sync, Arguments.Resolved) -> EngineOutputData?
+    (EngineObjectData.Sync, EngineObjectData.Sync, Arguments.Resolved) -> ResolverOutputData?
 
 /**
  * A deterministic partial map from resolved inputs and output demand to an output value.
@@ -43,7 +43,7 @@ typealias SelectiveFieldResolverFunction =
         EngineObjectData.Sync,
         Arguments.Resolved,
         SelectionForest,
-    ) -> EngineOutputData?
+    ) -> ResolverOutputData?
 
 /** Computes all tenant-provided variables once for one field-resolver occurrence. */
 typealias VariablesProviderFunction =
@@ -220,7 +220,7 @@ class FieldResolver private constructor(
         input: EngineObjectData.Sync,
         arguments: Arguments.Resolved,
         selections: SelectionForest = selectionForestOf(),
-    ): EngineOutputData? =
+    ): ResolverOutputData? =
         invoke(
             input = input,
             queryValue = engineObjectDataOf(queryType),
@@ -235,7 +235,7 @@ class FieldResolver private constructor(
         queryValue: EngineObjectData.Sync,
         arguments: Arguments.Resolved,
         selections: SelectionForest = selectionForestOf(),
-    ): EngineOutputData? {
+    ): ResolverOutputData? {
         applicationObserver(
             input,
             arguments,
@@ -255,7 +255,7 @@ class FieldResolver private constructor(
         queryValue: EngineObjectData.Sync,
         arguments: Arguments.Resolved,
         selections: SelectionForest,
-    ): EngineOutputData? {
+    ): ResolverOutputData? {
         require(queryValue.schemaType == queryType) {
             "Query value type ${queryValue.schemaType.name} does not match ${queryType.name}"
         }
@@ -559,7 +559,7 @@ private fun MaterializeSelectionForest.usedVariablesApplicableTo(
     return variables
 }
 
-private fun EngineOutputData?.requireArgumentlessObjectFields() {
+private fun ResolverOutputData?.requireArgumentlessObjectFields() {
     when (this) {
         is EngineObjectData.Sync -> {
             getSelections().forEach { selection ->

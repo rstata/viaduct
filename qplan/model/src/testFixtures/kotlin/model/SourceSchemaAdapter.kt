@@ -34,4 +34,12 @@ class SourceSchemaAdapter(
         field: ViaductSchema.Field,
         output: EngineOutputData?,
     ): EngineOutputData? = schema.lowerSourceOutput(field, output)
+
+    /** Converts one production source-schema root-field reference to the canonical qplan carrier. */
+    fun lowerRootFieldReference(
+        rootFieldPath: List<String>,
+        sourceTypeName: String,
+        arguments: Map<String, Any?>,
+    ): RootFieldReferenceData =
+        schema.lowerRootFieldReference(rootFieldPath, sourceTypeName, arguments)
 }

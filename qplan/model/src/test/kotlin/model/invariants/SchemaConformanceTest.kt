@@ -6,11 +6,13 @@ import model.engineResultOf
 import model.engineObjectDataOf
 import model.objectOf
 import model.outputType
+import model.RootFieldReferenceData
 import model.requireField
 import model.requireType
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class SchemaConformanceTest {
@@ -47,6 +49,19 @@ class SchemaConformanceTest {
     }
 
     @Test
+    fun `root field references belong only to resolver output`() {
+        val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions
+        val field = world.schema.requireField("Query", "user") as ViaductSchema.ObjectField
+        val listField = world.schema.requireField("Query", "users") as ViaductSchema.ObjectField
+        val reference = RootFieldReferenceData.of(listOf(field), emptyMap())
+
+        assertFalse(reference.conformsToOutputSchemaType(field.outputType))
+        assertTrue(reference.conformsToResolverOutputSchemaType(field.outputType))
+        assertFalse(listOf(reference).conformsToOutputSchemaType(listField.outputType))
+        assertTrue(listOf(reference).conformsToResolverOutputSchemaType(listField.outputType))
+    }
+
+    @Test
     fun `object value factory rejects a field value with the wrong type`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val user = schema.requireType("User") as ViaductSchema.Object
@@ -71,6 +86,7 @@ class SchemaConformanceTest {
 
             type Query {
               user: User
+              users: [User]
             }
             """.trimIndent()
     }

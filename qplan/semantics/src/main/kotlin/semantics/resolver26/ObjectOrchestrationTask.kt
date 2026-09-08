@@ -76,7 +76,11 @@ internal class ObjectOrchestrationTask(
             }
         validatePassiveFields(closed)
 
-        if (closed.fieldResolverOccurrenceContexts.isNotEmpty()) {
+        if (
+            closed.fieldResolverOccurrenceContexts.isNotEmpty() ||
+            closed.rootFieldReferenceOccurrences.isNotEmpty() ||
+            closed.objectProviderReads.isNotEmpty()
+        ) {
             operation.requestScope.launch {
                 this@ObjectOrchestrationTask.launchBindingsAndResolvers(closed)
                 occurrence.target.freeze()
@@ -92,7 +96,10 @@ internal class ObjectOrchestrationTask(
             if (selection.inclusionCondition === InclusionCondition.Never) {
                 return@forEach
             }
-            if (objectKey !in closed.fieldResolverOccurrenceContexts) {
+            if (
+                objectKey !in closed.fieldResolverOccurrenceContexts &&
+                objectKey !in closed.rootFieldReferenceOccurrences
+            ) {
                 check(
                     objectKey is ObjectEngineResult.GroundKey &&
                         occurrence.target.isCellSet(objectKey),
@@ -142,7 +149,8 @@ private fun declareBindings(closed: CloseInputDemandResult) {
         "Resolver26 closed demand attempted to declare its bindings twice"
     }
     closed.bindingDeclarationStarted = true
-    closed.fieldResolverOccurrenceContexts.values.forEach { fieldResolverOccurrenceContext ->
+    closed.fieldResolverOccurrenceContexts.values
+        .forEach { fieldResolverOccurrenceContext ->
         val ownerKey = fieldResolverOccurrenceContext.selection.key
         fieldResolverOccurrenceContext.variableDefinitions.forEach { variableDefinition ->
             val variableId = requireNotNull(variableDefinition.variable.instanceId)

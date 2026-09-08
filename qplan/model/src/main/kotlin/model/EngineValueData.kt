@@ -53,6 +53,15 @@ private data class PresentCoercedDefaultValueImpl(
  */
 typealias EngineOutputData = Any
 
+/**
+ * [EngineOutputData] or [RootFieldReferenceData].
+ *
+ * This is the field-resolver codomain. A root-field reference is a symbolic resolver instruction
+ * with grounded, variable-free arguments, not engine data supplied as resolver input. List and
+ * object positions within resolver output may recursively contain [ResolverOutputData].
+ */
+typealias ResolverOutputData = Any
+
 /** A recursively validated list of nullable engine output values. */
 typealias EngineOutputListData = List<EngineOutputData?>
 

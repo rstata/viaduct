@@ -1,17 +1,21 @@
 package semantics.resolver26
 
+import kotlinx.coroutines.launch
 import viaduct.graphql.schema.ViaductSchema
 
 import model.EngineErrorData
-import model.EngineOutputData
+import model.ResolverOutputData
 import model.EngineResult
+import model.EngineResultCell
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.ObjectSelectionForest
 import model.PathComponent
+import model.Selection
 import model.SelectionForest
-import model.invariants.conformsToOutputSchemaType
+import model.RootFieldReferenceData
+import model.invariants.conformsToResolverOutputSchemaType
 import model.isParentField
 import model.merge
 import model.outputType
@@ -24,7 +28,7 @@ import viaduct.engine.api.EngineObjectData
 
 // Builds one passive result value, launching an orchestration lifecycle for every object it creates.
 context(operation: Resolver26OperationContext)
-internal fun EngineOutputData?.resolvePassiveValues(
+internal fun ResolverOutputData?.resolvePassiveValues(
     root: ObjectEngineResult,
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     path: List<PathComponent>,
@@ -32,12 +36,14 @@ internal fun EngineOutputData?.resolvePassiveValues(
     constructionDemand: SelectionForest,
     parent: OEROccurrenceContext? = null,
 ): EngineResult? {
-    require(conformsToOutputSchemaType(expectedType)) {
+    require(conformsToResolverOutputSchemaType(expectedType)) {
         "Resolver output does not conform to $expectedType"
     }
     return when (this) {
         null -> null
         is EngineErrorData -> ErrorEngineResult.of(this)
+        is RootFieldReferenceData ->
+            error("A direct root-field reference must be installed before passive resolution")
         is EngineObjectData.Sync ->
             resolvePassiveObjectValues(
                 root = root,
@@ -48,24 +54,76 @@ internal fun EngineOutputData?.resolvePassiveValues(
             )
         is List<*> -> {
             val elementType = checkNotNull(expectedType.unwrapList())
-            ListEngineResult.of(
-                typeExpr = elementType,
-                values =
-                    mapIndexed { index, value ->
+            val result = ListEngineResult.ofPendingValues(elementType, size)
+            forEachIndexed { index, value ->
+                val elementPath = path + ListEngineResult.Index.of(index)
+                val elementCell = result[index]
+                if (value is RootFieldReferenceData) {
+                    val containingOccurrence =
+                        requireNotNull(parent) {
+                            "Root-field-reference list element has no containing object occurrence"
+                        }
+                    launchListElementReference(
+                        reference = value,
+                        publicationCell = elementCell,
+                        publicationPath = elementPath,
+                        expectedType = elementType,
+                        constructionDemand = constructionDemand,
+                        parent = containingOccurrence,
+                    )
+                } else {
+                    elementCell.getValue().complete(
                         value.resolvePassiveValues(
                             root = root,
                             expectedType = elementType,
-                            path = path + ListEngineResult.Index.of(index),
+                            path = elementPath,
                             invocationDemand = invocationDemand,
                             constructionDemand = constructionDemand,
                             parent = parent,
-                        )
-                    },
-            )
+                        ),
+                    )
+                }
+            }
+            result
         }
         else ->
             toEngineResult(expectedType.baseTypeDef as ViaductSchema.SimpleTypeDef)
     }
+}
+
+context(operation: Resolver26OperationContext)
+private fun launchListElementReference(
+    reference: RootFieldReferenceData,
+    publicationCell: EngineResultCell,
+    publicationPath: List<PathComponent>,
+    expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
+    constructionDemand: SelectionForest,
+    parent: OEROccurrenceContext,
+) {
+    val consumerKey = publicationPath.filterIsInstance<ObjectEngineResult.ObjectKey>().last()
+    val selection =
+        selectionForestOf(
+            Selection.of(
+                key = consumerKey,
+                possibleTypes = setOf(parent.target.type),
+                subselections = constructionDemand,
+            ),
+        ).merge(parent.target.type).byKey().getValue(consumerKey)
+    operation.cycleChecker.registerWriter(publicationCell, publicationPath)
+    val task =
+        FieldResolverTask(
+            operationContext = operation,
+            oerOccurrenceContext = parent,
+            resolverOccurrenceContext =
+                RootFieldReferenceOccurrence(
+                    selection = selection,
+                    reference = reference,
+                    publicationPath = publicationPath,
+                    publicationExpectedType = expectedType,
+                ),
+            cell = publicationCell,
+        )
+    operation.requestScope.launch { task.run() }
 }
 
 // Creates one mutable OER and enters its orchestration lifecycle before descending into children.
@@ -133,6 +191,8 @@ private fun EngineObjectData.Sync.materializePassiveFields(
             "Resolver output must not supply argument-bearing field " +
                 "${schemaType.name}/$fieldName"
         }
+        val output = outputValue(fieldName)
+        if (output is RootFieldReferenceData) return@forEach
         val demandedKeys = linkedSetOf<ObjectEngineResult.GroundKey>()
         (invocationDemandByKey.keys + closedDemandByKey.keys).forEach { key ->
             if (key.field == field) {
@@ -155,7 +215,7 @@ private fun EngineObjectData.Sync.materializePassiveFields(
                     ?.subselections
                     ?: selectionForestOf()
             val value =
-                outputValue(key.field.name)
+                output
                     .resolvePassiveValues(
                         root = occurrence.root,
                         expectedType = key.field.outputType,

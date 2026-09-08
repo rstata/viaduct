@@ -4,7 +4,7 @@ import viaduct.graphql.schema.ViaductSchema
 
 import model.Arguments
 import model.EngineErrorData
-import model.EngineOutputData
+import model.ResolverOutputData
 import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
@@ -12,6 +12,7 @@ import model.ObjectEngineResult
 import model.outputType
 import model.outputValue
 import model.PathComponent
+import model.RootFieldReferenceData
 import model.VariableBinding
 import semantics.shared.groundedArguments
 import semantics.shared.isContextuallyGrounded
@@ -197,13 +198,28 @@ context(
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun EngineResult?.engineResultConformsToResolverValue(
-    resolverValue: EngineOutputData?,
+    resolverValue: ResolverOutputData?,
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     path: List<PathComponent>,
     structuralParent: ObjectEngineResult,
     producerField: ViaductSchema.ObjectField,
-): Boolean =
-    when (this) {
+): Boolean {
+    if (resolverValue is RootFieldReferenceData) {
+        return reapplyRootFieldReference(
+            reference = resolverValue,
+            publicationRoot = resolverApplicationCache.root,
+            publicationPath = path,
+        )?.let { application ->
+            engineResultConformsToResolverValue(
+                resolverValue = application.output,
+                expectedType = expectedType,
+                path = path,
+                structuralParent = structuralParent,
+                producerField = producerField,
+            )
+        } == true
+    }
+    return when (this) {
         null -> resolverValue == null
         is ErrorEngineResult -> resolverValue is EngineErrorData
 
@@ -233,6 +249,7 @@ private fun EngineResult?.engineResultConformsToResolverValue(
             toEngineOutputData(expectedType.baseTypeDef as ViaductSchema.SimpleTypeDef) ==
                 resolverValue
     }
+}
 
 context(
     operation: OperationContext,

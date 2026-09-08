@@ -104,6 +104,50 @@ class EngineResultTest {
     }
 
     @Test
+    fun `pending list creates fixed activated cells with writable uncompleted values`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val elementType = schema.requireField("Query", "required").outputType
+
+        val result = ListEngineResult.ofPendingValues(elementType, size = 2)
+
+        assertEquals(elementType, result.typeExpr)
+        assertEquals(2, result.size)
+        result.forEach { cell ->
+            cell.checkActivated()
+            assertEquals(true, cell.getAccessResult().get())
+            assertFalse(cell.getValue().isCompleted)
+        }
+
+        val firstPlaceholder = result[0].getValue()
+        val firstWriter = result[0].createValuePromise()
+        assertSame(firstPlaceholder, firstWriter)
+        firstWriter.complete("first")
+        result[1].setValue("second")
+
+        assertEquals(listOf("first", "second"), result.map { cell -> cell.getValue().get() })
+        assertFailsWith<IllegalStateException> { result[0].createValuePromise() }
+        assertFailsWith<IllegalStateException> { result[1].setValue("again") }
+    }
+
+    @Test
+    fun `pending list validates size and eventual element values`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val elementType = schema.requireField("Query", "required").outputType
+
+        assertFailsWith<IllegalArgumentException> {
+            ListEngineResult.ofPendingValues(elementType, size = -1)
+        }
+
+        val result = ListEngineResult.ofPendingValues(elementType, size = 1)
+        val writer = result.single().createValuePromise()
+
+        assertFailsWith<IllegalArgumentException> { writer.complete(null) }
+        assertFalse(writer.isCompleted)
+        writer.complete("valid")
+        assertEquals("valid", writer.get())
+    }
+
+    @Test
     fun `object result factory rejects values that violate field typing`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val key =

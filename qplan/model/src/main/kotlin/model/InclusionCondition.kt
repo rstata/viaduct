@@ -154,3 +154,11 @@ private fun disjunction(conditions: List<InclusionCondition>): InclusionConditio
 
 internal fun InclusionCondition.alternatives(): List<InclusionCondition> =
     if (this is AnyOf) alternatives else listOf(this)
+
+/** Returns the normalized, satisfiable conjunctions whose disjunction is this condition. */
+fun InclusionCondition.satisfiableAlternatives(): List<InclusionCondition> =
+    when (this) {
+        InclusionCondition.Never -> emptyList()
+        is AnyOf -> alternatives
+        else -> listOf(this)
+    }

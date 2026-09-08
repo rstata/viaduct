@@ -17,11 +17,14 @@ import model.registry.InstantiatedFieldPathDefinition
 import model.registry.ResolverFragments
 import model.registry.VariableInstanceDefinition
 import model.schemaType
+import model.satisfiableAlternatives
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.resolvers.inputParentDemand
 import viaduct.engine.api.EngineObjectData
 
-// Expands resolver object fragments until no new resolver keys enter the object's demand.
+// Expands resolver object fragments until no new resolver keys or activation alternatives enter
+// the object's demand. A previously expanded key can gain a late disjunct through another resolver,
+// so each new satisfiable alternative must propagate independently into that key's prerequisites.
 // Returns the merged demand together with the resolver and binding metadata used by later phases.
 context(world: Assumptions)
 internal fun EngineObjectData.Sync.closeInputDemand(
@@ -33,26 +36,59 @@ internal fun EngineObjectData.Sync.closeInputDemand(
     val expansionAccumulators:
         MutableMap<ObjectEngineResult.ObjectKey, ResolverExpansionAccumulator> =
         linkedMapOf()
-    val objectProviderReads: MutableList<ProviderDefinitionRead> =
-        mutableListOf()
 
     while (true) {
         val mergedDemand: ObjectSelectionForest =
             accumulatedDemand.merge(schemaType)
-        val newResolverSelections: Map<ObjectEngineResult.ObjectKey, ObjectSelection> =
+        val resolverSelections: Map<ObjectEngineResult.ObjectKey, ObjectSelection> =
             mergedDemand
                 .byKey()
                 .filter { (objectKey, _) ->
-                    requiresStandardResolution(objectKey) &&
-                        objectKey !in expansionAccumulators
+                    requiresStandardResolution(objectKey)
                 }
-        if (newResolverSelections.isEmpty()) {
+        var propagatedNewAlternative = false
+
+        resolverSelections.forEach { (objectKey, resolverSelection) ->
+            val expansion =
+                expansionAccumulators[objectKey]
+                    ?: createResolverExpansion(
+                        occurrence = occurrence,
+                        objectKey = objectKey,
+                    ).also { created ->
+                        check(expansionAccumulators.put(objectKey, created) == null) {
+                            "Resolver26 expanded object key twice: $objectKey"
+                        }
+                    }
+            val newAlternatives =
+                resolverSelection.inclusionCondition
+                    .satisfiableAlternatives()
+                    .filter(expansion.propagatedAlternatives::add)
+            if (newAlternatives.isEmpty()) return@forEach
+            propagatedNewAlternative = true
+
+            if (
+                objectKey is ObjectEngineResult.GroundKey &&
+                objectKey.arguments.argumentsContainErrorValue()
+            ) {
+                return@forEach
+            }
+            val objectFragment = expansion.fragments.objectFragment
+            newAlternatives.forEach { alternative ->
+                val guardedObjectFragment =
+                    objectFragment.constructionSelections.guardedBy(alternative)
+                accumulatedDemand +=
+                    guardedObjectFragment +
+                        guardedObjectFragment.inputParentDemand() +
+                        objectFragment.constructionSelections.providerDemand(
+                            definitions = objectFragment.pathVariableDefinitions,
+                            inclusionCondition = alternative,
+                        )
+            }
+        }
+
+        if (!propagatedNewAlternative) {
             check(
-                mergedDemand
-                    .byKey()
-                    .filterKeys { objectKey ->
-                        requiresStandardResolution(objectKey)
-                    }.keys == expansionAccumulators.keys,
+                resolverSelections.keys == expansionAccumulators.keys,
             ) {
                 "Resolver26 closed demand and resolver expansions are misaligned"
             }
@@ -64,76 +100,60 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                             selection = mergedDemand.byKey().getValue(objectKey),
                         )
                     },
-                objectProviderReads = objectProviderReads,
+                objectProviderReads =
+                    expansionAccumulators.flatMap { (objectKey, expansion) ->
+                        if (
+                            objectKey is ObjectEngineResult.GroundKey &&
+                            objectKey.arguments.argumentsContainErrorValue()
+                        ) {
+                            return@flatMap emptyList()
+                        }
+                        expansion.fragments.objectFragment.pathVariableDefinitions.map { definition ->
+                            ProviderDefinitionRead(
+                                definition = definition,
+                                readerPath = occurrence.coordinate(objectKey),
+                                inclusionCondition =
+                                    mergedDemand.byKey().getValue(objectKey).inclusionCondition,
+                            )
+                        }
+                    },
             )
-        }
-
-        newResolverSelections.forEach { (objectKey, resolverSelection) ->
-            val resolver: FieldResolver =
-                world.resolverRegistry.resolver(objectKey.field)
-            val resolverOccurrenceId =
-                ResolverOccurrenceId.at(
-                    occurrence.root,
-                    occurrence.coordinate(objectKey),
-                )
-            val fragments = resolver.instantiateFragments(resolverOccurrenceId)
-            if (
-                objectKey is ObjectEngineResult.GroundKey &&
-                objectKey.arguments.argumentsContainErrorValue()
-            ) {
-                check(
-                    expansionAccumulators.put(
-                        objectKey,
-                        ResolverExpansionAccumulator(
-                            resolverOccurrenceId = resolverOccurrenceId,
-                            resolver = resolver,
-                            inputMaterializeSelections = materializeSelectionForestOf(),
-                            variableDefinitions = fragments.queryFragment.variableDefinitions,
-                            fragments = fragments,
-                        ),
-                    ) == null,
-                ) {
-                    "Resolver26 expanded error-valued object key twice: $objectKey"
-                }
-                return@forEach
-            }
-            val readerPath = occurrence.coordinate(objectKey)
-            val objectFragment = fragments.objectFragment
-            val expansion =
-                ResolverExpansionAccumulator(
-                    resolverOccurrenceId = resolverOccurrenceId,
-                    resolver = resolver,
-                    inputMaterializeSelections = objectFragment.materializeSelections,
-                    variableDefinitions =
-                        resolver.instantiatedVariableDefinitions(resolverOccurrenceId),
-                    fragments = fragments,
-                )
-            check(expansionAccumulators.put(objectKey, expansion) == null) {
-                "Resolver26 expanded object key twice: $objectKey"
-            }
-
-            objectProviderReads +=
-                objectFragment.pathVariableDefinitions.map { definition ->
-                    ProviderDefinitionRead(
-                        definition = definition,
-                        readerPath = readerPath,
-                        inclusionCondition = resolverSelection.inclusionCondition,
-                    )
-                }
-            val guardedObjectFragment =
-                objectFragment.constructionSelections.guardedBy(
-                    resolverSelection.inclusionCondition,
-                )
-            accumulatedDemand +=
-                guardedObjectFragment +
-                    guardedObjectFragment.inputParentDemand() +
-                    objectFragment.constructionSelections.providerDemand(
-                        definitions = objectFragment.pathVariableDefinitions,
-                        inclusionCondition = resolverSelection.inclusionCondition,
-                    )
         }
     }
     error("Resolver26 demand closure terminated unexpectedly")
+}
+
+context(world: Assumptions)
+private fun createResolverExpansion(
+    occurrence: OEROccurrenceContext,
+    objectKey: ObjectEngineResult.ObjectKey,
+): ResolverExpansionAccumulator {
+    val resolver: FieldResolver = world.resolverRegistry.resolver(objectKey.field)
+    val resolverOccurrenceId =
+        ResolverOccurrenceId.at(
+            occurrence.root,
+            occurrence.coordinate(objectKey),
+        )
+    val fragments = resolver.instantiateFragments(resolverOccurrenceId)
+    if (
+        objectKey is ObjectEngineResult.GroundKey &&
+        objectKey.arguments.argumentsContainErrorValue()
+    ) {
+        return ResolverExpansionAccumulator(
+            resolverOccurrenceId = resolverOccurrenceId,
+            resolver = resolver,
+            inputMaterializeSelections = materializeSelectionForestOf(),
+            variableDefinitions = fragments.queryFragment.variableDefinitions,
+            fragments = fragments,
+        )
+    }
+    return ResolverExpansionAccumulator(
+        resolverOccurrenceId = resolverOccurrenceId,
+        resolver = resolver,
+        inputMaterializeSelections = fragments.objectFragment.materializeSelections,
+        variableDefinitions = resolver.instantiatedVariableDefinitions(resolverOccurrenceId),
+        fragments = fragments,
+    )
 }
 
 context(world: Assumptions)
@@ -158,6 +178,8 @@ private data class ResolverExpansionAccumulator(
     val variableDefinitions: List<VariableInstanceDefinition>,
     val fragments: ResolverFragments,
 ) {
+    val propagatedAlternatives: MutableSet<InclusionCondition> = linkedSetOf()
+
     fun toFieldResolverOccurrenceContext(
         selection: ObjectSelection,
     ): FieldResolverOccurrenceContext =

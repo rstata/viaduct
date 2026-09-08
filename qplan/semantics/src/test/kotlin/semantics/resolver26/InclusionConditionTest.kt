@@ -91,6 +91,41 @@ class InclusionConditionTest {
     }
 
     @Test
+    fun `late equal-key alternative broadens resolver prerequisites`() {
+        val world =
+            TestWorld.fromDSL(
+                """
+                extend type Query {
+                  outer(a: Boolean!, b: Boolean!): Int!
+                    @resolver(
+                      of: "dependency @include(if: ${'$'}a) bridge(flag: ${'$'}b)"
+                      result: 1
+                    )
+                  bridge(flag: Boolean!): Int!
+                    @resolver(
+                      of: "dependency @include(if: ${'$'}flag)"
+                      result: 2
+                    )
+                  dependency: Int!
+                    @resolver(
+                      of: "prerequisite"
+                      result: 3
+                    )
+                  prerequisite: Int! @resolver(result: 4)
+                }
+                """.trimIndent(),
+            )
+
+        val resolution = world.resolve("query { outer(a: false, b: true) }")
+
+        listOf("outer", "bridge", "dependency", "prerequisite").forEach { fieldName ->
+            val field = world.schema.requireObjectField("Query", fieldName)
+            assertEquals(1, resolution.applications.count { it == field }, fieldName)
+        }
+        assertTrue(resolution.correct)
+    }
+
+    @Test
     fun `aliases sharing one construction cell are materialized by source occurrence`() {
         val world =
             TestWorld.fromSDL(

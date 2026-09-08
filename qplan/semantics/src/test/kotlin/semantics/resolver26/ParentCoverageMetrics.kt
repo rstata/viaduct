@@ -101,6 +101,7 @@ internal class ParentCoverageAnalyzer(
                     .collect(schemaType)
                     .byResponseKey()
                     .forEach { (responseKey, selection) ->
+                        if (!isPresent(responseKey)) return@forEach
                         val key = selection.key
                         val isParent = key is ObjectEngineResult.ParentKey
                         val nextParentDepth =

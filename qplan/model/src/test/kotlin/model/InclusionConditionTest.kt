@@ -74,6 +74,8 @@ class InclusionConditionTest {
         assertTrue(condition.include(mapOf(x to true, y to true)))
         assertTrue(condition.include(mapOf(x to false, y to false)))
         assertFalse(condition.include(mapOf(x to false, y to true)))
+        assertEquals(listOf(xRequired, yRequired), condition.satisfiableAlternatives())
+        assertTrue(InclusionCondition.Never.satisfiableAlternatives().isEmpty())
     }
 
     @Test

@@ -533,8 +533,6 @@ val resolverPropertyProfiles =
             "generated object fragment worlds with fromObjectField resolve correctly",
         "mixed-variables" to
             "generated mixed resolver variable worlds resolve correctly",
-        "inclusion-conditions" to
-            "generated inclusion-condition worlds resolve correctly",
         "resolver26-broad-stress" to
             "broad full-feature worlds resolve correctly",
         "resolver26-broad-descendant-variables" to

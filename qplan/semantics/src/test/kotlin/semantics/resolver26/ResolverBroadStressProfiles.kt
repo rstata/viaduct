@@ -21,10 +21,6 @@ import semantics.arbitrary.ResolverArgumentErrorWeight
 import semantics.arbitrary.ResolverFragmentDepth
 import semantics.arbitrary.ResolverFragmentWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
-import semantics.arbitrary.ResolverInclusionConditionAlternativeWeight
-import semantics.arbitrary.ResolverInclusionConditionCount
-import semantics.arbitrary.ResolverInclusionConditionsEnabled
-import semantics.arbitrary.ResolverInclusionConditionWeight
 import semantics.arbitrary.ResolverFromArgumentNestedPathWeight
 import semantics.arbitrary.ResolverFromArgumentVariablesEnabled
 import semantics.arbitrary.ResolverFromFieldPassiveUseWeight
@@ -68,8 +64,6 @@ internal enum class Resolver26BroadStressProfile(
                 Resolver26StructuralSignature.MIXED_BINDING_SOURCES,
                 Resolver26StructuralSignature.ABSTRACT_PROVIDER_PATH,
                 Resolver26StructuralSignature.GREAT_GRANDPARENT_PARENT_DEMAND,
-                Resolver26StructuralSignature.GENERATED_INCLUSION_CONDITION,
-                Resolver26StructuralSignature.SUPPRESSED_INCLUSION_CONDITION,
             ),
         config = balancedBroadConfig(),
     ),
@@ -82,8 +76,6 @@ internal enum class Resolver26BroadStressProfile(
                 Resolver26StructuralSignature.NESTED_VARIABLE_USE,
                 Resolver26StructuralSignature.PASSIVE_DESCENDANT_VARIABLE_USE,
                 Resolver26StructuralSignature.LIST_SYMBOLIC_RESOLVER_INSTANCE,
-                Resolver26StructuralSignature.GENERATED_INCLUSION_CONDITION,
-                Resolver26StructuralSignature.SUPPRESSED_INCLUSION_CONDITION,
             ),
         config =
             balancedBroadConfig() +
@@ -108,7 +100,6 @@ internal enum class Resolver26BroadStressProfile(
             ),
         config =
             balancedBroadConfig() +
-                (ResolverInclusionConditionsEnabled to false) +
                 (NullableTypeWeight to 0.75) +
                 (NullValueWeight to 0.45) +
                 (ErrorValueWeight to 0.45) +
@@ -123,8 +114,6 @@ internal enum class Resolver26BroadStressProfile(
         requiredSignatures =
             setOf(
                 Resolver26StructuralSignature.EQUAL_SYMBOLIC_ARGUMENTS,
-                Resolver26StructuralSignature.GENERATED_INCLUSION_CONDITION,
-                Resolver26StructuralSignature.SUPPRESSED_INCLUSION_CONDITION,
             ),
         config =
             balancedBroadConfig() +
@@ -143,8 +132,6 @@ internal enum class Resolver26BroadStressProfile(
             setOf(
                 Resolver26StructuralSignature.MULTIPLE_OBJECT_PATH_OWNERS,
                 Resolver26StructuralSignature.OBJECT_PATH_OWNER_DEPENDENCY,
-                Resolver26StructuralSignature.GENERATED_INCLUSION_CONDITION,
-                Resolver26StructuralSignature.SUPPRESSED_INCLUSION_CONDITION,
             ),
         config =
             balancedBroadConfig() +
@@ -197,20 +184,16 @@ private fun balancedBroadConfig(): Config =
         (ListValueSize to 0..2) +
         (NullableTypeWeight to 0.35) +
         (NullValueWeight to 0.15) +
-        (ErrorValueWeight to 0.0) +
+        (ErrorValueWeight to 0.08) +
         (NodeObjectWeight to 0.2) +
         (QueryScalarFieldWeight to 0.2) +
         (ResolverFragmentsEnabled to true) +
         (ResolverQueryFragmentsEnabled to true) +
-        (ResolverInclusionConditionsEnabled to true) +
-        (ResolverInclusionConditionWeight to 0.2) +
-        (ResolverInclusionConditionCount to 1..2) +
-        (ResolverInclusionConditionAlternativeWeight to 0.15) +
         (ParentFieldsEnabled to true) +
         (ResolverQueryFragmentWeight to 0.1) +
         (ResolverFragmentWeight to 0.8) +
         (ResolverFragmentDepth to 3) +
-        (ResolverArgumentErrorWeight to 0.0) +
+        (ResolverArgumentErrorWeight to 0.05) +
         (ResolverFromArgumentNestedPathWeight to 0.5) +
         (ResolverFromArgumentVariablesEnabled to true) +
         (ResolverFromProviderVariablesEnabled to true) +

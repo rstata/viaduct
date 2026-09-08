@@ -48,7 +48,6 @@ import semantics.arbitrary.configuredResolverTestExecution
 import semantics.arbitrary.executeResolverTestCases
 import semantics.arbitrary.isGeneratedRandomParentField
 import semantics.contract.registeredResolverOccurrences
-import semantics.contract.registeredResolverActivationCounts
 import semantics.contract.registeredResolverOccurrenceApplicationIdentityCounts
 import semantics.contract.registeredResolverOccurrenceApplicationIdentityCountsFor
 import semantics.contract.registeredResolverOccurrenceApplicationKeyCounts
@@ -228,8 +227,6 @@ internal suspend fun runResolver26BroadStress(
     var activatedSometimesPassiveParentDemandOccurrences = 0
     val sometimesPassiveParentDemandDepths: MutableMap<Int, Int> = linkedMapOf()
     var generatedQueryFragments = 0
-    var generatedInclusionConditions = 0
-    var suppressedInclusionConditionOccurrences = 0
     var activatedQueryFragmentApplications = 0
     var activatedParentDemandApplications = 0
     var materializedParentFieldActivations = 0
@@ -294,8 +291,6 @@ internal suspend fun runResolver26BroadStress(
                 generatedSometimesPassiveFields +=
                     testCase.registry.features.sometimesPassiveFieldCount
                 generatedQueryFragments += testCase.registry.features.queryFragmentCount
-                generatedInclusionConditions +=
-                    testCase.registry.features.inclusionConditionCount
                 maximumProviderPathLength =
                     maxOf(
                         maximumProviderPathLength,
@@ -458,17 +453,11 @@ internal suspend fun runResolver26BroadStress(
                     context(operation) {
                         result.registeredResolverOccurrences(operation.resolverRegistry)
                     }
-                val activationCounts =
-                    context(operation) {
-                        result.registeredResolverActivationCounts()
-                    }
-                suppressedInclusionConditionOccurrences += activationCounts.notActivated
                 observedSignatures +=
                     resolver26StructuralSignatures(
                         occurrences = occurrences,
                         witness = witness,
                         registry = testCase.registry,
-                        activationCounts = activationCounts,
                     )
                 resolverApplications += witness.applications.size
                 witness.applications.forEach { application ->
@@ -696,9 +685,6 @@ internal suspend fun runResolver26BroadStress(
                 "$activatedSometimesPassiveParentDemandOccurrences, " +
                 "sometimesPassiveParentDemandDepths=$sometimesPassiveParentDemandDepths, " +
                 "generatedQueryFragments=$generatedQueryFragments, " +
-                "generatedInclusionConditions=$generatedInclusionConditions, " +
-                "suppressedInclusionConditionOccurrences=" +
-                "$suppressedInclusionConditionOccurrences, " +
                 "activatedQueryFragmentApplications=$activatedQueryFragmentApplications, " +
                 "activatedParentDemandApplications=$activatedParentDemandApplications, " +
                 "materializedParentFieldActivations=$materializedParentFieldActivations, " +

@@ -8,6 +8,7 @@ import model.Fragment
 import model.EngineInputData
 import model.SourceSchemaAdapter
 import model.spec.SpecSelection
+import model.isParentField
 import model.requireField
 import model.requireQueryTypeDef
 import model.registry.ProviderFragment
@@ -46,6 +47,9 @@ class FromField private constructor(
             nullableTraversal = nullableTraversal,
             locationHasDefault = locationHasDefault,
         )
+
+    internal fun isCompatibleWithInclusionCondition(): Boolean =
+        terminalType.isCompatibleWithInclusionCondition(nullableTraversal)
 
     companion object {
         internal fun compile(
@@ -213,7 +217,9 @@ private fun GJSchema.compilePath(
         responsePath = responsePath,
         index = index + 1,
         keys = keys + matchedKeys,
-        nullableTraversal = nullableTraversal || typeExpr.isNullable,
+        nullableTraversal =
+            nullableTraversal ||
+                (typeExpr.isNullable && !key.field.isParentField()),
     )
 }
 

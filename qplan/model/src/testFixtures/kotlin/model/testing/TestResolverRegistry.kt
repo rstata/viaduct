@@ -500,6 +500,8 @@ private class TestResolverRegistry(
                                     declaration.inputPath.map(ViaductSchema.Field::name))
                                     .joinToString("."),
                         isCompatible = declaration::isCompatibleWith,
+                        isCompatibleWithInclusionCondition =
+                            declaration::isCompatibleWithInclusionCondition,
                     )
                 }
                 is FromField -> {
@@ -533,6 +535,8 @@ private class TestResolverRegistry(
                             "${declaration.providerFragment.name.lowercase()} provider path " +
                                 declaration.responsePath.joinToString("."),
                         isCompatible = declaration::isCompatibleWith,
+                        isCompatibleWithInclusionCondition =
+                            declaration::isCompatibleWithInclusionCondition,
                     )
                 }
             }
@@ -674,18 +678,28 @@ private class TestResolverRegistry(
             ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
             Boolean,
         ) -> Boolean,
+        isCompatibleWithInclusionCondition: () -> Boolean,
     ) {
         fragments
             .flatMap { fragment -> fragment.subselections.variableUses(variable) }
             .forEach { use ->
                 require(
-                    isCompatible(
-                        use.typeExpr,
-                        use.hasDefault,
-                    ),
+                    when (use) {
+                        is VariableUse.Argument ->
+                            isCompatible(
+                                use.typeExpr,
+                                use.hasDefault,
+                            )
+                        VariableUse.InclusionCondition ->
+                            isCompatibleWithInclusionCondition()
+                    },
                 ) {
                     "Variable ${variable.variableName} $sourceDescription is incompatible " +
-                        "with one of its argument locations"
+                        when (use) {
+                            is VariableUse.Argument -> "with one of its argument locations"
+                            VariableUse.InclusionCondition ->
+                                "with an inclusion-condition location"
+                        }
                 }
             }
     }
@@ -707,10 +721,14 @@ private class TestResolverRegistry(
             this@toSelectionList.forEach(::add)
         }
 
-    private data class VariableUse(
-        val typeExpr: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
-        val hasDefault: Boolean,
-    )
+    private sealed interface VariableUse {
+        data class Argument(
+            val typeExpr: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
+            val hasDefault: Boolean,
+        ) : VariableUse
+
+        data object InclusionCondition : VariableUse
+    }
 
     private fun SelectionForest.variableUses(
         variable: Arguments.Variable,
@@ -727,10 +745,13 @@ private class TestResolverRegistry(
                                     typeExpr = argument.inputType,
                                     hasDefault = argument.hasDefault,
                                 ).map { (typeExpr, hasDefault) ->
-                                    VariableUse(typeExpr, hasDefault)
+                                    VariableUse.Argument(typeExpr, hasDefault)
                                 },
                         )
                     }
+                }
+                if (variable in selection.inclusionCondition.usedVariables()) {
+                    add(VariableUse.InclusionCondition)
                 }
                 addAll(selection.subselections.variableUses(variable))
             }

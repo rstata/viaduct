@@ -614,6 +614,155 @@ class ResolverDemandTest {
     }
 
     @Test
+    fun `rejects an Int fromArgument used as an inclusion condition`() {
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                TestWorld.fromSDL(
+                    schemaSDL =
+                        """
+                        type Query {
+                          result(flag: Int!): Int!
+                          dependency: Int!
+                        }
+                        """.trimIndent(),
+                    fieldResolvers = { schema ->
+                        val result = schema.requireObjectField("Query", "result")
+                        mapOf(
+                            result to
+                                resolver(
+                                    schema.fragmentFrom(
+                                        "fragment ResultInput on Query { " +
+                                            "dependency @include(if: ${'$'}flag) }",
+                                        variableField = result,
+                                    ),
+                                ),
+                            schema.requireObjectField("Query", "dependency") to
+                                resolver(schema.emptyFragmentOf("Query")),
+                        )
+                    },
+                    variableProviders = { schema ->
+                        val result = schema.requireObjectField("Query", "result")
+                        mapOf(
+                            Arguments.Variable.of(result, "flag") to
+                                schema.fromArgument(result, "flag"),
+                        )
+                    },
+                )
+            }
+
+        assertTrue(
+            failure.message!!.contains(
+                "argument path flag is incompatible with an inclusion-condition location",
+            ),
+        )
+    }
+
+    @Test
+    fun `rejects an Int fromObjectField used as a query inclusion condition`() {
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                TestWorld.fromSDL(
+                    schemaSDL =
+                        """
+                        type Query {
+                          result: Int!
+                          enabled: Int!
+                          dependency: Int!
+                        }
+                        """.trimIndent(),
+                    fieldResolvers = { schema ->
+                        val result = schema.requireObjectField("Query", "result")
+                        mapOf(
+                            result to
+                                fieldResolverOf(
+                                    objectFragment =
+                                        schema.fragmentFrom(
+                                            "fragment ResultInput on Query { enabled }",
+                                            variableField = result,
+                                        ),
+                                    queryFragment =
+                                        schema.fragmentFrom(
+                                            "fragment QueryInput on Query { " +
+                                                "dependency @include(if: ${'$'}enabled) }",
+                                            variableField = result,
+                                        ),
+                                ) { _, _, _ ->
+                                    error("Not invoked")
+                                },
+                            schema.requireObjectField("Query", "enabled") to
+                                resolver(schema.emptyFragmentOf("Query")),
+                            schema.requireObjectField("Query", "dependency") to
+                                resolver(schema.emptyFragmentOf("Query")),
+                        )
+                    },
+                    variableProviders = { schema ->
+                        val result = schema.requireObjectField("Query", "result")
+                        mapOf(
+                            Arguments.Variable.of(result, "enabled") to
+                                schema.fromObjectField(
+                                    objectFragmentSource =
+                                        "fragment ResultInput on Query { enabled }",
+                                    responsePath = listOf("enabled"),
+                                    variableField = result,
+                                ),
+                        )
+                    },
+                )
+            }
+
+        assertTrue(
+            failure.message!!.contains(
+                "object provider path enabled is incompatible with an " +
+                    "inclusion-condition location",
+            ),
+        )
+    }
+
+    @Test
+    fun `rejects a nullable Boolean used as an inclusion condition`() {
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                TestWorld.fromSDL(
+                    schemaSDL =
+                        """
+                        type Query {
+                          result(flag: Boolean): Int!
+                          dependency: Int!
+                        }
+                        """.trimIndent(),
+                    fieldResolvers = { schema ->
+                        val result = schema.requireObjectField("Query", "result")
+                        mapOf(
+                            result to
+                                resolver(
+                                    schema.fragmentFrom(
+                                        "fragment ResultInput on Query { " +
+                                            "dependency @include(if: ${'$'}flag) }",
+                                        variableField = result,
+                                    ),
+                                ),
+                            schema.requireObjectField("Query", "dependency") to
+                                resolver(schema.emptyFragmentOf("Query")),
+                        )
+                    },
+                    variableProviders = { schema ->
+                        val result = schema.requireObjectField("Query", "result")
+                        mapOf(
+                            Arguments.Variable.of(result, "flag") to
+                                schema.fromArgument(result, "flag"),
+                        )
+                    },
+                )
+            }
+
+        assertTrue(
+            failure.message!!.contains(
+                "argument path flag is incompatible with an inclusion-condition location",
+            ),
+        )
+    }
+
+    @Test
     fun `rejects a provider path behind a narrowing guard`() {
         val failure =
             assertFailsWith<IllegalArgumentException> {

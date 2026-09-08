@@ -326,6 +326,97 @@ class ResolverDemandTest {
     }
 
     @Test
+    fun `rejects inclusion-condition variables beneath parent selections`() {
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                TestWorld.fromSDL(
+                    schemaSDL =
+                        """
+                        directive @parent on FIELD_DEFINITION
+                        type Query { root: Root }
+                        type Root { child: Child }
+                        type Child {
+                          parent: Root @parent
+                          dependency: Int
+                          result(enabled: Boolean!): Int
+                        }
+                        """.trimIndent(),
+                    fieldResolvers = { schema ->
+                        val result = schema.requireObjectField("Child", "result")
+                        mapOf(
+                            result to
+                                resolver(
+                                    schema.fragmentFrom(
+                                        """
+                                        fragment ResultInput on Child {
+                                          parent { child @include(if: ${'$'}enabled) { dependency } }
+                                        }
+                                        """.trimIndent(),
+                                        variableField = result,
+                                    ),
+                                ),
+                        )
+                    },
+                    variableProviders = { schema ->
+                        val result = schema.requireObjectField("Child", "result")
+                        mapOf(
+                            Arguments.Variable.of(result, "enabled") to
+                                schema.fromArgument(result, "enabled"),
+                        )
+                    },
+                )
+            }
+
+        assertTrue(failure.message!!.contains("must not use variables beneath @parent"))
+    }
+
+    @Test
+    fun `accepts a variable defined beneath parent and used outside parent`() {
+        TestWorld.fromSDL(
+            schemaSDL =
+                """
+                directive @parent on FIELD_DEFINITION
+                type Query { root: Root }
+                type Root { enabled: Boolean!, child: Child }
+                type Child {
+                  parent: Root @parent
+                  dependency: Int
+                  result: Int
+                }
+                """.trimIndent(),
+            fieldResolvers = { schema ->
+                val result = schema.requireObjectField("Child", "result")
+                mapOf(
+                    result to
+                        resolver(
+                            schema.fragmentFrom(
+                                """
+                                fragment ResultInput on Child {
+                                  parent { enabled }
+                                  dependency @include(if: ${'$'}enabled)
+                                }
+                                """.trimIndent(),
+                                variableField = result,
+                            ),
+                        ),
+                )
+            },
+            variableProviders = { schema ->
+                val result = schema.requireObjectField("Child", "result")
+                mapOf(
+                    Arguments.Variable.of(result, "enabled") to
+                        schema.fromObjectField(
+                            objectFragmentSource =
+                                "fragment ResultInput on Child { parent { enabled } }",
+                            responsePath = listOf("parent", "enabled"),
+                            variableField = result,
+                        ),
+                )
+            },
+        )
+    }
+
+    @Test
     fun `rejects variable cycles`() = assertRejectedVariableCycle(mixedFragments = false)
 
     @Test

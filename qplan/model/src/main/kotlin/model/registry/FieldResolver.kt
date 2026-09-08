@@ -550,6 +550,7 @@ private fun MaterializeSelectionForest.usedVariablesApplicableTo(
         if (type !in selection.possibleTypes) return@forEach
         val objectKey = selection.key.objectKey(type)
         variables += objectKey.arguments.usedVariables()
+        variables += selection.inclusionCondition.usedVariables()
         val outputType = objectKey.field.type.baseTypeDef as? ViaductSchema.CompositeTypeDef
         outputType?.possibleObjectTypes?.forEach { possibleOutputType ->
             variables += selection.subselections.usedVariablesApplicableTo(possibleOutputType)

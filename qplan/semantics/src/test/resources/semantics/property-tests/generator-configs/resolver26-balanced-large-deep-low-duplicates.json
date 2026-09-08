@@ -15,7 +15,6 @@
     "resolverFromObjectFieldVariablesEnabled" : true,
     "resolverFromProviderVariablesEnabled" : true,
     "resolverFromQueryFieldVariablesEnabled" : true,
-    "resolverInclusionConditionsEnabled" : true,
     "resolverQueryFragmentsEnabled" : true,
     "resolverVariableSingletonCoercionEnabled" : true,
     "resolverVariablesEnabled" : true,
@@ -25,7 +24,7 @@
   "doubles" : {
     "aliasWeight" : 0.2,
     "duplicateSelectionWeight" : 0.1,
-    "errorValueWeight" : 0.0,
+    "errorValueWeight" : 0.08,
     "explicitFieldResolverWeight" : 0.8,
     "fieldArgumentWeight" : 0.65,
     "implementationArgumentDefaultWeight" : 0.3,
@@ -40,7 +39,7 @@
     "passiveAbstractOutputTypeWeight" : 0.0,
     "queryScalarFieldWeight" : 0.2,
     "recursiveOutputEdgeWeight" : 0.2,
-    "resolverArgumentErrorWeight" : 0.0,
+    "resolverArgumentErrorWeight" : 0.05,
     "resolverFragmentArgumentFieldWeight" : 0.0,
     "resolverFragmentLongTailWeight" : 0.0,
     "resolverFragmentWeight" : 0.8,
@@ -48,9 +47,6 @@
     "resolverFromFieldPassiveUseWeight" : 0.25,
     "resolverFromFieldProviderArgumentVariableWeight" : 0.0,
     "resolverFromFieldVariableOwnerUseWeight" : 0.25,
-    "resolverInclusionConditionAlternativeWeight" : 0.15,
-    "resolverInclusionConditionSkipWeight" : 0.5,
-    "resolverInclusionConditionWeight" : 0.2,
     "resolverLiteralVariableConvergenceWeight" : 0.2,
     "resolverNestedProviderPathWeight" : 0.5,
     "resolverQueryFragmentWeight" : 0.1,
@@ -114,10 +110,6 @@
     },
     "resolverFromFieldVariableUseDepth" : {
       "maximum" : 3,
-      "minimum" : 1
-    },
-    "resolverInclusionConditionCount" : {
-      "maximum" : 2,
       "minimum" : 1
     },
     "resolverVariableCount" : {

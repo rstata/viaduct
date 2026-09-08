@@ -273,12 +273,6 @@ private data class FragmentSelectionDocument(
     val subselections: List<FragmentSelectionDocument>,
     val typeCondition: String?,
     val alias: String?,
-    val inclusionRequirements: List<InclusionRequirementDocument> = emptyList(),
-)
-
-private data class InclusionRequirementDocument(
-    val variableName: String,
-    val required: Boolean,
 )
 
 private data class ArgumentDocument(
@@ -599,13 +593,6 @@ private fun FragmentSelectionPlan.toDocument(): FragmentSelectionDocument =
         subselections = subselections.map(FragmentSelectionPlan::toDocument),
         typeCondition = typeCondition,
         alias = alias,
-        inclusionRequirements =
-            inclusionRequirements.map { requirement ->
-                InclusionRequirementDocument(
-                    variableName = requirement.variableName,
-                    required = requirement.required,
-                )
-            },
     )
 
 private fun FragmentSelectionDocument.toFragmentSelectionPlan(): FragmentSelectionPlan =
@@ -615,13 +602,6 @@ private fun FragmentSelectionDocument.toFragmentSelectionPlan(): FragmentSelecti
         subselections = subselections.map(FragmentSelectionDocument::toFragmentSelectionPlan),
         typeCondition = typeCondition,
         alias = alias,
-        inclusionRequirements =
-            inclusionRequirements.map { requirement ->
-                InclusionRequirementPlan(
-                    variableName = requirement.variableName,
-                    required = requirement.required,
-                )
-            },
     )
 
 private fun InputTypeSpec.toDocument(): InputTypeDocument =

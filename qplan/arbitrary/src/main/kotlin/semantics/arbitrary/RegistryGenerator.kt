@@ -89,15 +89,6 @@ data class RegistryFeatures(
     val maximumFromQueryFieldVariableUseDepth: Int = 0,
     val maximumParentSelectionDepth: Int = 0,
     val resolverOutputParentFieldCount: Int = 0,
-    val inclusionConditionCount: Int = 0,
-    val inclusionConditionFromArgumentCount: Int = 0,
-    val inclusionConditionFromObjectFieldCount: Int = 0,
-    val inclusionConditionFromQueryFieldCount: Int = 0,
-    val inclusionConditionFromProviderCount: Int = 0,
-    val objectFragmentInclusionConditionCount: Int = 0,
-    val queryFragmentInclusionConditionCount: Int = 0,
-    val nestedInclusionConditionCount: Int = 0,
-    val inclusionConditionAlternativeGroupCount: Int = 0,
 )
 
 /**
@@ -716,13 +707,9 @@ private class RegistryGenerator(
             }
         val ranks = fieldSites.withIndex().associate { (rank, site) -> site to rank }
         val variableProviders = mutableListOf<VariableProviderPlan>()
-        val baseResolverFragments =
+        val resolverFragments =
             fieldSites.associateWith { site ->
                 resolverFragmentPlans(site, ranks, variableProviders)
-            }
-        val resolverFragments =
-            baseResolverFragments.mapValues { (site, fragments) ->
-                fragments.withInclusionConditions(site, ranks, variableProviders)
             }
         val objectFragments =
             resolverFragments.mapValues { (_, fragments) -> fragments.objectFragment }
@@ -786,8 +773,6 @@ private class RegistryGenerator(
             objectFragments
                 .mapValues { (_, fragment) -> fragment.maximumParentSelectionDepth() }
                 .filterValues { depth -> depth > 0 }
-        val inclusionConditionFeatures =
-            resolverFragments.inclusionConditionFeatures(variableProviders)
         return ArbitraryRegistry(
             fieldResolverCoordinates = fieldSites,
             nodeResolverTypes = nodeSites,
@@ -924,22 +909,6 @@ private class RegistryGenerator(
                     resolverOutputParentFieldCount =
                         (fieldValues.values + nodeValues.values)
                             .sumOf { value -> value.parentFieldCount() },
-                    inclusionConditionCount = inclusionConditionFeatures.total,
-                    inclusionConditionFromArgumentCount =
-                        inclusionConditionFeatures.fromArgument,
-                    inclusionConditionFromObjectFieldCount =
-                        inclusionConditionFeatures.fromObjectField,
-                    inclusionConditionFromQueryFieldCount =
-                        inclusionConditionFeatures.fromQueryField,
-                    inclusionConditionFromProviderCount =
-                        inclusionConditionFeatures.fromProvider,
-                    objectFragmentInclusionConditionCount =
-                        inclusionConditionFeatures.objectFragment,
-                    queryFragmentInclusionConditionCount =
-                        inclusionConditionFeatures.queryFragment,
-                    nestedInclusionConditionCount = inclusionConditionFeatures.nested,
-                    inclusionConditionAlternativeGroupCount =
-                        inclusionConditionFeatures.alternativeGroups,
                 ),
         )
     }
@@ -1047,139 +1016,6 @@ private class RegistryGenerator(
             )
         }
     }
-
-    private fun ResolverFragmentPlans.withInclusionConditions(
-        consumer: FieldCoordinate,
-        ranks: Map<FieldCoordinate, Int>,
-        variableProviders: List<VariableProviderPlan>,
-    ): ResolverFragmentPlans {
-        if (!config[ResolverInclusionConditionsEnabled]) return this
-        val providers =
-            variableProviders
-                .filter { provider -> provider.owner == consumer }
-                .filter { provider ->
-                    (objectFragment.variableTargets(provider.variableName) +
-                        queryFragment.variableTargets(provider.variableName))
-                        .any { target ->
-                            target is ScalarVariableTarget &&
-                                target.scalar == ScalarKind.BOOLEAN &&
-                                !target.nullable
-                        }
-                }.shuffled(random)
-        if (providers.isEmpty() || !chance(config[ResolverInclusionConditionWeight])) return this
-
-        var result = this
-        var alternativeProvider: VariableProviderPlan? = null
-        if (chance(config[ResolverInclusionConditionAlternativeWeight])) {
-            val provider = providers.first()
-            val target =
-                result
-                    .conditionTargets(provider, ranks)
-                    .filter { target ->
-                        result.fragment(target.location)
-                            .selectionAt(target.selectionPath)
-                            .inclusionRequirements
-                            .isEmpty()
-                    }.shuffled(random)
-                    .firstOrNull()
-            if (target != null) {
-                alternativeProvider = provider
-                result =
-                    result.duplicateWithOppositeConditions(
-                        target,
-                        provider.variableName,
-                    )
-            }
-        }
-
-        val requested = Arb.int(config[ResolverInclusionConditionCount]).next(random)
-        providers.filterNot { provider -> provider == alternativeProvider }.take(requested).forEach { provider ->
-            val required = !chance(config[ResolverInclusionConditionSkipWeight])
-            val targets =
-                result.conditionTargets(provider, ranks).filter { target ->
-                    result.fragment(target.location)
-                        .selectionAt(target.selectionPath)
-                        .inclusionRequirements
-                        .none { requirement -> requirement.required == required }
-                }
-            val target = targets.shuffled(random).firstOrNull() ?: return@forEach
-            result =
-                result.addCondition(
-                    target = target,
-                    requirement =
-                        InclusionRequirementPlan(
-                            variableName = provider.variableName,
-                            required = required,
-                        ),
-                )
-        }
-        return result
-    }
-
-    private fun ResolverFragmentPlans.conditionTargets(
-        provider: VariableProviderPlan,
-        ranks: Map<FieldCoordinate, Int>,
-    ): List<ConditionTarget> =
-        FragmentLocation.entries.flatMap { location ->
-            val fragment = fragment(location)
-            fragment.conditionTargets(schema).filter { target ->
-                if (target.field !in fieldSites) return@filter false
-                if (provider !is FromFieldVariableProviderPlan) return@filter true
-                val providerFragment = fragment(provider.providerFragment.location())
-                val targetBranch = fragment.selections[target.selectionPath.first()]
-                structuralBranchRank(
-                    providerFragment.ownerName,
-                    provider.selection,
-                    ranks,
-                ) <
-                    structuralBranchRank(fragment.ownerName, targetBranch, ranks)
-            }.map { target -> target.copy(location = location) }
-        }
-
-    private fun ResolverFragmentPlans.addCondition(
-        target: ConditionTarget,
-        requirement: InclusionRequirementPlan,
-    ): ResolverFragmentPlans =
-        replaceFragment(
-            target.location,
-            fragment(target.location).updateSelection(target.selectionPath) { selection ->
-                selection.copy(
-                    inclusionRequirements =
-                        (selection.inclusionRequirements + requirement).distinct(),
-                )
-            },
-        )
-
-    private fun ResolverFragmentPlans.duplicateWithOppositeConditions(
-        target: ConditionTarget,
-        variableName: String,
-    ): ResolverFragmentPlans =
-        replaceFragment(
-            target.location,
-            fragment(target.location).duplicateSelection(target.selectionPath) { selection ->
-                listOf(
-                    selection.copy(
-                        inclusionRequirements =
-                            selection.inclusionRequirements +
-                                InclusionRequirementPlan(variableName, true),
-                    ),
-                    selection.copy(
-                        inclusionRequirements =
-                            selection.inclusionRequirements +
-                                InclusionRequirementPlan(variableName, false),
-                    ),
-                )
-            },
-        )
-
-    private fun ResolverFragmentPlans.replaceFragment(
-        location: FragmentLocation,
-        fragment: FragmentPlan,
-    ): ResolverFragmentPlans =
-        when (location) {
-            FragmentLocation.OBJECT -> copy(objectFragment = fragment)
-            FragmentLocation.QUERY -> copy(queryFragment = fragment)
-        }
 
     private fun ResolverFragmentPlans.withTopLevelRandomParentDemand(
         consumer: FieldCoordinate,
@@ -2643,27 +2479,9 @@ private data class ResolverFragmentPlans(
     val queryFragment: FragmentPlan,
 )
 
-internal enum class FragmentLocation {
+private enum class FragmentLocation {
     OBJECT,
     QUERY,
-}
-
-internal data class ConditionTarget(
-    val selectionPath: List<Int>,
-    val field: FieldCoordinate,
-    val location: FragmentLocation = FragmentLocation.OBJECT,
-)
-
-internal data class InclusionRequirementPlan(
-    val variableName: String,
-    val required: Boolean,
-) {
-    fun source(): String =
-        if (required) {
-            "@include(if: \$$variableName)"
-        } else {
-            "@skip(if: \$$variableName)"
-        }
 }
 
 private fun ProviderFragment.location(): FragmentLocation =
@@ -2730,42 +2548,6 @@ internal data class FragmentPlan(
                 append("}")
             }
         }
-
-    fun conditionTargets(schema: ArbitrarySchema): List<ConditionTarget> =
-        conditionTargets(
-            schema = schema,
-            ownerName = ownerName,
-            selections = selections,
-            selectionPath = emptyList(),
-            beneathParent = false,
-        )
-
-    fun updateSelection(
-        path: List<Int>,
-        transform: (FragmentSelectionPlan) -> FragmentSelectionPlan,
-    ): FragmentPlan {
-        require(path.isNotEmpty())
-        return copy(selections = selections.updateSelection(path, transform))
-    }
-
-    fun selectionAt(path: List<Int>): FragmentSelectionPlan {
-        require(path.isNotEmpty())
-        var selections = selections
-        lateinit var selected: FragmentSelectionPlan
-        path.forEach { index ->
-            selected = selections[index]
-            selections = selected.subselections
-        }
-        return selected
-    }
-
-    fun duplicateSelection(
-        path: List<Int>,
-        transform: (FragmentSelectionPlan) -> List<FragmentSelectionPlan>,
-    ): FragmentPlan {
-        require(path.isNotEmpty())
-        return copy(selections = selections.duplicateSelection(path, transform))
-    }
 }
 
 internal data class FragmentSelectionPlan(
@@ -2774,7 +2556,6 @@ internal data class FragmentSelectionPlan(
     val subselections: List<FragmentSelectionPlan>,
     val typeCondition: String? = null,
     val alias: String? = null,
-    val inclusionRequirements: List<InclusionRequirementPlan> = emptyList(),
 ) {
     fun source(indent: String): String =
         buildString {
@@ -2791,10 +2572,6 @@ internal data class FragmentSelectionPlan(
                         "$name: ${value.source()}"
                     },
                 )
-            }
-            inclusionRequirements.forEach { requirement ->
-                append(" ")
-                append(requirement.source())
             }
             if (subselections.isEmpty()) {
                 appendLine()
@@ -2828,78 +2605,6 @@ internal data class FragmentSelectionPlan(
     fun selectionDepth(): Int =
         1 + (subselections.maxOfOrNull(FragmentSelectionPlan::selectionDepth) ?: 0)
 }
-
-private fun conditionTargets(
-    schema: ArbitrarySchema,
-    ownerName: String,
-    selections: List<FragmentSelectionPlan>,
-    selectionPath: List<Int>,
-    beneathParent: Boolean,
-): List<ConditionTarget> =
-    selections.flatMapIndexed { index, selection ->
-        val selectionOwner = selection.typeCondition ?: ownerName
-        val field =
-            schema
-                .fieldsOn(selectionOwner)
-                .singleOrNull { candidate -> candidate.name == selection.fieldName }
-        val path = selectionPath + index
-        val selectable =
-            field != null &&
-                !beneathParent &&
-                !field.isParentField &&
-                selection.fieldName != "__typename"
-        listOfNotNull(
-            field?.let { selectedField ->
-                ConditionTarget(path, selectedField.coordinate).takeIf { selectable }
-            },
-        ) +
-            if (field == null || !schema.isComposite(field.type.namedType)) {
-                emptyList()
-            } else {
-                conditionTargets(
-                    schema = schema,
-                    ownerName = field.type.namedType,
-                    selections = selection.subselections,
-                    selectionPath = path,
-                    beneathParent = beneathParent || field.isParentField,
-                )
-            }
-    }
-
-private fun List<FragmentSelectionPlan>.updateSelection(
-    path: List<Int>,
-    transform: (FragmentSelectionPlan) -> FragmentSelectionPlan,
-): List<FragmentSelectionPlan> =
-    mapIndexed { index, selection ->
-        if (index != path.first()) {
-            selection
-        } else if (path.size == 1) {
-            transform(selection)
-        } else {
-            selection.copy(
-                subselections = selection.subselections.updateSelection(path.drop(1), transform),
-            )
-        }
-    }
-
-private fun List<FragmentSelectionPlan>.duplicateSelection(
-    path: List<Int>,
-    transform: (FragmentSelectionPlan) -> List<FragmentSelectionPlan>,
-): List<FragmentSelectionPlan> =
-    flatMapIndexed { index, selection ->
-        if (index != path.first()) {
-            listOf(selection)
-        } else if (path.size == 1) {
-            transform(selection)
-        } else {
-            listOf(
-                selection.copy(
-                    subselections =
-                        selection.subselections.duplicateSelection(path.drop(1), transform),
-                ),
-            )
-        }
-    }
 
 private fun List<FragmentSelectionPlan>.materialize(
     schema: ViaductSchema,
@@ -3254,112 +2959,6 @@ private data class GeneratedFromFieldFeatures(
     val maximumVariableUseDepth: Int,
     val hasAbstractProviderPath: Boolean,
 )
-
-private data class GeneratedInclusionConditionFeatures(
-    val total: Int,
-    val fromArgument: Int,
-    val fromObjectField: Int,
-    val fromQueryField: Int,
-    val fromProvider: Int,
-    val objectFragment: Int,
-    val queryFragment: Int,
-    val nested: Int,
-    val alternativeGroups: Int,
-)
-
-private data class InclusionRequirementOccurrence(
-    val owner: FieldCoordinate,
-    val location: FragmentLocation,
-    val depth: Int,
-    val requirement: InclusionRequirementPlan,
-)
-
-private fun Map<FieldCoordinate, ResolverFragmentPlans>.inclusionConditionFeatures(
-    variableProviders: List<VariableProviderPlan>,
-): GeneratedInclusionConditionFeatures {
-    val providers = variableProviders.associateBy { provider -> provider.owner to provider.variableName }
-    val occurrences =
-        flatMap { (owner, fragments) ->
-            fragments.objectFragment.inclusionRequirementOccurrences(
-                owner,
-                FragmentLocation.OBJECT,
-            ) +
-                fragments.queryFragment.inclusionRequirementOccurrences(
-                    owner,
-                    FragmentLocation.QUERY,
-                )
-        }
-    fun countProvider(predicate: (VariableProviderPlan) -> Boolean): Int =
-        occurrences.count { occurrence ->
-            predicate(
-                requireNotNull(providers[occurrence.owner to occurrence.requirement.variableName]) {
-                    "No provider for inclusion variable ${occurrence.requirement.variableName} " +
-                        "owned by ${occurrence.owner}"
-                },
-            )
-        }
-    return GeneratedInclusionConditionFeatures(
-        total = occurrences.size,
-        fromArgument = countProvider { provider -> provider is FromArgumentVariableProviderPlan },
-        fromObjectField =
-            countProvider { provider ->
-                provider is FromFieldVariableProviderPlan &&
-                    provider.providerFragment == ProviderFragment.OBJECT
-            },
-        fromQueryField =
-            countProvider { provider ->
-                provider is FromFieldVariableProviderPlan &&
-                    provider.providerFragment == ProviderFragment.QUERY
-            },
-        fromProvider = countProvider { provider -> provider is FromProviderVariableProviderPlan },
-        objectFragment = occurrences.count { it.location == FragmentLocation.OBJECT },
-        queryFragment = occurrences.count { it.location == FragmentLocation.QUERY },
-        nested = occurrences.count { it.depth > 1 },
-        alternativeGroups =
-            values.sumOf { fragments ->
-                fragments.objectFragment.conditionAlternativeGroupCount() +
-                    fragments.queryFragment.conditionAlternativeGroupCount()
-            },
-    )
-}
-
-private fun FragmentPlan.inclusionRequirementOccurrences(
-    owner: FieldCoordinate,
-    location: FragmentLocation,
-): List<InclusionRequirementOccurrence> {
-    fun collect(
-        selections: List<FragmentSelectionPlan>,
-        depth: Int,
-    ): List<InclusionRequirementOccurrence> =
-        selections.flatMap { selection ->
-            selection.inclusionRequirements.map { requirement ->
-                InclusionRequirementOccurrence(owner, location, depth, requirement)
-            } + collect(selection.subselections, depth + 1)
-        }
-    return collect(selections, 1)
-}
-
-private fun FragmentPlan.conditionAlternativeGroupCount(): Int {
-    fun count(selections: List<FragmentSelectionPlan>): Int {
-        val local =
-            selections
-                .groupBy { selection ->
-                    listOf(
-                        selection.fieldName,
-                        selection.arguments,
-                        selection.typeCondition,
-                        selection.alias,
-                    )
-                }.values
-                .count { alternatives ->
-                    alternatives.size > 1 &&
-                        alternatives.map { it.inclusionRequirements }.distinct().size > 1 &&
-                        alternatives.all { it.inclusionRequirements.isNotEmpty() }
-                }
-        return local + selections.sumOf { selection -> count(selection.subselections) }
-    }
-    return count(selections)
-}
 
 private fun List<FromFieldVariableProviderPlan>.features(
     fieldSites: Set<FieldCoordinate>,

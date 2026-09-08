@@ -13,7 +13,6 @@ import semantics.arbitrary.ResolverVariableSingletonCoercionEnabled
 import semantics.contract.EmptyObjectFragmentGeneratedResolverContract
 import semantics.contract.FeatureInteractionGeneratedResolverContract
 import semantics.contract.FromProviderGeneratedResolverContract
-import semantics.contract.InclusionConditionGeneratedResolverContract
 import semantics.contract.GeneratedCaseAssertions
 import semantics.contract.ListPassiveDeepeningGeneratedResolverContract
 import semantics.contract.MixedVariableGeneratedResolverContract
@@ -36,7 +35,6 @@ class ResolverGeneratedTest :
     ObjectFragmentFromArgumentGeneratedResolverContract,
     ObjectFragmentFromObjectPathGeneratedResolverContract,
     FromProviderGeneratedResolverContract,
-    InclusionConditionGeneratedResolverContract,
     MixedVariableGeneratedResolverContract,
     QueryFragmentGeneratedResolverContract,
     SometimesPassiveGeneratedResolverContract,

@@ -5,9 +5,9 @@ import viaduct.graphql.schema.ViaductSchema
 import model.Arguments
 
 import model.EngineErrorData
-import model.EngineOutputData
-import model.EngineOutputListData
+import model.ResolverOutputData
 import model.SelectionForest
+import model.RootFieldReferenceData
 import model.engineObjectDataOf
 import model.merge
 import model.objectKey
@@ -40,16 +40,16 @@ import viaduct.engine.api.EngineObjectData
  *
  * @throws IllegalArgumentException when a precondition is not met
  */
-internal fun EngineOutputData?.snipToDemand(demand: SelectionForest): EngineOutputData? =
+internal fun ResolverOutputData?.snipToDemand(demand: SelectionForest): ResolverOutputData? =
     when (this) {
         null,
         is EngineErrorData,
+        is RootFieldReferenceData,
         -> this
 
         is EngineObjectData.Sync -> snipObjectToDemand(demand)
         is List<*> -> {
-            val values: EngineOutputListData =
-                map { value -> value.snipToDemand(demand) }
+            val values: List<ResolverOutputData?> = map { value -> value.snipToDemand(demand) }
             values
         }
 

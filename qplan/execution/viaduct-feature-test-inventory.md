@@ -38,11 +38,11 @@ The following source files are intentionally not copied because every test in ea
 
 | Port | Current source difference |
 | --- | --- |
-| `RootFieldReferenceResolutionTest.kt` | Missing `caller is derived from resolver object traversal` and `caller survives a chain of resolver RSS dependencies` (21 of 23 source tests copied). |
 | `SelectiveFieldResolversExecutionTest.kt` | Missing `selective list item can read its non-selective parent` and `selective resolver materialization rejects DataFetcherResult` (63 of 65 current source tests copied). |
 
 ## Observed Port Boundaries
 
+- **Root-field references:** All 23 source tests are copied. Reference resolution cases run through Resolver26 except the independently blocked checker/caller-attribution cases, the node-resolver-to-reference inline bridge, and production's support for object RSS on a referenced target. The object-RSS case remains source-faithful and disabled; its enabled `ALTERNATIVE` prefixes the namespace path and reads the same data through Query RSS. Production's equivalent-reference deduplication test likewise remains disabled; its enabled `ALTERNATIVE` expects one fresh target execution for each of the three reference occurrences.
 - **Execution:** `TestWorld` fills missing nullable Query fields with null producers and missing non-null Query fields with error producers. Node lowering treats the fringe ID as authoritative when composing raw lookup data, matching production's `NodeEngineObjectDataImpl`; the lookup payload need not repeat it. Seven node tests currently pass through qplan; six remain disabled.
 - **Current policy:** `NodeResolverTest.kt`'s disabled `node reference nested inside resolver response` directly materializes its outer `Baz` object while using a `NodeReference` only for the nested `anotherBaz`. Production supports that distinction, but qplan currently requires every Node value to be resolved by its node resolver, so direct inline Node materialization remains outside the modeled scope. Its passing `ALTERNATIVE` returns an outer node reference and materializes both occurrences through the node resolver.
 - **Semantics:** `RequiredSelectionsTest.kt`'s disabled `resolve fields multiple mergeable requirements` preserves its named RSS fragment and production's two-invocation assertion. Qplan deliberately coalesces alias-shaped demand into one resolver application; its passing `ALTERNATIVE` differs only by expecting that one-shot count.

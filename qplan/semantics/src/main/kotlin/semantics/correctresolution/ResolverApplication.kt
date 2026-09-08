@@ -2,28 +2,33 @@ package semantics.correctresolution
 
 import kotlinx.coroutines.runBlocking
 import model.Arguments
-import model.EngineOutputData
+import model.ResolverOutputData
 import model.EngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
+import model.ResolverOccurrenceId
 import model.Selection
 import model.SelectionForest
+import model.VariableBinding
 import model.concatenateSelectionForests
 import model.engineObjectDataOf
 import model.merge
 import model.requireQueryTypeDef
+import model.RootFieldReferenceData
 import semantics.shared.groundedArguments
+import semantics.shared.isContextuallyGrounded
 import model.selectionForestOf
 import semantics.shared.CycleCheckState
 import semantics.shared.materialize
 import semantics.shared.OperationContext
 import semantics.shared.ResolverObservations
+import semantics.shared.RootFieldReferenceInvocationObservation
 import viaduct.engine.api.EngineObjectData
 import java.util.IdentityHashMap
 
 internal class ReappliedResolver(
-    val output: EngineOutputData?,
+    val output: ResolverOutputData?,
 )
 
 internal class ResolverApplicationCache(
@@ -128,6 +133,121 @@ internal fun ObjectEngineResult.reapplyResolver(
             },
         )
     }
+
+/** Reapplies every independently rooted resolver hop that justified one consumer value. */
+context(operation: OperationContext)
+internal fun reapplyRootFieldReference(
+    reference: RootFieldReferenceData,
+    publicationRoot: ObjectEngineResult,
+    publicationPath: List<PathComponent>,
+): ReappliedResolver? {
+    val observations =
+        (operation.resolverObserver as? ResolverObservations)
+            ?.rootFieldReferenceInvocations()
+            ?.filter { observation ->
+                observation.publicationRoot === publicationRoot &&
+                    observation.publicationPath == publicationPath
+            }
+            .orEmpty()
+    if (observations.isEmpty()) return null
+    if (
+        observations.indices.any { index ->
+            observations.take(index).any { prior ->
+                prior.invocationRoot === observations[index].invocationRoot
+            }
+        }
+    ) {
+        return null
+    }
+
+    var expectedReference = reference
+    observations.forEachIndexed { index, observation ->
+        if (!observation.matches(expectedReference, publicationRoot)) return null
+        val output = observation.reapplyReferencedResolver()?.output
+        if (output is RootFieldReferenceData) {
+            if (index == observations.lastIndex) return null
+            expectedReference = output
+        } else {
+            if (index != observations.lastIndex) return null
+            return ReappliedResolver(output)
+        }
+    }
+    return null
+}
+
+context(operation: OperationContext)
+private fun RootFieldReferenceInvocationObservation.matches(
+    expectedReference: RootFieldReferenceData,
+    expectedPublicationRoot: ObjectEngineResult,
+): Boolean =
+    reference == expectedReference &&
+        invocationRoot !== expectedPublicationRoot &&
+        invocationRoot.type == operation.schema.requireQueryTypeDef() &&
+        invocationKey.field == reference.targetField &&
+        invocationKey.arguments == reference.arguments &&
+        invocationPath.filterIsInstance<ObjectEngineResult.ObjectKey>().map { key -> key.field } ==
+        reference.path
+
+context(operation: OperationContext)
+private fun RootFieldReferenceInvocationObservation.reapplyReferencedResolver(): ReappliedResolver? {
+    if (!invocationKey.isContextuallyGrounded()) return null
+    val arguments = invocationKey.groundedArguments() as? Arguments.Resolved ?: return null
+    val resolver = operation.resolverRegistry.resolver(invocationKey.field)
+    val fragments = resolver.instantiateFragmentsAt(invocationRoot, invocationPath)
+    if (!fragments.objectFragment.materializeSelections.isEmpty()) return null
+    val input = engineObjectDataOf(invocationKey.field.containingDef)
+    val resolverArguments =
+        Arguments.Resolved.of(
+            field = invocationKey.field,
+            fields = arguments.fieldValues,
+        )
+    val resolverOccurrenceId = fragments.objectFragment.resolverOccurrenceId
+    if (resolverOccurrenceId != ResolverOccurrenceId.at(invocationRoot, invocationPath)) return null
+    if (
+        resolver.instantiatedVariableDefinitions(resolverOccurrenceId).any { definition ->
+            val instanceId = requireNotNull(definition.variable.instanceId)
+            val source = definition.definition
+            !operation.variableBindingsState.isBound(instanceId) ||
+                (source is model.registry.VariableDefinition.FromArgument &&
+                    operation.variableBindingsState.getBinding(instanceId) !=
+                    VariableBinding.of(source.read(arguments)))
+        }
+    ) {
+        return null
+    }
+    val queryFragment = fragments.queryFragment
+    val queryValue =
+        if (queryFragment.constructionSelections.isEmpty()) {
+            engineObjectDataOf(operation.schema.requireQueryTypeDef())
+        } else {
+            val queryResult =
+                (operation.resolverObserver as? ResolverObservations)
+                    ?.queryFragmentResults(resolverOccurrenceId)
+                    ?.singleOrNull()
+                    ?: return null
+            val querySelections =
+                queryFragment.constructionSelections.merge(operation.schema.requireQueryTypeDef())
+            if (!queryResult.correctResolution(querySelections)) return null
+            runBlocking {
+                context(operation, CycleCheckState.createNOP()) {
+                    queryResult.materialize(
+                        selections = queryFragment.materializeSelections,
+                        reader = publicationPath,
+                    )
+                }
+            }
+        }
+    return ReappliedResolver(
+        context(operation.world) {
+            resolver.evaluateRelation(
+                input = input,
+                queryValue = queryValue,
+                arguments = resolverArguments,
+                selections = suppliedDemand,
+            )
+        },
+    )
+}
 
 /**
  * Reconstructs one canonical demand from the completed output occurrence under judgment.

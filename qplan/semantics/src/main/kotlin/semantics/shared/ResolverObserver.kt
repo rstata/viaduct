@@ -2,8 +2,23 @@ package semantics.shared
 
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
+import model.ObjectEngineResult.ObjectKey
 import model.ObjectEngineResult
+import model.PathComponent
 import model.ResolverOccurrenceId
+import model.RootFieldReferenceData
+import model.SelectionForest
+
+/** Evidence connecting one symbolic reference hop to its independently rooted invocation. */
+data class RootFieldReferenceInvocationObservation(
+    val publicationRoot: ObjectEngineResult,
+    val publicationPath: List<PathComponent>,
+    val reference: RootFieldReferenceData,
+    val invocationRoot: ObjectEngineResult,
+    val invocationPath: List<PathComponent>,
+    val invocationKey: ObjectKey,
+    val suppliedDemand: SelectionForest,
+)
 
 /**
  * Receives semantically passive observations from one resolver operation.
@@ -18,6 +33,10 @@ interface ResolverObserver {
         result: ObjectEngineResult,
     )
 
+    fun onRootFieldReferenceInvocation(
+        observation: RootFieldReferenceInvocationObservation,
+    ) = Unit
+
     companion object {
         fun createNOP(): ResolverObserver = NOPResolverObserver
     }
@@ -30,12 +49,16 @@ interface ResolverObservations {
     ): List<ObjectEngineResult>
 
     fun allQueryFragmentResults(): Map<ResolverOccurrenceId, List<ObjectEngineResult>>
+
+    fun rootFieldReferenceInvocations(): List<RootFieldReferenceInvocationObservation> = emptyList()
 }
 
 /** Records every observation without rejecting or overwriting duplicates. */
 class RecordingResolverObserver : ResolverObserver, ResolverObservations {
     private val queryResults =
         ConcurrentHashMap<ResolverOccurrenceId, ConcurrentLinkedQueue<ObjectEngineResult>>()
+    private val rootFieldReferenceInvocations =
+        ConcurrentLinkedQueue<RootFieldReferenceInvocationObservation>()
 
     override fun onQueryFragmentResult(
         resolverOccurrenceId: ResolverOccurrenceId,
@@ -52,6 +75,15 @@ class RecordingResolverObserver : ResolverObserver, ResolverObservations {
 
     override fun allQueryFragmentResults(): Map<ResolverOccurrenceId, List<ObjectEngineResult>> =
         queryResults.mapValues { (_, results) -> results.toList() }
+
+    override fun onRootFieldReferenceInvocation(
+        observation: RootFieldReferenceInvocationObservation,
+    ) {
+        rootFieldReferenceInvocations.add(observation)
+    }
+
+    override fun rootFieldReferenceInvocations(): List<RootFieldReferenceInvocationObservation> =
+        rootFieldReferenceInvocations.toList()
 }
 
 private object NOPResolverObserver : ResolverObserver {

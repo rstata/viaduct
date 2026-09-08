@@ -3,11 +3,15 @@ package model.testing
 import viaduct.graphql.schema.ViaductSchema
 
 import model.ObjectEngineResult
+import model.RootFieldReferenceData
 import graphql.language.NamedNode
 import graphql.language.Node
 import graphql.parser.Parser
 import graphql.schema.GraphQLCompositeType
+import graphql.schema.GraphQLList
+import graphql.schema.GraphQLNonNull
 import graphql.schema.GraphQLObjectType
+import graphql.schema.GraphQLOutputType
 import graphql.schema.GraphQLSchema
 import graphql.schema.idl.SchemaParser
 import graphql.schema.idl.UnExecutableSchemaGenerator
@@ -98,13 +102,49 @@ internal class GJSchema private constructor(
         }
     }
 
+    internal fun lowerRootFieldReference(
+        rootFieldPath: List<String>,
+        sourceTypeName: String,
+        arguments: Map<String, Any?>,
+    ): RootFieldReferenceData {
+        require(rootFieldPath.isNotEmpty()) { "Root-field-reference path must not be empty" }
+        var sourceParent = graphQLSchema.queryType
+        val canonicalPath =
+            rootFieldPath.mapIndexed { index, fieldName ->
+                val sourceField =
+                    requireNotNull(sourceParent.getFieldDefinition(fieldName)) {
+                        "Root-field-reference path has no field ${sourceParent.name}/$fieldName"
+                    }
+                val sourceOutput = sourceField.type.unwrapNonNull()
+                require(sourceOutput !is GraphQLList && sourceOutput is GraphQLObjectType) {
+                    "Root-field-reference path field ${sourceParent.name}/$fieldName " +
+                        "must return a singular object"
+                }
+                val canonicalField = fieldFromSource(sourceParent.name, fieldName)
+                require(canonicalField is ViaductSchema.ObjectField) {
+                    "Root-field-reference path field ${sourceParent.name}/$fieldName " +
+                        "does not lower to an object field"
+                }
+                if (index == rootFieldPath.lastIndex) {
+                    require(sourceOutput.name == sourceTypeName) {
+                        "Root-field-reference type $sourceTypeName does not match " +
+                            "${sourceParent.name}/$fieldName type ${sourceOutput.name}"
+                    }
+                } else {
+                    sourceParent = sourceOutput
+                }
+                canonicalField
+            }
+        return RootFieldReferenceData.of(canonicalPath, arguments)
+    }
+
     private fun lowerNodeReferences(
         output: EngineOutputData?,
         sourceTypeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
         bridgeTypeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     ): EngineOutputData? =
         when {
-            output == null || output is EngineErrorData -> output
+            output == null || output is EngineErrorData || output is RootFieldReferenceData -> output
             sourceTypeExpr.isList && bridgeTypeExpr.isList -> {
                 require(output is List<*>) {
                     "Node-list field resolver did not return a list"
@@ -161,7 +201,7 @@ internal class GJSchema private constructor(
         loweredTypeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     ): EngineOutputData? =
         when {
-            output == null || output is EngineErrorData -> output
+            output == null || output is EngineErrorData || output is RootFieldReferenceData -> output
             sourceTypeExpr.isList && loweredTypeExpr.isList -> {
                 require(output is List<*>) {
                     "Source output for $sourceTypeExpr is not a list"
@@ -314,3 +354,10 @@ internal class GJSchema private constructor(
         }
     }
 }
+
+private fun GraphQLOutputType.unwrapNonNull(): GraphQLOutputType =
+    if (this is GraphQLNonNull) {
+        wrappedType as GraphQLOutputType
+    } else {
+        this
+    }

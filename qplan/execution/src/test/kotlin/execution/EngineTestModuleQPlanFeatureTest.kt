@@ -15,6 +15,82 @@ import viaduct.engine.api.mocks.createEngineObjectData
 
 class EngineTestModuleQPlanFeatureTest {
     @Test
+    fun `supplies empty objects for namespace fields`() {
+        EngineTestModule(
+            """
+            type Catalog @namespaceType {
+              value: Int! @resolver
+            }
+
+            extend type Query {
+              catalog: Catalog
+            }
+            """.trimIndent(),
+        ) {
+            fieldWithValue("Catalog" to "value", 7)
+        }.runQPlanFeatureTest {
+            runQuery("{ catalog { value } }").assertJson("{data: {catalog: {value: 7}}}")
+        }
+    }
+
+    @Test
+    fun `normalizes root-field references nested in object lists`() {
+        EngineTestModule(
+            """
+            type Product {
+              name: String!
+            }
+
+            type ProductFactory @namespaceType {
+              create(name: String!): Product! @resolver
+            }
+
+            type Shelf {
+              product: Product
+            }
+
+            extend type Query {
+              productFactory: ProductFactory
+              shelves: [Shelf!]! @resolver
+            }
+            """.trimIndent(),
+        ) {
+            field("ProductFactory" to "create") {
+                resolver {
+                    fn { arguments, _, _, _, _ ->
+                        createEngineObjectData(
+                            schema.schema.getObjectType("Product"),
+                            mapOf("name" to arguments.getValue("name")),
+                        )
+                    }
+                }
+            }
+            field("Query" to "shelves") {
+                resolver {
+                    fn { _, _, _, _, context ->
+                        listOf(
+                            createEngineObjectData(
+                                schema.schema.getObjectType("Shelf"),
+                                mapOf(
+                                    "product" to
+                                        context.createRootFieldReference(
+                                            rootFieldPath = listOf("productFactory", "create"),
+                                            type = schema.schema.getObjectType("Product"),
+                                            args = mapOf("name" to "chair"),
+                                        ),
+                                ),
+                            ),
+                        )
+                    }
+                }
+            }
+        }.runQPlanFeatureTest {
+            runQuery("{ shelves { product { name } } }")
+                .assertJson("""{"data": {"shelves": [{"product": {"name": "chair"}}]}}""")
+        }
+    }
+
+    @Test
     fun `executes field executors with arguments and object required selections`() {
         EngineTestModule(
             """

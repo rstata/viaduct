@@ -1,12 +1,13 @@
 package semantics.correctresolution
 
-import model.EngineOutputData
+import model.ResolverOutputData
 import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.Arguments
 import model.PathComponent
+import model.RootFieldReferenceData
 import semantics.shared.groundedArguments
 import semantics.shared.isContextuallyGrounded
 import semantics.shared.objectFragmentAt
@@ -152,11 +153,25 @@ context(
 )
 private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
     path: List<PathComponent>,
-    source: EngineOutputData?,
+    source: ResolverOutputData?,
     structuralParent: ObjectEngineResult,
     producerField: ViaductSchema.ObjectField,
-): Boolean =
-    when (this) {
+): Boolean {
+    if (source is RootFieldReferenceData) {
+        return reapplyRootFieldReference(
+            reference = source,
+            publicationRoot = resolverApplicationCache.root,
+            publicationPath = path,
+        )?.let { application ->
+            engineResultIsClosedUnderResolverDemand(
+                path = path,
+                source = application.output,
+                structuralParent = structuralParent,
+                producerField = producerField,
+            )
+        } == true
+    }
+    return when (this) {
         null,
         is ErrorEngineResult,
         -> true
@@ -183,6 +198,7 @@ private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
                 }
         else -> true
     }
+}
 
 context(
     operation: OperationContext,

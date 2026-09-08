@@ -49,7 +49,29 @@ fun EngineResult?.forEachRegisteredResolverOccurrence(
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
     visitOccurrence: (RegisteredResolverOccurrence) -> Unit,
 ) {
-    visitRegisteredResolverOccurrences(registry, bounds, canonicalOrder = false, visitOccurrence)
+    visitRegisteredResolverOccurrences(
+        registry,
+        bounds,
+        canonicalOrder = false,
+        initialPath = emptyList(),
+        visitOccurrence,
+    )
+}
+
+context(operation: OperationContext)
+internal fun EngineResult?.forEachRegisteredResolverOccurrenceAt(
+    registry: ResolverRegistry,
+    initialPath: List<PathComponent>,
+    bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
+    visitOccurrence: (RegisteredResolverOccurrence) -> Unit,
+) {
+    visitRegisteredResolverOccurrences(
+        registry,
+        bounds,
+        canonicalOrder = false,
+        initialPath = initialPath,
+        visitOccurrence,
+    )
 }
 
 context(operation: OperationContext)
@@ -57,6 +79,7 @@ private fun EngineResult?.visitRegisteredResolverOccurrences(
     registry: ResolverRegistry,
     bounds: ResolutionWitnessBounds,
     canonicalOrder: Boolean,
+    initialPath: List<PathComponent> = emptyList(),
     visitOccurrence: (RegisteredResolverOccurrence) -> Unit,
 ) {
     var visitedNodes = 0
@@ -122,7 +145,7 @@ private fun EngineResult?.visitRegisteredResolverOccurrences(
         }
     }
 
-    visit(this, emptyList())
+    visit(this, initialPath)
 }
 
 context(operation: OperationContext)

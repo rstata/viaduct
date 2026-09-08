@@ -34,68 +34,75 @@ context(operation: OperationContext)
 fun ObjectEngineResult.validateFromFieldBindings(
     appliedResolverOccurrences: Set<ResolverOccurrenceId>,
 ) {
-    requestQueryRoots().forEach { root ->
-        root.forEachRegisteredResolverOccurrence(operation.resolverRegistry) { cell ->
-            val resolver = operation.resolverRegistry.resolver(cell.field)
-            val definitions =
-                resolver.fieldPathDefinitions(
-                    root = root,
-                    path = cell.occurrencePath,
-                )
-            if (definitions.isEmpty()) {
-                return@forEachRegisteredResolverOccurrence
-            }
+    fun validateOccurrence(
+        root: ObjectEngineResult,
+        field: ViaductSchema.ObjectField,
+        path: List<PathComponent>,
+        containingObject: ObjectEngineResult?,
+    ) {
+        val resolver = operation.resolverRegistry.resolver(field)
+        val definitions = resolver.fieldPathDefinitions(root = root, path = path)
+        if (definitions.isEmpty()) return
 
-            val occurrenceId = ResolverOccurrenceId.at(root, cell.occurrencePath)
-            val requiredBindingIds =
-                definitions.mapTo(linkedSetOf()) { definition ->
-                    requireNotNull(definition.variable.instanceId)
-                }
-            val actualBindingIds =
-                requiredBindingIds.filterTo(
-                    linkedSetOf(),
-                    operation.variableBindingsState::isBound,
-                )
-            when (appliedResolverOccurrences.contains(occurrenceId)) {
-                true ->
-                    assertEquals(
-                        requiredBindingIds,
-                        actualBindingIds,
-                        "Applied resolver occurrence $occurrenceId has incomplete " +
-                            "from-field bindings",
-                    )
-                false -> {
-                    assertEquals(
-                        emptySet(),
-                        actualBindingIds,
-                        "Passive resolver occurrence $occurrenceId unexpectedly has " +
-                            "from-field bindings",
-                    )
-                    return@forEachRegisteredResolverOccurrence
-                }
+        val occurrenceId = ResolverOccurrenceId.at(root, path)
+        val requiredBindingIds =
+            definitions.mapTo(linkedSetOf()) { definition ->
+                requireNotNull(definition.variable.instanceId)
             }
-
-            definitions.forEach { definition ->
-                val providerRoot =
-                    when (definition.providerFragment) {
-                        ProviderFragment.OBJECT -> cell.containingObject
-                        ProviderFragment.QUERY ->
-                            operation.resolverObservations()
-                                .queryFragmentResults(occurrenceId)
-                                .single()
-                    }
-                val expected =
-                    providerRoot.readCompletedProvider(
-                        path = definition.path,
-                    )
+        val actualBindingIds =
+            requiredBindingIds.filterTo(
+                linkedSetOf(),
+                operation.variableBindingsState::isBound,
+            )
+        when (appliedResolverOccurrences.contains(occurrenceId)) {
+            true ->
                 assertEquals(
-                    expected,
-                    operation.variableBindingsState.getBinding(
-                        requireNotNull(definition.variable.instanceId),
-                    ),
+                    requiredBindingIds,
+                    actualBindingIds,
+                    "Applied resolver occurrence $occurrenceId has incomplete from-field bindings",
                 )
+            false -> {
+                assertEquals(
+                    emptySet(),
+                    actualBindingIds,
+                    "Passive resolver occurrence $occurrenceId unexpectedly has from-field bindings",
+                )
+                return
             }
         }
+
+        definitions.forEach { definition ->
+            val providerRoot =
+                when (definition.providerFragment) {
+                    ProviderFragment.OBJECT -> containingObject
+                        ?: error("Root-field-reference target unexpectedly has an object-field provider")
+                    ProviderFragment.QUERY ->
+                        operation.resolverObservations()
+                            .queryFragmentResults(occurrenceId)
+                            .single()
+                }
+            val expected = providerRoot.readCompletedProvider(path = definition.path)
+            assertEquals(
+                expected,
+                operation.variableBindingsState.getBinding(
+                    requireNotNull(definition.variable.instanceId),
+                ),
+            )
+        }
+    }
+
+    requestQueryRoots().forEach { root ->
+        root.forEachRegisteredResolverOccurrence(operation.resolverRegistry) { cell ->
+            validateOccurrence(root, cell.field, cell.occurrencePath, cell.containingObject)
+        }
+    }
+    operation.resolverObservations().rootFieldReferenceInvocations().forEach { observation ->
+        validateOccurrence(
+            observation.invocationRoot,
+            observation.invocationKey.field,
+            observation.invocationPath,
+            null,
+        )
     }
 }
 

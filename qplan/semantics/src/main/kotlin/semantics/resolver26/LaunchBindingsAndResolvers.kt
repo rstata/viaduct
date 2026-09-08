@@ -4,6 +4,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import model.ObjectEngineResult
 import model.requireQueryTypeDef
+import model.outputValue
 import semantics.correctresolution.argumentsContainErrorValue
 
 /**
@@ -53,9 +54,22 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
                     )
                 }
                 launch {
-                    installAndLaunchFieldResolver(
-                        fieldResolverOccurrenceContext = fieldResolverOccurrenceContext,
-                    )
+                    check(objectKey.field in operation.resolverRegistry) {
+                        "Resolver26 attempted to install passive key $objectKey"
+                    }
+                    check(!source.isPresent(objectKey.field.name)) {
+                        "Resolver26 attempted to install source-provided key $objectKey"
+                    }
+                    installAndLaunchResolver(fieldResolverOccurrenceContext)
+                }
+            }
+            closed.rootFieldReferenceOccurrences.values.forEach { referenceOccurrence ->
+                launch {
+                    val objectKey = referenceOccurrence.selection.key
+                    check(source.outputValue(objectKey.field.name) === referenceOccurrence.reference) {
+                        "Resolver26 root reference does not match its source value"
+                    }
+                    installAndLaunchResolver(referenceOccurrence)
                 }
             }
         }
@@ -63,17 +77,11 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
 }
 
 // Installs one active selection while retaining its symbolic cell key.
-private fun ObjectOrchestrationTask.installAndLaunchFieldResolver(
-    fieldResolverOccurrenceContext: FieldResolverOccurrenceContext,
+private fun ObjectOrchestrationTask.installAndLaunchResolver(
+    resolverOccurrenceContext: ResolverOccurrenceContext,
 ) {
     context(operation) {
-        val objectKey = fieldResolverOccurrenceContext.selection.key
-        check(objectKey.field in operation.resolverRegistry) {
-            "Resolver26 attempted to install passive key $objectKey"
-        }
-        check(!source.isPresent(objectKey.field.name)) {
-            "Resolver26 attempted to install source-provided key $objectKey"
-        }
+        val objectKey = resolverOccurrenceContext.selection.key
         val cell = occurrence.target.reserveCell(objectKey)
         cell.createValuePromise()
         operation.cycleChecker.registerWriter(
@@ -84,7 +92,7 @@ private fun ObjectOrchestrationTask.installAndLaunchFieldResolver(
             FieldResolverTask(
                 operationContext = operation,
                 oerOccurrenceContext = occurrence,
-                fieldResolverOccurrenceContext = fieldResolverOccurrenceContext,
+                resolverOccurrenceContext = resolverOccurrenceContext,
                 cell = cell,
             )
         operation.requestScope.launch {

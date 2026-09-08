@@ -386,6 +386,30 @@ sealed interface ListEngineResult : List<EngineResultCell> {
 
     companion object {
         /**
+         * Constructs a fixed-size list whose activated element cells each expose one uncompleted,
+         * writable value promise.
+         *
+         * Every eventual element value must satisfy
+         * `value.conformsToResultSchemaType(typeExpr)`. The list positions and their cell identities
+         * are fixed at construction; each cell's value may be claimed and completed exactly once.
+         */
+        fun ofPendingValues(
+            typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
+            size: Int,
+        ): ListEngineResult {
+            require(size >= 0) { "List engine result size must be non-negative" }
+            val cells =
+                List(size) {
+                    CellImpl(
+                        accessResult = true,
+                        mutable = true,
+                        validateValue = { value -> validateListValue(typeExpr, value) },
+                    ).also { cell -> cell.reserveValue() }
+                }
+            return ListResultImpl(typeExpr, cells)
+        }
+
+        /**
          * ### Invariant: list-engine-result-factory-schema-conformance
          *
          * Every cell value satisfies `value.conformsToResultSchemaType(typeExpr)` in its reasoning
@@ -412,16 +436,20 @@ sealed interface ListEngineResult : List<EngineResultCell> {
                         initiallyValueSet = true,
                         accessResult = accessResults[index],
                         mutable = mutableCells,
-                        validateValue = { updated ->
-                            require(updated.conformsToResultSchemaType(typeExpr)) {
-                                "List engine result contains an element incompatible with " +
-                                    typeExpr
-                            }
-                        },
+                        validateValue = { updated -> validateListValue(typeExpr, updated) },
                     )
                 }
             return ListResultImpl(typeExpr, cells)
         }
+    }
+}
+
+private fun validateListValue(
+    typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
+    value: EngineResult?,
+) {
+    require(value.conformsToResultSchemaType(typeExpr)) {
+        "List engine result contains an element incompatible with $typeExpr"
     }
 }
 

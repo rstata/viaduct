@@ -8,6 +8,7 @@ import model.ObjectSelection
 import model.ObjectSelectionForest
 import model.PathComponent
 import model.ResolverOccurrenceId
+import model.RootFieldReferenceData
 import model.SelectionForest
 import model.materializeSelectionForestOf
 import model.merge
@@ -17,6 +18,7 @@ import model.registry.InstantiatedFieldPathDefinition
 import model.registry.ResolverFragments
 import model.registry.VariableInstanceDefinition
 import model.schemaType
+import model.outputValue
 import model.satisfiableAlternatives
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.resolvers.inputParentDemand
@@ -92,14 +94,20 @@ internal fun EngineObjectData.Sync.closeInputDemand(
             ) {
                 "Resolver26 closed demand and resolver expansions are misaligned"
             }
+            val resolverContexts =
+                expansionAccumulators.mapValues { (objectKey, accumulator) ->
+                    accumulator.toFieldResolverOccurrenceContext(
+                        selection = mergedDemand.byKey().getValue(objectKey),
+                    )
+                }
+            val referenceOccurrences = discoverRootFieldReferences(occurrence, mergedDemand)
+            check(resolverContexts.keys.intersect(referenceOccurrences.keys).isEmpty()) {
+                "Resolver26 classified one field as both an ordinary resolver and a root reference"
+            }
             return CloseInputDemandResult(
                 demand = mergedDemand,
-                fieldResolverOccurrenceContexts =
-                    expansionAccumulators.mapValues { (objectKey, accumulator) ->
-                        accumulator.toFieldResolverOccurrenceContext(
-                            selection = mergedDemand.byKey().getValue(objectKey),
-                        )
-                    },
+                fieldResolverOccurrenceContexts = resolverContexts,
+                rootFieldReferenceOccurrences = referenceOccurrences,
                 objectProviderReads =
                     expansionAccumulators.flatMap { (objectKey, expansion) ->
                         if (
@@ -124,6 +132,43 @@ internal fun EngineObjectData.Sync.closeInputDemand(
 }
 
 context(world: Assumptions)
+private fun EngineObjectData.Sync.discoverRootFieldReferences(
+    occurrence: OEROccurrenceContext,
+    demand: ObjectSelectionForest,
+): Map<ObjectEngineResult.ObjectKey, RootFieldReferenceOccurrence> =
+    buildMap {
+        demand.byKey().forEach { (objectKey, selection) ->
+            if (selection.inclusionCondition === InclusionCondition.Never) return@forEach
+            if (!isPresent(objectKey.field.name)) return@forEach
+            val reference = outputValue(objectKey.field.name) as? RootFieldReferenceData
+                ?: return@forEach
+            require(objectKey is ObjectEngineResult.GroundKey) {
+                "Source-provided root-field reference has an open consumer key: $objectKey"
+            }
+            val consumerArguments = objectKey.arguments
+            require(consumerArguments is model.Arguments.Resolved && consumerArguments.fieldValues.isEmpty()) {
+                "Source-provided root-field reference must occupy an argumentless field: $objectKey"
+            }
+            require(reference.targetField in world.resolverRegistry) {
+                "Root-field-reference target has no registered resolver: " +
+                    "${reference.targetField.containingDef.name}/${reference.targetField.name}"
+            }
+            check(
+                put(
+                    objectKey,
+                    RootFieldReferenceOccurrence(
+                        selection = selection,
+                        reference = reference,
+                        publicationPath = occurrence.coordinate(objectKey),
+                    ),
+                ) == null,
+            ) {
+                "Resolver26 discovered a root-field reference twice: $objectKey"
+            }
+        }
+    }
+
+context(world: Assumptions)
 private fun createResolverExpansion(
     occurrence: OEROccurrenceContext,
     objectKey: ObjectEngineResult.ObjectKey,
@@ -140,6 +185,8 @@ private fun createResolverExpansion(
         objectKey.arguments.argumentsContainErrorValue()
     ) {
         return ResolverExpansionAccumulator(
+            invocationRoot = occurrence.root,
+            invocationPath = occurrence.coordinate(objectKey),
             resolverOccurrenceId = resolverOccurrenceId,
             resolver = resolver,
             inputMaterializeSelections = materializeSelectionForestOf(),
@@ -148,6 +195,8 @@ private fun createResolverExpansion(
         )
     }
     return ResolverExpansionAccumulator(
+        invocationRoot = occurrence.root,
+        invocationPath = occurrence.coordinate(objectKey),
         resolverOccurrenceId = resolverOccurrenceId,
         resolver = resolver,
         inputMaterializeSelections = fragments.objectFragment.materializeSelections,
@@ -172,6 +221,8 @@ private fun EngineObjectData.Sync.requiresStandardResolution(
 }
 
 private data class ResolverExpansionAccumulator(
+    val invocationRoot: ObjectEngineResult,
+    val invocationPath: List<PathComponent>,
     val resolverOccurrenceId: ResolverOccurrenceId,
     val resolver: FieldResolver,
     val inputMaterializeSelections: MaterializeSelectionForest,
@@ -185,6 +236,8 @@ private data class ResolverExpansionAccumulator(
     ): FieldResolverOccurrenceContext =
         FieldResolverOccurrenceContext(
             selection = selection,
+            invocationRoot = invocationRoot,
+            invocationPath = invocationPath,
             resolverOccurrenceId = resolverOccurrenceId,
             resolver = resolver,
             inputMaterializeSelections = inputMaterializeSelections,
@@ -197,6 +250,8 @@ internal class CloseInputDemandResult(
     val demand: ObjectSelectionForest,
     val fieldResolverOccurrenceContexts:
         Map<ObjectEngineResult.ObjectKey, FieldResolverOccurrenceContext>,
+    val rootFieldReferenceOccurrences:
+        Map<ObjectEngineResult.ObjectKey, RootFieldReferenceOccurrence>,
     val objectProviderReads: List<ProviderDefinitionRead>,
 ) {
     var bindingDeclarationStarted: Boolean = false

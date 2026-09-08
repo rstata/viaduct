@@ -2,12 +2,14 @@ package semantics.resolver26
 
 import kotlinx.coroutines.runBlocking
 import java.util.Collections
+import java.util.concurrent.atomic.AtomicInteger
 import viaduct.graphql.schema.ViaductSchema
 import model.Arguments
 import model.emptyFragmentOf
 import model.ObjectEngineResult
 import model.fragmentFrom
 import model.merge
+import model.objectOf
 import model.requireObjectField
 import model.requireQueryTypeDef
 import model.testing.TestWorld
@@ -24,6 +26,43 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class InclusionConditionTest {
+    @Test
+    fun `field and fragment conditions are conjoined`() {
+        listOf(
+            ConditionCase(fragment = false, field = false, skipped = false, included = false),
+            ConditionCase(fragment = false, field = true, skipped = false, included = false),
+            ConditionCase(fragment = true, field = false, skipped = false, included = false),
+            ConditionCase(fragment = true, field = true, skipped = true, included = false),
+            ConditionCase(fragment = true, field = true, skipped = false, included = true),
+        ).forEach { case ->
+            val world =
+                TestWorld.fromDSL(
+                    """
+                    extend type Query {
+                      outer(fragment: Boolean!, field: Boolean!, skipped: Boolean!): Int!
+                        @resolver(
+                          of: "... @include(if: ${'$'}fragment) { dependency @include(if: ${'$'}field) @skip(if: ${'$'}skipped) }"
+                          result: 1
+                        )
+                      dependency: Int! @resolver(result: 7)
+                    }
+                    """.trimIndent(),
+                )
+            val resolution =
+                world.resolve(
+                    "query { outer(fragment: ${case.fragment}, field: ${case.field}, skipped: ${case.skipped}) }",
+                )
+            val dependency = world.schema.requireObjectField("Query", "dependency")
+
+            assertEquals(
+                if (case.included) 1 else 0,
+                resolution.applications.count { it == dependency },
+                case.toString(),
+            )
+            assertTrue(resolution.correct, case.toString())
+        }
+    }
+
     @Test
     fun `equal-key alternatives invoke their tenant resolver exactly when any condition permits`() {
         val falseWorld = alternativeWorld()
@@ -243,6 +282,148 @@ class InclusionConditionTest {
     }
 
     @Test
+    fun `a from-provider condition gates a dependency after its owning resolver activates`() {
+        listOf(false, true).forEach { enabled ->
+            val providerApplications = AtomicInteger()
+            val world =
+                TestWorld.fromSDL(
+                    schemaSDL =
+                        """
+                        type Query {
+                          outer: Int!
+                          dependency: Int!
+                        }
+                        """.trimIndent(),
+                    fieldResolvers = { schema ->
+                        val outer = schema.requireObjectField("Query", "outer")
+                        val dependency = schema.requireObjectField("Query", "dependency")
+                        mapOf(
+                            outer to
+                                fieldResolverOf(
+                                    schema.fragmentFrom(
+                                        "fragment Outer on Query { dependency @include(if: ${'$'}enabled) }",
+                                        variableField = outer,
+                                    ),
+                                ) { _, _ -> 1 }
+                                    .withVariablesProvider(setOf("enabled")) {
+                                        providerApplications.incrementAndGet()
+                                        mapOf("enabled" to enabled)
+                                    },
+                            dependency to
+                                fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> 7 },
+                        )
+                    },
+                )
+            val resolution = world.resolve("query { outer }")
+            val dependency = world.schema.requireObjectField("Query", "dependency")
+
+            assertEquals(1, providerApplications.get())
+            assertEquals(
+                if (enabled) 1 else 0,
+                resolution.applications.count { it == dependency },
+            )
+            assertTrue(resolution.correct)
+        }
+    }
+
+    @Test
+    fun `an excluded resolver does not invoke its own variables provider`() {
+        val providerApplications = AtomicInteger()
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      controller(enabled: Boolean!): Int!
+                      outer: Int!
+                      dependency: Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val controller = schema.requireObjectField("Query", "controller")
+                    val outer = schema.requireObjectField("Query", "outer")
+                    val dependency = schema.requireObjectField("Query", "dependency")
+                    mapOf(
+                        controller to
+                            fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment Controller on Query { outer @include(if: ${'$'}enabled) }",
+                                    variableField = controller,
+                                ),
+                            ) { _, _ -> 1 },
+                        outer to
+                            fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment Outer on Query { dependency @include(if: ${'$'}provided) }",
+                                    variableField = outer,
+                                ),
+                            ) { _, _ -> 2 }
+                                .withVariablesProvider(setOf("provided")) {
+                                    providerApplications.incrementAndGet()
+                                    mapOf("provided" to true)
+                                },
+                        dependency to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> 7 },
+                    )
+                },
+                variableProviders = { schema ->
+                    val controller = schema.requireObjectField("Query", "controller")
+                    mapOf(
+                        Arguments.Variable.of(controller, "enabled") to
+                            schema.fromArgument(controller, "enabled"),
+                    )
+                },
+            )
+        val resolution = world.resolve("query { controller(enabled: false) }")
+        val outer = world.schema.requireObjectField("Query", "outer")
+        val dependency = world.schema.requireObjectField("Query", "dependency")
+
+        assertEquals(0, providerApplications.get())
+        assertEquals(0, resolution.applications.count { it == outer })
+        assertEquals(0, resolution.applications.count { it == dependency })
+        assertTrue(resolution.correct)
+    }
+
+    @Test
+    fun `a variable defined beneath parent may condition a sibling dependency`() {
+        listOf(false, true).forEach { enabled ->
+            val world = parentConditionWorld(enabled)
+            val resolution = world.resolve("query { root { child { result } } }")
+            val dependency = world.schema.requireObjectField("Child", "dependency")
+
+            assertEquals(
+                if (enabled) 1 else 0,
+                resolution.applications.count { it == dependency },
+            )
+            assertTrue(resolution.correct)
+        }
+    }
+
+    @Test
+    fun `conflicting requirements for one variable never invoke the dependency`() {
+        listOf(false, true).forEach { enabled ->
+            val world =
+                TestWorld.fromDSL(
+                    """
+                    extend type Query {
+                      outer(enabled: Boolean!): Int!
+                        @resolver(
+                          of: "dependency @include(if: ${'$'}enabled) @skip(if: ${'$'}enabled)"
+                          result: 1
+                        )
+                      dependency: Int! @resolver(result: 7)
+                    }
+                    """.trimIndent(),
+                )
+            val resolution = world.resolve("query { outer(enabled: $enabled) }")
+            val dependency = world.schema.requireObjectField("Query", "dependency")
+
+            assertEquals(0, resolution.applications.count { it == dependency })
+            assertTrue(resolution.correct)
+        }
+    }
+
+    @Test
     fun `include and skip must both permit inclusion`() {
         val world =
             TestWorld.fromDSL(
@@ -278,6 +459,63 @@ class InclusionConditionTest {
             """.trimIndent(),
         )
 
+    private fun parentConditionWorld(enabled: Boolean): TestWorld =
+        TestWorld.fromSDL(
+            schemaSDL =
+                """
+                directive @parent on FIELD_DEFINITION
+                type Query { root: Root! }
+                type Root { enabled: Boolean!, child: Child! }
+                type Child {
+                  parent: Root @parent
+                  result: Int!
+                  dependency: Int!
+                }
+                """.trimIndent(),
+            fieldResolvers = { schema ->
+                val root = schema.requireObjectField("Query", "root")
+                val child = schema.requireObjectField("Root", "child")
+                val result = schema.requireObjectField("Child", "result")
+                val dependency = schema.requireObjectField("Child", "dependency")
+                mapOf(
+                    root to
+                        fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                            schema.objectOf("Root") { "enabled" setTo enabled }
+                        },
+                    child to
+                        fieldResolverOf(schema.emptyFragmentOf("Root")) { _, _ ->
+                            schema.objectOf("Child")
+                        },
+                    result to
+                        fieldResolverOf(
+                            schema.fragmentFrom(
+                                """
+                                fragment ResultInput on Child {
+                                  parent { enabled }
+                                  dependency @include(if: ${'$'}enabled)
+                                }
+                                """.trimIndent(),
+                                variableField = result,
+                            ),
+                        ) { _, _ -> 1 },
+                    dependency to
+                        fieldResolverOf(schema.emptyFragmentOf("Child")) { _, _ -> 7 },
+                )
+            },
+            variableProviders = { schema ->
+                val result = schema.requireObjectField("Child", "result")
+                mapOf(
+                    Arguments.Variable.of(result, "enabled") to
+                        schema.fromObjectField(
+                            objectFragmentSource =
+                                "fragment ResultInput on Child { parent { enabled } }",
+                            responsePath = listOf("parent", "enabled"),
+                            variableField = result,
+                        ),
+                )
+            },
+        )
+
     private fun TestWorld.resolve(query: String): Resolution {
         val fragment = assumptions.fragmentFrom(query.replace("query", "fragment Query on Query"))
         val operation =
@@ -306,5 +544,12 @@ class InclusionConditionTest {
         val result: ObjectEngineResult,
         val correct: Boolean,
         val applications: List<ViaductSchema.ObjectField>,
+    )
+
+    private data class ConditionCase(
+        val fragment: Boolean,
+        val field: Boolean,
+        val skipped: Boolean,
+        val included: Boolean,
     )
 }

@@ -143,7 +143,7 @@ private fun disjunction(conditions: List<InclusionCondition>): InclusionConditio
                 is AnyOf -> condition.alternatives
                 else -> listOf(condition)
             }
-        }
+        }.distinct()
     if (alternatives.any { it === InclusionCondition.Always }) return InclusionCondition.Always
     return when (alternatives.size) {
         0 -> InclusionCondition.Never

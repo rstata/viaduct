@@ -1,5 +1,6 @@
 package semantics.contract
 
+import kotlinx.coroutines.runBlocking
 import model.Arguments
 import model.EngineResult
 import model.ErrorEngineResult
@@ -79,6 +80,8 @@ private fun EngineResult?.visitRegisteredResolverOccurrences(
                         value.keys
                     }
                 keys.forEach { key ->
+                    val cell = value.getCell(key)
+                    if (!runBlocking { cell.fetchActivated() }) return@forEach
                     val fieldPath = path + key
                     require(key.isContextuallyGrounded()) {
                         "Resolver occurrence key is not contextually grounded: $key"
@@ -103,14 +106,16 @@ private fun EngineResult?.visitRegisteredResolverOccurrences(
                         )
                     }
                     if (key !is ObjectEngineResult.ParentKey) {
-                        visit(value.getCell(key).getValue().get(), fieldPath)
+                        visit(cell.getValue().get(), fieldPath)
                     }
                 }
             }
 
             is ListEngineResult ->
                 value.forEachIndexed { index, cell ->
-                    visit(cell.getValue().get(), path + ListEngineResult.Index.of(index))
+                    if (runBlocking { cell.fetchActivated() }) {
+                        visit(cell.getValue().get(), path + ListEngineResult.Index.of(index))
+                    }
                 }
 
             else -> Unit

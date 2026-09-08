@@ -20,6 +20,7 @@ import semantics.arbitrary.ObjectFieldCount
 import semantics.arbitrary.QueryFieldCount
 import semantics.arbitrary.ResolverApplicationRecord
 import semantics.arbitrary.ResolverFragmentWeight
+import semantics.arbitrary.ResolverFragmentDepth
 import semantics.arbitrary.ResolverFragmentArgumentFieldWeight
 import semantics.arbitrary.ResolverFragmentsEnabled
 import semantics.arbitrary.ResolverFromArgumentNestedPathWeight
@@ -29,11 +30,17 @@ import semantics.arbitrary.ResolverFromFieldProviderArgumentVariableWeight
 import semantics.arbitrary.ResolverFromQueryFieldVariablesEnabled
 import semantics.arbitrary.ResolverNestedProviderPathWeight
 import semantics.arbitrary.ResolverQueryFragmentsEnabled
+import semantics.arbitrary.ResolverQueryFragmentWeight
 import semantics.arbitrary.ResolverTestCase
 import semantics.arbitrary.ResolverTestRun
 import semantics.arbitrary.ResolverVariableCount
 import semantics.arbitrary.ResolverVariableWeight
 import semantics.arbitrary.ResolverVariablesEnabled
+import semantics.arbitrary.ResolverInclusionConditionsEnabled
+import semantics.arbitrary.ResolverInclusionConditionWeight
+import semantics.arbitrary.ResolverInclusionConditionCount
+import semantics.arbitrary.ResolverInclusionConditionAlternativeWeight
+import semantics.arbitrary.ResolverFromObjectFieldVariablesEnabled
 import semantics.arbitrary.RootQueryFieldCount
 import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.SometimesPassiveFieldWeight
@@ -817,6 +824,107 @@ interface MixedVariableGeneratedResolverContract : GeneratedCaseAssertionPolicy 
         }
 }
 
+/** Generated Resolver26 coverage for symbolic inclusion conditions in resolver fragments. */
+interface InclusionConditionGeneratedResolverContract : GeneratedCaseAssertionPolicy {
+    @Test
+    fun `generated inclusion-condition worlds resolve correctly`(): Unit =
+        runBlocking {
+            val coverage = InclusionConditionCoverage()
+            val config =
+                Config.default +
+                    (SchemaObjectCount to 2..3) +
+                    (ObjectFieldCount to 2..3) +
+                    (QueryFieldCount to 3..4) +
+                    (RootQueryFieldCount to 1..2) +
+                    (FieldArgumentWeight to 0.7) +
+                    (ExplicitFieldResolverWeight to 0.6) +
+                    (NodeResolversEnabled to false) +
+                    (ResolverFragmentsEnabled to true) +
+                    (ResolverFragmentWeight to 1.0) +
+                    (ResolverFragmentDepth to 2) +
+                    (ResolverFragmentArgumentFieldWeight to 1.0) +
+                    (ResolverQueryFragmentsEnabled to true) +
+                    (ResolverQueryFragmentWeight to 0.7) +
+                    (ResolverFromArgumentVariablesEnabled to true) +
+                    (ResolverFromProviderVariablesEnabled to true) +
+                    (ResolverVariablesEnabled to true) +
+                    (ResolverFromObjectFieldVariablesEnabled to true) +
+                    (ResolverFromQueryFieldVariablesEnabled to true) +
+                    (ResolverVariableWeight to 1.0) +
+                    (ResolverVariableCount to 1..2) +
+                    (ResolverInclusionConditionsEnabled to true) +
+                    (ResolverInclusionConditionWeight to 1.0) +
+                    (ResolverInclusionConditionCount to 1..3) +
+                    (ResolverInclusionConditionAlternativeWeight to 0.5) +
+                    generatedResolverConfigOverrides
+            val assertions =
+                GeneratedCaseAssertions.defaultGeneratedContract +
+                    GeneratedCaseAssertions.fromFieldBindings
+
+            val run =
+                checkGeneratedProfile(
+                    profile = "inclusion-conditions",
+                    config = config,
+                    seed = INCLUSION_CONDITION_SEED,
+                ) { testWorld, testCase ->
+                    val features = testCase.registry.features
+                    coverage.generated += features.inclusionConditionCount
+                    coverage.fromArgument += features.inclusionConditionFromArgumentCount
+                    coverage.fromObjectField += features.inclusionConditionFromObjectFieldCount
+                    coverage.fromQueryField += features.inclusionConditionFromQueryFieldCount
+                    coverage.fromProvider += features.inclusionConditionFromProviderCount
+                    coverage.objectFragment += features.objectFragmentInclusionConditionCount
+                    coverage.queryFragment += features.queryFragmentInclusionConditionCount
+                    coverage.nested += features.nestedInclusionConditionCount
+                    coverage.alternatives += features.inclusionConditionAlternativeGroupCount
+
+                    val observation =
+                        observeGeneratedCaseWithCurrentAssertions(
+                            testWorld = testWorld,
+                            testCase = testCase,
+                            assertions = assertions,
+                        )
+                    val activation =
+                        context(observation.ordinary.operation) {
+                            observation.ordinary.result
+                                .registeredResolverActivationCounts()
+                        }
+                    coverage.activatedOccurrences += observation.ordinaryApplications.size
+                    coverage.suppressedOccurrences += activation.notActivated
+                }
+
+            run.assertAggregate(coverage.generated > 0, "Generated no inclusion conditions")
+            run.assertAggregate(coverage.fromArgument > 0, "Generated no FromArgument conditions")
+            run.assertAggregate(
+                coverage.fromObjectField > 0,
+                "Generated no FromObjectField conditions",
+            )
+            run.assertAggregate(
+                coverage.fromQueryField > 0,
+                "Generated no FromQueryField conditions",
+            )
+            run.assertAggregate(coverage.fromProvider > 0, "Generated no FromProvider conditions")
+            run.assertAggregate(
+                coverage.objectFragment > 0,
+                "Generated no object-fragment conditions",
+            )
+            run.assertAggregate(
+                coverage.queryFragment > 0,
+                "Generated no Query-fragment conditions",
+            )
+            run.assertAggregate(coverage.nested > 0, "Generated no nested conditions")
+            run.assertAggregate(coverage.alternatives > 0, "Generated no local disjunctions")
+            run.assertAggregate(
+                coverage.activatedOccurrences > 0,
+                "Generated conditions activated no resolver occurrences",
+            )
+            run.assertAggregate(
+                coverage.suppressedOccurrences > 0,
+                "Generated conditions suppressed no resolver occurrences",
+            )
+        }
+}
+
 /**
  * Generated interaction-depth contract for the full supported feature combination.
  *
@@ -920,6 +1028,7 @@ private const val NODE_ACTIVATION_SEED = 1L
 private const val FROM_ARGUMENT_ACTIVATION_SEED = 1L
 private const val MIXED_VARIABLE_ACTIVATION_SEED = 1L
 private const val SOMETIMES_PASSIVE_ACTIVATION_SEED = 1L
+private const val INCLUSION_CONDITION_SEED = 2026090802L
 
 private val GENERATED_PROFILE_COUNTS =
     TestCaseCount(
@@ -960,6 +1069,20 @@ private data class MixedVariableCoverage(
 private data class SometimesPassiveCoverage(
     var generatedFields: Int = 0,
     var activatedOccurrences: Int = 0,
+)
+
+private data class InclusionConditionCoverage(
+    var generated: Int = 0,
+    var fromArgument: Int = 0,
+    var fromObjectField: Int = 0,
+    var fromQueryField: Int = 0,
+    var fromProvider: Int = 0,
+    var objectFragment: Int = 0,
+    var queryFragment: Int = 0,
+    var nested: Int = 0,
+    var alternatives: Int = 0,
+    var activatedOccurrences: Int = 0,
+    var suppressedOccurrences: Int = 0,
 )
 
 private suspend fun checkGeneratedProfile(

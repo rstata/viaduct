@@ -24,6 +24,7 @@ fun Selection.withErrorArguments(argumentNames: Set<String>): Selection =
                     ),
             ),
         possibleTypes = possibleTypes,
+        inclusionCondition = inclusionCondition,
         subselections = subselections,
     )
 
@@ -47,5 +48,6 @@ fun MaterializeSelection.withErrorArguments(
                     ),
             ),
         possibleTypes = possibleTypes,
+        inclusionCondition = inclusionCondition,
         subselections = subselections,
     )

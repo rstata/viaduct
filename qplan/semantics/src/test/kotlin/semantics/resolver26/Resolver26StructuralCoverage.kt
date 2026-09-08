@@ -8,6 +8,7 @@ import model.PathComponent
 import semantics.arbitrary.ArbitraryRegistry
 import semantics.arbitrary.FieldCoordinate
 import semantics.contract.RegisteredResolverOccurrence
+import semantics.contract.RegisteredResolverActivationCounts
 import semantics.arbitrary.ResolutionWitness
 import semantics.arbitrary.ResolverApplicationRecord
 
@@ -28,6 +29,8 @@ internal enum class Resolver26StructuralSignature {
     MULTIPLE_OBJECT_PATH_OWNERS,
     OBJECT_PATH_OWNER_DEPENDENCY,
     GREAT_GRANDPARENT_PARENT_DEMAND,
+    GENERATED_INCLUSION_CONDITION,
+    SUPPRESSED_INCLUSION_CONDITION,
 }
 
 // Classifies one completed case without consulting Resolver26's scheduler or private runtime state.
@@ -35,6 +38,7 @@ internal fun resolver26StructuralSignatures(
     occurrences: List<RegisteredResolverOccurrence>,
     witness: ResolutionWitness,
     registry: ArbitraryRegistry,
+    activationCounts: RegisteredResolverActivationCounts,
 ): Set<Resolver26StructuralSignature> {
     val signatures: MutableSet<Resolver26StructuralSignature> = linkedSetOf()
     val symbolicOccurrences: List<RegisteredResolverOccurrence> =
@@ -142,6 +146,12 @@ internal fun resolver26StructuralSignatures(
     }
     if (registry.features.maximumParentSelectionDepth >= 3) {
         signatures += Resolver26StructuralSignature.GREAT_GRANDPARENT_PARENT_DEMAND
+    }
+    if (registry.features.inclusionConditionCount > 0) {
+        signatures += Resolver26StructuralSignature.GENERATED_INCLUSION_CONDITION
+    }
+    if (activationCounts.notActivated > 0) {
+        signatures += Resolver26StructuralSignature.SUPPRESSED_INCLUSION_CONDITION
     }
     return signatures
 }

@@ -89,7 +89,7 @@
   },
   "profiles" : [ {
     "id" : "balanced",
-    "requiredCoverage" : [ "great-grandparent-parent-demand", "mixed-binding-sources", "object-path-variable-owner", "symbolic-resolver-instance" ],
+    "requiredCoverage" : [ "generated-inclusion-condition", "great-grandparent-parent-demand", "mixed-binding-sources", "object-path-variable-owner", "suppressed-inclusion-condition", "symbolic-resolver-instance" ],
     "seedOffset" : 1,
     "testInputProfiles" : {
       "large-deep" : "resolver26-balanced-large-deep",
@@ -98,7 +98,7 @@
     }
   }, {
     "id" : "descendant-variables",
-    "requiredCoverage" : [ "list-symbolic-resolver-instance", "nested-variable-use", "passive-descendant-variable-use" ],
+    "requiredCoverage" : [ "generated-inclusion-condition", "list-symbolic-resolver-instance", "nested-variable-use", "passive-descendant-variable-use", "suppressed-inclusion-condition" ],
     "seedOffset" : 2,
     "testInputProfiles" : {
       "large-deep" : "resolver26-descendant-variables-large-deep",
@@ -116,7 +116,7 @@
     }
   }, {
     "id" : "symbolic-identity",
-    "requiredCoverage" : [ "equal-symbolic-arguments" ],
+    "requiredCoverage" : [ "equal-symbolic-arguments", "generated-inclusion-condition", "suppressed-inclusion-condition" ],
     "seedOffset" : 4,
     "testInputProfiles" : {
       "large-deep-low-duplicates" : "resolver26-symbolic-identity-large-deep-low-duplicates",
@@ -124,7 +124,7 @@
     }
   }, {
     "id" : "multiple-owners",
-    "requiredCoverage" : [ "multiple-object-path-owners", "object-path-owner-dependency" ],
+    "requiredCoverage" : [ "generated-inclusion-condition", "multiple-object-path-owners", "object-path-owner-dependency", "suppressed-inclusion-condition" ],
     "seedOffset" : 5,
     "testInputProfiles" : {
       "large-deep" : "resolver26-multiple-owners-large-deep",

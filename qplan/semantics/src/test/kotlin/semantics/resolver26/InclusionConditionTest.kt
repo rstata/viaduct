@@ -10,6 +10,7 @@ import model.ObjectEngineResult
 import model.fragmentFrom
 import model.merge
 import model.objectOf
+import model.registry.ProviderFragment
 import model.requireObjectField
 import model.requireQueryTypeDef
 import model.testing.TestWorld
@@ -201,119 +202,24 @@ class InclusionConditionTest {
     }
 
     @Test
-    fun `a from-object-field condition provider runs before a dependent resolver is suppressed`() {
-        val world =
-            TestWorld.fromSDL(
-                schemaSDL =
-                    """
-                    type Query {
-                      outer: Int!
-                      flag: Boolean!
-                      dependency: Int!
-                    }
-                    """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val outer = schema.requireObjectField("Query", "outer")
-                    val flag = schema.requireObjectField("Query", "flag")
-                    val dependency = schema.requireObjectField("Query", "dependency")
-                    mapOf(
-                        outer to
-                            fieldResolverOf(
-                                schema.fragmentFrom(
-                                    """
-                                    fragment Outer on Query {
-                                      flag
-                                      dependency @include(if: ${'$'}enabled)
-                                    }
-                                    """.trimIndent(),
-                                    variableField = outer,
-                                ),
-                            ) { _, _ -> 1 },
-                        flag to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> false },
-                        dependency to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> 7 },
-                    )
-                },
-                variableProviders = { schema ->
-                    val outer = schema.requireObjectField("Query", "outer")
-                    mapOf(
-                        Arguments.Variable.of(outer, "enabled") to
-                            schema.fromObjectField(
-                                objectFragmentSource =
-                                    "fragment Outer on Query { flag }",
-                                responsePath = listOf("flag"),
-                                variableField = outer,
-                            ),
-                    )
-                },
-            )
-        val resolution = world.resolve("query { outer }")
-        val flag = world.schema.requireObjectField("Query", "flag")
-        val dependency = world.schema.requireObjectField("Query", "dependency")
+    fun `from-field variables apply include and skip semantics`() {
+        ProviderFragment.entries.forEach { providerFragment ->
+            conditionUses.forEach { use ->
+                val world = fromFieldConditionWorld(providerFragment, use)
+                val resolution = world.resolve("query { outer }")
+                val flag = world.schema.requireObjectField("Query", "flag")
+                val dependency = world.schema.requireObjectField("Query", "dependency")
+                val message = "$providerFragment $use"
 
-        assertEquals(1, resolution.applications.count { it == flag })
-        assertEquals(0, resolution.applications.count { it == dependency })
-        assertTrue(resolution.correct)
-    }
-
-    @Test
-    fun `a from-query-field condition provider runs before a query dependency is suppressed`() {
-        val world =
-            TestWorld.fromSDL(
-                schemaSDL =
-                    """
-                    type Query {
-                      outer: Int!
-                      flag: Boolean!
-                      dependency: Int!
-                    }
-                    """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val outer = schema.requireObjectField("Query", "outer")
-                    val flag = schema.requireObjectField("Query", "flag")
-                    val dependency = schema.requireObjectField("Query", "dependency")
-                    mapOf(
-                        outer to
-                            fieldResolverOf(
-                                objectFragment = schema.emptyFragmentOf("Query"),
-                                queryFragment =
-                                    schema.fragmentFrom(
-                                        """
-                                        fragment OuterQuery on Query {
-                                          flag
-                                          dependency @include(if: ${'$'}enabled)
-                                        }
-                                        """.trimIndent(),
-                                        variableField = outer,
-                                    ),
-                            ) { _, _, _ -> 1 },
-                        flag to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> false },
-                        dependency to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> 7 },
-                    )
-                },
-                variableProviders = { schema ->
-                    val outer = schema.requireObjectField("Query", "outer")
-                    mapOf(
-                        Arguments.Variable.of(outer, "enabled") to
-                            schema.fromQueryField(
-                                queryFragmentSource =
-                                    "fragment OuterQuery on Query { flag }",
-                                responsePath = listOf("flag"),
-                                variableField = outer,
-                            ),
-                    )
-                },
-            )
-        val resolution = world.resolve("query { outer }")
-        val flag = world.schema.requireObjectField("Query", "flag")
-        val dependency = world.schema.requireObjectField("Query", "dependency")
-
-        assertEquals(1, resolution.applications.count { it == flag })
-        assertEquals(0, resolution.applications.count { it == dependency })
-        assertTrue(resolution.correct)
+                assertEquals(1, resolution.applications.count { it == flag }, message)
+                assertEquals(
+                    if (use.included) 1 else 0,
+                    resolution.applications.count { it == dependency },
+                    message,
+                )
+                assertTrue(resolution.correct, message)
+            }
+        }
     }
 
     @Test
@@ -552,6 +458,66 @@ class InclusionConditionTest {
             """.trimIndent(),
         )
 
+    private fun fromFieldConditionWorld(
+        providerFragment: ProviderFragment,
+        use: ConditionUse,
+    ): TestWorld =
+        TestWorld.fromSDL(
+            schemaSDL =
+                """
+                type Query {
+                  outer: Int!
+                  flag: Boolean!
+                  dependency: Int!
+                }
+                """.trimIndent(),
+            fieldResolvers = { schema ->
+                val outer = schema.requireObjectField("Query", "outer")
+                val flag = schema.requireObjectField("Query", "flag")
+                val dependency = schema.requireObjectField("Query", "dependency")
+                val fragmentSource =
+                    "fragment Outer on Query { flag dependency ${use.directiveSource()} }"
+                val fragment = schema.fragmentFrom(fragmentSource, variableField = outer)
+                val outerResolver =
+                    when (providerFragment) {
+                        ProviderFragment.OBJECT ->
+                            fieldResolverOf(fragment) { _, _ -> 1 }
+                        ProviderFragment.QUERY ->
+                            fieldResolverOf(
+                                objectFragment = schema.emptyFragmentOf("Query"),
+                                queryFragment = fragment,
+                            ) { _, _, _ -> 1 }
+                    }
+                mapOf(
+                    outer to outerResolver,
+                    flag to
+                        fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> use.value },
+                    dependency to
+                        fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> 7 },
+                )
+            },
+            variableProviders = { schema ->
+                val outer = schema.requireObjectField("Query", "outer")
+                val fragmentSource = "fragment Outer on Query { flag }"
+                val provider =
+                    when (providerFragment) {
+                        ProviderFragment.OBJECT ->
+                            schema.fromObjectField(
+                                objectFragmentSource = fragmentSource,
+                                responsePath = listOf("flag"),
+                                variableField = outer,
+                            )
+                        ProviderFragment.QUERY ->
+                            schema.fromQueryField(
+                                queryFragmentSource = fragmentSource,
+                                responsePath = listOf("flag"),
+                                variableField = outer,
+                            )
+                    }
+                mapOf(Arguments.Variable.of(outer, "enabled") to provider)
+            },
+        )
+
     private fun parentConditionWorld(enabled: Boolean): TestWorld =
         TestWorld.fromSDL(
             schemaSDL =
@@ -645,4 +611,22 @@ class InclusionConditionTest {
         val skipped: Boolean,
         val included: Boolean,
     )
+
+    private data class ConditionUse(
+        val directive: String,
+        val value: Boolean,
+        val included: Boolean,
+    ) {
+        fun directiveSource(): String = "@$directive(if: ${'$'}enabled)"
+    }
+
+    private companion object {
+        val conditionUses =
+            listOf(
+                ConditionUse(directive = "include", value = false, included = false),
+                ConditionUse(directive = "include", value = true, included = true),
+                ConditionUse(directive = "skip", value = false, included = true),
+                ConditionUse(directive = "skip", value = true, included = false),
+            )
+    }
 }

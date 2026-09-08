@@ -29,6 +29,16 @@ class FromArgument private constructor(
         )
     }
 
+    internal fun isCompatibleWithInclusionCondition(): Boolean {
+        var sourceType = argument.inputType
+        var nullableTraversal = false
+        inputPath.forEach { field ->
+            nullableTraversal = nullableTraversal || sourceType.isNullable
+            sourceType = field.inputType
+        }
+        return sourceType.isCompatibleWithInclusionCondition(nullableTraversal)
+    }
+
     companion object {
         internal fun of(
             argument: ViaductSchema.FieldArg,

@@ -121,6 +121,11 @@ object ResolverFromArgumentNestedPathWeight :
     ConfigKey<Double>("resolverFromArgumentNestedPathWeight", ConfigValueType.DOUBLE, 0.0, ::weight)
 object ResolverVariableWeight : ConfigKey<Double>("resolverVariableWeight", ConfigValueType.DOUBLE, 0.5, ::weight)
 object ResolverVariableCount : ConfigKey<IntRange>("resolverVariableCount", ConfigValueType.INTEGER_RANGE, 1..3, ::range)
+object ResolverInclusionConditionsEnabled : ConfigKey<Boolean>("resolverInclusionConditionsEnabled", ConfigValueType.BOOLEAN, false, { null })
+object ResolverInclusionConditionWeight : ConfigKey<Double>("resolverInclusionConditionWeight", ConfigValueType.DOUBLE, 0.5, ::weight)
+object ResolverInclusionConditionCount : ConfigKey<IntRange>("resolverInclusionConditionCount", ConfigValueType.INTEGER_RANGE, 1..2, ::range)
+object ResolverInclusionConditionSkipWeight : ConfigKey<Double>("resolverInclusionConditionSkipWeight", ConfigValueType.DOUBLE, 0.5, ::weight)
+object ResolverInclusionConditionAlternativeWeight : ConfigKey<Double>("resolverInclusionConditionAlternativeWeight", ConfigValueType.DOUBLE, 0.25, ::weight)
 object ResolverVariableSingletonCoercionEnabled : ConfigKey<Boolean>("resolverVariableSingletonCoercionEnabled", ConfigValueType.BOOLEAN, false, { null })
 object ResolverLiteralVariableConvergenceWeight : ConfigKey<Double>("resolverLiteralVariableConvergenceWeight", ConfigValueType.DOUBLE, 0.0, ::weight)
 object ResolverNestedProviderPathWeight : ConfigKey<Double>("resolverNestedProviderPathWeight", ConfigValueType.DOUBLE, 0.5, ::weight)
@@ -199,6 +204,11 @@ internal object ConfigKeys {
             ResolverFromArgumentNestedPathWeight,
             ResolverVariableWeight,
             ResolverVariableCount,
+            ResolverInclusionConditionsEnabled,
+            ResolverInclusionConditionWeight,
+            ResolverInclusionConditionCount,
+            ResolverInclusionConditionSkipWeight,
+            ResolverInclusionConditionAlternativeWeight,
             ResolverVariableSingletonCoercionEnabled,
             ResolverLiteralVariableConvergenceWeight,
             ResolverNestedProviderPathWeight,

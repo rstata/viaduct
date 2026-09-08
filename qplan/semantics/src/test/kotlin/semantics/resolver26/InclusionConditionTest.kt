@@ -385,6 +385,64 @@ class InclusionConditionTest {
     }
 
     @Test
+    fun `an excluded resolver does not ground a descendant key from its provider`() {
+        val providerApplications = AtomicInteger()
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      controller(enabled: Boolean!): Int!
+                      outer: Int!
+                      dependency(value: Int!): Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val controller = schema.requireObjectField("Query", "controller")
+                    val outer = schema.requireObjectField("Query", "outer")
+                    val dependency = schema.requireObjectField("Query", "dependency")
+                    mapOf(
+                        controller to
+                            fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment Controller on Query { outer @include(if: ${'$'}enabled) }",
+                                    variableField = controller,
+                                ),
+                            ) { _, _ -> 1 },
+                        outer to
+                            fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment Outer on Query { dependency(value: ${'$'}provided) }",
+                                    variableField = outer,
+                                ),
+                            ) { _, _ -> 2 }
+                                .withVariablesProvider(setOf("provided")) {
+                                    providerApplications.incrementAndGet()
+                                    mapOf("provided" to 7)
+                                },
+                        dependency to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> 3 },
+                    )
+                },
+                variableProviders = { schema ->
+                    val controller = schema.requireObjectField("Query", "controller")
+                    mapOf(
+                        Arguments.Variable.of(controller, "enabled") to
+                            schema.fromArgument(controller, "enabled"),
+                    )
+                },
+            )
+        val resolution = world.resolve("query { controller(enabled: false) }")
+        val outer = world.schema.requireObjectField("Query", "outer")
+        val dependency = world.schema.requireObjectField("Query", "dependency")
+
+        assertEquals(0, providerApplications.get())
+        assertEquals(0, resolution.applications.count { it == outer })
+        assertEquals(0, resolution.applications.count { it == dependency })
+        assertTrue(resolution.correct)
+    }
+
+    @Test
     fun `a variable defined beneath parent may condition a sibling dependency`() {
         listOf(false, true).forEach { enabled ->
             val world = parentConditionWorld(enabled)

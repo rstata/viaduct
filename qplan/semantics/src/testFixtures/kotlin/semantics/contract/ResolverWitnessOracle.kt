@@ -2,6 +2,8 @@ package semantics.contract
 
 import kotlinx.coroutines.runBlocking
 import model.EngineResult
+import model.ErrorEngineResult
+import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
 import model.ResolverOccurrenceId
@@ -17,6 +19,43 @@ import semantics.correctresolution.conformsToSelectionsAt
 import semantics.shared.materialize
 import semantics.shared.OperationContext
 import semantics.shared.ResolverObservations
+
+data class RegisteredResolverActivationCounts(
+    val activated: Int,
+    val notActivated: Int,
+)
+
+/** Counts every reserved registered cell without attempting to read negatively activated values. */
+context(operation: OperationContext)
+fun EngineResult?.registeredResolverActivationCounts(): RegisteredResolverActivationCounts {
+    var activated = 0
+    var notActivated = 0
+
+    fun visit(value: EngineResult?) {
+        if (value == null || value is ErrorEngineResult) return
+        when (value) {
+            is ObjectEngineResult ->
+                value.keys.forEach { key ->
+                    val cell = value.getCell(key)
+                    val isActivated = runBlocking { cell.fetchActivated() }
+                    if (key.field in operation.resolverRegistry) {
+                        if (isActivated) activated += 1 else notActivated += 1
+                    }
+                    if (isActivated && key !is ObjectEngineResult.ParentKey) {
+                        visit(cell.getValue().get())
+                    }
+                }
+            is ListEngineResult ->
+                value.forEach { cell ->
+                    if (runBlocking { cell.fetchActivated() }) visit(cell.getValue().get())
+                }
+            else -> Unit
+        }
+    }
+
+    requestQueryRoots().forEach(::visit)
+    return RegisteredResolverActivationCounts(activated, notActivated)
+}
 
 /**
  * Expected deterministic resolver applications reconstructed from every request-local Query root.

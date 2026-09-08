@@ -15,6 +15,7 @@
     "resolverFromObjectFieldVariablesEnabled" : true,
     "resolverFromProviderVariablesEnabled" : true,
     "resolverFromQueryFieldVariablesEnabled" : true,
+    "resolverInclusionConditionsEnabled" : false,
     "resolverQueryFragmentsEnabled" : true,
     "resolverVariableSingletonCoercionEnabled" : true,
     "resolverVariablesEnabled" : true,
@@ -47,6 +48,9 @@
     "resolverFromFieldPassiveUseWeight" : 0.25,
     "resolverFromFieldProviderArgumentVariableWeight" : 0.0,
     "resolverFromFieldVariableOwnerUseWeight" : 0.25,
+    "resolverInclusionConditionAlternativeWeight" : 0.25,
+    "resolverInclusionConditionSkipWeight" : 0.5,
+    "resolverInclusionConditionWeight" : 0.5,
     "resolverLiteralVariableConvergenceWeight" : 0.2,
     "resolverNestedProviderPathWeight" : 0.5,
     "resolverQueryFragmentWeight" : 0.1,
@@ -110,6 +114,10 @@
     },
     "resolverFromFieldVariableUseDepth" : {
       "maximum" : 3,
+      "minimum" : 1
+    },
+    "resolverInclusionConditionCount" : {
+      "maximum" : 2,
       "minimum" : 1
     },
     "resolverVariableCount" : {

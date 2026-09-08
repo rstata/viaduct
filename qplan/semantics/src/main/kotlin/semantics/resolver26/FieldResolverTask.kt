@@ -13,6 +13,7 @@ import model.ObjectEngineResult
 import model.PathComponent
 import model.ResolverOccurrenceId
 import model.SelectionForest
+import model.VariableBinding
 import model.engineObjectDataOf
 import model.guardedBy
 import model.outputType
@@ -24,7 +25,6 @@ import model.usedVariables
 import model.variableArgumentNames
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.shared.fetchGroundedArguments
-import semantics.shared.fetchIncluded
 import viaduct.engine.api.EngineObjectData
 
 /** Invokes and publishes one already-installed field resolver instance. */
@@ -64,11 +64,46 @@ internal class FieldResolverTask(
         context(operationContext, world, operationContext.cycleChecker) {
             val selection = fieldResolverOccurrenceContext.selection
             val objectKey = selection.key
-            val groundedArguments = objectKey.fetchGroundedArguments()
-            completeFromArgumentBindings(groundedArguments)
-            val activated = selection.inclusionCondition.fetchIncluded()
+            var cachedGroundedArguments: Arguments.Ground? = null
+            suspend fun fetchArguments(): Arguments.Ground =
+                cachedGroundedArguments
+                    ?: objectKey.fetchGroundedArguments().also { cachedGroundedArguments = it }
+            var fromArgumentBindingsCompleted = false
+            suspend fun completeFromArgumentBindingsIfNeeded() {
+                if (fromArgumentBindingsCompleted) return
+                completeFromArgumentBindings(fetchArguments())
+                fromArgumentBindingsCompleted = true
+            }
+            val fromArgumentVariableIds =
+                fieldResolverOccurrenceContext.variableDefinitions
+                    .filter { definition ->
+                        definition.definition is VariableDefinition.FromArgument
+                    }.mapTo(linkedSetOf()) { definition ->
+                        requireNotNull(definition.variable.instanceId)
+                    }
+            val activated =
+                selection.inclusionCondition.include { variable ->
+                    val variableId = requireNotNull(variable.instanceId)
+                    if (
+                        variableId in fromArgumentVariableIds &&
+                        !operationContext.variableBindingsState.isBound(variableId)
+                    ) {
+                        completeFromArgumentBindingsIfNeeded()
+                    }
+                    when (
+                        val binding =
+                            operationContext.variableBindingsState.fetchBinding(variableId)
+                    ) {
+                        VariableBinding.Error -> error("Inclusion-condition variable failed")
+                        is VariableBinding.Input ->
+                            binding.value as? Boolean
+                                ?: error("Inclusion-condition variable must contain a Boolean")
+                    }
+                }
             cell.setActivated(activated)
             if (!activated) return
+            val groundedArguments = fetchArguments()
+            completeFromArgumentBindingsIfNeeded()
             if (groundedArguments.argumentsContainErrorValue()) {
                 completeVariablesProviderBindingsWithError()
                 val errorResult = ErrorEngineResult.of(EngineErrorData.of())

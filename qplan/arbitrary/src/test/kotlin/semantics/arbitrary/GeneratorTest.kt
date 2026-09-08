@@ -21,6 +21,97 @@ import model.registry.VariableDefinition
 
 class GeneratorTest {
     @Test
+    fun `resolver inclusion conditions generate from every variable source and round trip`() {
+        val config =
+            Config.default +
+                (SchemaObjectCount to 5..7) +
+                (ObjectFieldCount to 5..7) +
+                (QueryFieldCount to 7..9) +
+                (FieldArgumentWeight to 1.0) +
+                (ExplicitFieldResolverWeight to 1.0) +
+                (NodeResolversEnabled to false) +
+                (ResolverFragmentsEnabled to true) +
+                (ResolverFragmentWeight to 1.0) +
+                (ResolverFragmentDepth to 3) +
+                (ResolverFragmentSelectionCount to 8..12) +
+                (ResolverFragmentArgumentFieldWeight to 1.0) +
+                (ResolverQueryFragmentsEnabled to true) +
+                (ResolverQueryFragmentWeight to 1.0) +
+                (ResolverFromArgumentVariablesEnabled to true) +
+                (ResolverFromProviderVariablesEnabled to true) +
+                (ResolverVariablesEnabled to true) +
+                (ResolverFromObjectFieldVariablesEnabled to true) +
+                (ResolverFromQueryFieldVariablesEnabled to true) +
+                (ResolverVariableWeight to 1.0) +
+                (ResolverVariableCount to 3..4) +
+                (ResolverInclusionConditionsEnabled to true) +
+                (ResolverInclusionConditionWeight to 1.0) +
+                (ResolverInclusionConditionCount to 2..4) +
+                (ResolverInclusionConditionAlternativeWeight to 0.75)
+        val random = RandomSource.seeded(2026090801L)
+        var conditions = 0
+        var fromArgument = 0
+        var fromObjectField = 0
+        var fromQueryField = 0
+        var fromProvider = 0
+        var objectFragment = 0
+        var queryFragment = 0
+        var nested = 0
+        var alternatives = 0
+        var roundTripped = false
+
+        repeat(100) {
+            val schema = Arb.schema(config).next(random)
+            val registry = schema.registry(config).next(random)
+
+            registry.world(schema)
+            val features = registry.features
+            assertEquals(
+                features.inclusionConditionCount,
+                features.inclusionConditionFromArgumentCount +
+                    features.inclusionConditionFromObjectFieldCount +
+                    features.inclusionConditionFromQueryFieldCount +
+                    features.inclusionConditionFromProviderCount,
+            )
+            assertEquals(
+                features.inclusionConditionCount,
+                features.objectFragmentInclusionConditionCount +
+                    features.queryFragmentInclusionConditionCount,
+            )
+            conditions += features.inclusionConditionCount
+            fromArgument += features.inclusionConditionFromArgumentCount
+            fromObjectField += features.inclusionConditionFromObjectFieldCount
+            fromQueryField += features.inclusionConditionFromQueryFieldCount
+            fromProvider += features.inclusionConditionFromProviderCount
+            objectFragment += features.objectFragmentInclusionConditionCount
+            queryFragment += features.queryFragmentInclusionConditionCount
+            nested += features.nestedInclusionConditionCount
+            alternatives += features.inclusionConditionAlternativeGroupCount
+            if (!roundTripped && features.inclusionConditionCount > 0) {
+                val decoded =
+                    ResolverBenchmarkCorpus.decode(
+                        schemaSDL = schema.sdl,
+                        registryJson = registry.encodeResolverBenchmarkCorpus(schema),
+                    )
+                assertEquals(features, decoded.registry.features)
+                decoded.world()
+                roundTripped = true
+            }
+        }
+
+        assertTrue(conditions > 0)
+        assertTrue(fromArgument > 0)
+        assertTrue(fromObjectField > 0)
+        assertTrue(fromQueryField > 0)
+        assertTrue(fromProvider > 0)
+        assertTrue(objectFragment > 0)
+        assertTrue(queryFragment > 0)
+        assertTrue(nested > 0)
+        assertTrue(alternatives > 0)
+        assertTrue(roundTripped)
+    }
+
+    @Test
     fun `fromProvider variable generation is independently configurable and assembled`() {
         val baseConfig =
             Config.default +

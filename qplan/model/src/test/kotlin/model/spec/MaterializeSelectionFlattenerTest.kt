@@ -25,6 +25,35 @@ import kotlin.test.assertTrue
 
 class MaterializeSelectionFlattenerTest {
     @Test
+    fun `Boolean literal directives lower with include and skip semantics`() {
+        val world = TestWorld.fromSDL("type Query { value: String }")
+        val schema = world.schema as GJSchema
+        val (_, selections) =
+            GJSelectionParser(schema, emptyMap())
+                .materializeSelectionsFrom(
+                    """
+                    fragment ResolverInput on Query {
+                      includeTrue: value @include(if: true)
+                      includeFalse: value @include(if: false)
+                      skipTrue: value @skip(if: true)
+                      skipFalse: value @skip(if: false)
+                    }
+                    """.trimIndent(),
+                )
+        val conditions =
+            buildMap {
+                selections.forEach { selection ->
+                    put(selection.responseKey, selection.inclusionCondition)
+                }
+            }
+
+        assertEquals(InclusionCondition.Always, conditions.getValue("includeTrue"))
+        assertEquals(InclusionCondition.Never, conditions.getValue("includeFalse"))
+        assertEquals(InclusionCondition.Never, conditions.getValue("skipTrue"))
+        assertEquals(InclusionCondition.Always, conditions.getValue("skipFalse"))
+    }
+
+    @Test
     fun `fragment and field directives flatten into one conjunctive condition`() {
         val world = TestWorld.fromSDL("type Query { value: String }")
         val schema = world.schema as GJSchema

@@ -444,6 +444,95 @@ class InclusionConditionTest {
         assertTrue(resolution.correct)
     }
 
+    @Test
+    fun `include and skip gate synthetic namespace resolvers at root and nested positions`() {
+        listOf(false, true).forEach { conditionNestedNamespace ->
+            conditionUses.forEach { use ->
+                val world =
+                    TestWorld.fromSDL(
+                        schemaSDL =
+                            """
+                            type Query {
+                              outer(enabled: Boolean!): Int!
+                              namespace: Namespace
+                            }
+
+                            type Namespace {
+                              nested: NestedNamespace
+                            }
+
+                            type NestedNamespace {
+                              value: Int!
+                            }
+                            """.trimIndent(),
+                        fieldResolvers = { schema ->
+                            val outer = schema.requireObjectField("Query", "outer")
+                            val namespace = schema.requireObjectField("Query", "namespace")
+                            val nested = schema.requireObjectField("Namespace", "nested")
+                            val value = schema.requireObjectField("NestedNamespace", "value")
+                            val namespaceSelection =
+                                if (conditionNestedNamespace) {
+                                    "namespace { nested ${use.directiveSource()} { value } }"
+                                } else {
+                                    "namespace ${use.directiveSource()} { nested { value } }"
+                                }
+                            mapOf(
+                                outer to
+                                    fieldResolverOf(
+                                        schema.fragmentFrom(
+                                            "fragment Outer on Query { $namespaceSelection }",
+                                            variableField = outer,
+                                        ),
+                                    ) { _, _ -> 1 },
+                                namespace to
+                                    fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                        schema.objectOf("Namespace")
+                                    },
+                                nested to
+                                    fieldResolverOf(schema.emptyFragmentOf("Namespace")) { _, _ ->
+                                        schema.objectOf("NestedNamespace")
+                                    },
+                                value to
+                                    fieldResolverOf(schema.emptyFragmentOf("NestedNamespace")) { _, _ ->
+                                        7
+                                    },
+                            )
+                        },
+                        variableProviders = { schema ->
+                            val outer = schema.requireObjectField("Query", "outer")
+                            mapOf(
+                                Arguments.Variable.of(outer, "enabled") to
+                                    schema.fromArgument(outer, "enabled"),
+                            )
+                        },
+                    )
+                val resolution = world.resolve("query { outer(enabled: ${use.value}) }")
+                val namespace = world.schema.requireObjectField("Query", "namespace")
+                val nested = world.schema.requireObjectField("Namespace", "nested")
+                val value = world.schema.requireObjectField("NestedNamespace", "value")
+                val message =
+                    "${use.directive}=${use.value}, nested=$conditionNestedNamespace"
+
+                assertEquals(
+                    if (conditionNestedNamespace || use.included) 1 else 0,
+                    resolution.applications.count { it == namespace },
+                    message,
+                )
+                assertEquals(
+                    if (use.included) 1 else 0,
+                    resolution.applications.count { it == nested },
+                    message,
+                )
+                assertEquals(
+                    if (use.included) 1 else 0,
+                    resolution.applications.count { it == value },
+                    message,
+                )
+                assertTrue(resolution.correct, message)
+            }
+        }
+    }
+
     private fun alternativeWorld(): TestWorld =
         TestWorld.fromDSL(
             """

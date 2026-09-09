@@ -62,6 +62,20 @@ class SchemaConformanceTest {
     }
 
     @Test
+    fun `abstract root field references conform only when every possible type fits`() {
+        val world = TestWorld.fromSDL(POLYMORPHIC_SCHEMA_SDL).assumptions
+        val schema = world.schema
+        val target = schema.requireField("Query", "search") as ViaductSchema.ObjectField
+        val compatibleConsumer = schema.requireField("Container", "entity")
+        val partialConsumer = schema.requireField("Container", "product")
+        val reference = RootFieldReferenceData.of(listOf(target), emptyMap())
+
+        assertTrue(reference.conformsToResolverOutputSchemaType(target.outputType))
+        assertTrue(reference.conformsToResolverOutputSchemaType(compatibleConsumer.outputType))
+        assertFalse(reference.conformsToResolverOutputSchemaType(partialConsumer.outputType))
+    }
+
+    @Test
     fun `object value factory rejects a field value with the wrong type`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val user = schema.requireType("User") as ViaductSchema.Object
@@ -87,6 +101,36 @@ class SchemaConformanceTest {
             type Query {
               user: User
               users: [User]
+            }
+            """.trimIndent()
+
+        val POLYMORPHIC_SCHEMA_SDL =
+            """
+            interface Entity {
+              name: String!
+            }
+
+            interface ProductEntity {
+              name: String!
+            }
+
+            type Product implements Entity & ProductEntity {
+              name: String!
+            }
+
+            type Service implements Entity {
+              name: String!
+            }
+
+            union SearchResult = Product | Service
+
+            type Container {
+              entity: Entity
+              product: ProductEntity
+            }
+
+            type Query {
+              search: SearchResult
             }
             """.trimIndent()
     }

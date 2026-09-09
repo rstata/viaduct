@@ -44,6 +44,21 @@ class RootFieldReferenceDataTest {
     }
 
     @Test
+    fun `factory accepts interface and union targets`() {
+        val item = schema.requireObjectField("ProductFactory", "item")
+        val search = schema.requireObjectField("ProductFactory", "search")
+
+        assertEquals(
+            schema.requireType("Item"),
+            RootFieldReferenceData.of(listOf(factoryField, item), emptyMap()).type,
+        )
+        assertEquals(
+            schema.requireType("SearchResult"),
+            RootFieldReferenceData.of(listOf(factoryField, search), emptyMap()).type,
+        )
+    }
+
+    @Test
     fun `reference conforms as object output including within a list`() {
         val reference =
             RootFieldReferenceData.of(
@@ -95,12 +110,24 @@ class RootFieldReferenceDataTest {
     private companion object {
         val SCHEMA_SDL =
             """
-            type Product {
+            type Product implements Item {
               name: String
             }
 
+            type Service implements Item {
+              name: String
+            }
+
+            interface Item {
+              name: String
+            }
+
+            union SearchResult = Product | Service
+
             type ProductFactory {
               create(name: String!): Product!
+              item: Item
+              search: SearchResult
             }
 
             type Other {

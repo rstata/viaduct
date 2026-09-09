@@ -231,9 +231,13 @@ private fun Any?.conformsToOutputSchemaType(
         is RootFieldReferenceData ->
             rootFieldReferencesAllowed &&
                 !typeExpr.isList &&
-                (typeExpr.baseTypeDef as? ViaductSchema.CompositeTypeDef)
-                    ?.possibleObjectTypes
-                    ?.contains(type) == true
+                when (val expectedType = typeExpr.baseTypeDef) {
+                    is ViaductSchema.CompositeTypeDef ->
+                        type is ViaductSchema.CompositeTypeDef &&
+                            type.possibleObjectTypes.all(expectedType.possibleObjectTypes::contains)
+                    is ViaductSchema.SimpleTypeDef -> type == expectedType
+                    else -> false
+                }
         is EngineObjectData.Sync ->
             if (typeExpr.isList) {
                 false

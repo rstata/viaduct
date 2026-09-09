@@ -3,11 +3,11 @@ package model
 import viaduct.graphql.schema.ViaductSchema
 
 /**
- * A symbolic instruction to resolve one Query-reachable object field.
+ * A symbolic instruction to resolve one Query-reachable field.
  *
- * [path] starts at Query and follows singular, argumentless object fields to [targetField]. The
- * target's [arguments] are completely grounded and variable-free. This carrier belongs to
- * [ResolverOutputData], not [EngineOutputData], and exposes no fields before the referenced
+ * [path] starts at Query; every field before [targetField] is a singular, argumentless object
+ * field. The target's [arguments] are completely grounded and variable-free. This carrier belongs
+ * to [ResolverOutputData], not [EngineOutputData], and exposes no fields before the referenced
  * resolver runs. Equality is structural over the canonical path and arguments.
  */
 sealed interface RootFieldReferenceData {
@@ -18,8 +18,8 @@ sealed interface RootFieldReferenceData {
     val targetField: ViaductSchema.ObjectField
         get() = path.last()
 
-    /** The concrete object type produced by [targetField]. */
-    val type: ViaductSchema.Object
+    /** The singular composite or simple type produced by [targetField]. */
+    val type: ViaductSchema.OutputTypeDef
 
     companion object {
         /**
@@ -45,9 +45,15 @@ sealed interface RootFieldReferenceData {
             }
             val targetField = path.last()
             val targetType = targetField.outputType
-            require(!targetType.isList && targetType.baseTypeDef is ViaductSchema.Object) {
+            val targetTypeDef = targetType.baseTypeDef
+            require(
+                !targetType.isList &&
+                    (targetTypeDef is ViaductSchema.CompositeTypeDef ||
+                        targetTypeDef is ViaductSchema.SimpleTypeDef),
+            ) {
                 "Root-field-reference target " +
-                    "${targetField.containingDef.name}/${targetField.name} must return a singular object"
+                    "${targetField.containingDef.name}/${targetField.name} must return a " +
+                    "singular composite or simple value"
             }
             require(arguments.conformsToArgumentDefinition(targetField)) {
                 "Root-field-reference arguments do not belong to " +
@@ -56,7 +62,7 @@ sealed interface RootFieldReferenceData {
             return RootFieldReferenceDataImpl(
                 path = path.toList(),
                 arguments = arguments,
-                type = targetType.baseTypeDef as ViaductSchema.Object,
+                type = targetTypeDef,
             )
         }
 
@@ -74,5 +80,5 @@ sealed interface RootFieldReferenceData {
 private data class RootFieldReferenceDataImpl(
     override val path: List<ViaductSchema.ObjectField>,
     override val arguments: Arguments.Resolved,
-    override val type: ViaductSchema.Object,
+    override val type: ViaductSchema.OutputTypeDef,
 ) : RootFieldReferenceData

@@ -7,6 +7,7 @@ import model.CoercedDefaultValue
 import model.Fragment
 import model.EngineErrorData
 import model.EngineOutputData
+import model.InclusionCondition
 import model.Arguments
 import model.Selection
 import model.SelectionForest
@@ -802,6 +803,7 @@ private class TestResolverRegistry(
         selection: Selection,
         ownerField: ViaductSchema.ObjectField,
     ) {
+        if (selection.inclusionCondition === InclusionCondition.Never) return
         selection.possibleTypes.forEach { possibleType ->
             possibleType.field(selection.key.field.name)
                 ?.takeIf { it in sourceFieldResolvers }

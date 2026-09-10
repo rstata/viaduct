@@ -3,6 +3,7 @@ package model.testing
 import viaduct.graphql.schema.ViaductSchema
 
 import model.Arguments
+import model.InclusionCondition
 import model.Selection
 import model.SelectionForest
 import model.registry.FieldResolver
@@ -211,7 +212,7 @@ internal class BranchOrderValidator(
 }
 
 private fun Selection.branchOn(type: ViaductSchema.Object): ViaductSchema.ObjectField? =
-    if (type in possibleTypes) {
+    if (inclusionCondition !== InclusionCondition.Never && type in possibleTypes) {
         type.requireField(key.field.name)
     } else {
         null
@@ -235,6 +236,7 @@ private fun Selection.pathsContaining(
     variable: Arguments.Variable,
     prefix: List<String> = emptyList(),
 ): Set<String> {
+    if (inclusionCondition === InclusionCondition.Never) return emptySet()
     val path = prefix + key.field.name
     val result = linkedSetOf<String>()
     if (variable in key.arguments.variables()) {

@@ -6,7 +6,6 @@ package execution.viaductfeaturetests
 import execution.testing.runQPlanFeatureTest
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import viaduct.engine.api.mocks.EngineTestModule
 import viaduct.engine.api.mocks.createEngineObjectData
@@ -58,7 +57,6 @@ class NamespaceTypeTest {
             }
         }
 
-    @Disabled("TODO: NamespaceType")
     @Test
     fun `simple case`() {
         bootstrapper().runQPlanFeatureTest {
@@ -67,7 +65,6 @@ class NamespaceTypeTest {
         }
     }
 
-    @Disabled("TODO: NamespaceType")
     @Test
     fun `nested namespace types`() {
         bootstrapper().runQPlanFeatureTest {

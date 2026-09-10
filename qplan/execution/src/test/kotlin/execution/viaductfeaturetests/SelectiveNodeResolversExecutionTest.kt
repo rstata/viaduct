@@ -46,7 +46,10 @@ import viaduct.engine.api.EngineObjectData
 import viaduct.engine.api.EngineSelection
 import viaduct.engine.api.EngineSelectionSet
 import viaduct.engine.api.ExecutionAttribution
+import viaduct.engine.api.FromObjectFieldVariable
 import viaduct.engine.api.NodeEngineObjectData
+import viaduct.engine.api.RequiredSelectionSet
+import viaduct.engine.api.VariablesResolver
 import viaduct.engine.api.instrumentation.InstrumentNodeFetchingParameters
 import viaduct.engine.api.instrumentation.resolver.ResolverFunction
 import viaduct.engine.api.instrumentation.resolver.ViaductResolverInstrumentation
@@ -57,6 +60,7 @@ import viaduct.engine.api.mocks.createRSS
 import viaduct.engine.api.mocks.featureTestDefault
 import viaduct.engine.api.mocks.fetchAs
 import viaduct.engine.api.mocks.getAs
+import viaduct.engine.api.select.SelectionsParser
 import viaduct.graphql.test.assertMatches
 import viaduct.service.api.ExecutionInput
 import viaduct.service.api.Viaduct
@@ -1916,7 +1920,7 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("ALT: Uses a callback-owned RSS and asks a selective node owner to supply an argument-bearing field; qplan uses a declarative provider, an active argument-bearing field, and one non-selective node application")
         @Test
         fun `node owned sibling supplies required rss variable`() {
             MockTenantModuleBootstrapper(
@@ -1973,6 +1977,67 @@ class SelectiveNodeResolversExecutionTest {
                 runQueryWithTimeout("{ foo { bar { x } } }")
                     .assertJson("{data: {foo: {bar: {x: 30}}}}")
             }
+        }
+
+        @Test
+        fun `ALTERNATIVE node owned sibling supplies required rss variable`() {
+            val nodeCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo:Foo }
+                    type Foo implements Node { id:ID!, bar:Bar }
+                    type Bar { x:Int, y(z:Int!): Int, z:Int! }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    valueFromContext { it.createNodeReference("foo", objectType("Foo")) }
+                }
+
+                field("Bar" to "y") {
+                    resolver {
+                        fn { args, _, _, _, _ -> args.getAs<Int>("z") * 3 }
+                    }
+                }
+
+                field("Bar" to "x") {
+                    resolverExecutor {
+                        val objectSelections = SelectionsParser.parse("Bar", "y(z: \$z), z")
+                        val variablesResolvers = VariablesResolver.fromSelectionSetVariables(
+                            objectSelections = objectSelections,
+                            querySelections = null,
+                            variables = listOf(FromObjectFieldVariable("z", "z")),
+                            forChecker = false,
+                        )
+                        MockFieldUnbatchedResolverExecutor(
+                            objectSelectionSet = RequiredSelectionSet(
+                                selections = objectSelections,
+                                variablesResolvers = variablesResolvers,
+                                forChecker = false,
+                            ),
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, obj, _, _, _ -> obj.fetchAs<Int>("y") * 5 },
+                        )
+                    }
+                }
+
+                type("Foo") {
+                    nodeUnbatchedExecutor { _, _, _ ->
+                        nodeCalls.incrementAndGet()
+                        createEngineObjectData(
+                            objectType,
+                            mapOf(
+                                "bar" to createEngineObjectData("Bar", mapOf("z" to 2)),
+                            ),
+                        )
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { bar { x } } }")
+                    .assertJson("{data: {foo: {bar: {x: 30}}}}")
+            }
+
+            assertEquals(1, nodeCalls.get())
         }
 
         @Disabled("TODO: Selective")
@@ -2039,7 +2104,7 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("ALT: Uses a callback-owned RSS and selective node execution for a conditional dependency chain; qplan uses a declarative provider and resolves the node once through its supported non-selective executor")
         @Test
         fun `variable rss does not use skipped child object plan`() {
             MockTenantModuleBootstrapper(
@@ -2121,6 +2186,97 @@ class SelectiveNodeResolversExecutionTest {
                     """.trimIndent()
                 ).assertJson("{data: {b: 2}}")
             }
+        }
+
+        @Test
+        fun `ALTERNATIVE variable rss does not use skipped child object plan`() {
+            val nodeCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { a: Int, b: Int, foo: Foo! }
+                    type Foo implements Node { id: ID!, y: Int, z: Boolean! }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    valueFromContext { it.createNodeReference("foo", objectType("Foo")) }
+                }
+
+                field("Query" to "b") {
+                    resolverExecutor {
+                        val objectSelections = SelectionsParser.parse(
+                            "Query",
+                            "__typename @include(if: \$includeFoo), foo { z y }",
+                        )
+                        val variablesResolvers = VariablesResolver.fromSelectionSetVariables(
+                            objectSelections = objectSelections,
+                            querySelections = null,
+                            variables = listOf(
+                                FromObjectFieldVariable("includeFoo", "foo.z"),
+                            ),
+                            forChecker = false,
+                        )
+                        MockFieldUnbatchedResolverExecutor(
+                            objectSelectionSet = RequiredSelectionSet(
+                                selections = objectSelections,
+                                variablesResolvers = variablesResolvers,
+                                forChecker = false,
+                            ),
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, _, _ -> 2 },
+                        )
+                    }
+                }
+
+                field("Query" to "a") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            objectSelectionSet = createRSS("Query", "b, foo { z y }"),
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, obj, _, _, _ ->
+                                obj.fetch("b")
+                                val foo = obj.fetchAs<EngineObjectData>("foo")
+                                foo.fetch("y")
+                                foo.fetch("z")
+                                1
+                            }
+                        )
+                    }
+                }
+
+                field("Foo" to "z") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            objectSelectionSet = createRSS("Foo", "y"),
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, obj, _, _, _ ->
+                                obj.fetchAs<Int>("y")
+                                false
+                            }
+                        )
+                    }
+                }
+
+                type("Foo") {
+                    nodeUnbatchedExecutor { _, _, _ ->
+                        nodeCalls.incrementAndGet()
+                        createEngineObjectData(objectType, mapOf("y" to 4))
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout(
+                    """
+                        query (${"$"}includeA: Boolean! = false) {
+                          b
+                          a @include(if: ${"$"}includeA)
+                        }
+                    """.trimIndent()
+                ).assertJson("{data: {b: 2}}")
+            }
+
+            assertEquals(1, nodeCalls.get())
         }
 
         @Nested

@@ -49,6 +49,7 @@ internal class GJSelectionParser(
     private val schema: GJSchema,
     private val variableValues: Map<String, EngineInputData?>,
     private val variableField: ViaductSchema.ObjectField? = null,
+    private val preserveSourceResponseKeys: Boolean = false,
 ) {
     private val sourceSchema = SourceSchemaAdapter(schema)
     private var effectiveVariableField = variableField
@@ -241,7 +242,11 @@ internal class GJSelectionParser(
                 subselections
             }
         return SpecSelection.Field.of(
-            alias = field.alias ?: field.name.takeIf { loweredNodeField },
+            alias =
+                field.alias ?: field.name.takeIf {
+                    loweredNodeField ||
+                        (preserveSourceResponseKeys && canonicalField.name != field.name)
+                },
             field = canonicalField,
             arguments = arguments,
             subselections = canonicalSubselections,

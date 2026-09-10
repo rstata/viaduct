@@ -164,7 +164,7 @@ class EngineFeatureTestExample {
         }
     }
 
-    @Disabled("TODO: VarCallbk AccessChk")
+    @Disabled("TODO: AccessChk")
     @Test
     fun `test from kdoc`() {
         EngineTestModule(

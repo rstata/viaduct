@@ -23,7 +23,7 @@ import viaduct.engine.api.mocks.featureTestDefault
 import viaduct.engine.api.mocks.fetchAs
 
 class ParentFieldRequiredSelectionsExecutionTest {
-    @Disabled("TODO: ParentFld")
+    @Disabled("TODO: AccessChk")
     @Test
     fun `type checker required selections resolve the returned object's parent`() {
         val checkedParentName = AtomicReference<String>()
@@ -444,7 +444,7 @@ class ParentFieldRequiredSelectionsExecutionTest {
         }
     }
 
-    @Disabled("TODO: ParentFld")
+    @Disabled("TODO: AccessChk")
     @Test
     fun `parent field checker denies restricted data like equivalent normal field`() {
         EngineTestModule(
@@ -522,7 +522,7 @@ class ParentFieldRequiredSelectionsExecutionTest {
         }
     }
 
-    @Disabled("TODO: ParentFld")
+    @Disabled("N/A: Tests production field instrumentation behavior, outside qplan resolver correctness")
     @Test
     fun `execution runs checker but skips field instrumentation for parent field itself`() {
         val parentCheckerCount = AtomicInteger()
@@ -606,7 +606,7 @@ class ParentFieldRequiredSelectionsExecutionTest {
         assertTrue("Company" to "companyName" in fieldFetchingCoordinates)
     }
 
-    @Disabled("TODO: ParentFld")
+    @Disabled("TODO: AccessChk")
     @Test
     fun `execution resolves checker required selection sets for parent field itself`() {
         val parentCheckerCount = AtomicInteger()
@@ -685,7 +685,7 @@ class ParentFieldRequiredSelectionsExecutionTest {
         assertEquals(1, nestedParentFieldCount.get())
     }
 
-    @Disabled("TODO: ParentFld")
+    @Disabled("TODO: AccessChk")
     @Test
     fun `execution propagates checker failures from real fields selected under parent`() {
         EngineTestModule(

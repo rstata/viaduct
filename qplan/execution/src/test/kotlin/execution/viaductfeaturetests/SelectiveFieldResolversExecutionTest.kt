@@ -50,6 +50,9 @@ import viaduct.engine.EngineConfiguration
 import viaduct.engine.api.EngineObjectData
 import viaduct.engine.api.EngineSelection
 import viaduct.engine.api.EngineSelectionSet
+import viaduct.engine.api.FromObjectFieldVariable
+import viaduct.engine.api.RequiredSelectionSet
+import viaduct.engine.api.VariablesResolver
 import viaduct.engine.api.mocks.MockFieldBatchResolverExecutor
 import viaduct.engine.api.mocks.MockFieldUnbatchedResolverExecutor
 import viaduct.engine.api.mocks.MockTenantModuleBootstrapper
@@ -59,6 +62,7 @@ import viaduct.engine.api.mocks.featureTestDefault
 import viaduct.engine.api.mocks.fetchAs
 import viaduct.engine.api.mocks.getAs
 import viaduct.engine.api.spi.FieldSelectivityProvider
+import viaduct.engine.api.select.SelectionsParser
 import viaduct.graphql.test.assertMatches
 import viaduct.service.api.ExecutionInput
 import viaduct.service.api.Viaduct
@@ -408,7 +412,7 @@ class SelectiveFieldResolversExecutionTest {
 
     @Nested
     inner class RssTests {
-        @Disabled("TODO: Directive")
+        @Disabled("ALT: Production excludes resolver-owned Foo.x from selective parent output; qplan permits argumentless registered descendants to be source-owned, so its one-shot alternative omits x from the parent result")
         @Test
         fun `selective field skipped in query is selected in RSS`() {
             // This creates two planned executions of Foo.x:
@@ -477,7 +481,64 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Directive")
+        @Test
+        fun `ALTERNATIVE selective field skipped in query is selected in RSS`() {
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { b: Int, foo: Foo }
+                    type Foo { x: Int, y: Int, z: Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, sels, _ ->
+                                createEngineObjectData(
+                                    "Foo",
+                                    buildMap {
+                                        if (sels!!.containsField("Foo", "y")) put("y", 3)
+                                        if (sels.containsField("Foo", "z")) put("z", 5)
+                                    },
+                                )
+                            }
+                        )
+                    }
+                }
+
+                field("Query" to "b") {
+                    resolver {
+                        objectSelections("foo { x y }")
+                        fn { _, obj, _, _, _ ->
+                            obj.fetch("foo")
+                            2
+                        }
+                    }
+                }
+
+                field("Foo" to "x") {
+                    resolver {
+                        querySelections("foo { y }")
+                        fn { _, _, query, _, _ ->
+                            query.fetchAs<EngineObjectData>("foo").fetchAs<Int>("y") * 5
+                        }
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout(
+                    """
+                        query (${"$"}skipB: Boolean! = true) {
+                          b @skip(if: ${"$"}skipB)
+                          foo {
+                            x
+                          }
+                        }
+                    """.trimIndent(),
+                ).assertJson("{data: {foo: {x: 15}}}")
+            }
+        }
+
         @Test
         fun `statically skipped fragment spread does not shadow spreads of the same fragment`() {
             // The first Frag spread is statically skipped and creates a stub fragment definition.
@@ -588,7 +649,6 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Directive")
         @Test
         fun `selective field is selected in one RSS but in a skipped fragment in another RSS`() {
             // Query.b's object RSS fetches `foo.y` before `foo.x`. Resolving `foo.y` first exercises
@@ -790,7 +850,7 @@ class SelectiveFieldResolversExecutionTest {
             assertEquals(1, fooCalls.get())
         }
 
-        @Disabled("TODO: SelSem")
+        @Disabled("ALT: Tests precedence across multiple covering materializations; qplan produces the same values from one closed-demand application")
         @Test
         fun `surplus coverage uses values from the first covering result`() {
             val resultNumber = AtomicInteger()
@@ -851,7 +911,51 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: SelSem")
+        @Test
+        fun `ALTERNATIVE surplus coverage uses values from the first covering result`() {
+            val fooCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo: Foo }
+                    type Foo { x: Int, y: Int, z: Int, w: Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, _, _ ->
+                                fooCalls.incrementAndGet()
+                                createEngineObjectData("Foo", mapOf("z" to 2, "w" to 3))
+                            }
+                        )
+                    }
+                }
+
+                field("Foo" to "x") {
+                    resolver {
+                        objectSelections("z")
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("z") * 5 }
+                    }
+                }
+
+                field("Foo" to "y") {
+                    resolver {
+                        objectSelections("w")
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("w") * 7 }
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { x y } }")
+                    .assertJson("{data: {foo: {x: 10, y: 21}}}")
+            }
+
+            assertEquals(1, fooCalls.get())
+        }
+
+        @Disabled("ALT: Expects a second selective-source materialization for nested RSS coverage; qplan closes that demand before one application")
         @Test
         fun `missing nested rss coverage rematerializes selective source`() {
             val fooCalls = AtomicInteger()
@@ -899,6 +1003,51 @@ class SelectiveFieldResolversExecutionTest {
             }
 
             assertEquals(2, fooCalls.get())
+        }
+
+        @Test
+        fun `ALTERNATIVE missing nested rss coverage rematerializes selective source`() {
+            val fooCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo:Foo }
+                    type Foo { x:Int, bar:Bar }
+                    type Bar { y: Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, sels, _ ->
+                                fooCalls.incrementAndGet()
+                                val barData = if (sels!!.containsField("Foo", "bar")) {
+                                    mapOf<String, Any?>("y" to 2)
+                                } else {
+                                    emptyMap()
+                                }
+                                createEngineObjectData("Foo", mapOf("bar" to barData))
+                            }
+                        )
+                    }
+                }
+
+                field("Foo" to "x") {
+                    resolver {
+                        objectSelections("bar { y }")
+                        fn { _, obj, _, _, _ ->
+                            obj.fetchAs<EngineObjectData>("bar").fetchAs<Int>("y") * 3
+                        }
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { x } }")
+                    .assertJson("{data: {foo: {x: 6}}}")
+            }
+
+            assertEquals(1, fooCalls.get())
         }
 
         @Test
@@ -1290,7 +1439,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: SelSem Abstract")
+        @Disabled("ALT: Tests per-runtime-type rematerialization coverage; qplan supplies both concrete dependencies from one conservative application")
         @Test
         fun `partial rss coverage across list item types rematerializes only uncovered types`() {
             MockTenantModuleBootstrapper(
@@ -1353,6 +1502,62 @@ class SelectiveFieldResolversExecutionTest {
         }
 
         @Test
+        fun `ALTERNATIVE partial rss coverage across list item types rematerializes only uncovered types`() {
+            val fooCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo: Foo }
+                    type Foo { bars: [Bar] }
+                    union Bar = Baz | Qux
+                    type Baz { x: Int, y: Int }
+                    type Qux { x: Int, y: Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, _, _ ->
+                                fooCalls.incrementAndGet()
+                                createEngineObjectData(
+                                    "Foo",
+                                    mapOf(
+                                        "bars" to listOf(
+                                            createEngineObjectData("Baz", mapOf("y" to 2)),
+                                            createEngineObjectData("Qux", mapOf("y" to 3)),
+                                        )
+                                    ),
+                                )
+                            }
+                        )
+                    }
+                }
+
+                field("Baz" to "x") {
+                    resolver {
+                        objectSelections("y")
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("y") * 7 }
+                    }
+                }
+
+                field("Qux" to "x") {
+                    resolver {
+                        objectSelections("y")
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("y") * 11 }
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout(
+                    "{ foo { bars { ... on Baz { x } ... on Qux { x } } } }"
+                ).assertJson("{data: {foo: {bars: [{x: 14}, {x: 33}]}}}")
+            }
+
+            assertEquals(1, fooCalls.get())
+        }
+
+        @Test
         fun `null list items remain null while siblings rematerialize`() {
             MockTenantModuleBootstrapper(
                 """
@@ -1403,7 +1608,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: SelSem")
+        @Disabled("ALT: Tests positional reconciliation when repeated materializations change list size; qplan represents the same final item outcomes in one stable result")
         @Test
         fun `list size changes across materializations leave unmatched items unresolved`() {
             MockTenantModuleBootstrapper(
@@ -1465,7 +1670,66 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: SelSem")
+        @Test
+        fun `ALTERNATIVE list size changes across materializations leave unmatched items unresolved`() {
+            val fooCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo: Foo }
+                    type Foo { bars: [Bar] }
+                    type Bar { x: Int, y: Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, _, _ ->
+                                fooCalls.incrementAndGet()
+                                createEngineObjectData(
+                                    "Foo",
+                                    mapOf(
+                                        "bars" to listOf(
+                                            createEngineObjectData("Bar", mapOf("y" to 2)),
+                                            createEngineObjectData("Bar", mapOf("y" to null)),
+                                        ),
+                                    ),
+                                )
+                            }
+                        )
+                    }
+                }
+
+                field("Bar" to "x") {
+                    resolver {
+                        objectSelections("y")
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("y") * 3 }
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { bars { x } } }").assertMatches {
+                    "data" to {
+                        "foo" to {
+                            "bars" to arrayOf(
+                                { "x" to "6" },
+                                { "x" to null },
+                            )
+                        }
+                    }
+                    "errors" to arrayOf(
+                        {
+                            "path" to listOf("foo", "bars", "1", "x")
+                        }
+                    )
+                }
+            }
+
+            assertEquals(1, fooCalls.get())
+        }
+
+        @Disabled("ALT: Tests a runtime-type change between materializations; qplan produces the same final nullable leaf from one stable runtime type")
         @Test
         fun `nested list item type changes across materializations report a field error`() {
             MockTenantModuleBootstrapper(
@@ -1528,6 +1792,67 @@ class SelectiveFieldResolversExecutionTest {
                     )
                 }
             }
+        }
+
+        @Test
+        fun `ALTERNATIVE nested list item type changes across materializations report a field error`() {
+            val fooCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo: Foo }
+                    type Foo { bars: [Bar] }
+                    union Bar = Baz | Qux
+                    type Baz { x: Int, y: Int }
+                    type Qux { y: Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, _, _ ->
+                                fooCalls.incrementAndGet()
+                                createEngineObjectData(
+                                    "Foo",
+                                    mapOf(
+                                        "bars" to listOf(
+                                            createEngineObjectData("Baz", mapOf("y" to null)),
+                                        )
+                                    ),
+                                )
+                            }
+                        )
+                    }
+                }
+
+                field("Baz" to "x") {
+                    resolver {
+                        objectSelections("y")
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("y") * 3 }
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout(
+                    "{ foo { bars { ... on Baz { x } } } }"
+                ).assertMatches {
+                    "data" to {
+                        "foo" to {
+                            "bars" to arrayOf(
+                                { "x" to null },
+                            )
+                        }
+                    }
+                    "errors" to arrayOf(
+                        {
+                            "path" to listOf("foo", "bars", "0", "x")
+                        }
+                    )
+                }
+            }
+
+            assertEquals(1, fooCalls.get())
         }
 
         @Nested
@@ -1718,7 +2043,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: SelSem")
+        @Disabled("ALT: Expects argument-distinct passive values from separate materializations; qplan resolves each argument-bearing field actively under one parent application")
         @Test
         fun `rss aliases with different arguments remain isolated across materializations`() {
             MockTenantModuleBootstrapper(
@@ -1770,7 +2095,57 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: VarCallbk ErrorData")
+        @Test
+        fun `ALTERNATIVE rss aliases with different arguments remain isolated across materializations`() {
+            val fooCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo:Foo }
+                    type Foo { x:Int, y:Int, z(x:Int!):Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, _, _ ->
+                                fooCalls.incrementAndGet()
+                                createEngineObjectData("Foo")
+                            }
+                        )
+                    }
+                }
+
+                field("Foo" to "z") {
+                    resolver {
+                        fn { args, _, _, _, _ -> args.getAs<Int>("x") * 5 }
+                    }
+                }
+
+                field("Foo" to "x") {
+                    resolver {
+                        objectSelections("a:z(x:2)")
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("a") * 7 }
+                    }
+                }
+
+                field("Foo" to "y") {
+                    resolver {
+                        objectSelections("b:z(x:3)")
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("b") * 11 }
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { x y } }")
+                    .assertJson("{data: {foo: {x:70, y:165}}}")
+            }
+
+            assertEquals(1, fooCalls.get())
+        }
+
+        @Disabled("ALT: Routes an argument-bearing RSS field through passive rematerialization; qplan resolves it actively and preserves the provider failure at the consumer field")
         @Test
         fun `rss variables resolver failure during rematerialization reports a field error`() {
             MockTenantModuleBootstrapper(
@@ -1825,7 +2200,65 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: VarCallbk")
+        @Test
+        fun `ALTERNATIVE rss variables resolver failure during rematerialization reports a field error`() {
+            val fooCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo: Foo }
+                    type Foo { x: Int, y(x: Int!): Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, _, _ ->
+                                fooCalls.incrementAndGet()
+                                createEngineObjectData("Foo")
+                            }
+                        )
+                    }
+                }
+
+                field("Foo" to "y") {
+                    resolver {
+                        fn { args, _, _, _, _ -> args.getAs<Int>("x") }
+                    }
+                }
+
+                field("Foo" to "x") {
+                    resolver {
+                        objectSelections("y(x: \$x)") {
+                            variables("x") { _, _ ->
+                                error("rss variables resolver failed")
+                            }
+                        }
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("y") * 3 }
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { x } }").assertMatches {
+                    "data" to {
+                        "foo" to {
+                            "x" to null
+                        }
+                    }
+                    "errors" to arrayOf(
+                        {
+                            "message" to ".*rss variables resolver failed.*"
+                            "path" to listOf("foo", "x")
+                        }
+                    )
+                }
+            }
+
+            assertEquals(1, fooCalls.get())
+        }
+
+        @Disabled("ALT: Uses a callback-owned RSS for a conditional dependency chain; qplan expresses the chain as a declarative object-field provider and resolves it one-shot")
         @Test
         fun `variable rss does not use skipped child object plan`() {
             // Query.b has a runtime-dependent object RSS field whose variable resolver needs
@@ -1920,6 +2353,99 @@ class SelectiveFieldResolversExecutionTest {
         }
 
         @Test
+        fun `ALTERNATIVE variable rss does not use skipped child object plan`() {
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { a: Int, b: Int, foo: Foo! @resolver }
+                    type Foo { y: Int, z: Boolean! }
+                """.trimIndent()
+            ) {
+                field("Query" to "b") {
+                    resolverExecutor {
+                        val objectSelections = SelectionsParser.parse(
+                            "Query",
+                            "__typename @include(if: \$includeFoo), foo { z y }",
+                        )
+                        val variablesResolvers = VariablesResolver.fromSelectionSetVariables(
+                            objectSelections = objectSelections,
+                            querySelections = null,
+                            variables = listOf(
+                                FromObjectFieldVariable("includeFoo", "foo.z"),
+                            ),
+                            forChecker = false,
+                        )
+                        MockFieldUnbatchedResolverExecutor(
+                            objectSelectionSet = RequiredSelectionSet(
+                                selections = objectSelections,
+                                variablesResolvers = variablesResolvers,
+                                forChecker = false,
+                            ),
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, _, _ -> 2 },
+                        )
+                    }
+                }
+
+                field("Query" to "a") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            objectSelectionSet = createRSS("Query", "b, foo { z y }"),
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, obj, _, _, _ ->
+                                obj.fetch("b")
+                                val foo = obj.fetchAs<EngineObjectData>("foo")
+                                foo.fetch("y")
+                                foo.fetch("z")
+                                1
+                            }
+                        )
+                    }
+                }
+
+                field("Query" to "foo") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, sels, _ ->
+                                val values = buildMap {
+                                    if (sels!!.containsField("Foo", "y")) {
+                                        put("y", 4)
+                                    }
+                                }
+                                createEngineObjectData("Foo", values)
+                            }
+                        )
+                    }
+                }
+
+                field("Foo" to "z") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            objectSelectionSet = createRSS("Foo", "y"),
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, obj, _, _, _ ->
+                                obj.fetchAs<Int>("y")
+                                false
+                            }
+                        )
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout(
+                    """
+                        query (${"$"}includeA: Boolean! = false) {
+                          b
+                          a @include(if: ${"$"}includeA)
+                        }
+                    """.trimIndent()
+                ).assertJson("{data: {b: 2}}")
+            }
+        }
+
+        @Test
         fun `embedded materialization preserves ancestor argument variables across child plans`() {
             MockTenantModuleBootstrapper(
                 """
@@ -1965,7 +2491,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: VarCallbk")
+        @Disabled("ALT: Uses a callback-owned RSS and asks a selective owner to supply an argument-bearing field; qplan uses a declarative provider and resolves argument-bearing fields actively")
         @Test
         fun `selective-owned sibling supplies required rss variable`() {
             MockTenantModuleBootstrapper(
@@ -2019,7 +2545,74 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: VarCallbk")
+        @Test
+        fun `ALTERNATIVE selective-owned sibling supplies required rss variable`() {
+            val fooCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo: Foo }
+                    type Foo { bar: Bar }
+                    type Bar { x: Int, y(z: Int!): Int, z: Int! }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, sels, _ ->
+                                fooCalls.incrementAndGet()
+                                val fooData = mutableMapOf<String, Any?>()
+                                if (sels!!.containsField("Foo", "bar")) {
+                                    val barSelections = sels.selectionSetForField("Foo", "bar")
+                                    val barData = mutableMapOf<String, Any?>()
+                                    if (barSelections.containsField("Bar", "z")) {
+                                        barData["z"] = 2
+                                    }
+                                    fooData["bar"] = createEngineObjectData("Bar", barData)
+                                }
+                                createEngineObjectData("Foo", fooData)
+                            }
+                        )
+                    }
+                }
+
+                field("Bar" to "y") {
+                    resolver {
+                        fn { args, _, _, _, _ -> args.getAs<Int>("z") * 3 }
+                    }
+                }
+
+                field("Bar" to "x") {
+                    resolverExecutor {
+                        val objectSelections = SelectionsParser.parse("Bar", "y(z: \$z), z")
+                        val variablesResolvers = VariablesResolver.fromSelectionSetVariables(
+                            objectSelections = objectSelections,
+                            querySelections = null,
+                            variables = listOf(FromObjectFieldVariable("z", "z")),
+                            forChecker = false,
+                        )
+                        MockFieldUnbatchedResolverExecutor(
+                            objectSelectionSet = RequiredSelectionSet(
+                                selections = objectSelections,
+                                variablesResolvers = variablesResolvers,
+                                forChecker = false,
+                            ),
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, obj, _, _, _ -> obj.fetchAs<Int>("y") * 5 },
+                        )
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { bar { x } } }")
+                    .assertJson("{data: {foo: {bar: {x: 30}}}}")
+            }
+
+            assertEquals(1, fooCalls.get())
+        }
+
+        @Disabled("ALT: Supplies argument-bearing child fields through embedded materialization; qplan resolves those fields actively beneath one selective parent application")
         @Test
         fun `embedded materialization preserves fragment argument variables across child plans`() {
             MockTenantModuleBootstrapper(
@@ -2086,6 +2679,80 @@ class SelectiveFieldResolversExecutionTest {
                     variables = mapOf("x" to 2),
                 ).assertJson("{data: {foo: {bar: {x: 30}}}}")
             }
+        }
+
+        @Test
+        fun `ALTERNATIVE embedded materialization preserves fragment argument variables across child plans`() {
+            val fooCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo: Foo }
+                    type Foo { bar(y: Int!): Bar }
+                    type Bar { x: Int, y(x: Int!): Int, sourceY: Int! }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, _, _ ->
+                                fooCalls.incrementAndGet()
+                                createEngineObjectData("Foo")
+                            },
+                        )
+                    }
+                }
+
+                field("Foo" to "bar") {
+                    resolver {
+                        fn { args, _, _, _, _ ->
+                            createEngineObjectData(
+                                "Bar",
+                                mapOf("sourceY" to args.getAs<Int>("y")),
+                            )
+                        }
+                    }
+                }
+
+                field("Bar" to "y") {
+                    resolver {
+                        objectSelections("sourceY")
+                        fn { args, obj, _, _, _ ->
+                            args.getAs<Int>("x") * obj.fetchAs<Int>("sourceY")
+                        }
+                    }
+                }
+
+                field("Bar" to "x") {
+                    resolver {
+                        objectSelections("y(x: \$x)") {
+                            variables("x") { _, _ -> mapOf("x" to 3) }
+                        }
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("y") * 5 }
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout(
+                    """
+                        query(${"$"}x: Int!) {
+                          foo {
+                            ...FooFields
+                          }
+                        }
+
+                        fragment FooFields on Foo {
+                          bar(y: ${"$"}x) {
+                            x
+                          }
+                        }
+                    """.trimIndent(),
+                    variables = mapOf("x" to 2),
+                ).assertJson("{data: {foo: {bar: {x: 30}}}}")
+            }
+
+            assertEquals(1, fooCalls.get())
         }
 
         @Nested
@@ -2209,7 +2876,7 @@ class SelectiveFieldResolversExecutionTest {
 
     @Nested
     inner class ConsistencyTests {
-        @Disabled("TODO: SelSem")
+        @Disabled("ALT: Tests a null second materialization; qplan represents the same nullable-consumer result from one stable object with a null dependency")
         @Test
         fun `null rematerialization reports a field error at nullable consumer`() {
             MockTenantModuleBootstrapper(
@@ -2268,7 +2935,57 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: SelSem")
+        @Test
+        fun `ALTERNATIVE null rematerialization reports a field error at nullable consumer`() {
+            val fooCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                extend type Query { foo: Foo }
+                type Foo { x:Int, y:Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, _, _ ->
+                                fooCalls.incrementAndGet()
+                                createEngineObjectData("Foo", mapOf("x" to null))
+                            }
+                        )
+                    }
+                }
+
+                field("Foo" to "y") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            objectSelectionSet = createRSS("Foo", "x"),
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, obj, _, _, _ -> obj.fetchAs<Int>("x") * 3 }
+                        )
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { y } }").assertMatches {
+                    "data" to {
+                        "foo" to {
+                            "y" to null
+                        }
+                    }
+                    "errors" to arrayOf(
+                        {
+                            "path" to listOf("foo", "y")
+                        }
+                    )
+                }
+            }
+
+            assertEquals(1, fooCalls.get())
+        }
+
+        @Disabled("ALT: Tests a null second materialization beneath a non-null consumer; qplan produces the same bubbling from one stable object with a null dependency")
         @Test
         fun `null rematerialization bubbles through non-null consumer`() {
             MockTenantModuleBootstrapper(
@@ -2326,6 +3043,54 @@ class SelectiveFieldResolversExecutionTest {
         }
 
         @Test
+        fun `ALTERNATIVE null rematerialization bubbles through non-null consumer`() {
+            val fooCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                extend type Query { foo: Foo }
+                type Foo { x:Int, y:Int! }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, _, _ ->
+                                fooCalls.incrementAndGet()
+                                createEngineObjectData("Foo", mapOf("x" to null))
+                            }
+                        )
+                    }
+                }
+
+                field("Foo" to "y") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            objectSelectionSet = createRSS("Foo", "x"),
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, obj, _, _, _ -> obj.fetchAs<Int>("x") * 3 }
+                        )
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { y } }").assertMatches {
+                    "data" to {
+                        "foo" to null
+                    }
+                    "errors" to arrayOf(
+                        {
+                            "path" to listOf("foo", "y")
+                        }
+                    )
+                }
+            }
+
+            assertEquals(1, fooCalls.get())
+        }
+
+        @Test
         fun `initially null selective result is not rematerialized`() {
             val fooCalls = AtomicInteger()
 
@@ -2362,7 +3127,7 @@ class SelectiveFieldResolversExecutionTest {
             assertEquals(1, fooCalls.get())
         }
 
-        @Disabled("TODO: SelSem")
+        @Disabled("ALT: Tests a root runtime-type change between materializations; qplan preserves the final nullable leaf and error path from one stable runtime type")
         @Test
         fun `type changes across root materializations report a field error`() {
             MockTenantModuleBootstrapper(
@@ -2418,7 +3183,59 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: SelSem")
+        @Test
+        fun `ALTERNATIVE type changes across root materializations report a field error`() {
+            val fooCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                extend type Query { foo: Foo }
+                union Foo = Bar | Baz
+                type Bar { x: Int, y: Int }
+                type Baz { z: Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, _, _ ->
+                                fooCalls.incrementAndGet()
+                                createEngineObjectData("Bar", mapOf("x" to null))
+                            }
+                        )
+                    }
+                }
+
+                field("Bar" to "y") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            objectSelectionSet = createRSS("Bar", "x"),
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, obj, _, _, _ -> obj.fetchAs<Int>("x") * 3 }
+                        )
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { ... on Bar { y } } }").assertMatches {
+                    "data" to {
+                        "foo" to {
+                            "y" to null
+                        }
+                    }
+                    "errors" to arrayOf(
+                        {
+                            "path" to listOf("foo", "y")
+                        }
+                    )
+                }
+            }
+
+            assertEquals(1, fooCalls.get())
+        }
+
+        @Disabled("ALT: Tests a nested runtime-type change between materializations; qplan preserves the final nullable leaf and error path from one stable runtime type")
         @Test
         fun `type changes across nested object materializations report a field error`() {
             MockTenantModuleBootstrapper(
@@ -2485,7 +3302,67 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: SelSem")
+        @Test
+        fun `ALTERNATIVE type changes across nested object materializations report a field error`() {
+            val fooCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                extend type Query { foo: Foo }
+                type Foo { bar: Bar }
+                union Bar = Baz | Qux
+                type Baz { x: Int, y: Int }
+                type Qux { z: Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, _, _ ->
+                                fooCalls.incrementAndGet()
+                                createEngineObjectData(
+                                    "Foo",
+                                    mapOf("bar" to createEngineObjectData("Baz", mapOf("x" to null))),
+                                )
+                            }
+                        )
+                    }
+                }
+
+                field("Baz" to "y") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            objectSelectionSet = createRSS("Baz", "x"),
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, obj, _, _, _ -> obj.fetchAs<Int>("x") * 3 }
+                        )
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout(
+                    "{ foo { bar { ... on Baz { y } } } }"
+                ).assertMatches {
+                    "data" to {
+                        "foo" to {
+                            "bar" to {
+                                "y" to null
+                            }
+                        }
+                    }
+                    "errors" to arrayOf(
+                        {
+                            "path" to listOf("foo", "bar", "y")
+                        }
+                    )
+                }
+            }
+
+            assertEquals(1, fooCalls.get())
+        }
+
+        @Disabled("ALT: Tests malformed nested output only on a second materialization; qplan preserves the final nullable leaf and error path from one stable malformed dependency value")
         @Test
         fun `malformed nested object from rematerialization reports a field error`() {
             MockTenantModuleBootstrapper(
@@ -2543,7 +3420,62 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: SelSem")
+        @Test
+        fun `ALTERNATIVE malformed nested object from rematerialization reports a field error`() {
+            val fooCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo: Foo }
+                    type Foo { bar: Bar }
+                    type Bar { x: Int, y: Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, _, _ ->
+                                fooCalls.incrementAndGet()
+                                createEngineObjectData(
+                                    "Foo",
+                                    mapOf(
+                                        "bar" to createEngineObjectData("Bar", mapOf("y" to null)),
+                                    ),
+                                )
+                            }
+                        )
+                    }
+                }
+
+                field("Bar" to "x") {
+                    resolver {
+                        objectSelections("y")
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("y") * 3 }
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { bar { x } } }").assertMatches {
+                    "data" to {
+                        "foo" to {
+                            "bar" to {
+                                "x" to null
+                            }
+                        }
+                    }
+                    "errors" to arrayOf(
+                        {
+                            "path" to listOf("foo", "bar", "x")
+                        }
+                    )
+                }
+            }
+
+            assertEquals(1, fooCalls.get())
+        }
+
+        @Disabled("ALT: Tests a selective producer exception on a second materialization; qplan preserves the final consumer error from one stable producer result")
         @Test
         fun `resolver exceptions during rematerialization report a field error`() {
             MockTenantModuleBootstrapper(
@@ -2590,6 +3522,53 @@ class SelectiveFieldResolversExecutionTest {
                     )
                 }
             }
+        }
+
+        @Test
+        fun `ALTERNATIVE resolver exceptions during rematerialization report a field error`() {
+            val fooCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                extend type Query { foo: Foo }
+                type Foo { x: Int, y: Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, _, _ ->
+                                fooCalls.incrementAndGet()
+                                createEngineObjectData("Foo", mapOf("y" to 2))
+                            }
+                        )
+                    }
+                }
+
+                field("Foo" to "x") {
+                    resolver {
+                        objectSelections("y")
+                        fn { _, _, _, _, _ -> throw RuntimeException("one-shot dependent resolver failed") }
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { x } }").assertMatches {
+                    "data" to {
+                        "foo" to {
+                            "x" to null
+                        }
+                    }
+                    "errors" to arrayOf(
+                        {
+                            "path" to listOf("foo", "x")
+                        }
+                    )
+                }
+            }
+
+            assertEquals(1, fooCalls.get())
         }
     }
 
@@ -3343,7 +4322,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: SelSem Abstract")
+        @Disabled("ALT: Expects post-materialization runtime types to narrow later selection sets; qplan conservatively requests possible concrete demand before its one application")
         @Test
         fun `materialization output selections preserve path-specific concrete ownership`() {
             var materializationSelections: EngineSelectionSet? = null
@@ -3435,6 +4414,73 @@ class SelectiveFieldResolversExecutionTest {
             )
         }
 
+        @Test
+        fun `ALTERNATIVE materialization output selections preserve path-specific concrete ownership`() {
+            val fooCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo: Foo }
+                    type Foo { x: Int @resolver, bar: Qux, baz: Qux }
+                    interface Qux { x: Int, y: Int }
+                    type QuxA implements Qux { x: Int, y: Int @resolver }
+                    type QuxB implements Qux { x: Int @resolver, y: Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, sels, _ ->
+                                fooCalls.incrementAndGet()
+                                createEngineObjectData(
+                                    "Foo",
+                                    buildMap {
+                                        if (sels!!.containsField("Foo", "bar")) {
+                                            put("bar", createEngineObjectData("QuxA", mapOf("x" to 2)))
+                                        }
+                                        if (sels.containsField("Foo", "baz")) {
+                                            put("baz", createEngineObjectData("QuxB", mapOf("y" to 3)))
+                                        }
+                                    },
+                                )
+                            }
+                        )
+                    }
+                }
+
+                field("Foo" to "x") {
+                    resolver {
+                        objectSelections(
+                            """
+                                bar { x }
+                                baz { y }
+                            """.trimIndent()
+                        )
+                        fn { _, obj, _, _, _ ->
+                            val bar = obj.fetchAs<EngineObjectData>("bar")
+                            val baz = obj.fetchAs<EngineObjectData>("baz")
+                            bar.fetchAs<Int>("x") * baz.fetchAs<Int>("y")
+                        }
+                    }
+                }
+
+                field("QuxA" to "y") {
+                    resolver { fn { _, _, _, _, _ -> 5 } }
+                }
+
+                field("QuxB" to "x") {
+                    resolver { fn { _, _, _, _, _ -> 7 } }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { x } }")
+                    .assertJson("{data: {foo: {x: 6}}}")
+            }
+
+            assertEquals(1, fooCalls.get())
+        }
+
         @Disabled("TODO: MechAdapt")
         @Test
         fun `materialization preserves resolver selection directives`() {
@@ -3476,7 +4522,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: SelSem")
+        @Disabled("ALT: Uses a later materialization to distinguish client and RSS hydration of one selected field; qplan requires one explicit passive value")
         @Test
         fun `resolver does not hydrate a selected field in its output selection set`() {
             val initialFooCall = AtomicBoolean(true)
@@ -3517,6 +4563,43 @@ class SelectiveFieldResolversExecutionTest {
         }
 
         @Test
+        fun `ALTERNATIVE resolver does not hydrate a selected field in its output selection set`() {
+            val fooCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo: Foo }
+                    type Foo { x: Int, y: Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, _, _ ->
+                                fooCalls.incrementAndGet()
+                                createEngineObjectData("Foo", mapOf("y" to null))
+                            }
+                        )
+                    }
+                }
+
+                field("Foo" to "x") {
+                    resolver {
+                        objectSelections("y")
+                        fn { _, obj, _, _, _ -> (obj.fetchOrNull("y") as? Int ?: 2) * 3 }
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { y x } }")
+                    .assertJson("{data: {foo: {y: null, x: 6}}}")
+            }
+
+            assertEquals(1, fooCalls.get())
+        }
+
+        @Test
         fun `resolver hydrates unselected fields in its output selection set`() {
             val initialFooCall = AtomicBoolean(true)
 
@@ -3553,7 +4636,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: SelSem")
+        @Disabled("ALT: Expects argument-distinct passive values from separate output selection sets; qplan resolves both argument-bearing occurrences actively")
         @Test
         fun `client and rss arguments remain isolated in output selection set`() {
             MockTenantModuleBootstrapper(
@@ -3594,7 +4677,50 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: SelSem")
+        @Test
+        fun `ALTERNATIVE client and rss arguments remain isolated in output selection set`() {
+            val fooCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo:Foo }
+                    type Foo { x:Int, y(z:Int!):Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, _, _ ->
+                                fooCalls.incrementAndGet()
+                                createEngineObjectData("Foo")
+                            }
+                        )
+                    }
+                }
+
+                field("Foo" to "y") {
+                    resolver {
+                        fn { args, _, _, _, _ -> args.getAs<Int>("z") }
+                    }
+                }
+
+                field("Foo" to "x") {
+                    resolver {
+                        objectSelections("y(z:2)")
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("y") * 3 }
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { y(z:1) x } }")
+                    .assertJson("{data: {foo: {y:1, x:6}}}")
+            }
+
+            assertEquals(1, fooCalls.get())
+        }
+
+        @Disabled("ALT: Production ignores a selective producer value outside its output selection set; qplan's one-shot ownership contract requires the producer not to return that surplus field")
         @Test
         fun `resolver hydrates unselected fields outside its output selection set`() {
             MockTenantModuleBootstrapper(
@@ -3624,6 +4750,42 @@ class SelectiveFieldResolversExecutionTest {
                 runQueryWithTimeout("{ foo { x } }")
                     .assertJson("{data: {foo: {x: 3}}}")
             }
+        }
+
+        @Test
+        fun `ALTERNATIVE resolver hydrates unselected fields outside its output selection set`() {
+            val fooCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo: Foo }
+                    type Foo { x: Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    resolverExecutor {
+                        MockFieldUnbatchedResolverExecutor(
+                            isSelective = true,
+                            resolverId = resolverId,
+                            unbatchedResolveFn = { _, _, _, _, _ ->
+                                fooCalls.incrementAndGet()
+                                createEngineObjectData("Foo")
+                            }
+                        )
+                    }
+                }
+
+                field("Foo" to "x") {
+                    resolver {
+                        fn { _, _, _, _, _ -> 3 }
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { x } }")
+                    .assertJson("{data: {foo: {x: 3}}}")
+            }
+
+            assertEquals(1, fooCalls.get())
         }
     }
 

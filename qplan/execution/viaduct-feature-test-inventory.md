@@ -4,7 +4,7 @@ This inventory records the current synchronization boundary between qplan and th
 
 Migration is atomic by source file. A synchronized port is authoritative through its copied source tests and coded `@Disabled` reasons; this document intentionally does not duplicate that per-test status.
 
-Eleven ports currently match the source test names and counts. The synchronization gaps below keep the other two ports from being complete whole-file migrations.
+Twelve ports currently match the source test names and counts. The synchronization gap below keeps the remaining port from being a complete whole-file migration.
 
 Migrated tests are source-faithful: aside from package/import plumbing, `runFeatureTest` to `runQPlanFeatureTest`, source metadata, and coded `@Disabled` annotations, their fixture code, helpers, behavior, and assertions must remain unchanged. Tests requiring production `KeyTree` or `KeyTreeBuilder` utilities are out of scope and belong in the N/A worklist until that infrastructure is deliberately added.
 
@@ -42,12 +42,17 @@ The following source files are intentionally not copied because every test in ea
 
 ## Observed Port Boundaries
 
+- **Namespace types:** Both source tests run unchanged through Resolver26, covering simple and nested namespace paths.
 - **Root-field references:** All 23 source tests are copied. Reference resolution cases run through Resolver26 except the independently blocked checker/caller-attribution cases, the node-resolver-to-reference inline bridge, and production's support for object RSS on a referenced target. The object-RSS case remains source-faithful and disabled; its enabled `ALTERNATIVE` prefixes the namespace path and reads the same data through Query RSS. Production's equivalent-reference deduplication test likewise remains disabled; its enabled `ALTERNATIVE` expects one fresh target execution for each of the three reference occurrences.
 - **Execution:** `TestWorld` fills missing nullable Query fields with null producers and missing non-null Query fields with error producers. Node lowering treats the fringe ID as authoritative when composing raw lookup data, matching production's `NodeEngineObjectDataImpl`; the lookup payload need not repeat it. Seven node tests currently pass through qplan; six remain disabled.
 - **Current policy:** `NodeResolverTest.kt`'s disabled `node reference nested inside resolver response` directly materializes its outer `Baz` object while using a `NodeReference` only for the nested `anotherBaz`. Production supports that distinction, but qplan currently requires every Node value to be resolved by its node resolver, so direct inline Node materialization remains outside the modeled scope. Its passing `ALTERNATIVE` returns an outer node reference and materializes both occurrences through the node resolver.
 - **Semantics:** `RequiredSelectionsTest.kt`'s disabled `resolve fields multiple mergeable requirements` preserves its named RSS fragment and production's two-invocation assertion. Qplan deliberately coalesces alias-shaped demand into one resolver application; its passing `ALTERNATIVE` differs only by expecting that one-shot count.
 - **Variables:** `VariablesResolverTest.kt`'s disabled `variables are coerced` preserves production's independent object- and Query-RSS bindings for the same variable name. Qplan gives each resolver variable name one occurrence-local binding; its passing `ALTERNATIVE` uses distinct `varx` and `vary` names while preserving the coercion behavior under test.
-- **Selective fields:** The executor adapter now passes converted Resolver26 demand to selective field executors. Seventeen of the 71 formerly `Selective`-only cases in `SelectiveFieldResolversExecutionTest.kt` and three of the seven such cases in `RequiredSelectionsTest.kt` now pass unchanged. The remaining cases have been reclassified by their actual blocker. `SelSem` marks unresolved Resolver26/production differences in selective coverage, argument-shape isolation, concrete applicability, key coalescing, or handling of outputs outside qplan's resolver-perfect relation.
+- **Selective fields:** The executor adapter now passes converted Resolver26 demand to selective field executors. Seventeen of the 71 formerly `Selective`-only cases in `SelectiveFieldResolversExecutionTest.kt` and three of the seven such cases in `RequiredSelectionsTest.kt` run unchanged. All eighteen production tests formerly labeled `SelSem` retain their source form as disabled `ALT` tests and have passing one-shot `ALTERNATIVE` counterparts. The alternatives preserve final GraphQL data and meaningful error paths while replacing repeated materialization, snapshot reconciliation, passive argument-bearing output, runtime-type-dependent demand narrowing, and surplus-output policy with Resolver26's closed-demand semantics. Other disabled cases are classified by their actual non-`SelSem` blocker.
+- **Conditional directives:** Seven production-derived skip/include cases run unchanged. Source-document adaptation now preserves the source `__typename` response key after lowering, and static registry dependency and branch-order validation ignore `Never` selections. The remaining production case permits a selective parent to supply an argumentless registered descendant that production instead leaves to its standard resolver; it retains the production form as an `ALT` with a same-response `ALTERNATIVE` whose parent omits that descendant.
+- **Synchronized-port selective semantics:** Four production tests in `RequiredSelectionsTest.kt` expect consumer-shaped resolver execution where qplan deliberately provides one-shot producer execution. Three expect production to invoke a selective source separately for client and RSS shapes, while Resolver26 coalesces those demands into one application. The fourth expects the client selection `{a}` to remain the executor-visible shape for a non-selective source, while Resolver26 supplies the coalesced `{a, b}` demand. Each unchanged production test remains disabled with an `ALT` reason immediately followed by a passing `ALTERNATIVE` that preserves the response assertion and verifies the one coalesced application.
+- **Parent fields:** Ordinary singular, list, nested, interface, union, aliased, named-fragment, and selective parent-field cases run unchanged. The sole remaining `ParentFld` case uses a resolver variable beneath `@parent`; qplan deliberately rejects variables on every concrete branch reachable beneath a parent selection. Former parent-labelled checker tests are now classified as `AccessChk`, and the instrumentation-only case is N/A.
+- **Legacy callback RSS:** `VarCallbk` is no longer an actionable qplan blocker, and callback ownership by itself does not make a production scenario N/A. Eleven production forms now remain disabled as `ALT` tests with passing `ALTERNATIVE` rewrites: declarative `FromObjectField` providers replace data-dependent callback RSSes, supported no-RSS providers replace callbacks whose RSS contributes no value, bounded parent demand is lifted unconditionally, argument-bearing fields are resolved actively rather than supplied passively, and selective node fixtures use one supported non-selective node application. The three genuine N/A cases are semantic boundaries: two require child-produced variables beneath `@parent` to parameterize ancestor work, and one tests pruning an unused provider that qplan instead rejects during registry construction.
 - **Result metadata:** `SelectiveFieldResolversExecutionTest.kt` preserves production's disabled `selective resolver rematerializes DataFetcherResult list items`; its passing `ALTERNATIVE` unwraps the metadata-free list item to the directly conforming EOD value represented by qplan.
 - `NodeResolverTest.kt`'s copied and disabled `node resolver not executed twice for the same query path` tests memoization across the primary operation and an independently rooted resolver Query fragment. Qplan will not support memoizing query-fragment OERs across resolver roots, so the test is N/A rather than an intentional behavior alternative.
 - `FromFieldVariablesFeatureTest.kt`'s source-success case `from arg -- path traverses nested input` remains unchanged and disabled; adapter rejection coverage belongs in a separate qplan-specific test.
@@ -55,22 +60,19 @@ The following source files are intentionally not copied because every test in ea
 
 ## Grouped Blocker Counts
 
-Counts overlap because one test may be blocked by more than one requirement. They cover the eleven synchronized ports and exclude the two incomplete ports listed above. Labels appear space-separated in actionable `@Disabled("TODO: ...")` reasons; `IntentDiff` identifies the three intentional incompatibilities whose specific prose reasons are retained. `AccessChk` includes checker and type-checker executors together with their object- and Query-rooted required selections; checker Query fragments carry no additional blocker.
+Counts overlap because one test may be blocked by more than one requirement. They summarize actionable mixed-feature cases in `EngineFeatureTestExample.kt`, `FromFieldVariablesFeatureTest.kt`, `RequiredSelectionsTest.kt`, and `VariablesResolverTest.kt`; they exclude dedicated ports whose primary unsupported surface is already evident from the file, as well as the incomplete selective-field port listed above. Labels appear space-separated in actionable `@Disabled("TODO: ...")` reasons; `IntentDiff` identifies the fourteen intentional incompatibilities whose specific `ALT` prose reasons are retained. `AccessChk` includes checker and type-checker executors together with their object- and Query-rooted required selections; checker Query fragments carry no additional blocker. Resolved categories and N/A behavior are omitted rather than retained as zero-count blocker rows.
 
 | Group | Count | Label |
 | --- | ---: | --- |
 | |
-| Selective resolution semantics | 4 | `SelSem` |
-| Parent-field semantics | 7 | `ParentFld` |
+| Parent-field semantics | 1 | `ParentFld` |
 | Checkers / access checks | 8 | `AccessChk` |
-| Variable providers with RSS dependencies | 1 | `VarCallbk` |
-| Likely mechanical adapter enablement | 4 | `MechAdapt` |
-| Abstract-type/runtime applicability | 5 | `Abstract` |
-| Directives | 0 | `Directive` |
+| Likely mechanical adapter enablement | 3 | `MechAdapt` |
+| Abstract-type/runtime applicability | 2 | `Abstract` |
 | Mutations | 3 | `Mutation` |
 | Rich executor error preservation | 1 | `ErrorData` |
 | Nested `FromArgument` paths | 2 | `NestedArg` |
-| Intentional semantic incompatibilities | 3 | `IntentDiff` |
+| Intentional semantic incompatibilities | 14 | `IntentDiff` |
 | Private-field schema adaptation | 1 | `PrivateFld` |
 | Node fragment/lowering behavior | 1 | `NodeLower` |
 
@@ -102,13 +104,21 @@ Counts overlap because one test may be blocked by more than one requirement. The
 
 | Test | Reason |
 | --- | --- |
-| [`queryValueFragment with unclosed brace should fail at build time`](./src/test/kotlin/execution/viaductfeaturetests/RequiredSelectionsTest.kt#L2366) | Tests query-RSS parser failure during module construction. |
-| [`queryValueFragment with invalid field syntax should fail at build time`](./src/test/kotlin/execution/viaductfeaturetests/RequiredSelectionsTest.kt#L2382) | Tests query-RSS parser failure during module construction. |
-| [`queryValueFragment referencing non-existent field should fail at build time`](./src/test/kotlin/execution/viaductfeaturetests/RequiredSelectionsTest.kt#L2398) | Tests schema validation of a query RSS during bootstrap. |
-| [`queryValueFragment with invalid fragment syntax should fail at build time`](./src/test/kotlin/execution/viaductfeaturetests/RequiredSelectionsTest.kt#L2414) | Tests query-RSS parser failure during module construction. |
-| [`queryValueFragment with invalid variable syntax should fail at build time`](./src/test/kotlin/execution/viaductfeaturetests/RequiredSelectionsTest.kt#L2430) | Tests query-RSS parser failure during module construction. |
-| [`queryValueFragment with empty selection set should fail at build time`](./src/test/kotlin/execution/viaductfeaturetests/RequiredSelectionsTest.kt#L2446) | Tests query-RSS parser/shape validation during module construction. |
-| [`queryValueFragment with wrong type condition should fail at build time`](./src/test/kotlin/execution/viaductfeaturetests/RequiredSelectionsTest.kt#L2461) | Tests schema/type-condition validation during bootstrap. |
+| [`queryValueFragment with unclosed brace should fail at build time`](./src/test/kotlin/execution/viaductfeaturetests/RequiredSelectionsTest.kt#L3047) | Tests query-RSS parser failure during module construction. |
+| [`queryValueFragment with invalid field syntax should fail at build time`](./src/test/kotlin/execution/viaductfeaturetests/RequiredSelectionsTest.kt#L3062) | Tests query-RSS parser failure during module construction. |
+| [`queryValueFragment referencing non-existent field should fail at build time`](./src/test/kotlin/execution/viaductfeaturetests/RequiredSelectionsTest.kt#L3077) | Tests schema validation of a query RSS during bootstrap. |
+| [`queryValueFragment with invalid fragment syntax should fail at build time`](./src/test/kotlin/execution/viaductfeaturetests/RequiredSelectionsTest.kt#L3096) | Tests query-RSS parser failure during module construction. |
+| [`queryValueFragment with invalid variable syntax should fail at build time`](./src/test/kotlin/execution/viaductfeaturetests/RequiredSelectionsTest.kt#L3111) | Tests query-RSS parser failure during module construction. |
+| [`queryValueFragment with empty selection set should fail at build time`](./src/test/kotlin/execution/viaductfeaturetests/RequiredSelectionsTest.kt#L3126) | Tests query-RSS parser/shape validation during module construction. |
+| [`queryValueFragment with wrong type condition should fail at build time`](./src/test/kotlin/execution/viaductfeaturetests/RequiredSelectionsTest.kt#L3140) | Tests schema/type-condition validation during bootstrap. |
+| [`parent field with child object field variables runs child plan`](./src/test/kotlin/execution/viaductfeaturetests/RequiredSelectionsTest.kt#L713) | Requires a child-produced `locale` binding beneath `@parent` to parameterize ancestor `name(locale:)` work; qplan deliberately rejects that dependency direction. |
+| [`parent field in variable resolver required selection is available to variables resolver`](./src/test/kotlin/execution/viaductfeaturetests/RequiredSelectionsTest.kt#L834) | Reads a provider through `@parent` and then uses it beneath the same parent selection; qplan deliberately rejects variables beneath parent selections. |
+
+### `ParentFieldRequiredSelectionsExecutionTest`
+
+| Test | Reason |
+| --- | --- |
+| [`execution runs checker but skips field instrumentation for parent field itself`](./src/test/kotlin/execution/viaductfeaturetests/ParentFieldRequiredSelectionsExecutionTest.kt#L527) | Tests production GraphQL field-instrumentation behavior, outside qplan resolver correctness. |
 
 ### `NodeResolverTest`
 
@@ -119,3 +129,9 @@ Counts overlap because one test may be blocked by more than one requirement. The
 | [`node resolver reads from dataloader cache`](./src/test/kotlin/execution/viaductfeaturetests/NodeResolverTest.kt#L374) | Tests request-scoped `NodeDataLoader` caching; production already marks it flaky. |
 | [`non-selective node resolver reads from dataloader cache for different selection sets`](./src/test/kotlin/execution/viaductfeaturetests/NodeResolverTest.kt#L408) | Tests production's non-selective data-loader cache-key policy. |
 | [`selective node resolver does not read from dataloader cache if selection set does not cover`](./src/test/kotlin/execution/viaductfeaturetests/NodeResolverTest.kt#L446) | Tests selective data-loader cache coverage and cache-key policy, not qplan resolution semantics. |
+
+### `VariablesResolverTest`
+
+| Test | Reason |
+| --- | --- |
+| [`variables resolver rss without a selection reference is missing from query plan index`](./src/test/kotlin/execution/viaductfeaturetests/VariablesResolverTest.kt#L226) | Tests production pruning a provider after static directives erase every use; qplan rejects the resulting unused declarative provider during registry construction. |

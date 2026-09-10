@@ -221,7 +221,7 @@ class VariablesResolverTest {
         }
     }
 
-    @Disabled("TODO: Directive")
+    @Disabled("N/A: Tests production pruning an unused callback-owned provider; qplan rejects unused declarative variable providers at registry construction")
     @Test
     fun `variables resolver rss without a selection reference is missing from query plan index`() {
         var variableResolverCalls = 0
@@ -277,7 +277,7 @@ class VariablesResolverTest {
         }
     }
 
-    @Disabled("TODO: VarCallbk")
+    @Disabled("ALT: Uses a callback-owned aliased-typename RSS; qplan folds that demand into the resolver object fragment and uses its supported no-RSS provider")
     @Test
     fun `variable resolver required selection with aliased typename does not hang`() {
         MockTenantModuleBootstrapper(
@@ -306,6 +306,41 @@ class VariablesResolverTest {
                                 "query { ignored: __typename }"
                             )
                         ) { _, _ -> mapOf("skipNested" to true) }
+                    }
+                    fn { _, _, _, _, _ -> true }
+                }
+            }
+        }.runQPlanFeatureTest {
+            runQueryWithTimeout("{ query { flag } }")
+                .assertJson("{data: {query: {flag: true}}}")
+        }
+    }
+
+    @Test
+    fun `ALTERNATIVE variable resolver required selection with aliased typename does not hang`() {
+        MockTenantModuleBootstrapper(
+            "extend type Query { flag:Boolean, query:Query }"
+        ) {
+            field("Query" to "query") {
+                resolver {
+                    fn { _, _, _, _, _ ->
+                        createEngineObjectData(
+                            schema.schema.getObjectType("Query")!!,
+                            emptyMap()
+                        )
+                    }
+                }
+            }
+
+            field("Query" to "flag") {
+                resolver {
+                    objectSelections(
+                        """
+                        query { ignored: __typename }
+                        query @skip(if: ${"$"}skipNested) { __typename }
+                        """.trimIndent()
+                    ) {
+                        variables("skipNested") { _, _ -> mapOf("skipNested" to true) }
                     }
                     fn { _, _, _, _, _ -> true }
                 }

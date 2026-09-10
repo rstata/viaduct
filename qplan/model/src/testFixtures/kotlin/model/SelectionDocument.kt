@@ -45,6 +45,7 @@ fun ViaductSchema.fragmentFromDocument(
         source = AstPrinter.printAst(inlinedEntry),
         bindings = bindings,
         variableField = variableField,
+        preserveSourceResponseKeys = true,
     )
 }
 

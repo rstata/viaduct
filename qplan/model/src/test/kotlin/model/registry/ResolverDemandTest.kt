@@ -955,6 +955,42 @@ class ResolverDemandTest {
     }
 
     @Test
+    fun `statically excluded demand does not form a resolver cycle`() {
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      first: Int!
+                      second: Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    mapOf(
+                        schema.requireField("Query", "first") to
+                            resolver(
+                                schema.fragmentFrom(
+                                    "fragment ignored on Query { second @skip(if: true) }",
+                                ),
+                            ),
+                        schema.requireField("Query", "second") to
+                            resolver(
+                                schema.fragmentFrom(
+                                    "fragment ignored on Query { first }",
+                                ),
+                            ),
+                    )
+                },
+            )
+        val schema = world.schema
+        val first = schema.requireObjectField("Query", "first")
+        val second = schema.requireObjectField("Query", "second")
+
+        assertTrue(world.resolverRegistry.mayDemandFrom(first).isEmpty())
+        assertEquals(setOf(first), world.resolverRegistry.mayDemandFrom(second))
+    }
+
+    @Test
     fun `conservatively rejects coordinate cycles broken by error arguments`() {
         val exception =
             assertFailsWith<IllegalArgumentException> {

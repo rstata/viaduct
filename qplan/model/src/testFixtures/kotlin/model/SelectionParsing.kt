@@ -91,11 +91,13 @@ fun ViaductSchema.fragmentFrom(
     source: String,
     bindings: Map<String, EngineInputData?> = emptyMap(),
     variableField: ViaductSchema.ObjectField? = null,
+    preserveSourceResponseKeys: Boolean = false,
 ): Fragment =
     GJSelectionParser(
         schema = this as GJSchema,
         variableValues = bindings,
         variableField = variableField,
+        preserveSourceResponseKeys = preserveSourceResponseKeys,
     ).fragmentFrom(source)
 
 /** Parses one post-validation GraphQL fragment without operation-variable bindings. */

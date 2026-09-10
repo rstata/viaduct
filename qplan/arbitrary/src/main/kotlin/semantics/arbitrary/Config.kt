@@ -105,6 +105,7 @@ object InterfacesEnabled : ConfigKey<Boolean>("interfacesEnabled", ConfigValueTy
 object UnionsEnabled : ConfigKey<Boolean>("unionsEnabled", ConfigValueType.BOOLEAN, true, { null })
 object ListsEnabled : ConfigKey<Boolean>("listsEnabled", ConfigValueType.BOOLEAN, true, { null })
 object NodeResolversEnabled : ConfigKey<Boolean>("nodeResolversEnabled", ConfigValueType.BOOLEAN, true, { null })
+object SelectiveNodeResolversEnabled : ConfigKey<Boolean>("selectiveNodeResolversEnabled", ConfigValueType.BOOLEAN, false, { null })
 object NodeObjectWeight : ConfigKey<Double>("nodeObjectWeight", ConfigValueType.DOUBLE, 0.35, ::weight)
 object ResolverFragmentsEnabled : ConfigKey<Boolean>("resolverFragmentsEnabled", ConfigValueType.BOOLEAN, true, { null })
 object ResolverFragmentWeight : ConfigKey<Double>("resolverFragmentWeight", ConfigValueType.DOUBLE, 0.65, ::weight)
@@ -186,6 +187,7 @@ internal object ConfigKeys {
             UnionsEnabled,
             ListsEnabled,
             NodeResolversEnabled,
+            SelectiveNodeResolversEnabled,
             NodeObjectWeight,
             ResolverFragmentsEnabled,
             ResolverFragmentWeight,

@@ -3,6 +3,7 @@ package semantics.contract
 import kotlinx.coroutines.runBlocking
 import model.testing.TestWorld
 import model.requireObjectField
+import model.selectionForestOf
 import org.junit.jupiter.api.Test
 import semantics.arbitrary.ArbitraryRegistry
 import semantics.arbitrary.Config
@@ -34,11 +35,13 @@ import semantics.arbitrary.ResolverTestRun
 import semantics.arbitrary.ResolverVariableCount
 import semantics.arbitrary.ResolverVariableWeight
 import semantics.arbitrary.ResolverVariablesEnabled
+import semantics.arbitrary.SelectiveNodeResolversEnabled
 import semantics.arbitrary.RootQueryFieldCount
 import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.SometimesPassiveFieldWeight
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
+import semantics.arbitrary.resolutionDigest
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
@@ -245,6 +248,100 @@ interface NodeGeneratedResolverContract : GeneratedCaseAssertionPolicy {
                 activationRun.assertAggregate(
                     activationCoverage.activatedMixedTopologyCases > 0,
                     "Node activation corpus activated no node loaders in mixed schemas",
+                )
+            }
+        }
+}
+
+/** Generated Resolver26 contract for selection-aware fixture-lowered node loaders. */
+interface SelectiveNodeGeneratedResolverContract : GeneratedCaseAssertionPolicy {
+    @Test
+    fun `generated selective node worlds resolve correctly with supplied payload demand`(): Unit =
+        runBlocking {
+            val config =
+                Config.default +
+                    (FieldArgumentWeight to 1.0) +
+                    (ExplicitFieldResolverWeight to 1.0) +
+                    (NodeResolversEnabled to true) +
+                    (SelectiveNodeResolversEnabled to true) +
+                    (NodeObjectWeight to 0.35) +
+                    (ResolverFragmentsEnabled to false) +
+                    (ResolverFromArgumentVariablesEnabled to false) +
+                    (ResolverVariablesEnabled to false)
+            val emptyDemand = selectionForestOf().resolutionDigest()
+
+            fun property(
+                coverage: SelectiveNodeCoverage,
+            ): suspend (TestWorld, ResolverTestCase) -> Unit =
+                { testWorld, testCase ->
+                    coverage.generatedNodeResolvers += testCase.registry.nodeResolverTypes.size
+                    val observation =
+                        observeGeneratedCaseWithCurrentAssertions(testWorld, testCase)
+                    val nodeLoaderApplications =
+                        observation.ordinaryApplications.filter { application ->
+                            testCase.registry
+                                .nodeLoaderPossibleTypes(
+                                    testCase.schema,
+                                    application.key.field,
+                                ).isNotEmpty()
+                        }
+                    val nodeLoaderDemands =
+                        nodeLoaderApplications.map { application ->
+                            requireNotNull(application.suppliedDemandFingerprint)
+                        }
+                    val callbackDemands =
+                        observation.selectiveNodeResolverApplications.map { application ->
+                            application.suppliedDemandFingerprint
+                        }
+                    assertEquals(
+                        nodeLoaderDemands.groupingBy { demand -> demand }.eachCount(),
+                        callbackDemands.groupingBy { demand -> demand }.eachCount(),
+                        "Selective node callbacks must receive each node-loader demand exactly once",
+                    )
+                    coverage.nodeLoaderApplications += nodeLoaderApplications.size
+                    coverage.nonemptyDemandApplications +=
+                        callbackDemands.count { demand ->
+                            demand != emptyDemand
+                        }
+                }
+
+            val sampledCoverage = SelectiveNodeCoverage()
+            val run =
+                checkGeneratedProfile(
+                    profile = "selective-node",
+                    config = config,
+                    captureSuppliedDemand = true,
+                    property = property(sampledCoverage),
+                )
+            if (run.selectedCase == null) {
+                val activationCoverage: SelectiveNodeCoverage
+                val activationRun: ResolverTestRun
+                if (run.seed == NODE_ACTIVATION_SEED) {
+                    activationCoverage = sampledCoverage
+                    activationRun = run
+                } else {
+                    activationCoverage = SelectiveNodeCoverage()
+                    activationRun =
+                        checkGeneratedProfile(
+                            profile = "selective-node",
+                            config = config,
+                            seed = NODE_ACTIVATION_SEED,
+                            captureSuppliedDemand = true,
+                            property = property(activationCoverage),
+                        )
+                }
+
+                activationRun.assertAggregate(
+                    activationCoverage.generatedNodeResolvers > 0,
+                    "Selective-node activation corpus produced no node resolvers",
+                )
+                activationRun.assertAggregate(
+                    activationCoverage.nodeLoaderApplications > 0,
+                    "Selective-node activation corpus activated no fixture-lowered node loaders",
+                )
+                activationRun.assertAggregate(
+                    activationCoverage.nonemptyDemandApplications > 0,
+                    "Selective-node activation corpus supplied no nonempty node payload demand",
                 )
             }
         }
@@ -942,6 +1039,12 @@ private data class NodeCoverage(
     var activatedMixedTopologyCases: Int = 0,
 )
 
+private data class SelectiveNodeCoverage(
+    var generatedNodeResolvers: Int = 0,
+    var nodeLoaderApplications: Int = 0,
+    var nonemptyDemandApplications: Int = 0,
+)
+
 private data class FromArgumentCoverage(
     var generatedVariables: Int = 0,
     var activatedApplications: Int = 0,
@@ -966,6 +1069,7 @@ private suspend fun checkGeneratedProfile(
     profile: String,
     config: Config,
     seed: Long? = null,
+    captureSuppliedDemand: Boolean = false,
     property: suspend (TestWorld, ResolverTestCase) -> Unit,
 ): ResolverTestRun =
     checkGeneratedCases(
@@ -974,6 +1078,7 @@ private suspend fun checkGeneratedProfile(
         expectedCases = GENERATED_PROFILE_CASE_BUDGET,
         config = config,
         seed = seed,
+        captureSuppliedDemand = captureSuppliedDemand,
         property = property,
     )
 
@@ -995,6 +1100,7 @@ private suspend fun checkGeneratedCases(
     expectedCases: Int,
     config: Config,
     seed: Long? = null,
+    captureSuppliedDemand: Boolean = false,
     property: suspend (TestWorld, ResolverTestCase) -> Unit,
 ): ResolverTestRun =
     checkResolverTestCases(
@@ -1002,6 +1108,7 @@ private suspend fun checkGeneratedCases(
         config = config,
         profile = profile,
         seed = seed,
+        captureSuppliedDemand = captureSuppliedDemand,
         property = property,
     ).also { run ->
         val effectiveExpectedCases =

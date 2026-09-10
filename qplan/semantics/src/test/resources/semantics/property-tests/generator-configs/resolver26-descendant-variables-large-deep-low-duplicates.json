@@ -20,6 +20,7 @@
     "resolverVariablesEnabled" : true,
     "resolverVariablesOnNonQueryFieldsOnly" : true,
     "rootFieldReferencesEnabled" : true,
+    "selectiveNodeResolversEnabled" : false,
     "unionsEnabled" : true
   },
   "doubles" : {
@@ -55,7 +56,7 @@
     "rootFieldReferenceWeight" : 0.2,
     "sometimesPassiveFieldWeight" : 0.25
   },
-  "formatVersion" : 4,
+  "formatVersion" : 5,
   "id" : "resolver26-descendant-variables-large-deep-low-duplicates",
   "integers" : {
     "maxInputTypeDepth" : 2,

@@ -21,6 +21,7 @@ import semantics.contract.ObjectFragmentFromArgumentGeneratedResolverContract
 import semantics.contract.ObjectFragmentFromObjectPathGeneratedResolverContract
 import semantics.contract.ObjectFragmentGeneratedResolverContract
 import semantics.contract.QueryFragmentGeneratedResolverContract
+import semantics.contract.SelectiveNodeGeneratedResolverContract
 import semantics.contract.ResolverResolutionObservation
 import semantics.contract.SometimesPassiveGeneratedResolverContract
 import java.util.concurrent.ConcurrentHashMap
@@ -30,6 +31,7 @@ import semantics.shared.RecordingResolverObserver
 class ResolverGeneratedTest :
     EmptyObjectFragmentGeneratedResolverContract,
     NodeGeneratedResolverContract,
+    SelectiveNodeGeneratedResolverContract,
     ListPassiveDeepeningGeneratedResolverContract,
     ObjectFragmentGeneratedResolverContract,
     ObjectFragmentFromArgumentGeneratedResolverContract,

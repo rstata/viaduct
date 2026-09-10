@@ -10,6 +10,7 @@ import model.testing.TestWorld
 import semantics.arbitrary.Config
 import semantics.arbitrary.ResolverApplicationRecord
 import semantics.arbitrary.ResolverTestCase
+import semantics.arbitrary.SelectiveNodeResolverApplicationRecord
 import semantics.correctresolution.correctResolution
 import semantics.correctresolution.conformsToResolvers
 import semantics.correctresolution.conformsToSelections
@@ -38,6 +39,7 @@ data class GeneratedCaseObservation(
     val ordinary: GeneratedResolutionObservation,
     val permutationEquivalent: GeneratedResolutionObservation,
     val ordinaryApplications: List<ResolverApplicationRecord>,
+    val selectiveNodeResolverApplications: List<SelectiveNodeResolverApplicationRecord>,
 ) {
     val executions: List<GeneratedResolutionObservation>
         get() = listOf(ordinary, permutationEquivalent)
@@ -169,6 +171,7 @@ fun ResolverContract.observeGeneratedCase(
             querySource = testCase.query.source,
         )
     val ordinaryApplications = testCase.registry.resolutionWitness().applications
+    val selectiveNodeResolverApplications = testCase.registry.selectiveNodeResolverApplications()
     val permutationEquivalent =
         testCase.registry.withoutResolutionWitnessCapture {
             observeGeneratedResolution(
@@ -181,6 +184,7 @@ fun ResolverContract.observeGeneratedCase(
         ordinary = ordinary,
         permutationEquivalent = permutationEquivalent,
         ordinaryApplications = ordinaryApplications,
+        selectiveNodeResolverApplications = selectiveNodeResolverApplications,
     )
 }
 

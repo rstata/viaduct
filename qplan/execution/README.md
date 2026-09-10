@@ -45,7 +45,7 @@ The mock field-executor surface returns `Any?`, permits a raw map or source-shap
 
 Production `RootFieldReference` values are normalized recursively into qplan-owned `RootFieldReferenceData`, including direct executor results and references nested in EOD fields or lists. `ResolverOutputData` is the resolver-facing union of ordinary `EngineOutputData` and this symbolic reference carrier; references are not members of the engine-data domain supplied as resolver input. The adapter does not call production root-reference resolution. It supplies dependency-free empty objects for unsupplied namespace fields so ordinary Query fragments may traverse namespace paths. Resolver26 gives every reference occurrence and direct-result tail hop its own fresh empty Query-rooted identity OER; those roots contain no namespace execution, are distinct from resolver Query-fragment roots, and are not shared across equivalent descriptors. A referenced target with object RSS is rejected; tenant code must express the corresponding dependency as Query RSS with its namespace path prefixed.
 
-In keeping with the architecture of qplan, the adapter translates node executors into field resolvers on fields that return Node types.  This is a process called "lowering:" the schema used for field resolution is slightly modified ("lowered") to conveniently support node-resolvers-as-field resolvers, and similarly node-resolver executors are modified to be put into the resolver registry as field resolvers. A raw node-executor payload may omit the repeated `id`: shared fixture lowering combines its fields with the authoritative ID supplied by the Node-valued fringe before the effective object enters qplan. The adapter also supplies local equivalents of built-in `Query.node` and `Query.nodes` when the module does not provide those executors.
+In keeping with the architecture of qplan, the adapter translates node executors into field resolvers on fields that return Node types. This is a process called "lowering:" the schema used for field resolution is slightly modified ("lowered") to conveniently support node-resolvers-as-field-resolvers, and similarly node-resolver executors are modified to be put into the resolver registry as field resolvers. Selective node executors become selective resolvers for the synthetic bridge payload field and receive Resolver26's one-shot successor demand. The Engine API conversion reverses nested node bridges back to their source field coordinates. A raw node-executor payload may omit the repeated `id`: shared fixture lowering combines its fields with the authoritative ID supplied by the Node-valued fringe when `id` is demanded, while the bridge retains identity independently. The adapter also supplies local equivalents of built-in `Query.node` and `Query.nodes` when the module does not provide those executors.
 
 ### Required-Selection Variables
 
@@ -78,7 +78,7 @@ Keep production test fixtures, behavior, and assertions intact so failures conti
 
 The feature-test adapter currently supports:
 
-- Unbatched selective and non-selective field resolvers, and unbatched non-selective node resolvers.
+- Unbatched selective and non-selective field and node resolvers.
 - Resolver-demand conversion to `EngineSelectionSet`, including concrete applicability, nested demand, resolved arguments, and lowered `__typename` restoration.
 - Field arguments, including values supplied by GraphQL operation variables.
 - Object required selections, including aliases, arguments, transitive requirements, repeated argumented fields, shared requirements, and multiple requirements.
@@ -95,7 +95,7 @@ The adapter rejects or does not yet model:
 
 - Nested input-object paths for from-argument variables.
 - Callback providers with overlapping variable names, and from-field providers whose erased production representation ambiguously matches both resolver fragments. Legacy callbacks with their own required selections are deliberately outside the target executor SPI rather than an adapter backlog item.
-- Batched field resolvers, and batched or selective node resolvers.
+- Batched field and node resolvers.
 - Inline object values from a Node-valued field; qplan currently requires every Node value to be resolved by its node resolver.
 - Root-field references returned by node resolvers, which still cross the unsupported inline Node bridge; ordinary root-field resolvers may return node references or another root-field reference.
 - Object required selections and `FromObjectField` variables on resolvers invoked as root-field-reference targets; use Query required selections with the namespace path prefixed.
@@ -146,6 +146,6 @@ Run the complete execution suite with `./gradlew :execution:test`, and run every
 
 Nested input-object argument paths need deliberate adapter decoding before multi-segment `FromArgument.path` values can be recovered into qplan's existing canonical path representation. Callback resolvers with their own RSS remain explicit rejection cases until qplan models their additional object-data dependency.
 
-After variables, useful incremental steps are structured executor error metadata beyond the retained causal throwable, asynchronous EOD support, and a deliberate batching design. Selective integration still has distinct follow-up work around production/rematerialization policy, custom selection-directive preservation, custom engine configuration, and Resolver26 demand-shape differences; these are recorded as specific feature-test blockers rather than part of basic requested-selection plumbing. Dispatcher and data-loader integration should remain a separate decision because Resolver26 already owns dependency scheduling and should not accidentally inherit a second scheduler.
+After variables, useful incremental steps are structured executor error metadata beyond the retained causal throwable, asynchronous EOD support, and a deliberate batching design. Selective integration still has distinct follow-up work around production/rematerialization policy, custom selection-directive preservation, custom engine configuration, empty node-payload elision, and Resolver26 demand-shape differences; these are recorded as specific feature-test blockers rather than part of basic requested-selection plumbing. Dispatcher and data-loader integration should remain a separate decision because Resolver26 already owns dependency scheduling and should not accidentally inherit a second scheduler.
 
 [Future work: From Qplan Execution Harness to an Engine Implementation](https://slate.airbnb.tools/zGyuI7hCin) analyzes the gap between the current execution harness and a production implementation of the three `Engine` API methods, including the recommended implementation sequence.

@@ -2,8 +2,11 @@ package model.testing
 
 import viaduct.graphql.schema.ViaductSchema
 
-import model.engineObjectDataOf
+import model.Arguments
+import model.SelectionForest
+import model.SourceSchemaAdapter
 import model.emptyFragmentOf
+import model.engineObjectDataOf
 import model.fragmentFrom
 import model.merge
 import model.objectKey
@@ -11,7 +14,6 @@ import model.requireQueryTypeDef
 import model.requireField
 import model.requireObjectField
 import model.requireType
-import model.SourceSchemaAdapter
 import model.lowering.VIADUCT_IGNORE_SYMBOL
 import model.schemaType
 import kotlin.test.Test
@@ -28,6 +30,94 @@ import viaduct.engine.api.EngineObjectDataBuilder
 import viaduct.graphql.schema.graphqljava.gjDef
 
 class NodeBridgeLoweringTest {
+    @Test
+    fun `selection-aware node lookup receives demand and uses model-owned projection`() {
+        lateinit var observedDemand: SelectionForest
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    interface Node { id: ID! }
+                    type User implements Node { id: ID!, name: String!, nickname: String! }
+                    type Query { user: User! }
+                    """.trimIndent(),
+                nodeResolvers = { schema ->
+                    val user = schema.requireType("User") as ViaductSchema.Object
+                    mapOf(
+                        user to
+                            selectionAwareNodeResolverOf { _, demand ->
+                                observedDemand = demand
+                                engineObjectDataOf(
+                                    user,
+                                    mapOf(
+                                        "name" to "Ada",
+                                        "nickname" to "Enchantress of Numbers",
+                                    ),
+                                )
+                            },
+                    )
+                },
+            )
+        val schema = world.schema
+        val bridge = schema.requireType("User_V_A_Bridge") as ViaductSchema.Object
+        val payload = schema.requireObjectField(bridge.name, "node")
+        val demand = schema.fragmentFrom("fragment _ on User { name }").subselections
+        val result =
+            context(world.newAssumptions(selectiveResolvers = true)) {
+                world.resolverRegistry.resolver(payload)(
+                    engineObjectDataOf(bridge, mapOf("id" to "\$node:4:Useruser-1")),
+                    Arguments.Resolved.of(payload, emptyMap()),
+                    demand,
+                )
+            }
+
+        assertEquals(demand, observedDemand)
+        val user = assertIs<EngineObjectData.Sync>(result)
+        assertEquals(setOf("name"), user.getSelections().toSet())
+        assertEquals("Ada", user.get("name"))
+    }
+
+    @Test
+    fun `selective node lookup receives payload demand`() {
+        lateinit var observedDemand: SelectionForest
+        val world =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    interface Node { id: ID! }
+                    type User implements Node { id: ID!, name: String! }
+                    type Query { user: User! }
+                    """.trimIndent(),
+                nodeResolvers = { schema ->
+                    val user = schema.requireType("User") as ViaductSchema.Object
+                    mapOf(
+                        user to
+                            selectiveNodeResolverOf { _, demand ->
+                                observedDemand = demand
+                                engineObjectDataOf(user, mapOf("name" to "Ada"))
+                            },
+                    )
+                },
+            )
+        val schema = world.schema
+        val bridge = schema.requireType("User_V_A_Bridge") as ViaductSchema.Object
+        val payload = schema.requireObjectField(bridge.name, "node")
+        val demand = schema.fragmentFrom("fragment _ on User { name }").subselections
+        val result =
+            context(world.newAssumptions(selectiveResolvers = true)) {
+                world.resolverRegistry.resolver(payload)(
+                    engineObjectDataOf(bridge, mapOf("id" to "\$node:4:Useruser-1")),
+                    Arguments.Resolved.of(payload, emptyMap()),
+                    demand,
+                )
+            }
+
+        assertEquals(demand, observedDemand)
+        val user = assertIs<EngineObjectData.Sync>(result)
+        assertEquals(setOf("name"), user.getSelections().toSet())
+        assertEquals("Ada", user.get("name"))
+    }
+
     @Test
     fun `retains the source GraphQL schema while lowering only the model schema`() {
         val schema =

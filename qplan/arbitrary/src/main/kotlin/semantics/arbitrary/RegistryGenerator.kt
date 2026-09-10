@@ -37,6 +37,7 @@ import model.testing.fromArgument
 import model.testing.fromObjectField
 import model.testing.fromQueryField
 import model.testing.nodeResolverOf
+import model.testing.selectionAwareNodeResolverOf
 import model.testing.withErrorArguments
 import model.toSelectionForest
 import model.usedVariables
@@ -119,6 +120,7 @@ class ArbitraryRegistry internal constructor(
     val features: RegistryFeatures,
 ) {
     private val applicationLog = ResolutionApplicationLog()
+    private val selectiveNodeApplicationLog = SelectiveNodeResolverApplicationLog()
     private val applicationCounts = ConcurrentHashMap<FieldCoordinate, Long>()
 
     /** Source resolver fields whose generated fragments consume a `FromArgument` variable. */
@@ -264,12 +266,18 @@ class ArbitraryRegistry internal constructor(
 
     fun clearResolutionWitness() {
         applicationLog.clear()
+        selectiveNodeApplicationLog.clear()
     }
 
     fun resolutionWitness(): ResolutionWitness = applicationLog.snapshot()
 
+    fun selectiveNodeResolverApplications(): List<SelectiveNodeResolverApplicationRecord> =
+        selectiveNodeApplicationLog.snapshot()
+
     fun <T> withoutResolutionWitnessCapture(block: () -> T): T =
-        applicationLog.withoutRecording(block)
+        applicationLog.withoutRecording {
+            selectiveNodeApplicationLog.withoutRecording(block)
+        }
 
     fun clearResolutionApplicationCounts() {
         applicationCounts.clear()
@@ -357,6 +365,7 @@ class ArbitraryRegistry internal constructor(
     fun world(
         schema: ArbitrarySchema,
         resolverProgramMutation: ResolverProgramMutation = ResolverProgramMutation.NONE,
+        selectiveNodeResolvers: Boolean = false,
         captureSuppliedDemand: Boolean = false,
         captureResolutionWitness: Boolean = true,
         captureResolutionApplicationCounts: Boolean = !captureResolutionWitness,
@@ -364,6 +373,7 @@ class ArbitraryRegistry internal constructor(
         world(
             schemaSDL = schema.sdl,
             resolverProgramMutation = resolverProgramMutation,
+            selectiveNodeResolvers = selectiveNodeResolvers,
             captureSuppliedDemand = captureSuppliedDemand,
             captureResolutionWitness = captureResolutionWitness,
             captureResolutionApplicationCounts = captureResolutionApplicationCounts,
@@ -372,6 +382,7 @@ class ArbitraryRegistry internal constructor(
     fun world(
         schemaSDL: String,
         resolverProgramMutation: ResolverProgramMutation = ResolverProgramMutation.NONE,
+        selectiveNodeResolvers: Boolean = false,
         captureSuppliedDemand: Boolean = false,
         captureResolutionWitness: Boolean = true,
         captureResolutionApplicationCounts: Boolean = !captureResolutionWitness,
@@ -429,14 +440,22 @@ class ArbitraryRegistry internal constructor(
             nodeResolvers = { canonicalSchema ->
                 nodeValues.map { (typeName, plan) ->
                     val type = canonicalSchema.requireType(typeName) as ViaductSchema.Object
+                    val materialize: (String) -> EngineObjectData.Sync = { id ->
+                        plan.materializeObject(
+                            schema = canonicalSchema,
+                            inputId = id,
+                            generatedHashSeed =
+                                stableGeneratedHash(typeName, id),
+                        )
+                    }
                     type to
-                        nodeResolverOf { id ->
-                            plan.materializeObject(
-                                schema = canonicalSchema,
-                                inputId = id,
-                                generatedHashSeed =
-                                    stableGeneratedHash(typeName, id),
-                            )
+                        if (selectiveNodeResolvers) {
+                            selectionAwareNodeResolverOf { id, demand ->
+                                selectiveNodeApplicationLog.record(typeName, id, demand)
+                                materialize(id)
+                            }
+                        } else {
+                            nodeResolverOf(materialize)
                         }
                 }.toMap()
             },

@@ -12,6 +12,7 @@ class GeneratorConfigDataTest {
                 (ArgumentsEnabled to false) +
                 (SchemaObjectCount to 7..9) +
                 (MaxSelectionDepth to 6) +
+                (SelectiveNodeResolversEnabled to true) +
                 (ResolverVariableWeight to 0.75)
         val data = GeneratorConfigData.from("round-trip", original)
         val restored = data.toConfig()
@@ -19,6 +20,7 @@ class GeneratorConfigDataTest {
         assertEquals(false, restored[ArgumentsEnabled])
         assertEquals(7..9, restored[SchemaObjectCount])
         assertEquals(6, restored[MaxSelectionDepth])
+        assertEquals(true, restored[SelectiveNodeResolversEnabled])
         assertEquals(0.75, restored[ResolverVariableWeight])
         assertEquals(ConfigKeys.all.size, data.keyNames().size)
     }

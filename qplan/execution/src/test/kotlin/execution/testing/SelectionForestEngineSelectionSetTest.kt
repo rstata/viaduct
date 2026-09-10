@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import model.SourceSchemaAdapter
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.testing.TestWorld
@@ -20,6 +21,7 @@ class SelectionForestEngineSelectionSetTest {
             fragment.subselections.toEngineSelectionSet(
                 type = fragment.nominalType,
                 schema = fixture.engineSchema,
+                sourceSchema = fixture.sourceSchema,
             )
 
         assertEquals("Foo", selections.type)
@@ -44,6 +46,7 @@ class SelectionForestEngineSelectionSetTest {
             fragment.subselections.toEngineSelectionSet(
                 type = fragment.nominalType,
                 schema = fixture.engineSchema,
+                sourceSchema = fixture.sourceSchema,
             )
 
         assertEquals("Foo", selections.type)
@@ -77,6 +80,7 @@ class SelectionForestEngineSelectionSetTest {
             fragment.subselections.toEngineSelectionSet(
                 type = fragment.nominalType,
                 schema = fixture.engineSchema,
+                sourceSchema = fixture.sourceSchema,
             )
 
         assertEquals(
@@ -115,15 +119,43 @@ class SelectionForestEngineSelectionSetTest {
             fragment.subselections.toEngineSelectionSet(
                 type = fragment.nominalType,
                 schema = fixture.engineSchema,
+                sourceSchema = fixture.sourceSchema,
             )
 
         assertTrue(selections.containsField("Alpha", "__typename"))
         assertTrue(selections.containsField("Beta", "__typename"))
     }
 
-    private class Fixture(schemaSDL: String) {
+    @Test
+    fun `restores nested node bridge demand to source fields`() {
+        val fixture = Fixture(NODE_SCHEMA, NODE_ENGINE_SCHEMA)
+        val fragment =
+            fixture.world.schema.fragmentFrom(
+                "fragment _ on User { friend { name } }",
+            )
+
+        val selections =
+            fragment.subselections.toEngineSelectionSet(
+                type = fragment.nominalType,
+                schema = fixture.engineSchema,
+                sourceSchema = fixture.sourceSchema,
+            )
+
+        assertTrue(selections.containsField("User", "friend"))
+        assertTrue(
+            selections
+                .selectionSetForField("User", "friend")
+                .containsField("User", "name"),
+        )
+    }
+
+    private class Fixture(
+        schemaSDL: String,
+        engineSchemaSDL: String = schemaSDL,
+    ) {
         val world = TestWorld.fromSDL(schemaSDL)
-        val engineSchema = createSchema(schemaSDL.replaceFirst("type Query", "extend type Query"))
+        val sourceSchema = SourceSchemaAdapter(world.schema)
+        val engineSchema = createSchema(engineSchemaSDL.replaceFirst("type Query", "extend type Query"))
     }
 
     private companion object {
@@ -143,6 +175,19 @@ class SelectionForestEngineSelectionSetTest {
             interface Item { common: Int }
             type Alpha implements Item { common: Int, alpha: Int }
             type Beta implements Item { common: Int, beta: Int }
+            """.trimIndent()
+
+        val NODE_SCHEMA =
+            """
+            interface Node { id: ID! }
+            type Query { user: User }
+            type User implements Node { id: ID!, name: String, friend: User }
+            """.trimIndent()
+
+        val NODE_ENGINE_SCHEMA =
+            """
+            type Query { user: User }
+            type User implements Node { id: ID!, name: String, friend: User }
             """.trimIndent()
     }
 }

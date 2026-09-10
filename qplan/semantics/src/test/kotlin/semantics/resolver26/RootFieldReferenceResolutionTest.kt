@@ -9,16 +9,19 @@ import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.RootFieldReferenceData
+import model.SourceSchemaAdapter
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.merge
 import model.objectOf
 import model.requireQueryTypeDef
 import model.requireObjectField
+import model.requireType
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromArgument
 import model.testing.fromQueryField
+import model.testing.nodeResolverOf
 import semantics.contract.contractKey
 import semantics.contract.registeredResolverOccurrenceApplicationIdentityCounts
 import semantics.correctresolution.correctResolution
@@ -35,6 +38,109 @@ import viaduct.engine.api.EngineObjectData
 import viaduct.graphql.schema.ViaductSchema
 
 class RootFieldReferenceResolutionTest {
+    @Test
+    fun `node resolver may return a root field reference`() {
+        val nodeApplications = AtomicInteger()
+        val targetApplications = AtomicInteger()
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    interface Node {
+                      id: ID!
+                    }
+
+                    interface ReferencedFoo {
+                      id: ID!
+                      value: String!
+                    }
+
+                    type Foo implements Node & ReferencedFoo {
+                      id: ID!
+                      value: String!
+                    }
+
+                    type Query {
+                      foo: Foo!
+                      referencedFoo: ReferencedFoo!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val foo =
+                        SourceSchemaAdapter(schema).field("Query", "foo")
+                            as ViaductSchema.ObjectField
+                    val referencedFoo = schema.requireObjectField("Query", "referencedFoo")
+                    mapOf(
+                        foo to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                schema.objectOf("Foo") { "id" setTo "source-id" }
+                            },
+                        referencedFoo to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                targetApplications.incrementAndGet()
+                                schema.objectOf("Foo") {
+                                    "id" setTo "target-id"
+                                    "value" setTo "from-reference"
+                                }
+                            },
+                    )
+                },
+                nodeResolvers = { schema ->
+                    val foo = schema.requireType("Foo") as ViaductSchema.Object
+                    val referencedFoo = schema.requireObjectField("Query", "referencedFoo")
+                    mapOf(
+                        foo to
+                            nodeResolverOf { id ->
+                                nodeApplications.incrementAndGet()
+                                assertEquals("source-id", id)
+                                RootFieldReferenceData.of(
+                                    path = listOf(referencedFoo),
+                                    arguments = emptyMap(),
+                                )
+                            },
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val query = world.fragmentFrom("fragment Result on Query { foo { value } }")
+        val operation = OperationContext(world, resolverObserver = RecordingResolverObserver())
+        val result = context(operation) { resolve(query.subselections) }
+        val bridge =
+            assertIs<ObjectEngineResult>(
+                result
+                    .getCell(
+                        ObjectEngineResult.GroundKey.of(
+                            world.schema.requireObjectField("Query", "foo_V_A_node"),
+                            emptyMap(),
+                        ),
+                    ).getValue()
+                    .get(),
+            )
+        val foo =
+            assertIs<ObjectEngineResult>(
+                bridge
+                    .getCell(
+                        ObjectEngineResult.GroundKey.of(
+                            world.schema.requireObjectField("Foo_V_A_Bridge", "node"),
+                            emptyMap(),
+                        ),
+                    ).getValue()
+                    .get(),
+            )
+
+        assertEquals(
+            "from-reference",
+            foo.getCell(world.schema.contractKey("Foo", "value")).getValue().get(),
+        )
+        assertEquals(1, nodeApplications.get())
+        assertEquals(1, targetApplications.get())
+        assertTrue(
+            context(operation) {
+                result.correctResolution(query.subselections.merge(world.schema.requireQueryTypeDef()))
+            },
+        )
+    }
+
     @Test
     fun `abstract target resolves when all possible types conform to the consumer`() {
         val testWorld =

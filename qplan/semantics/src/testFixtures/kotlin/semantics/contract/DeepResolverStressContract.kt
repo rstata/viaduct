@@ -4,6 +4,7 @@ import model.requireField
 import io.kotest.property.PropertyTesting
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
+import model.ObjectEngineResult
 import model.SourceSchemaAdapter
 import viaduct.graphql.schema.ViaductSchema
 import model.fragmentFrom
@@ -117,12 +118,14 @@ interface DeepResolverStressContract : ResolverContract {
             var generatedQueryPathVariables = 0
             var generatedSometimesPassiveFields = 0
             var generatedRootFieldReferences = 0
+            var generatedNodeRootFieldReferences = 0
             var activatedFromArgumentApplications = 0
             var activatedObjectPathApplications = 0
             var activatedQueryPathApplications = 0
             var activatedNestedObjectPathApplications = 0
             var activatedSometimesPassiveOccurrences = 0
             var activatedRootFieldReferences = 0
+            var activatedNodeRootFieldReferences = 0
             var maximumActivatedObjectPathResolverChainLength = 0
             var coactivatedMixedVariableCases = 0
             val previousSeed = PropertyTesting.defaultSeed
@@ -146,6 +149,8 @@ interface DeepResolverStressContract : ResolverContract {
                         testCase.registry.features.sometimesPassiveFieldCount
                     generatedRootFieldReferences +=
                         testCase.registry.features.generatedRootFieldReferenceCount
+                    generatedNodeRootFieldReferences +=
+                        testCase.registry.features.generatedNodeRootFieldReferenceCount
                     assertTrue(testCase.query.selectionDepth >= 4)
                     val world = testWorld.newAssumptions()
                     val fragment = world.fragmentFrom(testCase.query.source)
@@ -159,10 +164,22 @@ interface DeepResolverStressContract : ResolverContract {
                     val result = resolution.result
                     val operation = resolution.operation
                     if (rootFieldReferenceCoverageRequired) {
-                        activatedRootFieldReferences +=
+                        val references =
                             (operation.resolverObserver as ResolverObservations)
                                 .rootFieldReferenceInvocations()
-                                .size
+                        activatedRootFieldReferences += references.size
+                        activatedNodeRootFieldReferences +=
+                            references.count { observation ->
+                                val field =
+                                    (observation.publicationPath.lastOrNull()
+                                        as? ObjectEngineResult.ObjectKey)?.field
+                                        ?: return@count false
+                                testCase.registry
+                                    .nodeLoaderPossibleTypes(
+                                        testCase.schema,
+                                        FieldCoordinate(field.containingDef.name, field.name),
+                                    ).isNotEmpty()
+                            }
                     }
                     val witness = testCase.registry.resolutionWitness()
                     val activatedSourceResolvers =
@@ -292,6 +309,7 @@ interface DeepResolverStressContract : ResolverContract {
                         "generatedQueryPathVariables=$generatedQueryPathVariables, " +
                         "generatedSometimesPassiveFields=$generatedSometimesPassiveFields, " +
                         "generatedRootFieldReferences=$generatedRootFieldReferences, " +
+                        "generatedNodeRootFieldReferences=$generatedNodeRootFieldReferences, " +
                         "activatedFromArgumentApplications=$activatedFromArgumentApplications, " +
                         "activatedObjectPathApplications=$activatedObjectPathApplications, " +
                         "activatedQueryPathApplications=$activatedQueryPathApplications, " +
@@ -300,6 +318,7 @@ interface DeepResolverStressContract : ResolverContract {
                         "activatedSometimesPassiveOccurrences=" +
                         "$activatedSometimesPassiveOccurrences, " +
                         "activatedRootFieldReferences=$activatedRootFieldReferences, " +
+                        "activatedNodeRootFieldReferences=$activatedNodeRootFieldReferences, " +
                         "maximumActivatedObjectPathResolverChainLength=" +
                         "$maximumActivatedObjectPathResolverChainLength, " +
                         "coactivatedMixedVariableCases=$coactivatedMixedVariableCases, " +
@@ -355,6 +374,10 @@ interface DeepResolverStressContract : ResolverContract {
             if (rootFieldReferenceCoverageRequired) {
                 assertTrue(generatedRootFieldReferences > 0)
                 assertTrue(activatedRootFieldReferences > 0)
+                if (nodeResolversEnabled) {
+                    assertTrue(generatedNodeRootFieldReferences > 0)
+                    assertTrue(activatedNodeRootFieldReferences > 0)
+                }
             }
         }
 

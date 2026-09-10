@@ -263,7 +263,9 @@ internal suspend fun runResolver26BroadStress(
     var generatedQueryFragments = 0
     var activatedQueryFragmentApplications = 0
     var generatedRootFieldReferences = 0
+    var generatedNodeRootFieldReferences = 0
     var activatedRootFieldReferences = 0
+    var activatedNodeRootFieldReferences = 0
     var activatedListRootFieldReferences = 0
     var maximumRootFieldReferenceTailLength = 0
     var activatedRootFieldReferenceFallbacks = 0
@@ -339,6 +341,8 @@ internal suspend fun runResolver26BroadStress(
                 generatedQueryFragments += testCase.registry.features.queryFragmentCount
                 generatedRootFieldReferences +=
                     testCase.registry.features.generatedRootFieldReferenceCount
+                generatedNodeRootFieldReferences +=
+                    testCase.registry.features.generatedNodeRootFieldReferenceCount
                 maximumProviderPathLength =
                     maxOf(
                         maximumProviderPathLength,
@@ -516,6 +520,19 @@ internal suspend fun runResolver26BroadStress(
                     val publicationField =
                         (observation.publicationPath.lastOrNull()
                             as? ObjectEngineResult.ObjectKey)?.field
+                    if (
+                        publicationField != null &&
+                        testCase.registry
+                            .nodeLoaderPossibleTypes(
+                                testCase.schema,
+                                FieldCoordinate(
+                                    publicationField.containingDef.name,
+                                    publicationField.name,
+                                ),
+                            ).isNotEmpty()
+                    ) {
+                        activatedNodeRootFieldReferences += 1
+                    }
                     if (
                         publicationField != null &&
                         testCase.registry.sourceFieldIsRootFieldReferenceOverride(
@@ -748,6 +765,14 @@ internal suspend fun runResolver26BroadStress(
                 generatedRootFieldReferences > 0 && activatedRootFieldReferences > 0,
                 "Resolver26 profile $propertyProfile did not generate and activate root-field references",
             )
+            if (config[NodeResolversEnabled]) {
+                run.assertAggregate(
+                    generatedNodeRootFieldReferences > 0 &&
+                        activatedNodeRootFieldReferences > 0,
+                    "Resolver26 profile $propertyProfile did not generate and activate a " +
+                        "root-field-reference-returning node resolver",
+                )
+            }
             run.assertAggregate(
                 activatedRootFieldReferencePathDepths.containsAll(setOf(2, 3, 4)),
                 "Resolver26 profile $propertyProfile missed root-field-reference namespace depths: " +
@@ -871,7 +896,9 @@ internal suspend fun runResolver26BroadStress(
                 "generatedQueryFragments=$generatedQueryFragments, " +
                 "activatedQueryFragmentApplications=$activatedQueryFragmentApplications, " +
                 "generatedRootFieldReferences=$generatedRootFieldReferences, " +
+                "generatedNodeRootFieldReferences=$generatedNodeRootFieldReferences, " +
                 "activatedRootFieldReferences=$activatedRootFieldReferences, " +
+                "activatedNodeRootFieldReferences=$activatedNodeRootFieldReferences, " +
                 "activatedListRootFieldReferences=$activatedListRootFieldReferences, " +
                 "maximumRootFieldReferenceTailLength=$maximumRootFieldReferenceTailLength, " +
                 "activatedRootFieldReferenceFallbacks=$activatedRootFieldReferenceFallbacks, " +

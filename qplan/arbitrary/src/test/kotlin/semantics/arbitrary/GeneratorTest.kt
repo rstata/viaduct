@@ -7,6 +7,7 @@ import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
 import model.registry.ProviderFragment
 import model.engineObjectDataOf
+import model.invariants.conformsToResolverOutputSchemaType
 import model.objectOf
 import model.outputType
 import model.requireObjectField
@@ -29,7 +30,7 @@ class GeneratorTest {
         val family = requireNotNull(schema.rootFieldReferenceFamily)
 
         assertEquals(
-            setOf("zero", "object", "one", "tail", "four", "enum", "scalar"),
+            setOf("zero", "object", "one", "tail", "four", "enum", "scalar", "node"),
             family.targets.keys,
         )
         assertEquals(setOf(0, 1, 4), family.targets.values.map { it.arguments.size }.toSet())
@@ -59,6 +60,12 @@ class GeneratorTest {
             schema.possibleObjects(GENERATED_ROOT_REFERENCE_UNION).mapTo(linkedSetOf()) { it.name },
         )
         assertEquals(
+            setOf(GENERATED_ROOT_REFERENCE_NODE),
+            schema
+                .possibleObjects(GENERATED_ROOT_REFERENCE_NODE_INTERFACE)
+                .mapTo(linkedSetOf()) { it.name },
+        )
+        assertEquals(
             mapOf(
                 GENERATED_ROOT_REFERENCE_PAIR_A to GENERATED_ROOT_REFERENCE_PAIR_B,
                 GENERATED_ROOT_REFERENCE_PAIR_B to GENERATED_ROOT_REFERENCE_PAIR_A,
@@ -81,6 +88,33 @@ class GeneratorTest {
                 GENERATED_ROOT_REFERENCE_QUAD_C,
                 GENERATED_ROOT_REFERENCE_QUAD_D,
             ).associateWith { typeName -> schema.field(typeName, "next").type.namedType },
+        )
+    }
+
+    @Test
+    fun `root field reference family supplies a node resolver reference`() {
+        val config = Config.default + (RootFieldReferencesEnabled to true)
+        val random = RandomSource.seeded(2026091001L)
+        val schema = Arb.schema(config).next(random)
+        val registry = schema.registry(config).next(random)
+        val query = schema.query(config).next(random)
+        val family = requireNotNull(schema.rootFieldReferenceFamily)
+        val nodeType = requireNotNull(family.nodeResolverType)
+        val nodePlan = assertIs<RootFieldReferencePlan>(registry.nodeValues.getValue(nodeType))
+        val world = registry.world(schema)
+        val reference = nodePlan.materializeReference(world.schema)
+        val payload =
+            world.schema.requireObjectField(
+                "${GENERATED_ROOT_REFERENCE_NODE}_V_A_Bridge",
+                "node",
+            )
+
+        assertEquals(family.targets.getValue("node"), nodePlan.target)
+        assertEquals(1, registry.features.generatedNodeRootFieldReferenceCount)
+        assertTrue(GENERATED_ROOT_REFERENCE_NODE_FIELD in query.source)
+        assertTrue(
+            reference.conformsToResolverOutputSchemaType(payload.outputType),
+            "${reference.type.name} does not conform to ${payload.outputType}",
         )
     }
 

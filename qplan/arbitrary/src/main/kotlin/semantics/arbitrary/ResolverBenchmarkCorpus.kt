@@ -526,13 +526,9 @@ private fun RegistryDocument.toRegistry(): ArbitraryRegistry {
         fieldResolvers.associate { resolver ->
             resolver.coordinate.toCoordinate() to resolver.program
         }
-    val nodeValues: Map<String, ObjectPlan> =
+    val nodeValues: Map<String, ValuePlan> =
         nodeResolvers.associate { resolver ->
-            val value = resolver.value.toValuePlan()
-            require(value is ObjectPlan) {
-                "Node resolver ${resolver.typeName} must contain an object value plan"
-            }
-            resolver.typeName to value
+            resolver.typeName to resolver.value.toValuePlan()
         }
     val variableProviders: List<VariableProviderPlan> =
         variables.map(VariableProviderDocument::toVariableProviderPlan)

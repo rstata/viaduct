@@ -7,6 +7,8 @@ import model.CoercedDefaultValue
 import model.Fragment
 import model.EngineErrorData
 import model.EngineOutputData
+import model.ResolverOutputData
+import model.RootFieldReferenceData
 import model.InclusionCondition
 import model.Arguments
 import model.Selection
@@ -48,14 +50,15 @@ import viaduct.graphql.utils.GraphQLTypeRelation
  *
  * The returned object is partial and need not repeat the input ID. Fixture lowering retains the
  * authoritative ID supplied by the node-valued producer, matching production's node-reference
- * behavior.
+ * behavior. A node lookup may instead return a symbolic root-field reference; Resolver26 resolves
+ * that instruction at the synthetic payload field just as it does for an ordinary field resolver.
  *
  * This wrapper is not part of the canonical resolver algebra. [resolverRegistryOf] consumes these
  * functions and exposes a field-only [ResolverRegistry].
  */
 class NodeResolverFunction internal constructor(
     internal val mode: Mode,
-    private val function: (String, SelectionForest) -> EngineOutputData?,
+    private val function: (String, SelectionForest) -> ResolverOutputData?,
 ) {
     internal enum class Mode {
         NONSELECTIVE,
@@ -66,22 +69,22 @@ class NodeResolverFunction internal constructor(
     internal operator fun invoke(
         id: String,
         selections: SelectionForest,
-    ): EngineOutputData? = function(id, selections)
+    ): ResolverOutputData? = function(id, selections)
 }
 
 /** Marks a raw external node lookup for fixture composition. */
-fun nodeResolverOf(function: (String) -> EngineOutputData?): NodeResolverFunction =
+fun nodeResolverOf(function: (String) -> ResolverOutputData?): NodeResolverFunction =
     NodeResolverFunction(NodeResolverFunction.Mode.NONSELECTIVE) { id, _ -> function(id) }
 
 /** Marks a stable raw node lookup that receives demand before model-owned output projection. */
 fun selectionAwareNodeResolverOf(
-    function: (String, SelectionForest) -> EngineOutputData?,
+    function: (String, SelectionForest) -> ResolverOutputData?,
 ): NodeResolverFunction =
     NodeResolverFunction(NodeResolverFunction.Mode.SELECTION_AWARE_NONSELECTIVE, function)
 
 /** Marks a selection-sensitive raw external node lookup for fixture composition. */
 fun selectiveNodeResolverOf(
-    function: (String, SelectionForest) -> EngineOutputData?,
+    function: (String, SelectionForest) -> ResolverOutputData?,
 ): NodeResolverFunction = NodeResolverFunction(NodeResolverFunction.Mode.SELECTIVE, function)
 
 typealias CanonicalFieldResolverApplicationObserver =
@@ -364,7 +367,7 @@ private class NodeResolverLowering(
         typedId: EngineOutputData?,
         nodeOutputType: ViaductSchema.Object,
         selections: SelectionForest,
-    ): EngineOutputData? {
+    ): ResolverOutputData? {
         if (typedId == null || typedId is EngineErrorData) return typedId
         require(typedId is String) {
             "Node bridge ${nodeBridgeTypeName(nodeOutputType.name)} did not contain an ID"
@@ -378,6 +381,7 @@ private class NodeResolverLowering(
                 ?: throw IllegalArgumentException("No fixture node resolver for ${type.name}")
         val sourceResult = resolver(id, selections)
         if (sourceResult == null || sourceResult is EngineErrorData) return sourceResult
+        if (sourceResult is RootFieldReferenceData) return sourceResult
         require(sourceResult is EngineObjectData.Sync) {
             "Node resolver for ${type.name} returned a non-object value"
         }

@@ -13,6 +13,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
+import model.EngineErrorData
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -104,7 +105,6 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Test
-        @Disabled("TODO: NodeLower: Empty lowered payload demand still invokes the node executor")
         fun `engine-managed node fields do not invoke selective resolver`() {
             MockTenantModuleBootstrapper(
                 """
@@ -477,7 +477,7 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Test
-        @Disabled("TODO: NodeCache: Production performs an initial fetch and a second path-specific materialization; qplan supplies their union once")
+        @Disabled("ALT: Production performs an initial fetch and a path-specific refetch; qplan supplies their concrete path union once")
         fun `materialization output selections preserve path-specific concrete ownership`() {
             // The Root node resolver owns different leaves below foo and bar based on the concrete
             // Abstract implementation, so flat field coordinates cannot represent its selections.
@@ -575,6 +575,74 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Test
+        fun `ALTERNATIVE materialization output selections preserve path-specific concrete ownership`() {
+            val rootCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { root: Root }
+                    type Root implements Node { id: ID!, value: Int @resolver, foo: Abstract, bar: Abstract }
+                    interface Abstract { x: Int, y: Int }
+                    type Impl1 implements Abstract { x: Int, y: Int @resolver }
+                    type Impl2 implements Abstract { x: Int @resolver, y: Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "root") {
+                    valueFromContext { ctx ->
+                        ctx.createNodeReference("root", schema.schema.getObjectType("Root")!!)
+                    }
+                }
+
+                type("Root") {
+                    nodeUnbatchedExecutor(selective = true) { _, sels, _ ->
+                        rootCalls.incrementAndGet()
+                        val sel = sels!!
+                        createEngineObjectData(
+                            objectType,
+                            buildMap {
+                                if (sel.containsField("Root", "foo")) {
+                                    put("foo", createEngineObjectData("Impl1", mapOf("x" to 2)))
+                                }
+                                if (sel.containsField("Root", "bar")) {
+                                    put("bar", createEngineObjectData("Impl2", mapOf("y" to 3)))
+                                }
+                            },
+                        )
+                    }
+                }
+
+                field("Root" to "value") {
+                    resolver {
+                        objectSelections(
+                            """
+                                foo { x }
+                                bar { y }
+                            """.trimIndent()
+                        )
+                        fn { _, obj, _, _, _ ->
+                            val fooAbstract = obj.fetchAs<EngineObjectData>("foo")
+                            val barAbstract = obj.fetchAs<EngineObjectData>("bar")
+                            fooAbstract.fetchAs<Int>("x") * barAbstract.fetchAs<Int>("y")
+                        }
+                    }
+                }
+
+                field("Impl1" to "y") {
+                    resolver { fn { _, _, _, _, _ -> -1 } }
+                }
+
+                field("Impl2" to "x") {
+                    resolver { fn { _, _, _, _, _ -> -1 } }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ root { value } }")
+                    .assertJson("{data: {root: {value: 6}}}")
+            }
+
+            assertEquals(1, rootCalls.get())
+        }
+
+        @Test
         fun `selective field can return selective node`() {
             MockTenantModuleBootstrapper(
                 """
@@ -655,7 +723,7 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Test
-        @Disabled("TODO: NodeCache: Production materializes a node reference returned by an initial node fetch; qplan closes one occurrence before invocation")
+        @Disabled("ALT: Production mutates the original node reference after fetching; qplan publishes the same response from a closed one-shot occurrence")
         fun `initial materialization resolves node reference`() {
             // This test captures the original node reference returned by a field resolver
             // and then later trying to read fields off of it after the node resolver has run
@@ -692,7 +760,31 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Test
-        @Disabled("TODO: NodeCache: Production refetches a reused node reference for newly selected fields; qplan resolves each closed occurrence once")
+        fun `ALTERNATIVE initial materialization resolves node reference`() {
+            MockTenantModuleBootstrapper(
+                """
+                    | extend type Query { foo: Foo }
+                    | type Foo implements Node { id: ID!, x: Int }
+                """.trimMargin()
+            ) {
+                field("Query" to "foo") {
+                    valueFromContext {
+                        it.createNodeReference("foo", objectType("Foo"))
+                    }
+                }
+                type("Foo") {
+                    nodeUnbatchedExecutor(selective = true) { _, _, _ ->
+                        createEngineObjectData(objectType, mapOf("x" to 2))
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { x } }")
+                    .assertJson("{data: {foo: {x: 2}}}")
+            }
+        }
+
+        @Test
+        @Disabled("ALT: Production accumulates fields on one reused mutable node reference; qplan resolves fresh closed reference occurrences")
         fun `reused node reference resolves newly selected fields`() {
             var nodeReference: NodeEngineObjectData? = null
 
@@ -752,6 +844,60 @@ class SelectiveNodeResolversExecutionTest {
             runTest {
                 assertEquals(3, checkNotNull(nodeReference).fetchAs<Int>("y"))
                 assertEquals(2, checkNotNull(nodeReference).fetchAs<Int>("x"))
+            }
+        }
+
+        @Test
+        fun `ALTERNATIVE reused node reference resolves newly selected fields`() {
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { x:Int, foo2:Foo, foo1:Foo }
+                    type Foo implements Node { id:ID!, x:Int!, y:Int! }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo1") {
+                    valueFromContext { ctx ->
+                        ctx.createNodeReference("foo", objectType("Foo"))
+                    }
+                }
+
+                field("Query" to "foo2") {
+                    resolver {
+                        objectSelections("foo1 { y }")
+                        fn { _, obj, _, _, ctx ->
+                            obj.fetchAs<EngineObjectData>("foo1").fetchAs<Int>("y")
+                            ctx.createNodeReference("foo", schema.schema.getObjectType("Foo"))
+                        }
+                    }
+                }
+
+                field("Query" to "x") {
+                    resolver {
+                        objectSelections("foo2 { x }")
+                        fn { _, obj, _, _, _ ->
+                            obj.fetchAs<EngineObjectData>("foo2").fetchAs<Int>("x")
+                        }
+                    }
+                }
+
+                type("Foo") {
+                    nodeUnbatchedExecutor(selective = true) { _, sels, _ ->
+                        createEngineObjectData(
+                            objectType,
+                            buildMap {
+                                if (sels!!.containsField("Foo", "x")) {
+                                    put("x", 2)
+                                }
+                                if (sels.containsField("Foo", "y")) {
+                                    put("y", 3)
+                                }
+                            },
+                        )
+                    }
+                }
+            }.runQPlanFeatureTest(withoutDefaultQueryNodeResolvers = true) {
+                runQueryWithTimeout("{ x }")
+                    .assertJson("{data: {x: 2}}")
             }
         }
 
@@ -1149,7 +1295,7 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Test
-        @Disabled("TODO: NodeCache: Production refetches when nested RSS coverage is missing; qplan closes the complete demand before one fetch")
+        @Disabled("ALT: Production refetches after discovering nested RSS demand; qplan supplies the complete nested demand in one node call")
         fun `missing nested rss rematerializes node source`() {
             val fooCalls = AtomicInteger()
 
@@ -1201,6 +1347,57 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Test
+        fun `ALTERNATIVE missing nested rss rematerializes node source`() {
+            val fooCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo: Foo }
+                    type Foo implements Node { id: ID!, bar: Bar }
+                    type Bar { x: Int, y: Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    valueFromContext { it.createNodeReference("foo", objectType("Foo")) }
+                }
+
+                field("Bar" to "y") {
+                    resolver {
+                        objectSelections("x")
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("x") * 3 }
+                    }
+                }
+
+                type("Foo") {
+                    nodeUnbatchedExecutor(selective = true) { _, sels, _ ->
+                        fooCalls.incrementAndGet()
+                        val barSelections =
+                            sels!!.selectionSetForField("Foo", "bar")
+                        createEngineObjectData(
+                            objectType,
+                            mapOf(
+                                "bar" to
+                                    createEngineObjectData(
+                                        "Bar",
+                                        buildMap {
+                                            if (barSelections.containsField("Bar", "x")) {
+                                                put("x", 2)
+                                            }
+                                        },
+                                    )
+                            ),
+                        )
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { bar { y } } }")
+                    .assertJson("{data: {foo: {bar: {y: 6}}}}")
+            }
+
+            assertEquals(1, fooCalls.get())
+        }
+
+        @Test
         fun `returned nested rss coverage reuses node source`() {
             val fooCalls = AtomicInteger()
 
@@ -1248,7 +1445,7 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Test
-        @Disabled("TODO: NodeCache: Production chooses among successive covering results; qplan has one producer result")
+        @Disabled("ALT: Production selects values from successive cache-covering results; qplan publishes one stable producer result")
         fun `surplus coverage uses values from the first covering result`() {
             val resultNumber = AtomicInteger()
             val firstResultConsumed = CompletableDeferred<Unit>()
@@ -1304,6 +1501,54 @@ class SelectiveNodeResolversExecutionTest {
                 runQueryWithTimeout("{ foo { x y } }")
                     .assertJson("{data: {foo: {x: 10, y: 21}}}")
             }
+        }
+
+        @Test
+        fun `ALTERNATIVE surplus coverage uses values from the first covering result`() {
+            val nodeCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo: Foo }
+                    type Foo implements Node { id:ID!, x:Int, y:Int, z:Int, w:Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    valueFromContext { it.createNodeReference("foo", objectType("Foo")) }
+                }
+
+                field("Foo" to "x") {
+                    resolver {
+                        objectSelections("z")
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("z") * 5 }
+                    }
+                }
+
+                field("Foo" to "y") {
+                    resolver {
+                        objectSelections("w")
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("w") * 7 }
+                    }
+                }
+
+                type("Foo") {
+                    nodeUnbatchedExecutor(selective = true) { _, sels, _ ->
+                        nodeCalls.incrementAndGet()
+                        createEngineObjectData(
+                            objectType,
+                            buildMap {
+                                if (sels!!.containsField("Foo", "z")) put("z", 2)
+                                if (sels.containsField("Foo", "w")) put("w", 3)
+                            },
+                        )
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { x y } }")
+                    .assertJson("{data: {foo: {x: 10, y: 21}}}")
+            }
+
+            assertEquals(1, nodeCalls.get())
         }
 
         @Test
@@ -1460,7 +1705,6 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Test
-        @Disabled("TODO: NodeCache: Production reuses a recursive covering cache entry; qplan resolves distinct node occurrences once")
         fun `recursive self reference reuses covering node cache entry`() {
             val nodeCalls = AtomicInteger()
 
@@ -1617,7 +1861,7 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Test
-        @Disabled("TODO: NodeCache: Production reconciles changed embedded-list cardinality across refetches; qplan does not refetch")
+        @Disabled("ALT: Production reconciles different list sizes across refetches; qplan publishes one stable list with the same item results")
         fun `changed embedded list size leaves unmatched items unresolved`() {
             MockTenantModuleBootstrapper(
                 """
@@ -1677,7 +1921,73 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Test
-        @Disabled("TODO: NodeCache: Production reports embedded-list runtime-type drift across refetches; qplan does not refetch")
+        fun `ALTERNATIVE changed embedded list size leaves unmatched items unresolved`() {
+            val nodeCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo:Foo }
+                    type Foo implements Node { id:ID!, bars:[Bar] }
+                    type Bar { x:Int, y:Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    valueFromContext { it.createNodeReference("foo", objectType("Foo")) }
+                }
+
+                field("Bar" to "x") {
+                    resolver {
+                        objectSelections("y")
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("y") * 3 }
+                    }
+                }
+
+                type("Foo") {
+                    nodeUnbatchedExecutor(selective = true) { _, _, _ ->
+                        nodeCalls.incrementAndGet()
+                        createEngineObjectData(
+                            objectType,
+                            mapOf(
+                                "bars" to
+                                    listOf(
+                                        createEngineObjectData("Bar", mapOf("y" to 2)),
+                                        createEngineObjectData(
+                                            "Bar",
+                                            mapOf(
+                                                "y" to
+                                                    EngineErrorData.of(
+                                                        IllegalStateException("unmatched list item"),
+                                                    )
+                                            ),
+                                        ),
+                                    )
+                            ),
+                        )
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { bars { x } } }").assertMatches {
+                    "data" to {
+                        "foo" to {
+                            "bars" to arrayOf(
+                                { "x" to "6" },
+                                { "x" to null },
+                            )
+                        }
+                    }
+                    "errors" to arrayOf(
+                        {
+                            "path" to listOf("foo", "bars", "1", "x")
+                        }
+                    )
+                }
+            }
+
+            assertEquals(1, nodeCalls.get())
+        }
+
+        @Test
+        @Disabled("ALT: Production detects embedded-list type drift between node fetches; one-shot qplan can preserve the same consumer error but has no second type")
         fun `embedded list item type changes during refetch report a field error`() {
             MockTenantModuleBootstrapper(
                 """
@@ -1739,6 +2049,69 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
+        @Test
+        fun `ALTERNATIVE embedded list item type changes during refetch report a field error`() {
+            val nodeCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo: Foo }
+                    type Foo implements Node { id: ID!, bars: [Bar] }
+                    union Bar = Baz | Qux
+                    type Baz { x: Int, y: Int }
+                    type Qux { y: Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    valueFromContext { it.createNodeReference("foo", objectType("Foo")) }
+                }
+
+                field("Baz" to "x") {
+                    resolver {
+                        objectSelections("y")
+                        fn { _, _, _, _, _ ->
+                            error("expected object of type `Baz`, found `Qux`")
+                        }
+                    }
+                }
+
+                type("Foo") {
+                    nodeUnbatchedExecutor(selective = true) { _, _, _ ->
+                        nodeCalls.incrementAndGet()
+                        createEngineObjectData(
+                            objectType,
+                            mapOf(
+                                "bars" to
+                                    listOf(
+                                        createEngineObjectData("Baz", mapOf("y" to 2))
+                                    )
+                            ),
+                        )
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout(
+                    "{ foo { bars { ... on Baz { x } } } }"
+                ).assertMatches {
+                    "data" to {
+                        "foo" to {
+                            "bars" to arrayOf(
+                                { "x" to null },
+                            )
+                        }
+                    }
+                    "errors" to arrayOf(
+                        {
+                            "message" to ".*expected object of type `Baz`, found `Qux`.*"
+                            "path" to listOf("foo", "bars", "0", "x")
+                        }
+                    )
+                }
+            }
+
+            assertEquals(1, nodeCalls.get())
+        }
+
         @Nested
         @Disabled("N/A: Production arbitrary Viaduct harness does not expose the EngineTestModule adapter surface")
         inner class ArbitraryTests :
@@ -1754,7 +2127,7 @@ class SelectiveNodeResolversExecutionTest {
     @Nested
     inner class VariablesTests {
         @Test
-        @Disabled("TODO: NodeCache: Production keeps client and RSS argument shapes in separate materializations; qplan supplies their union once")
+        @Disabled("ALT: Production asks a selective node owner for argument-bearing fields in separate materializations; qplan resolves those fields actively by key")
         fun `client and rss arguments remain isolated`() {
             MockTenantModuleBootstrapper(
                 """
@@ -1793,7 +2166,45 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Test
-        @Disabled("TODO: NodeArg: Selective node output would have to supply an argument-bearing field, which is outside qplan's resolver-output relation")
+        fun `ALTERNATIVE client and rss arguments remain isolated`() {
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo: Foo }
+                    type Foo implements Node { id: ID!, x: Int, y(z: Int!): Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    valueFromContext { it.createNodeReference("foo", objectType("Foo")) }
+                }
+
+                field("Foo" to "x") {
+                    resolver {
+                        objectSelections("y(z: 2)")
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("y") * 3 }
+                    }
+                }
+
+                field("Foo" to "y") {
+                    resolver {
+                        fn { args, _, _, _, _ -> args.getAs<Int>("z") }
+                    }
+                }
+
+                type("Foo") {
+                    nodeUnbatchedExecutor(selective = true) { _, _, _ ->
+                        createEngineObjectData(objectType, emptyMap())
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout(
+                    "query(${'$'}z: Int!) { foo { y(z: ${'$'}z) x } }",
+                    variables = mapOf("z" to 1),
+                ).assertJson("{data: {foo: {y: 1, x: 6}}}")
+            }
+        }
+
+        @Test
+        @Disabled("ALT: Production asks the selective node owner to supply an argument-bearing RSS field; qplan resolves that field actively")
         fun `rss variable failure reports a field error`() {
             MockTenantModuleBootstrapper(
                 """
@@ -1846,7 +2257,58 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Test
-        @Disabled("TODO: NodeArg: Selective node output would have to supply an argument-bearing field, which is outside qplan's resolver-output relation")
+        fun `ALTERNATIVE rss variable failure reports a field error`() {
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo: Foo }
+                    type Foo implements Node { id: ID!, x: Int, y(z: Int!): Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    valueFromContext { it.createNodeReference("foo", objectType("Foo")) }
+                }
+
+                field("Foo" to "x") {
+                    resolver {
+                        objectSelections("y(z: ${'$'}z)") {
+                            variables("z") { _, _ ->
+                                error("rss variables resolver failed")
+                            }
+                        }
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("y") * 3 }
+                    }
+                }
+
+                field("Foo" to "y") {
+                    resolver {
+                        fn { _, _, _, _, _ -> 2 }
+                    }
+                }
+
+                type("Foo") {
+                    nodeUnbatchedExecutor(selective = true) { _, _, _ ->
+                        createEngineObjectData(objectType, emptyMap())
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { x } }").assertMatches {
+                    "data" to {
+                        "foo" to {
+                            "x" to null
+                        }
+                    }
+                    "errors" to arrayOf(
+                        {
+                            "message" to ".*rss variables resolver failed.*"
+                            "path" to listOf("foo", "x")
+                        }
+                    )
+                }
+            }
+        }
+
+        @Test
+        @Disabled("ALT: Production asks selective node output to own an argument-bearing embedded field; qplan resolves that field actively")
         fun `embedded node materialization preserves ancestor argument variables`() {
             MockTenantModuleBootstrapper(
                 """
@@ -1888,6 +2350,47 @@ class SelectiveNodeResolversExecutionTest {
                                 )
                             ),
                         )
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout(
+                    "query(\$y: Int!) { foo { bar(y: \$y) { x } } }",
+                    variables = mapOf("y" to 2),
+                ).assertJson("{data: {foo: {bar: {x: 10}}}}")
+            }
+        }
+
+        @Test
+        fun `ALTERNATIVE embedded node materialization preserves ancestor argument variables`() {
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo:Foo }
+                    type Foo implements Node { id:ID!, bar(y:Int!): Bar }
+                    type Bar { x:Int, y:Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    valueFromContext { it.createNodeReference("foo", objectType("Foo")) }
+                }
+
+                field("Foo" to "bar") {
+                    resolver {
+                        fn { args, _, _, _, _ ->
+                            createEngineObjectData("Bar", mapOf("y" to args.getAs<Int>("y")))
+                        }
+                    }
+                }
+
+                field("Bar" to "x") {
+                    resolver {
+                        objectSelections("y")
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("y") * 5 }
+                    }
+                }
+
+                type("Foo") {
+                    nodeUnbatchedExecutor(selective = true) { _, _, _ ->
+                        createEngineObjectData(objectType, emptyMap())
                     }
                 }
             }.runQPlanFeatureTest {
@@ -2019,7 +2522,7 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Test
-        @Disabled("TODO: NodeArg: Selective node output would have to supply argument-bearing fields, which are outside qplan's resolver-output relation")
+        @Disabled("ALT: Production asks selective node output to own nested argument-bearing fields; qplan resolves those fields actively")
         fun `embedded node materialization preserves fragment argument variables`() {
             MockTenantModuleBootstrapper(
                 """
@@ -2064,6 +2567,69 @@ class SelectiveNodeResolversExecutionTest {
                                 )
                             ),
                         )
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout(
+                    """
+                        query(${"$"}x: Int!) {
+                          foo { ...FooFields }
+                        }
+
+                        fragment FooFields on Foo {
+                          bar(y: ${"$"}x) { x }
+                        }
+                    """.trimIndent(),
+                    variables = mapOf("x" to 2),
+                ).assertJson("{data: {foo: {bar: {x: 30}}}}")
+            }
+        }
+
+        @Test
+        fun `ALTERNATIVE embedded node materialization preserves fragment argument variables`() {
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo: Foo }
+                    type Foo implements Node { id: ID!, bar(y: Int!): Bar }
+                    type Bar { x: Int, y(x: Int!): Int, parentY: Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    valueFromContext { it.createNodeReference("foo", objectType("Foo")) }
+                }
+
+                field("Foo" to "bar") {
+                    resolver {
+                        fn { args, _, _, _, _ ->
+                            createEngineObjectData(
+                                "Bar",
+                                mapOf("parentY" to args.getAs<Int>("y")),
+                            )
+                        }
+                    }
+                }
+
+                field("Bar" to "y") {
+                    resolver {
+                        objectSelections("parentY")
+                        fn { args, obj, _, _, _ ->
+                            args.getAs<Int>("x") * obj.fetchAs<Int>("parentY")
+                        }
+                    }
+                }
+
+                field("Bar" to "x") {
+                    resolver {
+                        objectSelections("y(x: \$x)") {
+                            variables("x") { _, _ -> mapOf("x" to 3) }
+                        }
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("y") * 5 }
+                    }
+                }
+
+                type("Foo") {
+                    nodeUnbatchedExecutor(selective = true) { _, _, _ ->
+                        createEngineObjectData(objectType, emptyMap())
                     }
                 }
             }.runQPlanFeatureTest {
@@ -2276,7 +2842,7 @@ class SelectiveNodeResolversExecutionTest {
     @Nested
     inner class ConsistencyTests {
         @Test
-        @Disabled("TODO: NodeCache: Production reports top-level runtime-type drift across refetches; qplan does not refetch")
+        @Disabled("ALT: Production detects top-level type drift between node fetches; one-shot qplan preserves the same consumer error from one stable type")
         fun `type changes during refetch report a field error`() {
             MockTenantModuleBootstrapper(
                 """
@@ -2324,7 +2890,57 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Test
-        @Disabled("TODO: NodeCache: Production compares inconsistent exceptions across refetches; qplan does not refetch")
+        fun `ALTERNATIVE type changes during refetch report a field error`() {
+            val nodeCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo: Foo }
+                    type Foo implements Node { id: ID!, x: Int, y: Int, z: Int }
+                    type Bar { z: Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    valueFromContext { it.createNodeReference("foo", objectType("Foo")) }
+                }
+
+                field("Foo" to "y") {
+                    resolver {
+                        objectSelections("z")
+                        fn { _, _, _, _, _ ->
+                            error("expected object of type `Foo`, found `Bar`")
+                        }
+                    }
+                }
+
+                type("Foo") {
+                    nodeUnbatchedExecutor(selective = true) { _, _, _ ->
+                        nodeCalls.incrementAndGet()
+                        createEngineObjectData(objectType, mapOf("x" to 1, "z" to 2))
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { x y } }").assertMatches {
+                    "data" to {
+                        "foo" to {
+                            "x" to "1"
+                            "y" to null
+                        }
+                    }
+                    "errors" to arrayOf(
+                        {
+                            "message" to ".*expected object of type `Foo`, found `Bar`.*"
+                            "path" to listOf("foo", "y")
+                        }
+                    )
+                }
+            }
+
+            assertEquals(1, nodeCalls.get())
+        }
+
+        @Test
+        @Disabled("ALT: Production compares exceptions across node refetches; one-shot qplan preserves the same consumer failure from one stable producer")
         fun `inconsistent resolver exceptions`() {
             val fooCalls = AtomicInteger()
 
@@ -2382,7 +2998,55 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Test
-        @Disabled("TODO: NodeCache: Production reports nested runtime-type drift across refetches; qplan does not refetch")
+        fun `ALTERNATIVE inconsistent resolver exceptions`() {
+            val fooCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                extend type Query { foo: Foo }
+                type Foo implements Node { id: ID!, x: Int, y: Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    valueFromContext { ctx ->
+                        ctx.createNodeReference("foo", schema.schema.getObjectType("Foo"))
+                    }
+                }
+                field("Foo" to "x") {
+                    resolver {
+                        objectSelections("y")
+                        fn { _, _, _, _, _ ->
+                            error("foo node failed when materialized")
+                        }
+                    }
+                }
+                type("Foo") {
+                    nodeUnbatchedExecutor(selective = true) { _, _, _ ->
+                        fooCalls.incrementAndGet()
+                        createEngineObjectData(objectType, mapOf("y" to 2))
+                    }
+                }
+            }.runQPlanFeatureTest(withoutDefaultQueryNodeResolvers = true) {
+                runQueryWithTimeout("{ foo { x } }").assertMatches {
+                    "data" to {
+                        "foo" to {
+                            "x" to null
+                        }
+                    }
+                    "errors" to arrayOf(
+                        {
+                            "message" to ".*failed when materialized.*"
+                            "path" to listOf("foo", "x")
+                        }
+                    )
+                }
+            }
+
+            assertEquals(1, fooCalls.get())
+        }
+
+        @Test
+        @Disabled("ALT: Production detects nested type drift between node fetches; one-shot qplan preserves the same consumer error from one stable nested type")
         fun `nested object type changes during refetch report a field error`() {
             MockTenantModuleBootstrapper(
                 """
@@ -2444,7 +3108,67 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Test
-        @Disabled("TODO: NodeCache: Production validates malformed nested objects during refetch reconciliation; qplan does not refetch")
+        fun `ALTERNATIVE nested object type changes during refetch report a field error`() {
+            val nodeCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo: Foo }
+                    type Foo implements Node { id: ID!, bar: Bar }
+                    union Bar = Baz | Qux
+                    type Baz { x: Int, y: Int }
+                    type Qux { z: Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    valueFromContext { it.createNodeReference("foo", objectType("Foo")) }
+                }
+
+                field("Baz" to "y") {
+                    resolver {
+                        objectSelections("x")
+                        fn { _, _, _, _, _ ->
+                            error("expected object of type `Baz`, found `Qux`")
+                        }
+                    }
+                }
+
+                type("Foo") {
+                    nodeUnbatchedExecutor(selective = true) { _, _, _ ->
+                        nodeCalls.incrementAndGet()
+                        createEngineObjectData(
+                            objectType,
+                            mapOf(
+                                "bar" to createEngineObjectData("Baz", mapOf("x" to 2))
+                            ),
+                        )
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout(
+                    "{ foo { bar { ... on Baz { y } } } }"
+                ).assertMatches {
+                    "data" to {
+                        "foo" to {
+                            "bar" to {
+                                "y" to null
+                            }
+                        }
+                    }
+                    "errors" to arrayOf(
+                        {
+                            "message" to ".*expected object of type `Baz`, found `Qux`.*"
+                            "path" to listOf("foo", "bar", "y")
+                        }
+                    )
+                }
+            }
+
+            assertEquals(1, nodeCalls.get())
+        }
+
+        @Test
+        @Disabled("ALT: Production detects malformed nested replacement data during refetch; one-shot qplan preserves the same consumer failure from stable data")
         fun `malformed nested object during refetch reports a field error`() {
             MockTenantModuleBootstrapper(
                 """
@@ -2497,6 +3221,62 @@ class SelectiveNodeResolversExecutionTest {
                     )
                 }
             }
+        }
+
+        @Test
+        fun `ALTERNATIVE malformed nested object during refetch reports a field error`() {
+            val nodeCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { foo:Foo }
+                    type Foo implements Node { id:ID!, bar:Bar }
+                    type Bar { x:Int, y:Int }
+                """.trimIndent()
+            ) {
+                field("Query" to "foo") {
+                    valueFromContext { it.createNodeReference("foo", objectType("Foo")) }
+                }
+
+                field("Bar" to "x") {
+                    resolver {
+                        objectSelections("y")
+                        fn { _, _, _, _, _ ->
+                            error("nested object failed when materialized")
+                        }
+                    }
+                }
+
+                type("Foo") {
+                    nodeUnbatchedExecutor(selective = true) { _, _, _ ->
+                        nodeCalls.incrementAndGet()
+                        createEngineObjectData(
+                            objectType,
+                            mapOf(
+                                "bar" to createEngineObjectData("Bar", mapOf("y" to 2))
+                            ),
+                        )
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { bar { x } } }").assertMatches {
+                    "data" to {
+                        "foo" to {
+                            "bar" to {
+                                "x" to null
+                            }
+                        }
+                    }
+                    "errors" to arrayOf(
+                        {
+                            "message" to ".*failed when materialized.*"
+                            "path" to listOf("foo", "bar", "x")
+                        }
+                    )
+                }
+            }
+
+            assertEquals(1, nodeCalls.get())
         }
     }
 
@@ -3516,7 +4296,6 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Test
-        @Disabled("TODO: NodeCache: Production treats an omitted selected field as cache coverage; qplan requires the selective result to supply demanded output")
         fun `selected omitted node field is treated as covered`() {
             val nodeCalls = AtomicInteger()
 
@@ -3554,7 +4333,6 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Test
-        @Disabled("TODO: NodeOwnership: Production discards selective-node surplus owned by a field resolver; qplan rejects surplus selective output")
         fun `node surplus does not override field resolver ownership`() {
             MockTenantModuleBootstrapper(
                 """

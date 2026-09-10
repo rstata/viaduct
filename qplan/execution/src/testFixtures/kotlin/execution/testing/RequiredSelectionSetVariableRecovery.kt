@@ -15,6 +15,7 @@ import viaduct.engine.api.RequiredSelectionSet
 import viaduct.engine.api.Validated
 import viaduct.engine.api.VariablesResolver
 import viaduct.engine.api.resolve
+import viaduct.engine.runtime.tenantloading.InvalidVariableException
 import viaduct.graphql.schema.ViaductSchema
 import viaduct.graphql.utils.ParsedSelections
 
@@ -35,11 +36,10 @@ import viaduct.graphql.utils.ParsedSelections
  * nested RSS is recovered recursively so providers used by argument-bearing path selections are
  * validated too.
  *
- * Qplan's semantic registry supports nested input-object paths, but this adapter can recover only
- * the one-segment argument recipes retained by the production Engine API. Nested input-object
- * paths and callbacks with their own required selections are rejected here rather than
- * approximated. All disjoint no-RSS callbacks are composed as the field resolver's variables
- * provider.
+ * Qplan's semantic registry supports nested input-object paths, so this adapter retains every
+ * segment in the production Engine API argument recipe. Callbacks with their own required
+ * selections are rejected here rather than approximated. All disjoint no-RSS callbacks are
+ * composed as the field resolver's variables provider.
  */
 internal class RequiredSelectionSetVariableRecovery(
     private val schema: ViaductSchema,
@@ -47,12 +47,12 @@ internal class RequiredSelectionSetVariableRecovery(
     /**
      * One recovered source configuration before it is compiled into a qplan declaration.
      *
-     * [variable] is the exact template decoded from the resolver object fragment. [argumentName]
-     * is the sole path segment retained by Engine API [FromArgument].
+     * [variable] is the exact template decoded from the resolver object fragment. [argumentPath]
+     * is the path retained by Engine API [FromArgument].
      */
     data class RecoveredFromArgument(
         override val variable: Arguments.Variable,
-        val argumentName: String,
+        val argumentPath: List<String>,
     ) : RecoveredConfiguration
 
     /**
@@ -142,28 +142,39 @@ internal class RequiredSelectionSetVariableRecovery(
             declarations =
                 configurations.filterNot { it is RecoveredFromProvider }.associate { configuration ->
                     configuration.variable to
-                        when (configuration) {
-                            is RecoveredFromArgument ->
-                                schema.fromArgument(field, configuration.argumentName)
-                            is RecoveredFromObjectField ->
-                                schema.fromObjectField(
-                                    objectFragmentSource =
-                                        checkNotNull(objectFragmentSource) {
-                                            "FromObjectField recovery requires an object RSS"
-                                        },
-                                    responsePath = configuration.responsePath,
-                                    variableField = field,
+                        try {
+                            when (configuration) {
+                                is RecoveredFromArgument ->
+                                    schema.fromArgument(field, configuration.argumentPath)
+                                is RecoveredFromObjectField ->
+                                    schema.fromObjectField(
+                                        objectFragmentSource =
+                                            checkNotNull(objectFragmentSource) {
+                                                "FromObjectField recovery requires an object RSS"
+                                            },
+                                        responsePath = configuration.responsePath,
+                                        variableField = field,
+                                    )
+                                is RecoveredFromQueryField ->
+                                    schema.fromQueryField(
+                                        queryFragmentSource =
+                                            checkNotNull(queryFragmentSource) {
+                                                "FromQueryField recovery requires a Query RSS"
+                                            },
+                                        responsePath = configuration.responsePath,
+                                        variableField = field,
+                                    )
+                                is RecoveredFromProvider -> error("Provider configurations are separate")
+                            }
+                        } catch (failure: IllegalArgumentException) {
+                            if (failure.message.orEmpty().contains("lossy type condition")) {
+                                throw InvalidVariableException(
+                                    field.containingDef.name to field.name,
+                                    configuration.variable.variableName,
+                                    failure.message ?: "Invalid variable source",
                                 )
-                            is RecoveredFromQueryField ->
-                                schema.fromQueryField(
-                                    queryFragmentSource =
-                                        checkNotNull(queryFragmentSource) {
-                                            "FromQueryField recovery requires a Query RSS"
-                                        },
-                                    responsePath = configuration.responsePath,
-                                    variableField = field,
-                                )
-                            is RecoveredFromProvider -> error("Provider configurations are separate")
+                            }
+                            throw failure
                         }
                 },
             variablesProvider =
@@ -234,11 +245,10 @@ internal class RequiredSelectionSetVariableRecovery(
                             require(resolver.variableNames == setOf(resolver.name)) {
                                 "FromArgument ${resolver.name} on $coordinate reports inconsistent variable names"
                             }
-                            require(resolver.path.size == 1) {
-                                "Qplan feature tests do not support nested FromArgument path " +
-                                    "${resolver.path.joinToString(".")} for \$${resolver.name} on $coordinate"
+                            require(resolver.path.isNotEmpty()) {
+                                "FromArgument ${resolver.name} on $coordinate has an empty path"
                             }
-                            val source = RecoveredSource.FromArgument(resolver.path.single())
+                            val source = RecoveredSource.FromArgument(resolver.path)
                             observedSources.record(resolver.name, source, coordinate)
                             listOf(resolver.name to source)
                         }
@@ -329,7 +339,7 @@ internal class RequiredSelectionSetVariableRecovery(
                 is RecoveredSource.FromArgument ->
                     RecoveredFromArgument(
                         variable = variables.single(),
-                        argumentName = source.argumentName,
+                        argumentPath = source.argumentPath,
                     )
                 is RecoveredSource.FromObjectField ->
                     RecoveredFromObjectField(
@@ -353,7 +363,7 @@ internal class RequiredSelectionSetVariableRecovery(
 
 private sealed interface RecoveredSource {
     data class FromArgument(
-        val argumentName: String,
+        val argumentPath: List<String>,
     ) : RecoveredSource
 
     data class FromObjectField(

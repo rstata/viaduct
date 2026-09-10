@@ -24,7 +24,7 @@ import viaduct.graphql.test.assertJson
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RootFieldReferenceResolutionTest {
-    @Disabled("Qplan caller attribution is an independent execution-adapter blocker")
+    @Disabled("TODO: CallerAttr")
     @Test
     fun `caller is derived from resolver object traversal`() {
         var caller: Caller? = null
@@ -68,7 +68,7 @@ class RootFieldReferenceResolutionTest {
         )
     }
 
-    @Disabled("Qplan caller attribution is an independent execution-adapter blocker")
+    @Disabled("TODO: CallerAttr")
     @Test
     fun `factory backing data remains available to child resolver RSS without duplicate execution`() {
         val factoryCalls = AtomicInteger()
@@ -200,7 +200,7 @@ class RootFieldReferenceResolutionTest {
         assertEquals(1, localizedStringCalls.get())
     }
 
-    @Disabled("Qplan caller attribution is an independent execution-adapter blocker")
+    @Disabled("TODO: CallerAttr")
     @Test
     fun `caller survives a chain of resolver RSS dependencies`() {
         val callers = ConcurrentHashMap<String, Caller>()
@@ -378,7 +378,7 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("Qplan access-check execution is an independent migration blocker")
+    @Disabled("TODO: AccessChk")
     @Test
     fun `factory field access check failure is propagated`() {
         EngineTestModule(
@@ -430,7 +430,7 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("Qplan access-check execution is an independent migration blocker")
+    @Disabled("TODO: AccessChk")
     @Test
     fun `namespace access check failure prevents factory field execution`() {
         val factoryCalls = AtomicInteger()
@@ -489,7 +489,7 @@ class RootFieldReferenceResolutionTest {
         assertEquals(0, factoryCalls.get())
     }
 
-    @Disabled("Qplan intentionally gives each equivalent reference occurrence a fresh Query root")
+    @Disabled("ALT: RefDedup")
     @Test
     fun `equivalent factory references share execution while distinct arguments resolve independently`() {
         val factoryCalls = AtomicInteger()
@@ -1189,7 +1189,7 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("Qplan cannot yet lower a Node resolver's root-reference result through its inline Node bridge")
+    @Disabled("TODO: NodeLower")
     @Test
     fun `node resolver returns a root field reference`() {
         EngineTestModule(
@@ -1295,7 +1295,7 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("Qplan root-field-reference targets intentionally do not support object required selections")
+    @Disabled("ALT: RootObjRSS")
     @Test
     fun `factory resolver reads object and query selection sets`() {
         EngineTestModule(
@@ -1419,7 +1419,7 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("Qplan access-check execution is an independent migration blocker")
+    @Disabled("TODO: AccessChk")
     @Test
     fun `root field reference resolves to null`() {
         EngineTestModule(
@@ -1471,7 +1471,7 @@ class RootFieldReferenceResolutionTest {
         }
     }
 
-    @Disabled("Qplan access-check execution is an independent migration blocker")
+    @Disabled("TODO: AccessChk")
     @Test
     fun `root field reference to non-null field resolves to null propagates field error`() {
         EngineTestModule(

@@ -93,10 +93,8 @@ fun EngineTestModule.runQPlanFeatureTest(
     engineConfig: EngineConfiguration? = null,
     block: QPlanFeatureTest.() -> Unit,
 ) {
-    if (schema != null) {
-        TODO("Qplan feature tests do not support a distinct executable schema yet")
-    }
-    val schemaSDL = qplanSchemaSDL(fullSchema)
+    val fullSchemaSDL = qplanSchemaSDL(fullSchema)
+    val executableSchemaSDL = qplanSchemaSDL(schema ?: fullSchema)
     val context = ContextMocks(myFullSchema = fullSchema).engineExecutionContext
     val fieldSelectivityProvider =
         engineConfig?.fieldSelectivityProvider ?: FieldSelectivityProvider.Never
@@ -105,7 +103,7 @@ fun EngineTestModule.runQPlanFeatureTest(
 
     val world =
         TestWorld.fromSDL(
-            schemaSDL = schemaSDL,
+            schemaSDL = fullSchemaSDL,
             fieldResolvers = { schema ->
                 registryInputs
                     .getOrPut(schema) {
@@ -134,7 +132,7 @@ fun EngineTestModule.runQPlanFeatureTest(
                     .variableProviders
             },
         )
-    QPlanFeatureTest(ExecutionTestFixture.fromWorld(schemaSDL, world)).block()
+    QPlanFeatureTest(ExecutionTestFixture.fromWorld(executableSchemaSDL, world)).block()
 }
 
 fun MockTenantModuleBootstrapper.runQPlanFeatureTest(
@@ -404,8 +402,22 @@ private fun EngineTestModule.qplanNodeResolvers(
     val supplied =
         nodeResolverExecutors.associate { (typeName, executor) ->
             val type = schema.requireType(typeName) as QPlanSchema.Object
+            val fieldResolverOwnedFields =
+                fieldResolverExecutors
+                    .mapNotNullTo(linkedSetOf()) { (coordinate, _) ->
+                        coordinate.second.takeIf { coordinate.first == typeName }
+                    }
             val invokeExecutor =
                 fun(id: String, selections: EngineSelectionSet): EngineOutputData? {
+                    if (
+                        executor.isSelective &&
+                        selections.selections().all { selection -> selection.fieldName == "id" }
+                    ) {
+                        return ResolvedEngineObjectData(
+                            requireNotNull(fullSchema.schema.getObjectType(typeName)),
+                            emptyMap(),
+                        )
+                    }
                     val selector = NodeResolverExecutor.Selector(id, selections)
                     val output =
                         runBlocking {
@@ -428,7 +440,10 @@ private fun EngineTestModule.qplanNodeResolvers(
                                 is RootFieldReferenceData -> normalized
                                 is EngineObjectData.Sync ->
                                     if (executor.isSelective) {
-                                        normalized
+                                        normalized.projectTopLevel(
+                                            selections = selections,
+                                            excludedFields = fieldResolverOwnedFields,
+                                        )
                                     } else {
                                         completeMissingNodeFields(typeName, normalized)
                                     }
@@ -474,6 +489,31 @@ private fun EngineTestModule.qplanNodeResolvers(
     return supplied + unavailable
 }
 
+private fun EngineObjectData.Sync.projectTopLevel(
+    selections: EngineSelectionSet,
+    excludedFields: Set<String>,
+): EngineObjectData.Sync {
+    val demandedFields =
+        selections
+            .selections()
+            .mapTo(linkedSetOf()) { it.fieldName }
+            .minus(excludedFields)
+    val fields =
+        getSelections()
+            .filter { fieldName -> fieldName in demandedFields }
+            .associateWithTo(linkedMapOf(), ::get)
+    demandedFields.forEach { fieldName ->
+        val field = type.getFieldDefinition(fieldName) ?: return@forEach
+        if (fieldName !in fields && field.type !is GraphQLNonNull) {
+            fields[fieldName] = null
+        }
+    }
+    return ResolvedEngineObjectData(
+        type,
+        fields,
+    )
+}
+
 private fun EngineTestModule.completeMissingNodeFields(
     typeName: String,
     value: EngineObjectData.Sync,
@@ -499,7 +539,9 @@ private fun normalizeSourceOutput(
     value: Any?,
     sourceSchema: SourceSchemaAdapter,
 ): Any? =
-    if (value is RootFieldReference) {
+    if (value is EngineErrorData) {
+        value
+    } else if (value is RootFieldReference) {
         sourceSchema.lowerRootFieldReference(
             rootFieldPath = value.rootFieldPath,
             sourceTypeName = value.type.name,

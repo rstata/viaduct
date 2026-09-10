@@ -239,7 +239,7 @@ class SelectiveFieldResolversExecutionTest {
         }
 
         @Nested
-        @Disabled("TODO: MechAdapt")
+        @Disabled("N/A: Production arbitrary Viaduct harness does not expose the EngineTestModule adapter surface")
         inner class ArbitraryTests :
             SelectiveFieldArbTest(
                 """
@@ -1232,7 +1232,7 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: MechAdapt")
+        @Disabled("TODO: Batching")
         @Test
         fun `recursive selective batching field supplies its own rss`() {
             MockTenantModuleBootstrapper(
@@ -1280,7 +1280,7 @@ class SelectiveFieldResolversExecutionTest {
         }
 
         @Nested
-        @Disabled("TODO: MechAdapt")
+        @Disabled("N/A: Production arbitrary Viaduct harness does not expose the EngineTestModule adapter surface")
         inner class ArbitraryTests :
             SelectiveFieldArbTest(
                 """
@@ -1855,7 +1855,7 @@ class SelectiveFieldResolversExecutionTest {
         }
 
         @Nested
-        @Disabled("TODO: MechAdapt")
+        @Disabled("N/A: Production arbitrary Viaduct harness does not expose the EngineTestModule adapter surface")
         inner class ArbitraryTests :
             SelectiveFieldArbTest(
                 """
@@ -1910,7 +1910,7 @@ class SelectiveFieldResolversExecutionTest {
         }
 
         @Nested
-        @Disabled("TODO: MechAdapt")
+        @Disabled("N/A: Production arbitrary Viaduct harness does not expose the EngineTestModule adapter surface")
         inner class ArbitraryTests :
             SelectiveFieldArbTest(
                 """
@@ -2755,7 +2755,7 @@ class SelectiveFieldResolversExecutionTest {
         }
 
         @Nested
-        @Disabled("TODO: MechAdapt")
+        @Disabled("N/A: Production arbitrary Viaduct harness does not expose the EngineTestModule adapter surface")
         inner class ArbitraryTests :
             SelectiveFieldArbTest(
                 """
@@ -2770,7 +2770,7 @@ class SelectiveFieldResolversExecutionTest {
 
     @Nested
     inner class BatchedTests {
-        @Disabled("TODO: MechAdapt")
+        @Disabled("TODO: Batching")
         @Test
         fun `batched selective field resolver batches distinct rematerialization shapes`() {
             val batches = mutableListOf<List<Pair<Int, Set<String>>>>()
@@ -2861,7 +2861,7 @@ class SelectiveFieldResolversExecutionTest {
         }
 
         @Nested
-        @Disabled("TODO: MechAdapt")
+        @Disabled("N/A: Production arbitrary Viaduct harness does not expose the EngineTestModule adapter surface")
         inner class ArbitraryTests :
             SelectiveFieldArbTest(
                 """
@@ -3663,7 +3663,7 @@ class SelectiveFieldResolversExecutionTest {
 
     @Nested
     inner class InstrumentationTests {
-        @Disabled("TODO: MechAdapt")
+        @Disabled("N/A: Asserts production materialization source identity through GraphQL field instrumentation")
         @Test
         fun `mat backed traversal keeps the selective resolver result as its source`() {
             val instrumentation = RecordingInstrumentation()
@@ -3697,7 +3697,7 @@ class SelectiveFieldResolversExecutionTest {
             assertSame(selectiveSource, xEnvironment.getSource<EngineObjectData>())
         }
 
-        @Disabled("TODO: MechAdapt")
+        @Disabled("N/A: Asserts two production field-fetch callbacks for staged rematerialization; Resolver26 resolves once")
         @Test
         fun `selective field resolver materialization invokes field fetching instrumentation`() {
             val instrumentation = RecordingInstrumentation()
@@ -4480,7 +4480,7 @@ class SelectiveFieldResolversExecutionTest {
             assertEquals(1, fooCalls.get())
         }
 
-        @Disabled("TODO: MechAdapt")
+        @Disabled("TODO: Directive: Canonical demand conversion does not preserve custom resolver-directive spelling")
         @Test
         fun `materialization preserves resolver selection directives`() {
             MockTenantModuleBootstrapper(

@@ -19,6 +19,7 @@
     "resolverVariableSingletonCoercionEnabled" : true,
     "resolverVariablesEnabled" : true,
     "resolverVariablesOnNonQueryFieldsOnly" : true,
+    "rootFieldReferencesEnabled" : true,
     "unionsEnabled" : true
   },
   "doubles" : {
@@ -51,6 +52,7 @@
     "resolverNestedProviderPathWeight" : 0.5,
     "resolverQueryFragmentWeight" : 0.1,
     "resolverVariableWeight" : 0.9,
+    "rootFieldReferenceWeight" : 0.2,
     "sometimesPassiveFieldWeight" : 0.25
   },
   "formatVersion" : 4,

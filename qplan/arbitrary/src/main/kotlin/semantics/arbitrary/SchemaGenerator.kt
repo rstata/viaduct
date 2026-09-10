@@ -3,6 +3,8 @@ package semantics.arbitrary
 import graphql.language.AstPrinter
 import graphql.language.Document
 import graphql.language.Directive
+import graphql.language.EnumTypeDefinition
+import graphql.language.EnumValueDefinition
 import graphql.language.FieldDefinition
 import graphql.language.InputObjectTypeDefinition
 import graphql.language.InputValueDefinition
@@ -37,6 +39,39 @@ internal const val GENERATED_PARENT_VALUE_FIELD = "ancestorValue"
 internal const val GENERATED_PARENT_RESULT_FIELD = "result"
 internal const val GENERATED_RANDOM_PARENT_TYPE_PREFIX = "GeneratedRandomParent"
 internal const val GENERATED_SOMETIMES_PASSIVE_PARENT_FIELD = "value1"
+internal const val GENERATED_ROOT_REFERENCE_NAMESPACE_FIELD = "generatedRootReferences"
+internal const val GENERATED_ROOT_REFERENCE_NAMESPACE_1 = "GeneratedRootReferenceNamespace1"
+internal const val GENERATED_ROOT_REFERENCE_NAMESPACE_2 = "GeneratedRootReferenceNamespace2"
+internal const val GENERATED_ROOT_REFERENCE_NAMESPACE_3 = "GeneratedRootReferenceNamespace3"
+internal const val GENERATED_ROOT_REFERENCE_CONSUMER_FIELD = "generatedRootReferenceConsumer"
+internal const val GENERATED_ROOT_REFERENCE_CONSUMER = "GeneratedRootReferenceConsumer"
+internal const val GENERATED_ROOT_REFERENCE_INTERFACE = "GeneratedRootReferenceEntity"
+internal const val GENERATED_ROOT_REFERENCE_UNION = "GeneratedRootReferenceResult"
+internal const val GENERATED_ROOT_REFERENCE_ENUM = "GeneratedRootReferenceMode"
+internal const val GENERATED_ROOT_REFERENCE_INPUT = "GeneratedRootReferenceInput"
+internal const val GENERATED_ROOT_REFERENCE_NESTED_INPUT = "GeneratedRootReferenceNestedInput"
+internal const val GENERATED_ROOT_REFERENCE_PAIR_A = "GeneratedRootReferencePairA"
+internal const val GENERATED_ROOT_REFERENCE_PAIR_B = "GeneratedRootReferencePairB"
+internal const val GENERATED_ROOT_REFERENCE_QUAD_A = "GeneratedRootReferenceQuadA"
+internal const val GENERATED_ROOT_REFERENCE_QUAD_B = "GeneratedRootReferenceQuadB"
+internal const val GENERATED_ROOT_REFERENCE_QUAD_C = "GeneratedRootReferenceQuadC"
+internal const val GENERATED_ROOT_REFERENCE_QUAD_D = "GeneratedRootReferenceQuadD"
+internal const val GENERATED_ROOT_REFERENCE_EXTENSION_FIELD = "generatedExtension"
+
+internal data class RootFieldReferenceTargetSpec(
+    val path: List<FieldCoordinate>,
+    val arguments: Map<String, Any?>,
+)
+
+internal data class RootFieldReferenceFamily(
+    val targets: Map<String, RootFieldReferenceTargetSpec>,
+    val targetCoordinates: Set<FieldCoordinate>,
+    val namespaceCoordinates: Set<FieldCoordinate>,
+    val consumerCoordinate: FieldCoordinate,
+    val consumerValueCoordinates: Set<FieldCoordinate>,
+    val fallbackCoordinate: FieldCoordinate,
+    val extensionCoordinates: Set<FieldCoordinate>,
+)
 
 class ArbitrarySchema internal constructor(
     val sdl: String,
@@ -45,8 +80,10 @@ class ArbitrarySchema internal constructor(
     internal val hashType: ObjectDefinition,
     internal val interfaces: List<InterfaceDefinitionSpec>,
     internal val unions: List<UnionDefinitionSpec>,
+    internal val enums: List<EnumDefinitionSpec> = emptyList(),
     internal val inputObjects: List<InputObjectDefinitionSpec>,
     internal val deepFields: Map<String, String>,
+    internal val rootFieldReferenceFamily: RootFieldReferenceFamily? = null,
     val features: SchemaFeatures,
 ) {
     val domainObjectTypeNames: Set<String> =
@@ -92,6 +129,9 @@ class ArbitrarySchema internal constructor(
             interfaces.any { it.name == typeName } ||
             unions.any { it.name == typeName }
 
+    internal fun enumNamed(typeName: String): EnumDefinitionSpec? =
+        enums.singleOrNull { it.name == typeName }
+
     override fun toString(): String = sdl
 }
 
@@ -135,6 +175,11 @@ internal data class UnionDefinitionSpec(
     val members: Set<String>,
 )
 
+internal data class EnumDefinitionSpec(
+    val name: String,
+    val values: List<String>,
+)
+
 private data class RandomParentGraph(
     val objects: List<ObjectDefinition> = emptyList(),
     val queryFields: List<FieldDefinitionSpec> = emptyList(),
@@ -142,6 +187,16 @@ private data class RandomParentGraph(
     val maximumChainDepth: Int = 0,
     val listProducerCount: Int = 0,
     val abstractTargetCount: Int = 0,
+)
+
+private data class RootFieldReferenceSchemaGraph(
+    val objects: List<ObjectDefinition> = emptyList(),
+    val queryFields: List<FieldDefinitionSpec> = emptyList(),
+    val interfaces: List<InterfaceDefinitionSpec> = emptyList(),
+    val unions: List<UnionDefinitionSpec> = emptyList(),
+    val enums: List<EnumDefinitionSpec> = emptyList(),
+    val inputObjects: List<InputObjectDefinitionSpec> = emptyList(),
+    val family: RootFieldReferenceFamily? = null,
 )
 
 internal data class FieldDefinitionSpec(
@@ -270,7 +325,8 @@ private class SchemaGenerator(
             maxOf(config[SchemaObjectCount].first, minimumDepth)..config[SchemaObjectCount].last
         val objectCount = Arb.int(objectCountRange).next(random)
         val objectNames = (0 until objectCount).map { "Object$it" }
-        val inputObjects = inputObjects()
+        val rootFieldReferenceGraph = rootFieldReferenceGraph()
+        val inputObjects = inputObjects() + rootFieldReferenceGraph.inputObjects
         val nodeNames =
             if (config[InterfacesEnabled] && config[NodeResolversEnabled]) {
                 objectNames.filter { chance(config[NodeObjectWeight]) }.toSet()
@@ -279,7 +335,9 @@ private class SchemaGenerator(
             }
         val baseObjects =
             objectNames.mapIndexed { index, name ->
-                val laterObjects = objectNames.drop(index + 1)
+                val laterObjects =
+                    objectNames.drop(index + 1) +
+                        rootFieldReferenceGraph.objects.map(ObjectDefinition::name)
                 val recursiveObjects =
                     if (config[RecursiveOutputEdgesEnabled]) {
                         objectNames.take(index + 1)
@@ -411,7 +469,8 @@ private class SchemaGenerator(
             )
         val objects =
             (
-                ordinaryObjects + parentObjects + randomParentGraph.objects
+                ordinaryObjects + parentObjects + randomParentGraph.objects +
+                    rootFieldReferenceGraph.objects
             ).map { objectType ->
                 objectType.copy(fields = objectType.fields + generatedHashField(objectType.name))
             }
@@ -441,12 +500,17 @@ private class SchemaGenerator(
                     )
                 }
                 generatedInterface?.let(::add)
+                addAll(rootFieldReferenceGraph.interfaces)
             }
-        val unions = listOfNotNull(generatedUnion) + randomParentGraph.unions
+        val unions =
+            listOfNotNull(generatedUnion) + randomParentGraph.unions +
+                rootFieldReferenceGraph.unions
+        val enums = rootFieldReferenceGraph.enums
         val queryTargets =
-            objectNames +
+            objectNames + rootFieldReferenceGraph.objects.map(ObjectDefinition::name) +
                 interfaces.map(InterfaceDefinitionSpec::name) +
-                listOfNotNull(generatedUnion).map(UnionDefinitionSpec::name)
+                listOfNotNull(generatedUnion).map(UnionDefinitionSpec::name) +
+                rootFieldReferenceGraph.unions.map(UnionDefinitionSpec::name)
         val queryFieldCount = Arb.int(config[QueryFieldCount]).next(random)
         val generatedQueryFields =
             (0 until queryFieldCount).map { index ->
@@ -469,6 +533,7 @@ private class SchemaGenerator(
                 interfaces = emptySet(),
                 fields =
                     randomParentGraph.queryFields +
+                        rootFieldReferenceGraph.queryFields +
                         parentRootField() +
                         if (minimumDepth > 0) {
                         listOf(deepField("Query", objectNames.first(), "query0")) +
@@ -484,6 +549,7 @@ private class SchemaGenerator(
                 add(objectType(hashType))
                 addAll(objects.map(::objectType))
                 addAll(unions.map(::unionType))
+                addAll(enums.map(::enumType))
                 add(objectType(query))
             }
         val sdl =
@@ -521,9 +587,446 @@ private class SchemaGenerator(
             hashType = hashType,
             interfaces = interfaces,
             unions = unions,
+            enums = enums,
             inputObjects = inputObjects,
             deepFields = deepFields,
+            rootFieldReferenceFamily = rootFieldReferenceGraph.family,
             features = features,
+        )
+    }
+
+    private fun rootFieldReferenceGraph(): RootFieldReferenceSchemaGraph {
+        if (!config[RootFieldReferencesEnabled]) return RootFieldReferenceSchemaGraph()
+
+        fun output(
+            name: String,
+            nullable: Boolean = false,
+        ): OutputTypeSpec =
+            OutputTypeSpec(
+                namedType = name,
+                nullable = nullable,
+                list = false,
+                elementNullable = false,
+            )
+
+        fun field(
+            owner: String,
+            name: String,
+            type: OutputTypeSpec,
+            arguments: List<ArgumentDefinitionSpec> = emptyList(),
+        ): FieldDefinitionSpec =
+            FieldDefinitionSpec(
+                ownerName = owner,
+                name = name,
+                type = type,
+                arguments = arguments,
+            )
+
+        fun scalarArgument(name: String, scalar: ScalarKind): ArgumentDefinitionSpec =
+            ArgumentDefinitionSpec(name, ScalarInputTypeSpec(scalar, nullable = false))
+
+        val nestedInput =
+            InputObjectDefinitionSpec(
+                name = GENERATED_ROOT_REFERENCE_NESTED_INPUT,
+                fields =
+                    listOf(
+                        InputFieldDefinitionSpec(
+                            "text",
+                            ScalarInputTypeSpec(ScalarKind.STRING, nullable = false),
+                        ),
+                        InputFieldDefinitionSpec(
+                            "flag",
+                            ScalarInputTypeSpec(ScalarKind.BOOLEAN, nullable = false),
+                        ),
+                    ),
+            )
+        val input =
+            InputObjectDefinitionSpec(
+                name = GENERATED_ROOT_REFERENCE_INPUT,
+                fields =
+                    listOf(
+                        InputFieldDefinitionSpec(
+                            "number",
+                            ScalarInputTypeSpec(ScalarKind.INT, nullable = false),
+                        ),
+                        InputFieldDefinitionSpec(
+                            "nested",
+                            InputObjectInputTypeSpec(
+                                GENERATED_ROOT_REFERENCE_NESTED_INPUT,
+                                nullable = false,
+                            ),
+                        ),
+                    ),
+            )
+
+        val extensionCoordinates = linkedSetOf<FieldCoordinate>()
+        fun resultObject(
+            name: String,
+            interfaces: Set<String> = emptySet(),
+            recursiveField: FieldDefinitionSpec,
+        ): ObjectDefinition {
+            val extension =
+                field(
+                    name,
+                    GENERATED_ROOT_REFERENCE_EXTENSION_FIELD,
+                    output("String"),
+                )
+            extensionCoordinates += extension.coordinate
+            return ObjectDefinition(
+                name = name,
+                implementsNode = false,
+                interfaces = interfaces,
+                fields =
+                    listOf(
+                        field(name, "label", output("String")),
+                        recursiveField,
+                        extension,
+                    ),
+            )
+        }
+
+        val resultObjects =
+            listOf(
+                resultObject(
+                    GENERATED_ROOT_REFERENCE_PAIR_A,
+                    interfaces = setOf(GENERATED_ROOT_REFERENCE_INTERFACE),
+                    recursiveField =
+                        field(
+                            GENERATED_ROOT_REFERENCE_PAIR_A,
+                            "pair",
+                            output(GENERATED_ROOT_REFERENCE_PAIR_B, nullable = true),
+                        ),
+                ),
+                resultObject(
+                    GENERATED_ROOT_REFERENCE_PAIR_B,
+                    recursiveField =
+                        field(
+                            GENERATED_ROOT_REFERENCE_PAIR_B,
+                            "pair",
+                            output(GENERATED_ROOT_REFERENCE_PAIR_A, nullable = true),
+                        ),
+                ),
+                resultObject(
+                    GENERATED_ROOT_REFERENCE_QUAD_A,
+                    interfaces = setOf(GENERATED_ROOT_REFERENCE_INTERFACE),
+                    recursiveField =
+                        field(
+                            GENERATED_ROOT_REFERENCE_QUAD_A,
+                            "next",
+                            output(GENERATED_ROOT_REFERENCE_QUAD_B, nullable = true),
+                        ),
+                ),
+                resultObject(
+                    GENERATED_ROOT_REFERENCE_QUAD_B,
+                    recursiveField =
+                        field(
+                            GENERATED_ROOT_REFERENCE_QUAD_B,
+                            "next",
+                            output(GENERATED_ROOT_REFERENCE_QUAD_C, nullable = true),
+                        ),
+                ),
+                resultObject(
+                    GENERATED_ROOT_REFERENCE_QUAD_C,
+                    recursiveField =
+                        field(
+                            GENERATED_ROOT_REFERENCE_QUAD_C,
+                            "next",
+                            output(GENERATED_ROOT_REFERENCE_QUAD_D, nullable = true),
+                        ),
+                ),
+                resultObject(
+                    GENERATED_ROOT_REFERENCE_QUAD_D,
+                    recursiveField =
+                        field(
+                            GENERATED_ROOT_REFERENCE_QUAD_D,
+                            "next",
+                            output(GENERATED_ROOT_REFERENCE_QUAD_A, nullable = true),
+                        ),
+                ),
+            )
+
+        val namespaceQuery =
+            field(
+                "Query",
+                GENERATED_ROOT_REFERENCE_NAMESPACE_FIELD,
+                output(GENERATED_ROOT_REFERENCE_NAMESPACE_1),
+            )
+        val level2 =
+            field(
+                GENERATED_ROOT_REFERENCE_NAMESPACE_1,
+                "level2",
+                output(GENERATED_ROOT_REFERENCE_NAMESPACE_2),
+            )
+        val level3 =
+            field(
+                GENERATED_ROOT_REFERENCE_NAMESPACE_2,
+                "level3",
+                output(GENERATED_ROOT_REFERENCE_NAMESPACE_3),
+            )
+        val zero =
+            field(
+                GENERATED_ROOT_REFERENCE_NAMESPACE_1,
+                "zero",
+                output(GENERATED_ROOT_REFERENCE_INTERFACE),
+            )
+        val objectValue =
+            field(
+                GENERATED_ROOT_REFERENCE_NAMESPACE_1,
+                "objectValue",
+                output(GENERATED_ROOT_REFERENCE_PAIR_A),
+            )
+        val one =
+            field(
+                GENERATED_ROOT_REFERENCE_NAMESPACE_2,
+                "one",
+                output(GENERATED_ROOT_REFERENCE_INTERFACE),
+                listOf(scalarArgument("id", ScalarKind.INT)),
+            )
+        val tail =
+            field(
+                GENERATED_ROOT_REFERENCE_NAMESPACE_3,
+                "tail",
+                output(GENERATED_ROOT_REFERENCE_INTERFACE),
+            )
+        val four =
+            field(
+                GENERATED_ROOT_REFERENCE_NAMESPACE_3,
+                "four",
+                output(GENERATED_ROOT_REFERENCE_UNION),
+                listOf(
+                    scalarArgument("number", ScalarKind.INT),
+                    scalarArgument("text", ScalarKind.STRING),
+                    ArgumentDefinitionSpec(
+                        "input",
+                        InputObjectInputTypeSpec(GENERATED_ROOT_REFERENCE_INPUT, nullable = false),
+                    ),
+                    ArgumentDefinitionSpec(
+                        "nested",
+                        InputObjectInputTypeSpec(
+                            GENERATED_ROOT_REFERENCE_NESTED_INPUT,
+                            nullable = false,
+                        ),
+                    ),
+                ),
+            )
+        val enumValue =
+            field(
+                GENERATED_ROOT_REFERENCE_NAMESPACE_3,
+                "enumValue",
+                output(GENERATED_ROOT_REFERENCE_ENUM),
+            )
+        val scalarValue =
+            field(
+                GENERATED_ROOT_REFERENCE_NAMESPACE_3,
+                "scalarValue",
+                output("Int"),
+                listOf(scalarArgument("value", ScalarKind.INT)),
+            )
+
+        val consumer =
+            field(
+                "Query",
+                GENERATED_ROOT_REFERENCE_CONSUMER_FIELD,
+                output(GENERATED_ROOT_REFERENCE_CONSUMER),
+            )
+        val consumerFields =
+            listOf(
+                field(
+                    GENERATED_ROOT_REFERENCE_CONSUMER,
+                    "objectValue",
+                    output(GENERATED_ROOT_REFERENCE_INTERFACE),
+                ),
+                field(
+                    GENERATED_ROOT_REFERENCE_CONSUMER,
+                    "concreteValue",
+                    output(GENERATED_ROOT_REFERENCE_PAIR_A),
+                ),
+                field(
+                    GENERATED_ROOT_REFERENCE_CONSUMER,
+                    "unionValue",
+                    output(GENERATED_ROOT_REFERENCE_UNION),
+                ),
+                field(
+                    GENERATED_ROOT_REFERENCE_CONSUMER,
+                    "enumValue",
+                    output(GENERATED_ROOT_REFERENCE_ENUM),
+                ),
+                field(
+                    GENERATED_ROOT_REFERENCE_CONSUMER,
+                    "scalarValue",
+                    output("Int"),
+                ),
+                field(
+                    GENERATED_ROOT_REFERENCE_CONSUMER,
+                    "listValue",
+                    OutputTypeSpec(
+                        namedType = GENERATED_ROOT_REFERENCE_INTERFACE,
+                        nullable = false,
+                        list = true,
+                        elementNullable = false,
+                    ),
+                ),
+                field(
+                    GENERATED_ROOT_REFERENCE_CONSUMER,
+                    "activeFallback",
+                    output("String"),
+                ),
+            )
+
+        val namespaceObjects =
+            listOf(
+                ObjectDefinition(
+                    GENERATED_ROOT_REFERENCE_NAMESPACE_1,
+                    implementsNode = false,
+                    interfaces = emptySet(),
+                    fields = listOf(level2, zero, objectValue),
+                ),
+                ObjectDefinition(
+                    GENERATED_ROOT_REFERENCE_NAMESPACE_2,
+                    implementsNode = false,
+                    interfaces = emptySet(),
+                    fields = listOf(level3, one),
+                ),
+                ObjectDefinition(
+                    GENERATED_ROOT_REFERENCE_NAMESPACE_3,
+                    implementsNode = false,
+                    interfaces = emptySet(),
+                    fields = listOf(tail, four, enumValue, scalarValue),
+                ),
+            )
+        val consumerObject =
+            ObjectDefinition(
+                GENERATED_ROOT_REFERENCE_CONSUMER,
+                implementsNode = false,
+                interfaces = emptySet(),
+                fields = consumerFields,
+            )
+
+        val nestedArguments =
+            mapOf("text" to "nested", "flag" to true)
+        val targets =
+            linkedMapOf(
+                "zero" to
+                    RootFieldReferenceTargetSpec(
+                        path = listOf(namespaceQuery.coordinate, zero.coordinate),
+                        arguments = emptyMap(),
+                    ),
+                "object" to
+                    RootFieldReferenceTargetSpec(
+                        path = listOf(namespaceQuery.coordinate, objectValue.coordinate),
+                        arguments = emptyMap(),
+                    ),
+                "one" to
+                    RootFieldReferenceTargetSpec(
+                        path = listOf(namespaceQuery.coordinate, level2.coordinate, one.coordinate),
+                        arguments = mapOf("id" to 7),
+                    ),
+                "tail" to
+                    RootFieldReferenceTargetSpec(
+                        path =
+                            listOf(
+                                namespaceQuery.coordinate,
+                                level2.coordinate,
+                                level3.coordinate,
+                                tail.coordinate,
+                            ),
+                        arguments = emptyMap(),
+                    ),
+                "four" to
+                    RootFieldReferenceTargetSpec(
+                        path =
+                            listOf(
+                                namespaceQuery.coordinate,
+                                level2.coordinate,
+                                level3.coordinate,
+                                four.coordinate,
+                            ),
+                        arguments =
+                            mapOf(
+                                "number" to 11,
+                                "text" to "four",
+                                "input" to mapOf("number" to 13, "nested" to nestedArguments),
+                                "nested" to nestedArguments,
+                            ),
+                    ),
+                "enum" to
+                    RootFieldReferenceTargetSpec(
+                        path =
+                            listOf(
+                                namespaceQuery.coordinate,
+                                level2.coordinate,
+                                level3.coordinate,
+                                enumValue.coordinate,
+                            ),
+                        arguments = emptyMap(),
+                    ),
+                "scalar" to
+                    RootFieldReferenceTargetSpec(
+                        path =
+                            listOf(
+                                namespaceQuery.coordinate,
+                                level2.coordinate,
+                                level3.coordinate,
+                                scalarValue.coordinate,
+                            ),
+                        arguments = mapOf("value" to 17),
+                    ),
+            )
+        return RootFieldReferenceSchemaGraph(
+            objects = namespaceObjects + resultObjects + consumerObject,
+            queryFields = listOf(namespaceQuery, consumer),
+            interfaces =
+                listOf(
+                    InterfaceDefinitionSpec(
+                        name = GENERATED_ROOT_REFERENCE_INTERFACE,
+                        members =
+                            setOf(
+                                GENERATED_ROOT_REFERENCE_PAIR_A,
+                                GENERATED_ROOT_REFERENCE_QUAD_A,
+                            ),
+                        fields =
+                            listOf(
+                                field(
+                                    GENERATED_ROOT_REFERENCE_INTERFACE,
+                                    "label",
+                                    output("String"),
+                                ),
+                            ),
+                    ),
+                ),
+            unions =
+                listOf(
+                    UnionDefinitionSpec(
+                        GENERATED_ROOT_REFERENCE_UNION,
+                        setOf(
+                            GENERATED_ROOT_REFERENCE_PAIR_B,
+                            GENERATED_ROOT_REFERENCE_QUAD_D,
+                        ),
+                    ),
+                ),
+            enums =
+                listOf(
+                    EnumDefinitionSpec(
+                        GENERATED_ROOT_REFERENCE_ENUM,
+                        listOf("FIRST", "SECOND", "THIRD"),
+                    ),
+                ),
+            inputObjects = listOf(input, nestedInput),
+            family =
+                RootFieldReferenceFamily(
+                    targets = targets,
+                    targetCoordinates = targets.values.mapTo(linkedSetOf()) { it.path.last() },
+                    namespaceCoordinates =
+                        setOf(namespaceQuery.coordinate, level2.coordinate, level3.coordinate),
+                    consumerCoordinate = consumer.coordinate,
+                    consumerValueCoordinates =
+                        consumerFields
+                            .filterNot { it.name == "activeFallback" }
+                            .mapTo(linkedSetOf(), FieldDefinitionSpec::coordinate),
+                    fallbackCoordinate =
+                        consumerFields.single { it.name == "activeFallback" }.coordinate,
+                    extensionCoordinates = extensionCoordinates,
+                ),
         )
     }
 
@@ -1070,6 +1573,16 @@ private class SchemaGenerator(
             .name(definition.name)
             .memberTypes(definition.members.map(::TypeName))
             .build()
+
+    private fun enumType(definition: EnumDefinitionSpec): EnumTypeDefinition =
+        EnumTypeDefinition
+            .newEnumTypeDefinition()
+            .name(definition.name)
+            .enumValueDefinitions(
+                definition.values.map { value ->
+                    EnumValueDefinition.newEnumValueDefinition().name(value).build()
+                },
+            ).build()
 
     private fun inputObjectType(
         definition: InputObjectDefinitionSpec,

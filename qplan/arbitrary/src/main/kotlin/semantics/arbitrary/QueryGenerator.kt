@@ -126,7 +126,16 @@ private class QueryGenerator(
 
         val rootOverride = config[RootQueryFieldCount]
         val count =
-            if (typeName == "Query" && rootOverride != 0..0) {
+            if (
+                config[RootFieldReferencesEnabled] &&
+                (
+                    typeName == GENERATED_ROOT_REFERENCE_CONSUMER ||
+                        typeName.startsWith("GeneratedRootReferencePair") ||
+                        typeName.startsWith("GeneratedRootReferenceQuad")
+                )
+            ) {
+                candidates.size
+            } else if (typeName == "Query" && rootOverride != 0..0) {
                 Arb.int(rootOverride).next(random).coerceIn(1, candidates.size)
             } else {
                 val configured = config[NestedQueryFieldCount]
@@ -138,9 +147,17 @@ private class QueryGenerator(
             schema.deepFields[typeName]
                 ?.takeIf { depth < config[MinimumSelectionDepth] }
                 ?.let { fieldName -> candidates.single { it.name == fieldName } }
+        val requiredRootReferenceConsumer =
+            if (config[RootFieldReferencesEnabled] && typeName == "Query") {
+                candidates.single { field ->
+                    field.name == GENERATED_ROOT_REFERENCE_CONSUMER_FIELD
+                }
+            } else {
+                null
+            }
         val remainingCandidates =
             candidates
-                .filterNot { it == requiredField }
+                .filterNot { it == requiredField || it == requiredRootReferenceConsumer }
                 .shuffled(random)
                 .let { fields ->
                     if (
@@ -156,9 +173,14 @@ private class QueryGenerator(
                     }
                 }
         val selectedFields =
-            listOfNotNull(requiredField) +
+            listOfNotNull(requiredField, requiredRootReferenceConsumer) +
                 remainingCandidates
-                    .take(count - if (requiredField == null) 0 else 1)
+                    .take(
+                        (
+                            count -
+                                listOfNotNull(requiredField, requiredRootReferenceConsumer).size
+                        ).coerceAtLeast(0),
+                    )
         val directSelections =
             selectedFields
                 .flatMap { field ->
@@ -211,7 +233,11 @@ private class QueryGenerator(
             if (
                 config[QueryFragmentsEnabled] &&
                 possibleObjects.isNotEmpty() &&
-                chance(0.75)
+                (
+                    typeName == GENERATED_ROOT_REFERENCE_INTERFACE ||
+                        typeName == GENERATED_ROOT_REFERENCE_UNION ||
+                        chance(0.75)
+                )
             ) {
                 val maximumBranches = minOf(3, possibleObjects.size)
                 val branchCount =

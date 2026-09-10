@@ -15,11 +15,161 @@ import model.requireField
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import model.registry.VariableDefinition
 
 class GeneratorTest {
+    @Test
+    fun `root field reference family has nested polymorphic targets and exact output cycles`() {
+        val schema =
+            Arb.schema(Config.default + (RootFieldReferencesEnabled to true))
+                .next(RandomSource.seeded(2026091001L))
+        val family = requireNotNull(schema.rootFieldReferenceFamily)
+
+        assertEquals(
+            setOf("zero", "object", "one", "tail", "four", "enum", "scalar"),
+            family.targets.keys,
+        )
+        assertEquals(setOf(0, 1, 4), family.targets.values.map { it.arguments.size }.toSet())
+        assertEquals(setOf(2, 3, 4), family.targets.values.map { it.path.size }.toSet())
+        assertEquals(
+            GENERATED_ROOT_REFERENCE_INTERFACE,
+            schema.field(family.targets.getValue("zero").path.last()).type.namedType,
+        )
+        assertEquals(
+            GENERATED_ROOT_REFERENCE_INTERFACE,
+            schema.field(family.targets.getValue("tail").path.last()).type.namedType,
+        )
+        assertEquals(
+            GENERATED_ROOT_REFERENCE_PAIR_A,
+            schema.field(family.targets.getValue("object").path.last()).type.namedType,
+        )
+        assertEquals(
+            GENERATED_ROOT_REFERENCE_UNION,
+            schema.field(family.targets.getValue("four").path.last()).type.namedType,
+        )
+        assertEquals(
+            setOf(GENERATED_ROOT_REFERENCE_PAIR_A, GENERATED_ROOT_REFERENCE_QUAD_A),
+            schema.possibleObjects(GENERATED_ROOT_REFERENCE_INTERFACE).mapTo(linkedSetOf()) { it.name },
+        )
+        assertEquals(
+            setOf(GENERATED_ROOT_REFERENCE_PAIR_B, GENERATED_ROOT_REFERENCE_QUAD_D),
+            schema.possibleObjects(GENERATED_ROOT_REFERENCE_UNION).mapTo(linkedSetOf()) { it.name },
+        )
+        assertEquals(
+            mapOf(
+                GENERATED_ROOT_REFERENCE_PAIR_A to GENERATED_ROOT_REFERENCE_PAIR_B,
+                GENERATED_ROOT_REFERENCE_PAIR_B to GENERATED_ROOT_REFERENCE_PAIR_A,
+            ),
+            mapOf(
+                GENERATED_ROOT_REFERENCE_PAIR_A to schema.field(GENERATED_ROOT_REFERENCE_PAIR_A, "pair").type.namedType,
+                GENERATED_ROOT_REFERENCE_PAIR_B to schema.field(GENERATED_ROOT_REFERENCE_PAIR_B, "pair").type.namedType,
+            ),
+        )
+        assertEquals(
+            mapOf(
+                GENERATED_ROOT_REFERENCE_QUAD_A to GENERATED_ROOT_REFERENCE_QUAD_B,
+                GENERATED_ROOT_REFERENCE_QUAD_B to GENERATED_ROOT_REFERENCE_QUAD_C,
+                GENERATED_ROOT_REFERENCE_QUAD_C to GENERATED_ROOT_REFERENCE_QUAD_D,
+                GENERATED_ROOT_REFERENCE_QUAD_D to GENERATED_ROOT_REFERENCE_QUAD_A,
+            ),
+            listOf(
+                GENERATED_ROOT_REFERENCE_QUAD_A,
+                GENERATED_ROOT_REFERENCE_QUAD_B,
+                GENERATED_ROOT_REFERENCE_QUAD_C,
+                GENERATED_ROOT_REFERENCE_QUAD_D,
+            ).associateWith { typeName -> schema.field(typeName, "next").type.namedType },
+        )
+    }
+
+    @Test
+    fun `root field reference family supplies fixed targets consumers and resolver inputs`() {
+        val config =
+            Config.default +
+                (RootFieldReferencesEnabled to true) +
+                (RootFieldReferenceWeight to 1.0) +
+                (NodeResolversEnabled to false) +
+                (ResolverFragmentsEnabled to true) +
+                (ResolverQueryFragmentsEnabled to true) +
+                (ResolverVariablesEnabled to true) +
+                (ResolverFromArgumentVariablesEnabled to true) +
+                (ResolverFromQueryFieldVariablesEnabled to true)
+        val random = RandomSource.seeded(2026091001L)
+        val schema = Arb.schema(config).next(random)
+        val registry = schema.registry(config).next(random)
+        val query = schema.query(config).next(random)
+        val family = requireNotNull(schema.rootFieldReferenceFamily)
+
+        assertEquals(6, family.extensionCoordinates.size)
+        assertTrue(GENERATED_ROOT_REFERENCE_CONSUMER_FIELD in query.source)
+        assertTrue(
+            family.consumerValueCoordinates.all { coordinate ->
+                coordinate in registry.fieldResolverCoordinates
+            },
+        )
+        assertTrue(family.fallbackCoordinate in registry.fieldResolverCoordinates)
+        assertTrue(
+            family.extensionCoordinates.all { coordinate ->
+                coordinate in registry.fieldResolverCoordinates
+            },
+        )
+        val consumer = assertIs<ObjectPlan>(registry.fieldValues.getValue(family.consumerCoordinate))
+        assertTrue(family.fallbackCoordinate !in consumer.fields)
+        assertTrue(family.consumerValueCoordinates.all(consumer.fields::containsKey))
+        assertIs<RootFieldReferencePlan>(
+            registry.fieldValues.getValue(family.targets.getValue("zero").path.last()),
+        )
+        assertIs<RootFieldReferencePlan>(
+            registry.fieldValues.getValue(family.targets.getValue("one").path.last()),
+        )
+        assertTrue(registry.features.generatedRootFieldReferenceCount > 8)
+        assertEquals(family.targetCoordinates.size, registry.features.rootFieldReferenceTargetCount)
+        assertEquals(1, registry.features.rootFieldReferenceFallbackCount)
+        assertTrue(
+            registry.fromArgumentVariableOwnerFields.any { owner ->
+                owner in family.targetCoordinates
+            },
+        )
+        assertTrue(
+            registry.fromQueryFieldVariableOwnerFields.any { owner ->
+                owner in family.targetCoordinates
+            },
+        )
+        assertTrue(
+            family.targetCoordinates.all { coordinate ->
+                registry.objectFragmentSources.getValue(coordinate).isEmpty()
+            },
+        )
+        assertTrue(
+            registry.queryFragmentSources
+                .getValue(family.targets.getValue("one").path.last())
+                .contains("\$rootReferenceArgument"),
+        )
+        assertTrue(
+            registry.queryFragmentSources
+                .getValue(family.targets.getValue("four").path.last())
+                .contains("\$rootReferenceQueryPath"),
+        )
+        registry.world(schema)
+
+        val decoded =
+            ResolverBenchmarkCorpus.decode(
+                schemaSDL = schema.sdl,
+                registryJson = registry.encodeResolverBenchmarkCorpus(schema),
+            )
+        decoded.world()
+    }
+
+    private fun ArbitrarySchema.field(coordinate: FieldCoordinate): FieldDefinitionSpec =
+        field(coordinate.typeName, coordinate.fieldName)
+
+    private fun ArbitrarySchema.field(
+        typeName: String,
+        fieldName: String,
+    ): FieldDefinitionSpec = fieldsOn(typeName).single { field -> field.name == fieldName }
+
     @Test
     fun `fromProvider variable generation is independently configurable and assembled`() {
         val baseConfig =

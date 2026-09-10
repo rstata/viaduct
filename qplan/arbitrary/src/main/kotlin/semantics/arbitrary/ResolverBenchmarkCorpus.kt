@@ -311,6 +311,8 @@ private data class ValuePlanDocument(
     val typeName: String?,
     val fields: List<OutputFieldDocument>,
     val salt: Int?,
+    val targetPath: List<CoordinateDocument> = emptyList(),
+    val targetArguments: Map<String, Any?> = emptyMap(),
 )
 
 private data class OutputFieldDocument(
@@ -754,6 +756,28 @@ private fun ValuePlan.toDocument(): ValuePlanDocument =
                 fields = emptyList(),
                 salt = null,
             )
+        is EnumPlan ->
+            ValuePlanDocument(
+                kind = "enum",
+                scalar = null,
+                literal = value,
+                elements = emptyList(),
+                typeName = null,
+                fields = emptyList(),
+                salt = null,
+            )
+        is RootFieldReferencePlan ->
+            ValuePlanDocument(
+                kind = "root-field-reference",
+                scalar = null,
+                literal = null,
+                elements = emptyList(),
+                typeName = null,
+                fields = emptyList(),
+                salt = null,
+                targetPath = target.path.map(FieldCoordinate::toDocument),
+                targetArguments = target.arguments,
+            )
         is ListPlan ->
             ValuePlanDocument(
                 kind = "list",
@@ -812,6 +836,14 @@ private fun ValuePlanDocument.toValuePlan(): ValuePlan =
             ScalarPlan(
                 scalar = requireNotNull(scalar),
                 value = parseScalarLiteral(scalar, requireNotNull(literal)),
+            )
+        "enum" -> EnumPlan(requireNotNull(literal))
+        "root-field-reference" ->
+            RootFieldReferencePlan(
+                RootFieldReferenceTargetSpec(
+                    path = targetPath.map(CoordinateDocument::toCoordinate),
+                    arguments = targetArguments,
+                ),
             )
         "list" -> ListPlan(elements.map(ValuePlanDocument::toValuePlan))
         "object" ->

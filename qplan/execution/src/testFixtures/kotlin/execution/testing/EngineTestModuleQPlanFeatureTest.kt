@@ -47,6 +47,7 @@ import viaduct.engine.api.mocks.EngineTestModule
 import viaduct.engine.api.mocks.MockTenantModuleBootstrapper
 import viaduct.engine.api.mocks.createEngineObjectData
 import viaduct.engine.api.spi.FieldResolverExecutor
+import viaduct.engine.api.spi.FieldSelectivityProvider
 import viaduct.engine.api.spi.NodeResolverExecutor
 import viaduct.engine.runtime.mocks.ContextMocks
 import viaduct.graphql.schema.ViaductSchema as QPlanSchema
@@ -95,12 +96,10 @@ fun EngineTestModule.runQPlanFeatureTest(
     if (schema != null) {
         TODO("Qplan feature tests do not support a distinct executable schema yet")
     }
-    // EngineConfiguration controls production runtime machinery that this pre-dispatcher adapter
-    // does not construct. Accept it so source-faithful tests can exercise both production flag
-    // configurations when their qplan behavior is intentionally identical.
-    engineConfig
     val schemaSDL = qplanSchemaSDL(fullSchema)
     val context = ContextMocks(myFullSchema = fullSchema).engineExecutionContext
+    val fieldSelectivityProvider =
+        engineConfig?.fieldSelectivityProvider ?: FieldSelectivityProvider.Never
     val registryInputs = IdentityHashMap<QPlanSchema, QPlanRegistryInputs>()
     validateSupportedExecutors()
 
@@ -113,6 +112,7 @@ fun EngineTestModule.runQPlanFeatureTest(
                         qplanRegistryInputs(
                             schema = schema,
                             context = context,
+                            fieldSelectivityProvider = fieldSelectivityProvider,
                             includeDefaultQueryNodeResolvers = !withoutDefaultQueryNodeResolvers,
                         )
                     }
@@ -127,6 +127,7 @@ fun EngineTestModule.runQPlanFeatureTest(
                         qplanRegistryInputs(
                             schema = schema,
                             context = context,
+                            fieldSelectivityProvider = fieldSelectivityProvider,
                             includeDefaultQueryNodeResolvers = !withoutDefaultQueryNodeResolvers,
                         )
                     }
@@ -181,6 +182,7 @@ private data class QPlanRegistryInputs(
 private fun EngineTestModule.qplanRegistryInputs(
     schema: QPlanSchema,
     context: EngineExecutionContext,
+    fieldSelectivityProvider: FieldSelectivityProvider,
     includeDefaultQueryNodeResolvers: Boolean,
 ): QPlanRegistryInputs {
     val sourceSchema = SourceSchemaAdapter(schema)
@@ -240,8 +242,10 @@ private fun EngineTestModule.qplanRegistryInputs(
                         onFailure = { EngineErrorData.of(it) },
                     )
                 }
+            val isSelective =
+                executor.isSelective || fieldSelectivityProvider.isSelective(coordinate)
             val resolver =
-                (if (executor.isSelective) ::selectiveFieldResolverOf else ::selectionAwareFieldResolverOf)(
+                (if (isSelective) ::selectiveFieldResolverOf else ::selectionAwareFieldResolverOf)(
                     objectFragment,
                     queryFragment,
                 ) { input, queryValue, arguments, selections ->

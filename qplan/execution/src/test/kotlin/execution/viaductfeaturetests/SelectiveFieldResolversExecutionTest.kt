@@ -175,7 +175,6 @@ class SelectiveFieldResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: MechAdapt")
         @Test
         fun `field selectivity provider enables selective execution`() {
             MockTenantModuleBootstrapper(
@@ -4796,10 +4795,7 @@ class SelectiveFieldResolversExecutionTest {
         engineConfig: EngineConfiguration = EngineConfiguration.featureTestDefault,
         block: QPlanFeatureTest.() -> Unit,
     ) {
-        if (engineConfig != EngineConfiguration.featureTestDefault) {
-            TODO("Qplan feature tests do not support custom engine configuration yet")
-        }
-        runWithQPlan(block = block)
+        runWithQPlan(engineConfig = engineConfig, block = block)
     }
 
     /** Helper class for managing deep Arb tests */

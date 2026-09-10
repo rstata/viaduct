@@ -2590,7 +2590,6 @@ class RequiredSelectionsTest {
         }
     }
 
-    @Disabled("TODO: PrivateFld MechAdapt")
     @Test
     fun `resolve private field in RSS`() {
         // Need to set up both full schema and scoped schema

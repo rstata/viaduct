@@ -60,30 +60,32 @@ class RequiredSelectionSetVariableRecoveryTest {
             )
         assertEquals("vary", configuration.variable.variableName)
         assertEquals(field, configuration.variable.field)
-        assertEquals("y", configuration.argumentName)
+        assertEquals(listOf("y"), configuration.argumentPath)
     }
 
     @Test
-    fun `rejects nested input argument path`() {
+    fun `recovers nested input argument path`() {
         val fragment =
             schema.fragmentFrom(
                 "fragment _ on Query { bar(x: \$vary) }",
                 variableField = field,
             )
 
-        val error =
-            assertFailsWith<IllegalArgumentException> {
-                recovery.recoverConfigurations(
-                    field,
-                    fragment,
-                    requiredSelectionSet(
-                        "bar(x: \$vary)",
-                        FromArgument("vary", listOf("input", "value")),
-                    ),
-                )
-            }
+        val recovered =
+            recovery.recoverConfigurations(
+                field,
+                fragment,
+                requiredSelectionSet(
+                    "bar(x: \$vary)",
+                    FromArgument("vary", listOf("input", "value")),
+                ),
+            )
 
-        assertTrue(error.message.orEmpty().contains("nested FromArgument path input.value"))
+        val configuration =
+            assertIs<RequiredSelectionSetVariableRecovery.RecoveredFromArgument>(
+                recovered.single(),
+            )
+        assertEquals(listOf("input", "value"), configuration.argumentPath)
     }
 
     @Test

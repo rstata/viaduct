@@ -336,7 +336,6 @@ class FromFieldVariablesFeatureTest {
             runQuery("{ x }").assertJson("{data: {x: -15}}")
         }
 
-    @Disabled("TODO: Abstract")
     @Test
     fun `from object field -- selection traverses through union`() {
         val err = assertThrows<Throwable> {
@@ -900,7 +899,6 @@ class FromFieldVariablesFeatureTest {
             runQuery("{foo(y:2)}").assertJson("{data: {foo: 30}}")
         }
 
-    @Disabled("TODO: NestedArg")
     @Test
     fun `from arg -- path traverses nested input`() =
         EngineTestModule(
@@ -921,7 +919,6 @@ class FromFieldVariablesFeatureTest {
             runQuery("{foo(inp:{x:2})}").assertJson("{data: {foo: 30}}")
         }
 
-    @Disabled("TODO: NestedArg")
     @Test
     fun `from arg -- path traverses through null object`() =
         EngineTestModule(

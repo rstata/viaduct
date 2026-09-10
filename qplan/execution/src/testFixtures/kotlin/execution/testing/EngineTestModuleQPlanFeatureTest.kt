@@ -34,6 +34,7 @@ import model.testing.fieldResolverOf
 import model.testing.nodeResolverOf
 import model.testing.selectionAwareFieldResolverOf
 import model.testing.selectiveFieldResolverOf
+import model.testing.selectiveNodeResolverOf
 import viaduct.engine.EngineConfiguration
 import viaduct.engine.api.EngineExecutionContext
 import viaduct.engine.api.EngineObjectData
@@ -169,9 +170,6 @@ private fun EngineTestModule.validateSupportedExecutors() {
         if (executor.isBatching) {
             TODO("Qplan feature tests do not support batching node executor $typeName")
         }
-        if (executor.isSelective) {
-            TODO("Qplan feature tests do not support selective node executor $typeName")
-        }
     }
 }
 
@@ -251,7 +249,7 @@ private fun EngineTestModule.qplanRegistryInputs(
                         (field.type.baseTypeDef as? QPlanSchema.CompositeTypeDef)?.let {
                             type ->
                             type.takeIf { fullSchema.schema.getType(it.name) != null }
-                                ?.let { selections.toEngineSelectionSet(it, fullSchema) }
+                                ?.let { selections.toEngineSelectionSet(it, fullSchema, sourceSchema) }
                         }
                     invokeExecutor(input, queryValue, arguments, selectionSet)
                 }
@@ -402,14 +400,8 @@ private fun EngineTestModule.qplanNodeResolvers(
     val supplied =
         nodeResolverExecutors.associate { (typeName, executor) ->
             val type = schema.requireType(typeName) as QPlanSchema.Object
-            type to
-                nodeResolverOf { id ->
-                    val selections =
-                        context.engineSelectionSetFactory.engineSelectionSet(
-                            typeName,
-                            "id",
-                            emptyMap(),
-                        )
+            val invokeExecutor =
+                fun(id: String, selections: EngineSelectionSet): EngineOutputData? {
                     val selector = NodeResolverExecutor.Selector(id, selections)
                     val output =
                         runBlocking {
@@ -419,7 +411,7 @@ private fun EngineTestModule.qplanNodeResolvers(
                                 "Node executor $typeName omitted its selector",
                             ),
                         )
-                    output.fold(
+                    return output.fold(
                         onSuccess = {
                             when (
                                 val normalized =
@@ -430,12 +422,37 @@ private fun EngineTestModule.qplanNodeResolvers(
                                     )
                             ) {
                                 is RootFieldReferenceData -> normalized
-                                is EngineObjectData.Sync -> completeMissingNodeFields(typeName, normalized)
+                                is EngineObjectData.Sync ->
+                                    if (executor.isSelective) {
+                                        normalized
+                                    } else {
+                                        completeMissingNodeFields(typeName, normalized)
+                                    }
                                 else -> error("Node executor $typeName returned a non-object value")
                             }
                         },
                         onFailure = { EngineErrorData.of(it) },
                     )
+                }
+            type to
+                if (executor.isSelective) {
+                    selectiveNodeResolverOf { id, selections ->
+                        invokeExecutor(
+                            id,
+                            selections.toEngineSelectionSet(type, fullSchema, sourceSchema),
+                        )
+                    }
+                } else {
+                    nodeResolverOf { id ->
+                        invokeExecutor(
+                            id,
+                            context.engineSelectionSetFactory.engineSelectionSet(
+                                typeName,
+                                "id",
+                                emptyMap(),
+                            ),
+                        )
+                    }
                 }
         }
     require(nodeResolverExecutors.count() == supplied.size) {

@@ -1,6 +1,6 @@
 package semantics.arbitrary
 
-const val GENERATOR_CONFIG_FORMAT_VERSION = 4
+const val GENERATOR_CONFIG_FORMAT_VERSION = 5
 
 data class IntRangeConfig(
     val minimum: Int,

@@ -69,7 +69,6 @@ import viaduct.service.api.spi.globalid.GlobalIDCodecDefault
 class SelectiveNodeResolversExecutionTest {
     @Nested
     inner class BasicExecutionTests {
-        @Disabled("TODO: Selective")
         @Test
         fun `simple selective node`() {
             MockTenantModuleBootstrapper(
@@ -104,8 +103,8 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
+        @Disabled("TODO: NodeLower: Empty lowered payload demand still invokes the node executor")
         fun `engine-managed node fields do not invoke selective resolver`() {
             MockTenantModuleBootstrapper(
                 """
@@ -125,7 +124,6 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `node resolver hydrates unselected fields in its output selection set`() {
             val nodeCalls = AtomicInteger()
@@ -160,7 +158,6 @@ class SelectiveNodeResolversExecutionTest {
             assertEquals(1, nodeCalls.get())
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `list of selective nodes`() {
             MockTenantModuleBootstrapper(
@@ -200,7 +197,6 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `nested list of selective nodes`() {
             MockTenantModuleBootstrapper(
@@ -247,7 +243,6 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `fragment on other node type is ignored`() {
             // Query.bar returns a reference to a Bar node, while the only child selection is a named
@@ -300,7 +295,6 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `cached node can fetch omitted id`() {
             // Query.foo returns a reference to Foo("foo"), and the outer `foo { self { id } }`
@@ -356,7 +350,6 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `same node resolves different fields`() {
             MockTenantModuleBootstrapper(
@@ -413,7 +406,6 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `same node lists resolve different fields`() {
             MockTenantModuleBootstrapper(
@@ -484,8 +476,8 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
+        @Disabled("TODO: NodeCache: Production performs an initial fetch and a second path-specific materialization; qplan supplies their union once")
         fun `materialization output selections preserve path-specific concrete ownership`() {
             // The Root node resolver owns different leaves below foo and bar based on the concrete
             // Abstract implementation, so flat field coordinates cannot represent its selections.
@@ -582,7 +574,6 @@ class SelectiveNodeResolversExecutionTest {
             )
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `selective field can return selective node`() {
             MockTenantModuleBootstrapper(
@@ -626,7 +617,6 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `merged node field occurrences resolve once with unioned selections`() {
             val nodeCalls = AtomicInteger()
@@ -664,8 +654,8 @@ class SelectiveNodeResolversExecutionTest {
             assertEquals(setOf("x", "y"), checkNotNull(nodeSelections).selections().map { it.fieldName }.toSet())
         }
 
-        @Disabled("TODO: Selective")
         @Test
+        @Disabled("TODO: NodeCache: Production materializes a node reference returned by an initial node fetch; qplan closes one occurrence before invocation")
         fun `initial materialization resolves node reference`() {
             // This test captures the original node reference returned by a field resolver
             // and then later trying to read fields off of it after the node resolver has run
@@ -701,8 +691,8 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
+        @Disabled("TODO: NodeCache: Production refetches a reused node reference for newly selected fields; qplan resolves each closed occurrence once")
         fun `reused node reference resolves newly selected fields`() {
             var nodeReference: NodeEngineObjectData? = null
 
@@ -766,7 +756,7 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Nested
-        @Disabled("TODO: Selective")
+        @Disabled("N/A: Production arbitrary Viaduct harness does not expose the EngineTestModule adapter surface")
         inner class ArbitraryTests :
             SelectiveNodeArbTest(
                 """
@@ -779,7 +769,6 @@ class SelectiveNodeResolversExecutionTest {
 
     @Nested
     inner class AbstractTypeTests {
-        @Disabled("TODO: Selective")
         @Test
         fun `query node fields dispatch concrete selective resolvers`() {
             val fooId = GlobalIDCodecDefault.serialize("Foo", "id")
@@ -860,7 +849,7 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Nested
-        @Disabled("TODO: Selective")
+        @Disabled("N/A: Production arbitrary Viaduct harness does not expose the EngineTestModule adapter surface")
         inner class ArbitraryTests :
             SelectiveNodeArbTest(
                 """
@@ -872,7 +861,6 @@ class SelectiveNodeResolversExecutionTest {
 
     @Nested
     inner class RssTests {
-        @Disabled("TODO: Selective")
         @Test
         fun `skipped node plan does not shadow rss`() {
             MockTenantModuleBootstrapper(
@@ -928,7 +916,6 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `node selected in rss is not shadowed by node plan under skipped rss`() {
             MockTenantModuleBootstrapper(
@@ -981,7 +968,6 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `node selected in rss is not shadowed by skipped fragment in another rss`() {
             MockTenantModuleBootstrapper(
@@ -1053,7 +1039,6 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `statically skipped fragment does not shadow active fragment during node materialization`() {
             MockTenantModuleBootstrapper(
@@ -1112,7 +1097,6 @@ class SelectiveNodeResolversExecutionTest {
 
     @Nested
     inner class CoverageTests {
-        @Disabled("TODO: Selective")
         @Test
         fun `covered nested rss reuses node source`() {
             val fooCalls = AtomicInteger()
@@ -1164,8 +1148,8 @@ class SelectiveNodeResolversExecutionTest {
             assertEquals(1, fooCalls.get())
         }
 
-        @Disabled("TODO: Selective")
         @Test
+        @Disabled("TODO: NodeCache: Production refetches when nested RSS coverage is missing; qplan closes the complete demand before one fetch")
         fun `missing nested rss rematerializes node source`() {
             val fooCalls = AtomicInteger()
 
@@ -1216,7 +1200,6 @@ class SelectiveNodeResolversExecutionTest {
             assertEquals(2, fooCalls.get())
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `returned nested rss coverage reuses node source`() {
             val fooCalls = AtomicInteger()
@@ -1264,8 +1247,8 @@ class SelectiveNodeResolversExecutionTest {
             assertEquals(1, fooCalls.get())
         }
 
-        @Disabled("TODO: Selective")
         @Test
+        @Disabled("TODO: NodeCache: Production chooses among successive covering results; qplan has one producer result")
         fun `surplus coverage uses values from the first covering result`() {
             val resultNumber = AtomicInteger()
             val firstResultConsumed = CompletableDeferred<Unit>()
@@ -1323,7 +1306,6 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `fully skipped node selections still resolve rss reads`() {
             val yRequests = AtomicInteger()
@@ -1376,7 +1358,6 @@ class SelectiveNodeResolversExecutionTest {
 
     @Nested
     inner class RecursiveTests {
-        @Disabled("TODO: Selective")
         @Test
         fun `recursive rss is materialized`() {
             MockTenantModuleBootstrapper(
@@ -1427,7 +1408,6 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `deeper overlapping recursive selection is retained`() {
             MockTenantModuleBootstrapper(
@@ -1479,8 +1459,8 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
+        @Disabled("TODO: NodeCache: Production reuses a recursive covering cache entry; qplan resolves distinct node occurrences once")
         fun `recursive self reference reuses covering node cache entry`() {
             val nodeCalls = AtomicInteger()
 
@@ -1515,7 +1495,6 @@ class SelectiveNodeResolversExecutionTest {
             assertEquals(1, nodeCalls.get())
         }
 
-        @Disabled("TODO: Selective")
         @Test
         fun `deep recursive node failure is attributed to rss consumer`() {
             MockTenantModuleBootstrapper(
@@ -1580,7 +1559,7 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Nested
-        @Disabled("TODO: Selective")
+        @Disabled("N/A: Production arbitrary Viaduct harness does not expose the EngineTestModule adapter surface")
         inner class ArbitraryTests :
             SelectiveNodeArbTest(
                 """
@@ -1593,7 +1572,6 @@ class SelectiveNodeResolversExecutionTest {
 
     @Nested
     inner class ListTests {
-        @Disabled("TODO: Selective")
         @Test
         fun `node materializes embedded list items`() {
             MockTenantModuleBootstrapper(
@@ -1638,8 +1616,8 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
+        @Disabled("TODO: NodeCache: Production reconciles changed embedded-list cardinality across refetches; qplan does not refetch")
         fun `changed embedded list size leaves unmatched items unresolved`() {
             MockTenantModuleBootstrapper(
                 """
@@ -1698,8 +1676,8 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
+        @Disabled("TODO: NodeCache: Production reports embedded-list runtime-type drift across refetches; qplan does not refetch")
         fun `embedded list item type changes during refetch report a field error`() {
             MockTenantModuleBootstrapper(
                 """
@@ -1762,7 +1740,7 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Nested
-        @Disabled("TODO: Selective")
+        @Disabled("N/A: Production arbitrary Viaduct harness does not expose the EngineTestModule adapter surface")
         inner class ArbitraryTests :
             SelectiveNodeArbTest(
                 """
@@ -1775,8 +1753,8 @@ class SelectiveNodeResolversExecutionTest {
 
     @Nested
     inner class VariablesTests {
-        @Disabled("TODO: Selective")
         @Test
+        @Disabled("TODO: NodeCache: Production keeps client and RSS argument shapes in separate materializations; qplan supplies their union once")
         fun `client and rss arguments remain isolated`() {
             MockTenantModuleBootstrapper(
                 """
@@ -1814,8 +1792,8 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
+        @Disabled("TODO: NodeArg: Selective node output would have to supply an argument-bearing field, which is outside qplan's resolver-output relation")
         fun `rss variable failure reports a field error`() {
             MockTenantModuleBootstrapper(
                 """
@@ -1867,8 +1845,8 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
+        @Disabled("TODO: NodeArg: Selective node output would have to supply an argument-bearing field, which is outside qplan's resolver-output relation")
         fun `embedded node materialization preserves ancestor argument variables`() {
             MockTenantModuleBootstrapper(
                 """
@@ -2040,8 +2018,8 @@ class SelectiveNodeResolversExecutionTest {
             assertEquals(1, nodeCalls.get())
         }
 
-        @Disabled("TODO: Selective")
         @Test
+        @Disabled("TODO: NodeArg: Selective node output would have to supply argument-bearing fields, which are outside qplan's resolver-output relation")
         fun `embedded node materialization preserves fragment argument variables`() {
             MockTenantModuleBootstrapper(
                 """
@@ -2280,7 +2258,7 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Nested
-        @Disabled("TODO: Selective")
+        @Disabled("N/A: Production arbitrary Viaduct harness does not expose the EngineTestModule adapter surface")
         inner class ArbitraryTests :
             SelectiveNodeArbTest(
                 """
@@ -2297,8 +2275,8 @@ class SelectiveNodeResolversExecutionTest {
 
     @Nested
     inner class ConsistencyTests {
-        @Disabled("TODO: Selective")
         @Test
+        @Disabled("TODO: NodeCache: Production reports top-level runtime-type drift across refetches; qplan does not refetch")
         fun `type changes during refetch report a field error`() {
             MockTenantModuleBootstrapper(
                 """
@@ -2345,8 +2323,8 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
+        @Disabled("TODO: NodeCache: Production compares inconsistent exceptions across refetches; qplan does not refetch")
         fun `inconsistent resolver exceptions`() {
             val fooCalls = AtomicInteger()
 
@@ -2403,8 +2381,8 @@ class SelectiveNodeResolversExecutionTest {
             assertEquals(2, fooCalls.get())
         }
 
-        @Disabled("TODO: Selective")
         @Test
+        @Disabled("TODO: NodeCache: Production reports nested runtime-type drift across refetches; qplan does not refetch")
         fun `nested object type changes during refetch report a field error`() {
             MockTenantModuleBootstrapper(
                 """
@@ -2465,8 +2443,8 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
+        @Disabled("TODO: NodeCache: Production validates malformed nested objects during refetch reconciliation; qplan does not refetch")
         fun `malformed nested object during refetch reports a field error`() {
             MockTenantModuleBootstrapper(
                 """
@@ -2524,7 +2502,7 @@ class SelectiveNodeResolversExecutionTest {
 
     @Nested
     inner class InstrumentationTests {
-        @Disabled("TODO: Selective")
+        @Disabled("N/A: Production resolver instrumentation is outside the qplan resolver-correctness boundary")
         @Test
         fun `initial selective node materialization instruments resolver once`() {
             val nodeExecutions = AtomicInteger()
@@ -2572,7 +2550,7 @@ class SelectiveNodeResolversExecutionTest {
             assertEquals(1, instrumentedNodeExecutions.get())
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("N/A: Production node-fetch instrumentation is outside the qplan resolver-correctness boundary")
         @Test
         fun `node fetch instrumentation covers required fields`() {
             val instrumentation = RecordingInstrumentation()
@@ -2639,7 +2617,7 @@ class SelectiveNodeResolversExecutionTest {
             )
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("N/A: Production instrumentation source identity is outside the qplan resolver-correctness boundary")
         @Test
         fun `mat backed traversal keeps the node reference as its source`() {
             val instrumentation = RecordingInstrumentation()
@@ -2678,7 +2656,7 @@ class SelectiveNodeResolversExecutionTest {
             assertSame(nodeReference, xEnvironment.getSource<Any>())
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("N/A: Production node-fetch instrumentation is outside the qplan resolver-correctness boundary")
         @Test
         fun `node refetch failure completes instrumentation with error`() {
             val instrumentation = RecordingInstrumentation()
@@ -2743,7 +2721,7 @@ class SelectiveNodeResolversExecutionTest {
 
     @Nested
     inner class CheckerTests {
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: AccessChk")
         @Test
         fun `type checker reads multiple node fields`() {
             MockTenantModuleBootstrapper(
@@ -2785,7 +2763,7 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: AccessChk")
         @Test
         fun `selective node materialization does not repeat type checker`() {
             val fooCheckerCalls = AtomicInteger()
@@ -2834,7 +2812,7 @@ class SelectiveNodeResolversExecutionTest {
             assertEquals(1, fooCheckerCalls.get())
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: AccessChk")
         @Test
         fun `type checker failure after selective node materialization is reported`() {
             MockTenantModuleBootstrapper(
@@ -2879,7 +2857,7 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: AccessChk")
         @Test
         fun `field checker denial after selective node materialization is reported`() {
             val checkerCalls = AtomicInteger()
@@ -2933,7 +2911,7 @@ class SelectiveNodeResolversExecutionTest {
             assertEquals(1, checkerCalls.get())
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: AccessChk")
         @Test
         fun `query node type checker materializes checker field`() {
             val fooId = GlobalIDCodecDefault.serialize("Foo", "id")
@@ -2961,7 +2939,7 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: AccessChk")
         @Test
         fun `type checker query rss does not rematerialize node recursively`() {
             MockTenantModuleBootstrapper(
@@ -2992,7 +2970,7 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: AccessChk")
         @Test
         fun `type checker aliases field from selective node list`() {
             MockTenantModuleBootstrapper(
@@ -3039,7 +3017,7 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Nested
-        @Disabled("TODO: Selective")
+        @Disabled("N/A: Production arbitrary Viaduct harness does not expose the EngineTestModule adapter surface")
         inner class ArbitraryTests :
             SelectiveNodeArbTest(
                 """
@@ -3054,7 +3032,7 @@ class SelectiveNodeResolversExecutionTest {
 
     @Nested
     inner class BatchedTests {
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: Batching")
         @Test
         fun `batched node refetches preserve selection shapes`() {
             val batches = mutableListOf<List<Pair<String, Set<String>>>>()
@@ -3129,7 +3107,7 @@ class SelectiveNodeResolversExecutionTest {
             )
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: Batching")
         @Test
         fun `batched selective node cache distinguishes nested selections across query paths`() {
             val barResolverSelections = mutableSetOf<Set<String>>()
@@ -3253,7 +3231,7 @@ class SelectiveNodeResolversExecutionTest {
             assertEquals(setOf(setOf("x"), setOf("y")), barResolverSelections)
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: Batching")
         @Test
         fun `batched node refetch isolates same id selector failure`() {
             val refetchArguments = mutableSetOf<Int>()
@@ -3329,7 +3307,7 @@ class SelectiveNodeResolversExecutionTest {
             assertEquals(setOf(1, 2), refetchArguments)
         }
 
-        @Disabled("TODO: Selective")
+        @Disabled("TODO: Batching")
         @Test
         fun `whole batch exception is reported for every selector`() {
             val batches = mutableListOf<List<String>>()
@@ -3401,7 +3379,7 @@ class SelectiveNodeResolversExecutionTest {
         }
 
         @Nested
-        @Disabled("TODO: Selective")
+        @Disabled("N/A: Production arbitrary Viaduct harness does not expose the EngineTestModule adapter surface")
         inner class ArbitraryTests :
             SelectiveNodeArbTest(
                 """
@@ -3421,7 +3399,7 @@ class SelectiveNodeResolversExecutionTest {
 
     @Nested
     inner class SubqueryTests {
-        @Disabled("TODO: Selective")
+        @Disabled("N/A: Production ctx.query subquery execution is outside the qplan adapter boundary")
         @Test
         fun `node resolver can query during refetch`() {
             val nodeCalls = AtomicInteger()
@@ -3461,7 +3439,6 @@ class SelectiveNodeResolversExecutionTest {
 
     @Nested
     inner class SelectionSetTests {
-        @Disabled("TODO: Selective")
         @Test
         fun `aliased rss reads node field`() {
             MockTenantModuleBootstrapper(
@@ -3499,8 +3476,8 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
+        @Disabled("TODO: Directive: Canonical demand conversion does not preserve custom resolver-directive spelling")
         fun `rss preserves resolver directives`() {
             MockTenantModuleBootstrapper(
                 """
@@ -3538,8 +3515,8 @@ class SelectiveNodeResolversExecutionTest {
             }
         }
 
-        @Disabled("TODO: Selective")
         @Test
+        @Disabled("TODO: NodeCache: Production treats an omitted selected field as cache coverage; qplan requires the selective result to supply demanded output")
         fun `selected omitted node field is treated as covered`() {
             val nodeCalls = AtomicInteger()
 
@@ -3576,8 +3553,8 @@ class SelectiveNodeResolversExecutionTest {
             assertEquals(1, nodeCalls.get())
         }
 
-        @Disabled("TODO: Selective")
         @Test
+        @Disabled("TODO: NodeOwnership: Production discards selective-node surplus owned by a field resolver; qplan rejects surplus selective output")
         fun `node surplus does not override field resolver ownership`() {
             MockTenantModuleBootstrapper(
                 """

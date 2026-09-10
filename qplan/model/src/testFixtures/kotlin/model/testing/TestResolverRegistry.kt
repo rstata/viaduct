@@ -13,6 +13,7 @@ import model.Selection
 import model.SelectionForest
 import model.SourceSchemaAdapter
 import model.inputType
+import model.merge
 import model.lowering.ALL_SOURCE_OBJECTS_TYPE
 import model.lowering.LOWERED_TYPENAME_FIELD
 import model.lowering.NODE_BRIDGE_ID_FIELD
@@ -49,13 +50,39 @@ import viaduct.graphql.utils.GraphQLTypeRelation
  * authoritative ID supplied by the node-valued producer, matching production's node-reference
  * behavior.
  *
- * This alias is not part of the canonical resolver algebra. [resolverRegistryOf] consumes these
+ * This wrapper is not part of the canonical resolver algebra. [resolverRegistryOf] consumes these
  * functions and exposes a field-only [ResolverRegistry].
  */
-typealias NodeResolverFunction = (String) -> EngineOutputData?
+class NodeResolverFunction internal constructor(
+    internal val mode: Mode,
+    private val function: (String, SelectionForest) -> EngineOutputData?,
+) {
+    internal enum class Mode {
+        NONSELECTIVE,
+        SELECTION_AWARE_NONSELECTIVE,
+        SELECTIVE,
+    }
+
+    internal operator fun invoke(
+        id: String,
+        selections: SelectionForest,
+    ): EngineOutputData? = function(id, selections)
+}
 
 /** Marks a raw external node lookup for fixture composition. */
-fun nodeResolverOf(function: NodeResolverFunction): NodeResolverFunction = function
+fun nodeResolverOf(function: (String) -> EngineOutputData?): NodeResolverFunction =
+    NodeResolverFunction(NodeResolverFunction.Mode.NONSELECTIVE) { id, _ -> function(id) }
+
+/** Marks a stable raw node lookup that receives demand before model-owned output projection. */
+fun selectionAwareNodeResolverOf(
+    function: (String, SelectionForest) -> EngineOutputData?,
+): NodeResolverFunction =
+    NodeResolverFunction(NodeResolverFunction.Mode.SELECTION_AWARE_NONSELECTIVE, function)
+
+/** Marks a selection-sensitive raw external node lookup for fixture composition. */
+fun selectiveNodeResolverOf(
+    function: (String, SelectionForest) -> EngineOutputData?,
+): NodeResolverFunction = NodeResolverFunction(NodeResolverFunction.Mode.SELECTIVE, function)
 
 typealias CanonicalFieldResolverApplicationObserver =
     (ViaductSchema.Field, EngineObjectData.Sync, Arguments.Resolved, SelectionForest?) -> Unit
@@ -295,23 +322,48 @@ private class NodeResolverLowering(
                         ),
                     ),
             )
-        return FieldResolverDefinition.of(
-            objectFragment = objectFragment,
-            function = { input, _ ->
-                loadNode(
-                    typedId =
-                        input.get(
-                            idField.name,
-                        ),
-                    nodeOutputType = nodeOutputType,
+        val resolver = nodeResolvers.getValue(nodeOutputType)
+        return when (resolver.mode) {
+            NodeResolverFunction.Mode.SELECTIVE -> FieldResolverDefinition.ofSelective(
+                objectFragment = objectFragment,
+                queryFragment = null,
+                function = { input, _, _, selections ->
+                    loadNode(
+                        typedId = input.get(idField.name),
+                        nodeOutputType = nodeOutputType,
+                        selections = selections,
+                    )
+                },
+            )
+            NodeResolverFunction.Mode.SELECTION_AWARE_NONSELECTIVE ->
+                FieldResolverDefinition.ofSelectionAwareNonselective(
+                    objectFragment = objectFragment,
+                    queryFragment = null,
+                    function = { input, _, _, selections ->
+                        loadNode(
+                            typedId = input.get(idField.name),
+                            nodeOutputType = nodeOutputType,
+                            selections = selections,
+                        )
+                    },
                 )
-            },
-        )
+            NodeResolverFunction.Mode.NONSELECTIVE -> FieldResolverDefinition.of(
+                objectFragment = objectFragment,
+                function = { input, _ ->
+                    loadNode(
+                        typedId = input.get(idField.name),
+                        nodeOutputType = nodeOutputType,
+                        selections = selectionForestOf(),
+                    )
+                },
+            )
+        }
     }
 
     private fun loadNode(
         typedId: EngineOutputData?,
         nodeOutputType: ViaductSchema.Object,
+        selections: SelectionForest,
     ): EngineOutputData? {
         if (typedId == null || typedId is EngineErrorData) return typedId
         require(typedId is String) {
@@ -324,7 +376,7 @@ private class NodeResolverLowering(
         val resolver =
             nodeResolvers[type]
                 ?: throw IllegalArgumentException("No fixture node resolver for ${type.name}")
-        val sourceResult = resolver(id)
+        val sourceResult = resolver(id, selections)
         if (sourceResult == null || sourceResult is EngineErrorData) return sourceResult
         require(sourceResult is EngineObjectData.Sync) {
             "Node resolver for ${type.name} returned a non-object value"
@@ -348,7 +400,13 @@ private class NodeResolverLowering(
          * that effective object here, in shared fixture lowering, with the fringe ID authoritative.
          */
         val idField = validateNodeIdField(type)
-        return engineObjectDataOf(resultType, fields + (idField.name to id))
+        val includeId =
+            resolver.mode != NodeResolverFunction.Mode.SELECTIVE ||
+                selections.merge(type).byKey().keys.any { key -> key.field == idField }
+        return engineObjectDataOf(
+            resultType,
+            if (includeId) fields + (idField.name to id) else fields - idField.name,
+        )
     }
 
     private fun payloadField(nodeOutputType: ViaductSchema.Object): ViaductSchema.ObjectField =

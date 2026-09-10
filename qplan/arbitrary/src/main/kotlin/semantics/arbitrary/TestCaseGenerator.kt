@@ -232,6 +232,7 @@ suspend fun executeResolverTestCases(
             val world =
                 registry.world(
                     schema = batch.schema,
+                    selectiveNodeResolvers = config[SelectiveNodeResolversEnabled],
                     captureSuppliedDemand = captureSuppliedDemand,
                     captureResolutionWitness = captureResolutionWitness,
                     captureResolutionApplicationCounts =

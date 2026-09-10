@@ -57,6 +57,60 @@ value class ResolutionFingerprint(
     val value: String,
 )
 
+/** One selection-aware generated node callback and the demand delivered to it. */
+data class SelectiveNodeResolverApplicationRecord(
+    val typeName: String,
+    val id: String,
+    val suppliedDemandFingerprint: ResolutionFingerprint,
+)
+
+internal class SelectiveNodeResolverApplicationLog(
+    private val bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
+) {
+    private val lock = Any()
+    private val records = mutableListOf<SelectiveNodeResolverApplicationRecord>()
+    private var recording = true
+
+    fun record(
+        typeName: String,
+        id: String,
+        suppliedDemand: SelectionForest,
+    ) {
+        val record =
+            SelectiveNodeResolverApplicationRecord(
+                typeName = typeName,
+                id = id,
+                suppliedDemandFingerprint = suppliedDemand.resolutionDigest(bounds),
+            )
+        synchronized(lock) {
+            if (!recording) return
+            if (records.size >= bounds.maxApplications) {
+                throw ResolutionWitnessBoundExceededException(
+                    "selective-node application",
+                    bounds.maxApplications,
+                )
+            }
+            records += record
+        }
+    }
+
+    fun snapshot(): List<SelectiveNodeResolverApplicationRecord> =
+        synchronized(lock) { records.toList() }
+
+    fun clear() {
+        synchronized(lock) { records.clear() }
+    }
+
+    fun <T> withoutRecording(block: () -> T): T {
+        val previous = synchronized(lock) { recording.also { recording = false } }
+        return try {
+            block()
+        } finally {
+            synchronized(lock) { recording = previous }
+        }
+    }
+}
+
 /** The canonical field identity of one field-resolver application after fixture lowering. */
 data class ResolverApplicationKey(
     val field: FieldCoordinate,

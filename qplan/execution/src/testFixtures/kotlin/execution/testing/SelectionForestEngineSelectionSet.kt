@@ -16,9 +16,11 @@ import model.Arguments
 import model.InclusionCondition
 import model.Selection
 import model.SelectionForest
+import model.SourceSchemaAdapter
+import model.objectKey
+import model.selectionForestOf
 import viaduct.engine.api.EngineSchema
 import viaduct.engine.api.EngineSelectionSet
-import viaduct.engine.api.gj
 import viaduct.engine.api.mocks.createEngineSelectionSet
 import viaduct.graphql.schema.ViaductSchema as QPlanSchema
 import viaduct.graphql.utils.ParsedSelections
@@ -39,6 +41,7 @@ import viaduct.graphql.utils.ParsedSelections
 internal fun SelectionForest.toEngineSelectionSet(
     type: QPlanSchema.CompositeTypeDef,
     schema: EngineSchema,
+    sourceSchema: SourceSchemaAdapter,
 ): EngineSelectionSet {
     require(schema.schema.getType(type.name) != null) {
         "Qplan selection type ${type.name} is absent from the Engine schema"
@@ -47,7 +50,7 @@ internal fun SelectionForest.toEngineSelectionSet(
         parsedSelections =
             ParsedSelections(
                 typeName = type.name,
-                selections = toConcreteSelectionSet(schema),
+                selections = toConcreteSelectionSet(schema, sourceSchema),
                 fragmentMap = emptyMap(),
             ),
         viaductSchema = schema,
@@ -55,7 +58,10 @@ internal fun SelectionForest.toEngineSelectionSet(
     )
 }
 
-private fun SelectionForest.toConcreteSelectionSet(schema: EngineSchema): SelectionSet {
+private fun SelectionForest.toConcreteSelectionSet(
+    schema: EngineSchema,
+    sourceSchema: SourceSchemaAdapter,
+): SelectionSet {
     val fieldsByConcreteType = linkedMapOf<String, MutableList<Field>>()
     forEach { selection ->
         selection.possibleTypes
@@ -63,7 +69,7 @@ private fun SelectionForest.toConcreteSelectionSet(schema: EngineSchema): Select
             .forEach { concreteType ->
                 fieldsByConcreteType
                     .getOrPut(concreteType.name, ::mutableListOf)
-                    .add(selection.toField(concreteType, schema))
+                    .add(selection.toField(concreteType, schema, sourceSchema))
             }
     }
 
@@ -85,13 +91,22 @@ private fun SelectionForest.toConcreteSelectionSet(schema: EngineSchema): Select
 private fun Selection.toField(
     concreteType: QPlanSchema.Object,
     schema: EngineSchema,
+    sourceSchema: SourceSchemaAdapter,
 ): Field {
     val loweredFieldName = key.field.name
+    val concreteField = objectKey(concreteType).field
+    val sourceObject = requireNotNull(schema.schema.getObjectType(concreteType.name))
+    val sourceField =
+        sourceObject.fieldDefinitions.singleOrNull { candidate ->
+            sourceSchema.field(concreteType.name, candidate.name) == concreteField
+        }
     val fieldName =
         if (loweredFieldName == LOWERED_TYPENAME_FIELD) {
             "__typename"
         } else {
-            loweredFieldName
+            requireNotNull(sourceField) {
+                "Qplan field ${concreteType.name}.$loweredFieldName is absent from the Engine schema"
+            }.name
         }
     val arguments =
         key.arguments as? Arguments.Resolved
@@ -118,11 +133,7 @@ private fun Selection.toField(
         }
         return field.build()
     }
-    val sourceField =
-        schema.schema.getFieldDefinition((concreteType.name to fieldName).gj)
-            ?: throw IllegalArgumentException(
-                "Qplan field ${concreteType.name}.$fieldName is absent from the Engine schema",
-            )
+    requireNotNull(sourceField)
     field.arguments(
                 arguments.fieldValues
                     .toSortedMap()
@@ -145,7 +156,19 @@ private fun Selection.toField(
                             ).build()
                     },
             )
-    val children = subselections.toConcreteSelectionSet(schema)
+    val sourceSubselections =
+        if (fieldName == loweredFieldName) {
+            subselections
+        } else {
+            subselections.flatMap { bridgeSelection ->
+                if (bridgeSelection.key.field.name == NODE_BRIDGE_PAYLOAD_FIELD) {
+                    bridgeSelection.subselections
+                } else {
+                    selectionForestOf()
+                }
+            }
+        }
+    val children = sourceSubselections.toConcreteSelectionSet(schema, sourceSchema)
     if (children.selections.isNotEmpty()) {
         field.selectionSet(children)
     }
@@ -153,3 +176,4 @@ private fun Selection.toField(
 }
 
 private const val LOWERED_TYPENAME_FIELD = "V_A_typename"
+private const val NODE_BRIDGE_PAYLOAD_FIELD = "node"

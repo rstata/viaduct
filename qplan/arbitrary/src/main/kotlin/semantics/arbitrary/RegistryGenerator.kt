@@ -14,6 +14,8 @@ import model.EngineErrorData
 import model.EngineInputData
 import model.EngineOutputData
 import model.EngineOutputListData
+import model.ResolverOutputData
+import model.RootFieldReferenceData
 import model.Fragment
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
@@ -89,6 +91,9 @@ data class RegistryFeatures(
     val maximumFromQueryFieldVariableUseDepth: Int = 0,
     val maximumParentSelectionDepth: Int = 0,
     val resolverOutputParentFieldCount: Int = 0,
+    val generatedRootFieldReferenceCount: Int = 0,
+    val rootFieldReferenceTargetCount: Int = 0,
+    val rootFieldReferenceFallbackCount: Int = 0,
 )
 
 /**
@@ -110,6 +115,7 @@ class ArbitraryRegistry internal constructor(
     internal val variableProviders: List<VariableProviderPlan>,
     internal val resolverPrograms: Map<FieldCoordinate, ResolverProgramKind>,
     val parentDemandOwnerFields: Map<FieldCoordinate, Int> = emptyMap(),
+    internal val schemaRootFieldReferenceFamily: RootFieldReferenceFamily? = null,
     val features: RegistryFeatures,
 ) {
     private val applicationLog = ResolutionApplicationLog()
@@ -218,6 +224,19 @@ class ArbitraryRegistry internal constructor(
         canonicalField: FieldCoordinate,
     ): Boolean =
         sourceField(canonicalField) in fromArgumentVariableOwnerFields
+
+    fun sourceResolverIsRootFieldReferenceFallback(
+        canonicalField: FieldCoordinate,
+    ): Boolean =
+        schemaRootFieldReferenceFamily?.fallbackCoordinate == sourceField(canonicalField)
+
+    fun sourceResolverIsRootFieldReferenceExtension(
+        canonicalField: FieldCoordinate,
+    ): Boolean =
+        sourceField(canonicalField) in schemaRootFieldReferenceFamily?.extensionCoordinates.orEmpty()
+
+    fun sourceFieldIsRootFieldReferenceOverride(field: FieldCoordinate): Boolean =
+        field in schemaRootFieldReferenceFamily?.consumerValueCoordinates.orEmpty()
 
     fun sourceResolverHasFromObjectFieldVariables(
         canonicalField: FieldCoordinate,
@@ -455,7 +474,7 @@ class ArbitraryRegistry internal constructor(
                         fieldResolverOf(
                             objectFragment = objectFragment,
                             queryFragment = queryFragment,
-                            function = { input, _, arguments ->
+                            function = { input, queryValue, arguments ->
                                 field.args
                                     .filter { argument -> argument.hasDefault }
                                     .forEach { argument ->
@@ -497,6 +516,7 @@ class ArbitraryRegistry internal constructor(
                                 val generatedHashSeed =
                                     stableGeneratedHash(
                                         effectiveInput.resolutionFingerprint().value,
+                                        queryValue.resolutionFingerprint().value,
                                         effectiveArguments
                                             .resolutionFingerprint(field)
                                             .value,
@@ -665,6 +685,16 @@ private class RegistryGenerator(
     private lateinit var nodeSites: Set<String>
 
     fun generate(): ArbitraryRegistry {
+        val rootFieldReferenceFamily = schema.rootFieldReferenceFamily
+        val forcedRootFieldReferenceSites =
+            rootFieldReferenceFamily?.let { family ->
+                family.targetCoordinates +
+                    family.namespaceCoordinates +
+                    family.consumerCoordinate +
+                    family.consumerValueCoordinates +
+                    family.fallbackCoordinate +
+                    family.extensionCoordinates
+            }.orEmpty()
         nodeSites =
             if (config[NodeResolversEnabled]) {
                 schema.objects
@@ -683,6 +713,7 @@ private class RegistryGenerator(
                         !field.isGeneratedPassiveAbstractOutput() &&
                         (
                             field.ownerName == "Query" ||
+                                field.coordinate in forcedRootFieldReferenceSites ||
                                 field.arguments.isNotEmpty() ||
                                 field.isGeneratedParentSpineResolver() ||
                                 chance(config[ExplicitFieldResolverWeight])
@@ -692,11 +723,21 @@ private class RegistryGenerator(
                 .withGeneratedParentResultAfterAncestor(config[ParentFieldsEnabled])
                 .toCollection(linkedSetOf())
 
-        val baseFieldValues =
+        val generatedFieldValues =
             fieldSites.associateWith { coordinate ->
                 val field = field(coordinate)
                 plan(field.type, "${coordinate.typeName}.${coordinate.fieldName}")
             }
+        val baseFieldValues =
+            rootFieldReferenceFamily?.let { family ->
+                generatedFieldValues.toMutableMap().apply {
+                    this[family.targets.getValue("zero").path.last()] =
+                        RootFieldReferencePlan(family.targets.getValue("one"))
+                    this[family.targets.getValue("one").path.last()] =
+                        RootFieldReferencePlan(family.targets.getValue("tail"))
+                    this[family.consumerCoordinate] = fixedRootFieldReferenceConsumer(family)
+                }.toMap()
+            } ?: generatedFieldValues
         val baseNodeValues =
             nodeSites.associateWith { typeName ->
                 objectPlan(
@@ -741,8 +782,21 @@ private class RegistryGenerator(
             }
         var sometimesPassiveFieldCount = 0
         val fieldValues =
-            baseFieldValues.mapValues { (_, value) ->
-                value.withSometimesPassiveFields(
+            baseFieldValues.mapValues { (coordinate, value) ->
+                val rootDecorated =
+                    if (
+                        rootFieldReferenceFamily == null ||
+                        coordinate in rootFieldReferenceFamily.targetCoordinates ||
+                        coordinate == rootFieldReferenceFamily.consumerCoordinate
+                    ) {
+                        value
+                    } else {
+                        value.withRootFieldReferences(
+                            expectedType = field(coordinate).type,
+                            family = rootFieldReferenceFamily,
+                        )
+                    }
+                rootDecorated.withSometimesPassiveFields(
                     baseFieldValues = baseFieldValues,
                     resolverPrograms = resolverPrograms,
                     onInsertion = { sometimesPassiveFieldCount += 1 },
@@ -799,6 +853,7 @@ private class RegistryGenerator(
             variableProviders = variableProviders,
             resolverPrograms = resolverPrograms,
             parentDemandOwnerFields = parentDemandOwnerFields,
+            schemaRootFieldReferenceFamily = rootFieldReferenceFamily,
             features =
                 RegistryFeatures(
                     inputSensitiveResolvers =
@@ -909,6 +964,12 @@ private class RegistryGenerator(
                     resolverOutputParentFieldCount =
                         (fieldValues.values + nodeValues.values)
                             .sumOf { value -> value.parentFieldCount() },
+                    generatedRootFieldReferenceCount =
+                        fieldValues.values.sumOf { value -> value.countRootFieldReferences() },
+                    rootFieldReferenceTargetCount =
+                        rootFieldReferenceFamily?.targetCoordinates?.size ?: 0,
+                    rootFieldReferenceFallbackCount =
+                        if (rootFieldReferenceFamily == null) 0 else 1,
                 ),
         )
     }
@@ -967,11 +1028,145 @@ private class RegistryGenerator(
         }
     }
 
+    private fun fixedRootFieldReferenceConsumer(
+        family: RootFieldReferenceFamily,
+    ): ObjectPlan {
+        fun consumerField(name: String): FieldCoordinate =
+            family.consumerValueCoordinates.single { coordinate ->
+                coordinate.fieldName == name
+            }
+        return ObjectPlan(
+            typeName = GENERATED_ROOT_REFERENCE_CONSUMER,
+            fields =
+                linkedMapOf(
+                    consumerField("objectValue") to
+                        RootFieldReferencePlan(family.targets.getValue("zero")),
+                    consumerField("concreteValue") to
+                        RootFieldReferencePlan(family.targets.getValue("object")),
+                    consumerField("unionValue") to
+                        RootFieldReferencePlan(family.targets.getValue("four")),
+                    consumerField("enumValue") to
+                        RootFieldReferencePlan(family.targets.getValue("enum")),
+                    consumerField("scalarValue") to
+                        RootFieldReferencePlan(family.targets.getValue("scalar")),
+                    consumerField("listValue") to
+                        ListPlan(
+                            listOf(
+                                RootFieldReferencePlan(family.targets.getValue("one")),
+                                objectPlan(
+                                    typeName = GENERATED_ROOT_REFERENCE_PAIR_A,
+                                    path = "fixedRootReferencePassiveListElement",
+                                ),
+                            ),
+                        ),
+                    FieldCoordinate(
+                        GENERATED_ROOT_REFERENCE_CONSUMER,
+                        GENERATED_HASH_FIELD,
+                    ) to GeneratedHashPlan(GENERATED_ROOT_REFERENCE_CONSUMER.hashCode()),
+                ),
+        )
+    }
+
+    private fun ValuePlan.withRootFieldReferences(
+        expectedType: OutputTypeSpec,
+        family: RootFieldReferenceFamily,
+    ): ValuePlan {
+        val compatibleTargets = compatibleRootFieldReferenceTargets(expectedType, family)
+        if (
+            !expectedType.list &&
+            compatibleTargets.isNotEmpty() &&
+            chance(config[RootFieldReferenceWeight])
+        ) {
+            return RootFieldReferencePlan(Arb.element(compatibleTargets).next(random))
+        }
+        return when (this) {
+            is ListPlan -> {
+                val elementType = expectedType.elementType()
+                copy(
+                    elements =
+                        elements.map { element ->
+                            element.withRootFieldReferences(elementType, family)
+                        },
+                )
+            }
+            is ObjectPlan -> {
+                val decorated =
+                    fields.mapValues { (coordinate, value) ->
+                        fieldOrNull(coordinate)?.let { field ->
+                            value.withRootFieldReferences(
+                                expectedType = field.type,
+                                family = family,
+                            )
+                        } ?: value
+                    }.toMutableMap()
+                fieldSites
+                    .asSequence()
+                    .filter { coordinate -> coordinate.typeName == typeName }
+                    .filterNot(decorated::containsKey)
+                    .map { coordinate -> coordinate to field(coordinate) }
+                    .filter { (_, field) ->
+                        field.arguments.isEmpty() &&
+                            !field.isGeneratedHashField() &&
+                            !field.isParentField
+                    }.forEach { (coordinate, field) ->
+                        val targets = compatibleRootFieldReferenceTargets(field.type, family)
+                        if (
+                            targets.isNotEmpty() &&
+                            chance(config[RootFieldReferenceWeight])
+                        ) {
+                            decorated[coordinate] =
+                                RootFieldReferencePlan(Arb.element(targets).next(random))
+                        }
+                    }
+                copy(fields = decorated)
+            }
+            else -> this
+        }
+    }
+
+    private fun compatibleRootFieldReferenceTargets(
+        expectedType: OutputTypeSpec,
+        family: RootFieldReferenceFamily,
+    ): List<RootFieldReferenceTargetSpec> {
+        if (expectedType.list) return emptyList()
+        return family.targets.values.filter { target ->
+            val targetType = field(target.path.last()).type
+            when {
+                targetType.list -> false
+                schema.isComposite(expectedType.namedType) &&
+                    schema.isComposite(targetType.namedType) ->
+                    schema
+                        .possibleObjects(targetType.namedType)
+                        .map(ObjectDefinition::name)
+                        .all(
+                            schema
+                                .possibleObjects(expectedType.namedType)
+                                .map(ObjectDefinition::name)
+                                .toSet()::contains,
+                        )
+                else -> targetType.namedType == expectedType.namedType
+            }
+        }
+    }
+
     private fun resolverFragmentPlans(
         consumer: FieldCoordinate,
         ranks: Map<FieldCoordinate, Int>,
         variableProviders: MutableList<VariableProviderPlan>,
     ): ResolverFragmentPlans {
+        schema.rootFieldReferenceFamily
+            ?.takeIf { family -> consumer in family.namespaceCoordinates }
+            ?.let {
+                return ResolverFragmentPlans(
+                    objectFragment = FragmentPlan(consumer.typeName, emptyList()),
+                    queryFragment = FragmentPlan("Query", emptyList()),
+                )
+            }
+        schema.rootFieldReferenceFamily
+            ?.takeIf { family -> consumer in family.targetCoordinates }
+            ?.let { family ->
+                return rootFieldReferenceTargetFragments(consumer, family, variableProviders)
+            }
         if (consumer.isGeneratedParentResult()) {
             return ResolverFragmentPlans(
                 objectFragment = generatedGreatGrandparentFragment(),
@@ -1014,6 +1209,123 @@ private class RegistryGenerator(
                 variableProviders,
                 providerFragment,
             )
+        }
+    }
+
+    private fun rootFieldReferenceTargetFragments(
+        consumer: FieldCoordinate,
+        family: RootFieldReferenceFamily,
+        variableProviders: MutableList<VariableProviderPlan>,
+    ): ResolverFragmentPlans {
+        fun intValue(value: InputValuePlan): FragmentSelectionPlan =
+            FragmentSelectionPlan(
+                fieldName = GENERATED_ROOT_REFERENCE_NAMESPACE_FIELD,
+                arguments = emptyMap(),
+                subselections =
+                    listOf(
+                        FragmentSelectionPlan(
+                            fieldName = "level2",
+                            arguments = emptyMap(),
+                            subselections =
+                                listOf(
+                                    FragmentSelectionPlan(
+                                        fieldName = "level3",
+                                        arguments = emptyMap(),
+                                        subselections =
+                                            listOf(
+                                                FragmentSelectionPlan(
+                                                    fieldName = "scalarValue",
+                                                    arguments = mapOf("value" to value),
+                                                    subselections = emptyList(),
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    ),
+            )
+
+        val emptyObject = FragmentPlan(consumer.typeName, emptyList())
+        return when (consumer) {
+            family.targets.getValue("zero").path.last() ->
+                ResolverFragmentPlans(
+                    objectFragment = emptyObject,
+                    queryFragment =
+                        FragmentPlan(
+                            "Query",
+                            listOf(
+                                intValue(
+                                    InputLiteralPlan(
+                                        ScalarInputTypeSpec(ScalarKind.INT, nullable = false),
+                                        3,
+                                    ),
+                                ),
+                            ),
+                        ),
+                )
+            family.targets.getValue("one").path.last() -> {
+                val variableName = "rootReferenceArgument"
+                variableProviders +=
+                    FromArgumentVariableProviderPlan(
+                        owner = consumer,
+                        variableName = variableName,
+                        argumentName = "id",
+                        nestedInput = false,
+                        listValue = false,
+                        nullable = false,
+                        literalConvergence = false,
+                    )
+                ResolverFragmentPlans(
+                    objectFragment = emptyObject,
+                    queryFragment =
+                        FragmentPlan(
+                            "Query",
+                            listOf(intValue(VariableInputPlan(variableName))),
+                        ),
+                )
+            }
+            family.targets.getValue("four").path.last() -> {
+                val variableName = "rootReferenceQueryPath"
+                val provider =
+                    intValue(
+                        InputLiteralPlan(
+                            ScalarInputTypeSpec(ScalarKind.INT, nullable = false),
+                            5,
+                        ),
+                    ).withResponseAliases(variableName)
+                variableProviders +=
+                    FromFieldVariableProviderPlan(
+                        owner = consumer,
+                        variableName = variableName,
+                        providerFragment = ProviderFragment.QUERY,
+                        selection = provider,
+                        nestedInput = false,
+                        listValue = false,
+                        nullable = false,
+                        abstractPath = false,
+                        useDepth = 4,
+                        topLevelUseField = family.namespaceCoordinates.single { coordinate ->
+                            coordinate.typeName == "Query"
+                        },
+                        literalConvergence = false,
+                    )
+                ResolverFragmentPlans(
+                    objectFragment = emptyObject,
+                    queryFragment =
+                        FragmentPlan(
+                            "Query",
+                            listOf(
+                                provider,
+                                intValue(VariableInputPlan(variableName)),
+                            ),
+                        ),
+                )
+            }
+            else ->
+                ResolverFragmentPlans(
+                    objectFragment = emptyObject,
+                    queryFragment = FragmentPlan("Query", emptyList()),
+                )
         }
     }
 
@@ -2246,6 +2558,9 @@ private class RegistryGenerator(
         return ScalarKind.entries
             .singleOrNull { it.graphQLName == type.namedType }
             ?.let { scalarPlan(it, path) }
+            ?: schema.enumNamed(type.namedType)?.let { enumType ->
+                EnumPlan(Arb.element(enumType.values).next(random))
+            }
             ?: Arb.element(schema.possibleObjects(type.namedType))
                 .next(random)
                 .name
@@ -2334,11 +2649,25 @@ private class RegistryGenerator(
             else -> 0
         }
 
+    private fun ValuePlan.countRootFieldReferences(): Int =
+        when (this) {
+            is RootFieldReferencePlan -> 1
+            is ListPlan -> elements.sumOf { value -> value.countRootFieldReferences() }
+            is ObjectPlan -> fields.values.sumOf { value -> value.countRootFieldReferences() }
+            else -> 0
+        }
+
     private fun field(coordinate: FieldCoordinate): FieldDefinitionSpec =
+        fieldOrNull(coordinate)
+            ?: error(
+                "Unknown generated field $coordinate; fields on ${coordinate.typeName}: " +
+                    schema.fieldsOn(coordinate.typeName).map(FieldDefinitionSpec::name),
+            )
+
+    private fun fieldOrNull(coordinate: FieldCoordinate): FieldDefinitionSpec? =
         schema
-            .objectNamed(coordinate.typeName)
-            .fields
-            .single { it.name == coordinate.fieldName }
+            .fieldsOn(coordinate.typeName)
+            .singleOrNull { it.name == coordinate.fieldName }
 
     private fun FieldDefinitionSpec.hasOnlyLowerRankedResolverDependencies(
         consumerRank: Int,
@@ -3334,7 +3663,7 @@ internal sealed interface ValuePlan {
         typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
         inputId: String? = null,
         generatedHashSeed: Int = 0,
-    ): EngineOutputData?
+    ): ResolverOutputData?
 
     fun selectedPaths(prefix: String = ""): Set<String>
 
@@ -3397,6 +3726,40 @@ internal data class ScalarPlan(
     override fun selectedPaths(prefix: String): Set<String> = emptySet()
 }
 
+internal data class EnumPlan(
+    val value: String,
+) : ValuePlan {
+    override fun materialize(
+        schema: ViaductSchema,
+        typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
+        inputId: String?,
+        generatedHashSeed: Int,
+    ): EngineOutputData = value
+
+    override fun selectedPaths(prefix: String): Set<String> = emptySet()
+}
+
+internal data class RootFieldReferencePlan(
+    val target: RootFieldReferenceTargetSpec,
+) : ValuePlan {
+    override fun materialize(
+        schema: ViaductSchema,
+        typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
+        inputId: String?,
+        generatedHashSeed: Int,
+    ): RootFieldReferenceData {
+        val sourceSchema = SourceSchemaAdapter(schema)
+        val path =
+            target.path.map { coordinate ->
+                sourceSchema.field(coordinate.typeName, coordinate.fieldName)
+                    as ViaductSchema.ObjectField
+            }
+        return RootFieldReferenceData.of(path, target.arguments)
+    }
+
+    override fun selectedPaths(prefix: String): Set<String> = setOf(prefix)
+}
+
 internal data class ListPlan(
     val elements: List<ValuePlan>,
 ) : ValuePlan {
@@ -3405,7 +3768,7 @@ internal data class ListPlan(
         typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
         inputId: String?,
         generatedHashSeed: Int,
-    ): EngineOutputListData {
+    ): List<ResolverOutputData?> {
         val elementType = checkNotNull(typeExpr.unwrapList())
         return elements.map {
             it.materialize(schema, elementType, inputId, generatedHashSeed)

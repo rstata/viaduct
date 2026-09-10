@@ -5,6 +5,7 @@ import model.Assumptions
 import model.EngineOutputData
 import model.MaterializeSelectionForest
 import model.ObjectEngineResult
+import model.ResolverOccurrenceId
 import model.Fragment
 import model.fragmentFrom
 import model.outputValue
@@ -21,6 +22,8 @@ import semantics.arbitrary.NodeResolversEnabled
 import semantics.arbitrary.NullValueWeight
 import semantics.arbitrary.ParentFieldsEnabled
 import semantics.arbitrary.RandomParentFieldsEnabled
+import semantics.arbitrary.RootFieldReferencesEnabled
+import semantics.arbitrary.RootFieldReferenceWeight
 import semantics.arbitrary.FieldCoordinate
 import semantics.contract.RegisteredResolverOccurrence
 import semantics.arbitrary.ResolutionOccurrenceApplicationLog
@@ -58,11 +61,42 @@ import kotlin.test.assertTrue
 import semantics.shared.OperationContext
 import semantics.shared.RecordingResolverObserver
 import viaduct.engine.api.EngineObjectData
+import viaduct.graphql.schema.ViaductSchema
 
 /**
  * Unfiltered Resolver26 stress: every generated registry/query product is resolved and validated.
  */
 class ResolverBroadStressTest {
+    @Test
+    fun `root field reference focused randomized worlds resolve correctly`(): Unit =
+        runBlocking {
+            val defaultCounts =
+                TestCaseCount(schemas = 10, registriesPerSchema = 5, queriesPerSchema = 5)
+            val propertyProfile = "resolver26-root-field-references"
+            val execution = configuredResolverTestExecution(defaultCounts, propertyProfile)
+            val counts = execution.counts
+            val completed =
+                runResolver26BroadStress(
+                    requiredSignatures = emptySet(),
+                    propertyProfile = propertyProfile,
+                    counts = counts,
+                    config =
+                        Resolver26BroadStressProfile.BALANCED.config +
+                            (RootFieldReferenceWeight to 0.6),
+                    seed = configuredSeed(default = 2026091001L),
+                    execution = execution,
+                )
+
+            assertEquals(
+                if (execution.selectedCase == null) {
+                    counts.schemas * counts.registriesPerSchema * counts.queriesPerSchema
+                } else {
+                    1
+                },
+                completed,
+            )
+        }
+
     @Test
     fun `parent focused randomized worlds resolve correctly`(): Unit =
         runBlocking {
@@ -228,6 +262,18 @@ internal suspend fun runResolver26BroadStress(
     val sometimesPassiveParentDemandDepths: MutableMap<Int, Int> = linkedMapOf()
     var generatedQueryFragments = 0
     var activatedQueryFragmentApplications = 0
+    var generatedRootFieldReferences = 0
+    var activatedRootFieldReferences = 0
+    var activatedListRootFieldReferences = 0
+    var maximumRootFieldReferenceTailLength = 0
+    var activatedRootFieldReferenceFallbacks = 0
+    var activatedRootFieldReferenceExtensions = 0
+    var activatedRootFieldReferenceOverrides = 0
+    var activatedRootTargetsWithFromArgument = 0
+    var activatedRootTargetsWithFromQueryField = 0
+    val activatedRootFieldReferencePathDepths = linkedSetOf<Int>()
+    val activatedRootFieldReferenceArgumentCounts = linkedSetOf<Int>()
+    val activatedRootFieldReferenceTargetKinds = linkedSetOf<String>()
     var activatedParentDemandApplications = 0
     var materializedParentFieldActivations = 0
     var materializedRandomParentFieldActivations = 0
@@ -291,6 +337,8 @@ internal suspend fun runResolver26BroadStress(
                 generatedSometimesPassiveFields +=
                     testCase.registry.features.sometimesPassiveFieldCount
                 generatedQueryFragments += testCase.registry.features.queryFragmentCount
+                generatedRootFieldReferences +=
+                    testCase.registry.features.generatedRootFieldReferenceCount
                 maximumProviderPathLength =
                     maxOf(
                         maximumProviderPathLength,
@@ -306,8 +354,9 @@ internal suspend fun runResolver26BroadStress(
                 val world: Assumptions =
                     testWorld.newAssumptions(selectiveResolvers = true)
                 val fragment: Fragment = world.fragmentFrom(testCase.query.source)
+                val recordingObserver = RecordingResolverObserver()
                 val operation =
-                    OperationContext(world, resolverObserver = RecordingResolverObserver())
+                    OperationContext(world, resolverObserver = recordingObserver)
                 testCase.registry.clearResolutionWitness()
                 val occurrenceLog = ResolutionOccurrenceApplicationLog()
                 resolutionCalls += 1
@@ -441,6 +490,70 @@ internal suspend fun runResolver26BroadStress(
                         }
                     }
                 val witness: ResolutionWitness = testCase.registry.resolutionWitness()
+                val rootFieldReferenceInvocations =
+                    recordingObserver.rootFieldReferenceInvocations()
+                activatedRootFieldReferences += rootFieldReferenceInvocations.size
+                rootFieldReferenceInvocations.forEach { observation ->
+                    activatedRootFieldReferencePathDepths += observation.reference.path.size
+                    activatedRootFieldReferenceArgumentCounts +=
+                        observation.reference.arguments.fieldValues.size
+                    if (
+                        observation.publicationPath.any { component ->
+                            component is model.ListEngineResult.Index
+                        }
+                    ) {
+                        activatedListRootFieldReferences += 1
+                    }
+                    activatedRootFieldReferenceTargetKinds +=
+                        when (observation.reference.type) {
+                            is ViaductSchema.Interface -> "interface"
+                            is ViaductSchema.Union -> "union"
+                            is ViaductSchema.Enum -> "enum"
+                            is ViaductSchema.Scalar -> "scalar"
+                            is ViaductSchema.Object -> "object"
+                            else -> "other"
+                        }
+                    val publicationField =
+                        (observation.publicationPath.lastOrNull()
+                            as? ObjectEngineResult.ObjectKey)?.field
+                    if (
+                        publicationField != null &&
+                        testCase.registry.sourceFieldIsRootFieldReferenceOverride(
+                            FieldCoordinate(
+                                publicationField.containingDef.name,
+                                publicationField.name,
+                            ),
+                        )
+                    ) {
+                        activatedRootFieldReferenceOverrides += 1
+                    }
+                    val targetField =
+                        FieldCoordinate(
+                            observation.reference.targetField.containingDef.name,
+                            observation.reference.targetField.name,
+                        )
+                    if (
+                        testCase.registry.sourceResolverHasFromArgumentVariables(targetField)
+                    ) {
+                        activatedRootTargetsWithFromArgument += 1
+                    }
+                    if (
+                        testCase.registry.sourceResolverHasFromQueryFieldVariables(targetField)
+                    ) {
+                        activatedRootTargetsWithFromQueryField += 1
+                    }
+                }
+                maximumRootFieldReferenceTailLength =
+                    maxOf(
+                        maximumRootFieldReferenceTailLength,
+                        rootFieldReferenceInvocations
+                            .groupingBy { observation ->
+                                observation.publicationRoot to observation.publicationPath
+                            }
+                            .eachCount()
+                            .values
+                            .maxOrNull() ?: 0,
+                    )
                 val occurrenceWitness = occurrenceLog.snapshot()
                 assertEquals(
                     witness.applicationIdentityCounts(),
@@ -460,6 +573,28 @@ internal suspend fun runResolver26BroadStress(
                         registry = testCase.registry,
                     )
                 resolverApplications += witness.applications.size
+                activatedRootFieldReferenceFallbacks +=
+                    witness.applications.count { application ->
+                        testCase.registry.sourceResolverIsRootFieldReferenceFallback(
+                            application.key.field,
+                        )
+                    }
+                activatedRootFieldReferenceExtensions +=
+                    occurrenceWitness.applications.count { application ->
+                        testCase.registry.sourceResolverIsRootFieldReferenceExtension(
+                            application.application.key.field,
+                        ) &&
+                            rootFieldReferenceInvocations.any { reference ->
+                                application.resolverOccurrenceId ==
+                                    ResolverOccurrenceId.at(
+                                        reference.publicationRoot,
+                                        application.occurrencePath,
+                                    ) &&
+                                    application.occurrencePath
+                                        .take(reference.publicationPath.size) ==
+                                    reference.publicationPath
+                            }
+                    }
                 witness.applications.forEach { application ->
                     val sourceField =
                         testCase.registry.sourceResolverCoordinate(application.key.field)
@@ -608,6 +743,55 @@ internal suspend fun runResolver26BroadStress(
                 "Resolver26 profile $propertyProfile did not activate query fragments",
             )
         }
+        if (config[RootFieldReferencesEnabled]) {
+            run.assertAggregate(
+                generatedRootFieldReferences > 0 && activatedRootFieldReferences > 0,
+                "Resolver26 profile $propertyProfile did not generate and activate root-field references",
+            )
+            run.assertAggregate(
+                activatedRootFieldReferencePathDepths.containsAll(setOf(2, 3, 4)),
+                "Resolver26 profile $propertyProfile missed root-field-reference namespace depths: " +
+                    "observed=$activatedRootFieldReferencePathDepths",
+            )
+            run.assertAggregate(
+                activatedRootFieldReferenceArgumentCounts.containsAll(setOf(0, 1, 4)),
+                "Resolver26 profile $propertyProfile missed root-field-reference arities: " +
+                    "observed=$activatedRootFieldReferenceArgumentCounts",
+            )
+            run.assertAggregate(
+                activatedRootFieldReferenceTargetKinds.containsAll(
+                    setOf("object", "interface", "union", "enum", "scalar"),
+                ),
+                "Resolver26 profile $propertyProfile missed root-field-reference target kinds: " +
+                    "observed=$activatedRootFieldReferenceTargetKinds",
+            )
+            run.assertAggregate(
+                activatedListRootFieldReferences > 0,
+                "Resolver26 profile $propertyProfile did not activate a list-element root-field reference",
+            )
+            run.assertAggregate(
+                maximumRootFieldReferenceTailLength >= 3,
+                "Resolver26 profile $propertyProfile did not activate a three-hop root-field-reference tail",
+            )
+            run.assertAggregate(
+                activatedRootFieldReferenceFallbacks > 0,
+                "Resolver26 profile $propertyProfile did not activate root-field-reference fallback",
+            )
+            run.assertAggregate(
+                activatedRootFieldReferenceOverrides > 0,
+                "Resolver26 profile $propertyProfile did not suppress a registered resolver with a root-field reference",
+            )
+            run.assertAggregate(
+                activatedRootFieldReferenceExtensions > 0,
+                "Resolver26 profile $propertyProfile did not resolve successor demand within a referenced result",
+            )
+            run.assertAggregate(
+                activatedRootTargetsWithFromArgument > 0 &&
+                    activatedRootTargetsWithFromQueryField > 0,
+                "Resolver26 profile $propertyProfile did not activate root targets using both " +
+                    "FromArgument and FromQueryField variables",
+            )
+        }
         if (config[ResolverFromQueryFieldVariablesEnabled]) {
             run.assertAggregate(
                 generatedQueryPathVariables > 0 &&
@@ -686,6 +870,18 @@ internal suspend fun runResolver26BroadStress(
                 "sometimesPassiveParentDemandDepths=$sometimesPassiveParentDemandDepths, " +
                 "generatedQueryFragments=$generatedQueryFragments, " +
                 "activatedQueryFragmentApplications=$activatedQueryFragmentApplications, " +
+                "generatedRootFieldReferences=$generatedRootFieldReferences, " +
+                "activatedRootFieldReferences=$activatedRootFieldReferences, " +
+                "activatedListRootFieldReferences=$activatedListRootFieldReferences, " +
+                "maximumRootFieldReferenceTailLength=$maximumRootFieldReferenceTailLength, " +
+                "activatedRootFieldReferenceFallbacks=$activatedRootFieldReferenceFallbacks, " +
+                "activatedRootFieldReferenceExtensions=$activatedRootFieldReferenceExtensions, " +
+                "activatedRootFieldReferenceOverrides=$activatedRootFieldReferenceOverrides, " +
+                "activatedRootTargetsWithFromArgument=$activatedRootTargetsWithFromArgument, " +
+                "activatedRootTargetsWithFromQueryField=$activatedRootTargetsWithFromQueryField, " +
+                "activatedRootFieldReferencePathDepths=$activatedRootFieldReferencePathDepths, " +
+                "activatedRootFieldReferenceArgumentCounts=$activatedRootFieldReferenceArgumentCounts, " +
+                "activatedRootFieldReferenceTargetKinds=$activatedRootFieldReferenceTargetKinds, " +
                 "activatedParentDemandApplications=$activatedParentDemandApplications, " +
                 "materializedParentFieldActivations=$materializedParentFieldActivations, " +
                 "materializedRandomParentFieldActivations=" +

@@ -60,6 +60,17 @@ Run the recursive deep stress property with a fixed seed and optional case count
 RESOLVER26_STRESS_CASES=100000 ./gradlew :semantics:resolver26Stress -Presolver26StressSeed=424242 -Presolver26ThreadCount=5
 ```
 
+Resolver26 deep stress enables root-field references and fails unless it both generates and invokes at least one, so the usual `resolver26Stress` command cannot pass after exercising only the older feature set. Run the focused 250-case product when the root-reference interactions themselves are the subject:
+
+```shell
+./gradlew :semantics:resolver26RootFieldReferenceFocused
+
+# Optional seed override
+./gradlew :semantics:resolver26RootFieldReferenceFocused -Presolver26RootFieldReferenceFocusedSeed=2026091001
+```
+
+The focused task hard-requires observed namespace depths two, three, and four; zero-, one-, and four-argument targets; scalar, enum, concrete-object, interface, and union targets; list-element references; a three-hop reference tail; active fallback; registered-resolver override; extension resolver applications below published referenced results; and target Query-fragment applications using `FromArgument` and `FromQueryField`. Every ordinary Resolver26 broad profile also enables the fixed family and requires generated and activated references, so persisted broad campaigns retain a second mandatory coverage path.
+
 Run one unfiltered broad product by choosing a directed profile, seed, and `S:R:Q` dimensions:
 
 ```shell

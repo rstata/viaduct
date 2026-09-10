@@ -41,6 +41,8 @@ import semantics.arbitrary.ResolverVariableWeight
 import semantics.arbitrary.ResolverVariablesEnabled
 import semantics.arbitrary.ResolverVariablesOnNonQueryFieldsOnly
 import semantics.arbitrary.RootQueryFieldCount
+import semantics.arbitrary.RootFieldReferencesEnabled
+import semantics.arbitrary.RootFieldReferenceWeight
 import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.SometimesPassiveFieldWeight
 
@@ -190,6 +192,8 @@ private fun balancedBroadConfig(): Config =
         (ResolverFragmentsEnabled to true) +
         (ResolverQueryFragmentsEnabled to true) +
         (ParentFieldsEnabled to true) +
+        (RootFieldReferencesEnabled to true) +
+        (RootFieldReferenceWeight to 0.2) +
         (ResolverQueryFragmentWeight to 0.1) +
         (ResolverFragmentWeight to 0.8) +
         (ResolverFragmentDepth to 3) +

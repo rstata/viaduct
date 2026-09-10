@@ -11,6 +11,8 @@ import semantics.arbitrary.Config
 import semantics.arbitrary.MaxSelectionDepth
 import semantics.arbitrary.ParentFieldsEnabled
 import semantics.arbitrary.ResolverVariableSingletonCoercionEnabled
+import semantics.arbitrary.RootFieldReferencesEnabled
+import semantics.arbitrary.RootFieldReferenceWeight
 import semantics.arbitrary.SometimesPassiveFieldWeight
 import semantics.contract.DeepResolverStressContract
 
@@ -23,10 +25,14 @@ class ResolverStressTest : DeepResolverStressContract {
 
     override val sometimesPassiveCoverageRequired: Boolean = true
 
+    override val rootFieldReferenceCoverageRequired: Boolean = true
+
     override val stressConfigOverrides: Config =
         Config.default +
             (ResolverVariableSingletonCoercionEnabled to true) +
             (ParentFieldsEnabled to true) +
+            (RootFieldReferencesEnabled to true) +
+            (RootFieldReferenceWeight to 0.2) +
             (MaxSelectionDepth to 6) +
             (SometimesPassiveFieldWeight to 0.25)
 

@@ -543,6 +543,8 @@ val resolverPropertyProfiles =
             "broad full-feature worlds resolve correctly",
         "resolver26-broad-multiple-owners" to
             "broad full-feature worlds resolve correctly",
+        "resolver26-root-field-references" to
+            "root field reference focused randomized worlds resolve correctly",
         "feature-interaction" to "generated full feature interactions resolve correctly",
         "resolver03-construction-witness" to
             "generated construction witness is exact minimal and permutation invariant",
@@ -716,6 +718,47 @@ tasks.register<org.gradle.api.tasks.testing.Test>("resolver26ParentFocused") {
         systemProperty("resolver.property.case", "all")
         systemProperty("resolver.property.profile", "resolver26-parent-fields")
         systemProperty("resolver.property.size", "40:5:5")
+        systemProperty("kotest.proptest.default.seed", seed)
+    }
+}
+
+val resolver26RootFieldReferenceFocusedSeed =
+    providers
+        .gradleProperty("resolver26RootFieldReferenceFocusedSeed")
+        .orElse(providers.systemProperty("resolver26.root.field.reference.focused.seed"))
+        .orElse(providers.environmentVariable("RESOLVER26_ROOT_FIELD_REFERENCE_FOCUSED_SEED"))
+        .orElse("2026091001")
+
+tasks.register<org.gradle.api.tasks.testing.Test>("resolver26RootFieldReferenceFocused") {
+    group = "verification"
+    description = "Runs the hard-coverage root-field-reference Resolver26 property."
+    maxHeapSize = "2g"
+    maxParallelForks = 1
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching(
+            "semantics.resolver26.ResolverBroadStressTest." +
+                "root field reference focused randomized worlds resolve correctly",
+        )
+    }
+    outputs.upToDateWhen { false }
+    testLogging {
+        showStandardStreams = true
+    }
+
+    doFirst {
+        val seed = resolver26RootFieldReferenceFocusedSeed.get()
+        seed.toLongOrNull()
+            ?: throw GradleException(
+                "resolver26RootFieldReferenceFocusedSeed must be a Long: $seed",
+            )
+        systemProperty("resolver26.broad.stress.seed", seed)
+        systemProperty("resolver.property.seed", seed)
+        systemProperty("resolver.property.case", "all")
+        systemProperty("resolver.property.profile", "resolver26-root-field-references")
+        systemProperty("resolver.property.size", "10:5:5")
         systemProperty("kotest.proptest.default.seed", seed)
     }
 }

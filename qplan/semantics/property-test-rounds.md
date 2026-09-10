@@ -8,7 +8,7 @@ A property-test run has two independent inputs. `testInputProfileId` names a ver
 
 `arbitrary` defines `GeneratorConfigData`, a primitive-shaped data class plus conversion to and from `Config`; it has no serialization or resource-loading responsibility. The launcher layer defines the campaign and round data classes, JSON codec, resource index, and loaders in `semantics/propertytest`. Generator profile resources live under `semantics/src/test/resources/semantics/property-tests/generator-configs`, and the explicit `index.json` makes discovery work identically from directories and jars. Broad campaign resources live under `semantics/src/test/resources/semantics/property-tests/campaigns`.
 
-Each generator document is a complete `GeneratorConfigData` value for one Resolver26 profile rather than a delta over `Config` defaults. Every `ConfigKey` has an explicit stable wire name and primitive wire type; query-fragment admission and density are serialized independently.
+Each generator document is a complete `GeneratorConfigData` value for one Resolver26 profile rather than a delta over `Config` defaults. Every `ConfigKey` has an explicit stable wire name and primitive wire type; query-fragment admission and density and root-field-reference admission and insertion weight are serialized independently. Every persisted Resolver26 broad profile enables the fixed root-reference family, and the broad subject rejects a run that generated no references or activated none, so campaign success cannot silently omit the feature.
 
 ## Shared Execution
 

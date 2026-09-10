@@ -78,6 +78,8 @@ object InputListTypeWeight : ConfigKey<Double>("inputListTypeWeight", ConfigValu
 object MaxInputTypeDepth : ConfigKey<Int>("maxInputTypeDepth", ConfigValueType.INTEGER, 2, ::nonNegative)
 object ExplicitFieldResolverWeight : ConfigKey<Double>("explicitFieldResolverWeight", ConfigValueType.DOUBLE, 0.25, ::weight)
 object SometimesPassiveFieldWeight : ConfigKey<Double>("sometimesPassiveFieldWeight", ConfigValueType.DOUBLE, 0.0, ::weight)
+object RootFieldReferencesEnabled : ConfigKey<Boolean>("rootFieldReferencesEnabled", ConfigValueType.BOOLEAN, false, { null })
+object RootFieldReferenceWeight : ConfigKey<Double>("rootFieldReferenceWeight", ConfigValueType.DOUBLE, 0.0, ::weight)
 object ListTypeWeight : ConfigKey<Double>("listTypeWeight", ConfigValueType.DOUBLE, 0.2, ::weight)
 object MaxOutputListDepth : ConfigKey<Int>("maxOutputListDepth", ConfigValueType.INTEGER, 1, ::positive)
 object PassiveAbstractOutputTypeWeight : ConfigKey<Double>("passiveAbstractOutputTypeWeight", ConfigValueType.DOUBLE, 0.0, ::weight)
@@ -157,6 +159,8 @@ internal object ConfigKeys {
             MaxInputTypeDepth,
             ExplicitFieldResolverWeight,
             SometimesPassiveFieldWeight,
+            RootFieldReferencesEnabled,
+            RootFieldReferenceWeight,
             ListTypeWeight,
             MaxOutputListDepth,
             PassiveAbstractOutputTypeWeight,

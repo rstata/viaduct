@@ -57,6 +57,9 @@ internal const val GENERATED_ROOT_REFERENCE_QUAD_B = "GeneratedRootReferenceQuad
 internal const val GENERATED_ROOT_REFERENCE_QUAD_C = "GeneratedRootReferenceQuadC"
 internal const val GENERATED_ROOT_REFERENCE_QUAD_D = "GeneratedRootReferenceQuadD"
 internal const val GENERATED_ROOT_REFERENCE_EXTENSION_FIELD = "generatedExtension"
+internal const val GENERATED_ROOT_REFERENCE_NODE_INTERFACE = "GeneratedRootReferenceNodeEntity"
+internal const val GENERATED_ROOT_REFERENCE_NODE = "GeneratedRootReferenceNode"
+internal const val GENERATED_ROOT_REFERENCE_NODE_FIELD = "generatedRootReferenceNode"
 
 internal data class RootFieldReferenceTargetSpec(
     val path: List<FieldCoordinate>,
@@ -71,6 +74,8 @@ internal data class RootFieldReferenceFamily(
     val consumerValueCoordinates: Set<FieldCoordinate>,
     val fallbackCoordinate: FieldCoordinate,
     val extensionCoordinates: Set<FieldCoordinate>,
+    val nodeResolverType: String? = null,
+    val nodeConsumerCoordinate: FieldCoordinate? = null,
 )
 
 class ArbitrarySchema internal constructor(
@@ -328,11 +333,16 @@ private class SchemaGenerator(
         val rootFieldReferenceGraph = rootFieldReferenceGraph()
         val inputObjects = inputObjects() + rootFieldReferenceGraph.inputObjects
         val nodeNames =
-            if (config[InterfacesEnabled] && config[NodeResolversEnabled]) {
-                objectNames.filter { chance(config[NodeObjectWeight]) }.toSet()
-            } else {
-                emptySet()
-            }
+            (
+                if (config[InterfacesEnabled] && config[NodeResolversEnabled]) {
+                    objectNames.filter { chance(config[NodeObjectWeight]) }
+                } else {
+                    emptyList()
+                }
+            ).toSet() +
+                rootFieldReferenceGraph.objects
+                    .filter(ObjectDefinition::implementsNode)
+                    .map(ObjectDefinition::name)
         val baseObjects =
             objectNames.mapIndexed { index, name ->
                 val laterObjects =
@@ -745,6 +755,25 @@ private class SchemaGenerator(
                 ),
             )
 
+        val nodeObject =
+            if (config[NodeResolversEnabled]) {
+                val extension =
+                    field(
+                        GENERATED_ROOT_REFERENCE_NODE,
+                        GENERATED_ROOT_REFERENCE_EXTENSION_FIELD,
+                        output("String"),
+                    )
+                extensionCoordinates += extension.coordinate
+                ObjectDefinition(
+                    name = GENERATED_ROOT_REFERENCE_NODE,
+                    implementsNode = true,
+                    interfaces = setOf(GENERATED_ROOT_REFERENCE_NODE_INTERFACE),
+                    fields = listOf(extension),
+                )
+            } else {
+                null
+            }
+
         val namespaceQuery =
             field(
                 "Query",
@@ -822,6 +851,14 @@ private class SchemaGenerator(
                 output("Int"),
                 listOf(scalarArgument("value", ScalarKind.INT)),
             )
+        val nodeValue =
+            nodeObject?.let {
+                field(
+                    GENERATED_ROOT_REFERENCE_NAMESPACE_1,
+                    "nodeValue",
+                    output(GENERATED_ROOT_REFERENCE_NODE_INTERFACE),
+                )
+            }
 
         val consumer =
             field(
@@ -829,6 +866,14 @@ private class SchemaGenerator(
                 GENERATED_ROOT_REFERENCE_CONSUMER_FIELD,
                 output(GENERATED_ROOT_REFERENCE_CONSUMER),
             )
+        val nodeConsumer =
+            nodeObject?.let {
+                field(
+                    "Query",
+                    GENERATED_ROOT_REFERENCE_NODE_FIELD,
+                    output(GENERATED_ROOT_REFERENCE_NODE),
+                )
+            }
         val consumerFields =
             listOf(
                 field(
@@ -879,7 +924,7 @@ private class SchemaGenerator(
                     GENERATED_ROOT_REFERENCE_NAMESPACE_1,
                     implementsNode = false,
                     interfaces = emptySet(),
-                    fields = listOf(level2, zero, objectValue),
+                    fields = listOf(level2, zero, objectValue) + listOfNotNull(nodeValue),
                 ),
                 ObjectDefinition(
                     GENERATED_ROOT_REFERENCE_NAMESPACE_2,
@@ -971,10 +1016,20 @@ private class SchemaGenerator(
                             ),
                         arguments = mapOf("value" to 17),
                     ),
-            )
+            ).apply {
+                nodeValue?.let { target ->
+                    put(
+                        "node",
+                        RootFieldReferenceTargetSpec(
+                            path = listOf(namespaceQuery.coordinate, target.coordinate),
+                            arguments = emptyMap(),
+                        ),
+                    )
+                }
+            }
         return RootFieldReferenceSchemaGraph(
-            objects = namespaceObjects + resultObjects + consumerObject,
-            queryFields = listOf(namespaceQuery, consumer),
+            objects = namespaceObjects + resultObjects + consumerObject + listOfNotNull(nodeObject),
+            queryFields = listOf(namespaceQuery, consumer) + listOfNotNull(nodeConsumer),
             interfaces =
                 listOf(
                     InterfaceDefinitionSpec(
@@ -993,7 +1048,23 @@ private class SchemaGenerator(
                                 ),
                             ),
                     ),
-                ),
+                ) +
+                    listOfNotNull(
+                        nodeObject?.let {
+                            InterfaceDefinitionSpec(
+                                name = GENERATED_ROOT_REFERENCE_NODE_INTERFACE,
+                                members = setOf(GENERATED_ROOT_REFERENCE_NODE),
+                                fields =
+                                    listOf(
+                                        field(
+                                            GENERATED_ROOT_REFERENCE_NODE_INTERFACE,
+                                            GENERATED_ROOT_REFERENCE_EXTENSION_FIELD,
+                                            output("String"),
+                                        ),
+                                    ),
+                            )
+                        },
+                    ),
             unions =
                 listOf(
                     UnionDefinitionSpec(
@@ -1026,6 +1097,8 @@ private class SchemaGenerator(
                     fallbackCoordinate =
                         consumerFields.single { it.name == "activeFallback" }.coordinate,
                     extensionCoordinates = extensionCoordinates,
+                    nodeResolverType = nodeObject?.name,
+                    nodeConsumerCoordinate = nodeConsumer?.coordinate,
                 ),
         )
     }

@@ -95,6 +95,7 @@ data class RegistryFeatures(
     val generatedRootFieldReferenceCount: Int = 0,
     val rootFieldReferenceTargetCount: Int = 0,
     val rootFieldReferenceFallbackCount: Int = 0,
+    val generatedNodeRootFieldReferenceCount: Int = 0,
 )
 
 /**
@@ -110,7 +111,7 @@ class ArbitraryRegistry internal constructor(
     val queryFragmentSources: Map<FieldCoordinate, String>,
     val variableProviderSources: Map<String, String>,
     internal val fieldValues: Map<FieldCoordinate, ValuePlan>,
-    internal val nodeValues: Map<String, ObjectPlan>,
+    internal val nodeValues: Map<String, ValuePlan>,
     internal val objectFragments: Map<FieldCoordinate, FragmentPlan>,
     internal val queryFragments: Map<FieldCoordinate, FragmentPlan>,
     internal val variableProviders: List<VariableProviderPlan>,
@@ -440,13 +441,17 @@ class ArbitraryRegistry internal constructor(
             nodeResolvers = { canonicalSchema ->
                 nodeValues.map { (typeName, plan) ->
                     val type = canonicalSchema.requireType(typeName) as ViaductSchema.Object
-                    val materialize: (String) -> EngineObjectData.Sync = { id ->
-                        plan.materializeObject(
-                            schema = canonicalSchema,
-                            inputId = id,
-                            generatedHashSeed =
-                                stableGeneratedHash(typeName, id),
-                        )
+                    val materialize: (String) -> ResolverOutputData? = { id ->
+                        when (plan) {
+                            is ObjectPlan ->
+                                plan.materializeObject(
+                                    schema = canonicalSchema,
+                                    inputId = id,
+                                    generatedHashSeed = stableGeneratedHash(typeName, id),
+                                )
+                            is RootFieldReferencePlan -> plan.materializeReference(canonicalSchema)
+                            else -> error("Node resolver $typeName has unsupported value plan $plan")
+                        }
                     }
                     type to
                         if (selectiveNodeResolvers) {
@@ -757,14 +762,23 @@ private class RegistryGenerator(
                     this[family.consumerCoordinate] = fixedRootFieldReferenceConsumer(family)
                 }.toMap()
             } ?: generatedFieldValues
-        val baseNodeValues =
-            nodeSites.associateWith { typeName ->
-                objectPlan(
-                    typeName = typeName,
-                    path = typeName,
-                    nodeResolverRoot = true,
-                )
-            }
+        val baseNodeValues: Map<String, ValuePlan> =
+            nodeSites
+                .associateWith<String, ValuePlan> { typeName ->
+                    objectPlan(
+                        typeName = typeName,
+                        path = typeName,
+                        nodeResolverRoot = true,
+                    )
+                }.toMutableMap()
+                .apply {
+                    rootFieldReferenceFamily?.nodeResolverType?.let { typeName ->
+                        this[typeName] =
+                            RootFieldReferencePlan(
+                                rootFieldReferenceFamily.targets.getValue("node"),
+                            )
+                    }
+                }
         val ranks = fieldSites.withIndex().associate { (rank, site) -> site to rank }
         val variableProviders = mutableListOf<VariableProviderPlan>()
         val resolverFragments =
@@ -827,7 +841,7 @@ private class RegistryGenerator(
                     baseFieldValues = baseFieldValues,
                     resolverPrograms = resolverPrograms,
                     onInsertion = { sometimesPassiveFieldCount += 1 },
-                ) as ObjectPlan
+                )
             }
         val oss =
             buildMap {
@@ -984,11 +998,14 @@ private class RegistryGenerator(
                         (fieldValues.values + nodeValues.values)
                             .sumOf { value -> value.parentFieldCount() },
                     generatedRootFieldReferenceCount =
-                        fieldValues.values.sumOf { value -> value.countRootFieldReferences() },
+                        (fieldValues.values + nodeValues.values)
+                            .sumOf { value -> value.countRootFieldReferences() },
                     rootFieldReferenceTargetCount =
                         rootFieldReferenceFamily?.targetCoordinates?.size ?: 0,
                     rootFieldReferenceFallbackCount =
                         if (rootFieldReferenceFamily == null) 0 else 1,
+                    generatedNodeRootFieldReferenceCount =
+                        nodeValues.values.sumOf { value -> value.countRootFieldReferences() },
                 ),
         )
     }
@@ -1148,24 +1165,27 @@ private class RegistryGenerator(
         family: RootFieldReferenceFamily,
     ): List<RootFieldReferenceTargetSpec> {
         if (expectedType.list) return emptyList()
-        return family.targets.values.filter { target ->
-            val targetType = field(target.path.last()).type
-            when {
-                targetType.list -> false
-                schema.isComposite(expectedType.namedType) &&
-                    schema.isComposite(targetType.namedType) ->
-                    schema
-                        .possibleObjects(targetType.namedType)
-                        .map(ObjectDefinition::name)
-                        .all(
-                            schema
-                                .possibleObjects(expectedType.namedType)
-                                .map(ObjectDefinition::name)
-                                .toSet()::contains,
-                        )
-                else -> targetType.namedType == expectedType.namedType
+        return family.targets
+            .filterKeys { key -> key != "node" }
+            .values
+            .filter { target ->
+                val targetType = field(target.path.last()).type
+                when {
+                    targetType.list -> false
+                    schema.isComposite(expectedType.namedType) &&
+                        schema.isComposite(targetType.namedType) ->
+                        schema
+                            .possibleObjects(targetType.namedType)
+                            .map(ObjectDefinition::name)
+                            .all(
+                                schema
+                                    .possibleObjects(expectedType.namedType)
+                                    .map(ObjectDefinition::name)
+                                    .toSet()::contains,
+                            )
+                    else -> targetType.namedType == expectedType.namedType
+                }
             }
-        }
     }
 
     private fun resolverFragmentPlans(
@@ -3766,7 +3786,9 @@ internal data class RootFieldReferencePlan(
         typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
         inputId: String?,
         generatedHashSeed: Int,
-    ): RootFieldReferenceData {
+    ): RootFieldReferenceData = materializeReference(schema)
+
+    fun materializeReference(schema: ViaductSchema): RootFieldReferenceData {
         val sourceSchema = SourceSchemaAdapter(schema)
         val path =
             target.path.map { coordinate ->

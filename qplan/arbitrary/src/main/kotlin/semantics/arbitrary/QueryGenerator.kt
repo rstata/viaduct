@@ -147,17 +147,33 @@ private class QueryGenerator(
             schema.deepFields[typeName]
                 ?.takeIf { depth < config[MinimumSelectionDepth] }
                 ?.let { fieldName -> candidates.single { it.name == fieldName } }
-        val requiredRootReferenceConsumer =
-            if (config[RootFieldReferencesEnabled] && typeName == "Query") {
-                candidates.single { field ->
-                    field.name == GENERATED_ROOT_REFERENCE_CONSUMER_FIELD
-                }
-            } else {
-                null
+        val requiredRootReferenceFields =
+            when {
+                !config[RootFieldReferencesEnabled] -> emptyList()
+                typeName == "Query" ->
+                    listOf(
+                        candidates.single { field ->
+                            field.name == GENERATED_ROOT_REFERENCE_CONSUMER_FIELD
+                        },
+                    ) +
+                        listOfNotNull(
+                            schema.rootFieldReferenceFamily
+                                ?.nodeConsumerCoordinate
+                                ?.let { coordinate ->
+                                    candidates.single { field -> field.name == coordinate.fieldName }
+                                },
+                        )
+                typeName == GENERATED_ROOT_REFERENCE_NODE ->
+                    candidates.filter { field ->
+                        field.name == "id" ||
+                            field.name == GENERATED_ROOT_REFERENCE_EXTENSION_FIELD
+                    }
+                else -> emptyList()
             }
+        val requiredFields = (listOfNotNull(requiredField) + requiredRootReferenceFields).distinct()
         val remainingCandidates =
             candidates
-                .filterNot { it == requiredField || it == requiredRootReferenceConsumer }
+                .filterNot { it in requiredFields }
                 .shuffled(random)
                 .let { fields ->
                     if (
@@ -173,13 +189,10 @@ private class QueryGenerator(
                     }
                 }
         val selectedFields =
-            listOfNotNull(requiredField, requiredRootReferenceConsumer) +
+            requiredFields +
                 remainingCandidates
                     .take(
-                        (
-                            count -
-                                listOfNotNull(requiredField, requiredRootReferenceConsumer).size
-                        ).coerceAtLeast(0),
+                        (count - requiredFields.size).coerceAtLeast(0),
                     )
         val directSelections =
             selectedFields
@@ -265,6 +278,7 @@ private class QueryGenerator(
             }
         val generatedHashSelection =
             objectType
+                ?.takeUnless { it.name == GENERATED_ROOT_REFERENCE_NODE }
                 ?.fields
                 ?.singleOrNull(FieldDefinitionSpec::isGeneratedHashField)
                 ?.let {

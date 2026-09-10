@@ -294,7 +294,7 @@ class ResolverTestReplayTest {
         val registry: String,
         val registryFeatures: RegistryFeatures,
         val fieldValues: Map<FieldCoordinate, ValuePlan>,
-        val nodeValues: Map<String, ObjectPlan>,
+        val nodeValues: Map<String, ValuePlan>,
         val objectFragments: Map<FieldCoordinate, FragmentPlan>,
         val variableProviders: List<VariableProviderPlan>,
         val resolverPrograms: Map<FieldCoordinate, ResolverProgramKind>,

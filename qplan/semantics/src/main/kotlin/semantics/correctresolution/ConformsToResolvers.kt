@@ -12,6 +12,7 @@ import model.ObjectEngineResult
 import model.outputType
 import model.outputValue
 import model.PathComponent
+import model.ResolverOccurrenceId
 import model.RootFieldReferenceData
 import model.VariableBinding
 import semantics.shared.groundedArguments
@@ -23,7 +24,10 @@ import model.usedVariables
 import model.registry.FieldResolver
 import model.registry.ResolverFragments
 import model.registry.VariableDefinition
+import model.merge
+import model.requireQueryTypeDef
 import semantics.shared.OperationContext
+import semantics.shared.ResolverObservations
 
 /**
  * Whether every value agrees with the resolver output that owns its exact occurrence.
@@ -37,7 +41,10 @@ import semantics.shared.OperationContext
  */
 context(operation: OperationContext)
 fun ObjectEngineResult.conformsToResolvers(): Boolean =
-    conformsToResolvers(ResolverApplicationCache(this))
+    resolverApplicationCache(this).let { resolverApplicationCache ->
+        conformsToResolvers(resolverApplicationCache) &&
+            resolverApplicationCache.hasCompleteRootFieldReferenceWitness()
+    }
 
 context(operation: OperationContext)
 internal fun ObjectEngineResult.conformsToResolvers(
@@ -75,7 +82,11 @@ private fun ObjectEngineResult.objectConformsToResolvers(
                     operation.world.parentFieldRelations[key.field] == producerField
 
             arguments !is Arguments.Resolved ->
-                value is ErrorEngineResult
+                value is ErrorEngineResult &&
+                    errorArgumentQueryFragmentConforms(
+                        key = key,
+                        path = path + key,
+                    )
 
             source?.isPresent(fieldName) == true ->
                 arguments.fieldValues.isEmpty() &&
@@ -109,6 +120,34 @@ private fun ObjectEngineResult.objectConformsToResolvers(
             else -> false
         }
     }
+
+context(
+    operation: OperationContext,
+    resolverApplicationCache: ResolverApplicationCache,
+)
+private fun ObjectEngineResult.errorArgumentQueryFragmentConforms(
+    key: ObjectEngineResult.ObjectKey,
+    path: List<PathComponent>,
+): Boolean {
+    if (key.field !in operation.resolverRegistry) return true
+    val resolver = operation.resolverRegistry.resolver(key.field)
+    val queryFragment =
+        resolver.instantiateFragmentsAt(resolverApplicationCache.root, path).queryFragment
+    if (queryFragment.constructionSelections.isEmpty()) return true
+    val queryResults =
+        (operation.resolverObserver as? ResolverObservations)
+            ?.queryFragmentResults(
+                ResolverOccurrenceId.at(resolverApplicationCache.root, path),
+            ).orEmpty()
+    if (key is ObjectEngineResult.GroundKey) return queryResults.isEmpty()
+    val queryResult = queryResults.singleOrNull() ?: return false
+    val querySelections =
+        queryFragment.constructionSelections.merge(operation.schema.requireQueryTypeDef())
+    return queryResult.correctResolution(
+        querySelections,
+        resolverApplicationCache.rootFieldReferenceWitness,
+    )
+}
 
 context(operation: OperationContext)
 internal fun FieldResolver.fragmentsSatisfiedBy(
@@ -209,6 +248,7 @@ private fun EngineResult?.engineResultConformsToResolverValue(
             reference = resolverValue,
             publicationRoot = resolverApplicationCache.root,
             publicationPath = path,
+            validationDemand = completedOutputDemand(),
         )?.let { application ->
             engineResultConformsToResolverValue(
                 resolverValue = application.output,

@@ -8,8 +8,10 @@ import model.EngineErrorData
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
+import model.ResolverOccurrenceId
 import model.RootFieldReferenceData
 import model.SourceSchemaAdapter
+import model.VariableBinding
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.merge
@@ -20,6 +22,7 @@ import model.requireType
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromArgument
+import model.testing.fromObjectField
 import model.testing.fromQueryField
 import model.testing.nodeResolverOf
 import semantics.contract.contractKey
@@ -38,6 +41,70 @@ import viaduct.engine.api.EngineObjectData
 import viaduct.graphql.schema.ViaductSchema
 
 class RootFieldReferenceResolutionTest {
+    @Test
+    fun `list provider awaits root-reference elements`() {
+        val resultFragment =
+            "fragment ResultInput on Query { numbers echo(values: ${'$'}provided) }"
+        val providerFragment = "fragment ProviderInput on Query { numbers }"
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      result: Int!
+                      numbers: [Int!]!
+                      one: Int!
+                      echo(values: [Int!]!): Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val empty = schema.emptyFragmentOf("Query")
+                    val result = schema.requireObjectField("Query", "result")
+                    val numbers = schema.requireObjectField("Query", "numbers")
+                    val one = schema.requireObjectField("Query", "one")
+                    val echo = schema.requireObjectField("Query", "echo")
+                    mapOf(
+                        result to
+                            fieldResolverOf(
+                                schema.fragmentFrom(resultFragment, variableField = result),
+                            ) { input, _ -> input.get("echo") },
+                        numbers to
+                            fieldResolverOf(empty) { _, _ ->
+                                listOf(RootFieldReferenceData.of(listOf(one), emptyMap()))
+                            },
+                        one to fieldResolverOf(empty) { _, _ -> 7 },
+                        echo to
+                            fieldResolverOf(empty) { _, arguments ->
+                                (arguments.fieldValues.getValue("values") as List<*>).single()
+                            },
+                    )
+                },
+                variableProviders = { schema ->
+                    val result = schema.requireObjectField("Query", "result")
+                    mapOf(
+                        Arguments.Variable.of(result, "provided") to
+                            schema.fromObjectField(
+                                objectFragmentSource = providerFragment,
+                                responsePath = listOf("numbers"),
+                                variableField = result,
+                            ),
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val query = world.fragmentFrom("fragment Result on Query { result }")
+        val observer = RecordingResolverObserver()
+        val operation = OperationContext(world, resolverObserver = observer)
+
+        val resolved = context(operation) { resolve(query.subselections) }
+
+        assertEquals(
+            7,
+            resolved.getCell(world.schema.contractKey("Query", "result")).getValue().get(),
+        )
+        assertEquals(1, observer.rootFieldReferenceInvocations().size)
+    }
+
     @Test
     fun `node resolver may return a root field reference`() {
         val nodeApplications = AtomicInteger()
@@ -1314,6 +1381,408 @@ class RootFieldReferenceResolutionTest {
     }
 
     @Test
+    fun `excluded passive list does not invoke its root-field-reference elements`() {
+        val resolution = resolveConditionalPassiveListReference(enabled = false)
+
+        assertEquals(0, resolution.targetApplications.get())
+    }
+
+    @Test
+    fun `included passive list invokes its root-field-reference elements`() {
+        val resolution = resolveConditionalPassiveListReference(enabled = true)
+
+        assertEquals(1, resolution.targetApplications.get())
+    }
+
+    @Test
+    fun `application-count oracle excludes references beneath an excluded passive list`() {
+        val resolution = resolveConditionalPassiveListReference(enabled = false)
+        val expectedApplications =
+            context(resolution.operation) {
+                resolution.result.registeredResolverOccurrenceApplicationIdentityCounts()
+            }
+
+        assertEquals(
+            emptySet(),
+            expectedApplications.keys
+                .mapTo(linkedSetOf()) { identity ->
+                    identity.applicationIdentity.key.field
+                }.filterTo(linkedSetOf()) { field -> field.fieldName == "product" },
+        )
+    }
+
+    @Test
+    fun `application-count oracle rejects an unowned root-reference observation`() {
+        val resolution = resolveConditionalPassiveListReference(enabled = true)
+        val observation =
+            assertIs<RecordingResolverObserver>(resolution.operation.resolverObserver)
+                .rootFieldReferenceInvocations()
+                .single()
+        val malformedObserver = RecordingResolverObserver()
+        malformedObserver.onRootFieldReferenceInvocation(observation)
+        malformedObserver.onRootFieldReferenceInvocation(
+            observation.copy(
+                invocationRoot =
+                    ObjectEngineResult.of(resolution.operation.schema.requireQueryTypeDef()),
+            ),
+        )
+        val validationOperation =
+            OperationContext(
+                world = resolution.operation.world,
+                variableBindingsState = resolution.operation.variableBindingsState,
+                resolverObserver = malformedObserver,
+            )
+        val expectedApplications =
+            context(validationOperation) {
+                resolution.result.registeredResolverOccurrenceApplicationIdentityCounts()
+            }
+
+        assertEquals(
+            1,
+            expectedApplications
+                .filterKeys { identity ->
+                    identity.applicationIdentity.key.field.fieldName == "product"
+                }.values.sum(),
+        )
+    }
+
+    @Test
+    fun `error-valued resolver occurrence owns references in its query fragment`() {
+        val queryFragmentSource =
+            "fragment ConsumerQuery on Query { container { product { value } } }"
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      consumer(value: Int!): Int!
+                      container: Container!
+                      product: Product!
+                    }
+
+                    type Container {
+                      product: Product!
+                    }
+
+                    type Product {
+                      value: String!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val empty = schema.emptyFragmentOf("Query")
+                    val consumer = schema.requireObjectField("Query", "consumer")
+                    val container = schema.requireObjectField("Query", "container")
+                    val product = schema.requireObjectField("Query", "product")
+                    mapOf(
+                        consumer to
+                            fieldResolverOf(
+                                objectFragment = empty,
+                                queryFragment = schema.fragmentFrom(queryFragmentSource),
+                            ) { _, _, _ -> error("error-valued consumer must not run") },
+                        container to
+                            fieldResolverOf(empty) { _, _ ->
+                                schema.objectOf("Container") {
+                                    "product" setTo
+                                        RootFieldReferenceData.of(listOf(product), emptyMap())
+                                }
+                            },
+                        product to
+                            fieldResolverOf(empty) { _, _ ->
+                                schema.objectOf("Product") { "value" setTo "target" }
+                            },
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val observer = RecordingResolverObserver()
+        val operation = OperationContext(world, resolverObserver = observer)
+        val queryFragment = world.fragmentFrom(queryFragmentSource)
+        val queryResult = context(operation) { resolve(queryFragment.subselections) }
+        assertEquals(1, observer.rootFieldReferenceInvocations().size)
+
+        val primaryRoot =
+            ObjectEngineResult.of(
+                operation.schema.requireQueryTypeDef(),
+                mutable = true,
+            )
+        val consumer = operation.schema.requireObjectField("Query", "consumer")
+        val variable =
+            Arguments.Variable.of(consumer, "provided").instantiate(
+                ResolverOccurrenceId.at(primaryRoot, emptyList()),
+            )
+        operation.variableBindingsState.bindVariable(
+            requireNotNull(variable.instanceId),
+            VariableBinding.Error,
+        )
+        val consumerKey =
+            ObjectEngineResult.ObjectKey.of(
+                consumer,
+                Arguments.of(consumer, mapOf("value" to variable)),
+            )
+        primaryRoot.setCellValue(consumerKey, ErrorEngineResult.of(EngineErrorData.of()))
+        observer.onQueryFragmentResult(
+            ResolverOccurrenceId.at(primaryRoot, listOf(consumerKey)),
+            queryResult,
+        )
+        val selections = model.selectionForestOf().merge(operation.schema.requireQueryTypeDef())
+
+        assertTrue(context(operation) { primaryRoot.correctResolution(selections) })
+        assertEquals(
+            1,
+            context(operation) {
+                primaryRoot.registeredResolverOccurrenceApplicationIdentityCounts()
+            }.filterKeys { identity ->
+                identity.applicationIdentity.key.field.fieldName == "product"
+            }.values.sum(),
+        )
+    }
+
+    @Test
+    fun `correctness replays a root reference with canonical rather than observed demand`() {
+        val resolution = resolveConditionalPassiveListReference(enabled = true)
+        val observation =
+            assertIs<RecordingResolverObserver>(resolution.operation.resolverObserver)
+                .rootFieldReferenceInvocations()
+                .single()
+        val malformedObserver = RecordingResolverObserver()
+        malformedObserver.onRootFieldReferenceInvocation(
+            observation.copy(suppliedDemand = model.selectionForestOf()),
+        )
+        val validationOperation =
+            OperationContext(
+                world = resolution.operation.world,
+                variableBindingsState = resolution.operation.variableBindingsState,
+                resolverObserver = malformedObserver,
+            )
+        val query =
+            resolution.operation.world.fragmentFrom(
+                "fragment Result on Query { result(enabled: true) }",
+            )
+
+        assertTrue(
+            context(validationOperation) {
+                resolution.result.correctResolution(
+                    query.subselections.merge(validationOperation.schema.requireQueryTypeDef()),
+                )
+            },
+        )
+    }
+
+    @Test
+    fun `correctness rejects a root-reference witness with a noncanonical invocation path`() {
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      container: Container!
+                      product: Product!
+                    }
+
+                    type Container {
+                      product: Product!
+                    }
+
+                    type Product {
+                      value: String!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val container = schema.requireObjectField("Query", "container")
+                    val target = schema.requireObjectField("Query", "product")
+                    mapOf(
+                        container to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                schema.objectOf("Container") {
+                                    "product" setTo
+                                        RootFieldReferenceData.of(listOf(target), emptyMap())
+                                }
+                            },
+                        target to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                schema.objectOf("Product") { "value" setTo "target" }
+                            },
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val query = world.fragmentFrom("fragment Result on Query { container { product { value } } }")
+        val observer = RecordingResolverObserver()
+        val operation = OperationContext(world, resolverObserver = observer)
+        val result = context(operation) { resolve(query.subselections) }
+        val observation = observer.rootFieldReferenceInvocations().single()
+        val malformedObserver = RecordingResolverObserver()
+        malformedObserver.onRootFieldReferenceInvocation(
+            observation.copy(
+                invocationPath =
+                    listOf(ListEngineResult.Index.of(0)) + observation.invocationPath,
+            ),
+        )
+        val validationOperation =
+            OperationContext(
+                world = world,
+                variableBindingsState = operation.variableBindingsState,
+                resolverObserver = malformedObserver,
+            )
+
+        assertFalse(
+            context(validationOperation) {
+                result.correctResolution(
+                    query.subselections.merge(world.schema.requireQueryTypeDef()),
+                )
+            },
+        )
+    }
+
+    @Test
+    fun `correctness rejects sibling root references that reuse one invocation root`() {
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      container: Container!
+                      product: Product!
+                    }
+
+                    type Container {
+                      first: Product!
+                      second: Product!
+                    }
+
+                    type Product {
+                      value: String!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val container = schema.requireObjectField("Query", "container")
+                    val target = schema.requireObjectField("Query", "product")
+                    val reference = RootFieldReferenceData.of(listOf(target), emptyMap())
+                    mapOf(
+                        container to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                schema.objectOf("Container") {
+                                    "first" setTo reference
+                                    "second" setTo reference
+                                }
+                            },
+                        target to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                schema.objectOf("Product") { "value" setTo "target" }
+                            },
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val query =
+            world.fragmentFrom(
+                "fragment Result on Query { container { first { value } second { value } } }",
+            )
+        val observer = RecordingResolverObserver()
+        val operation = OperationContext(world, resolverObserver = observer)
+        val result = context(operation) { resolve(query.subselections) }
+        val observations = observer.rootFieldReferenceInvocations()
+        assertEquals(2, observations.size)
+        val malformedObserver = RecordingResolverObserver()
+        malformedObserver.onRootFieldReferenceInvocation(observations[0])
+        malformedObserver.onRootFieldReferenceInvocation(
+            observations[1].copy(
+                invocationRoot = observations[0].invocationRoot,
+                invocationPath = observations[0].invocationPath,
+                invocationKey = observations[0].invocationKey,
+            ),
+        )
+        val validationOperation =
+            OperationContext(
+                world = world,
+                variableBindingsState = operation.variableBindingsState,
+                resolverObserver = malformedObserver,
+            )
+
+        assertFalse(
+            context(validationOperation) {
+                result.correctResolution(
+                    query.subselections.merge(world.schema.requireQueryTypeDef()),
+                )
+            },
+        )
+    }
+
+    private fun resolveConditionalPassiveListReference(
+        enabled: Boolean,
+    ): ConditionalPassiveListResolution {
+        val targetApplications = AtomicInteger()
+        val testWorld =
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    type Query {
+                      result(enabled: Boolean!): Int!
+                      container: Container!
+                      product: Product!
+                    }
+
+                    type Container {
+                      products: [Product!]!
+                    }
+
+                    type Product {
+                      value: String!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val result = schema.requireObjectField("Query", "result")
+                    val container = schema.requireObjectField("Query", "container")
+                    val target = schema.requireObjectField("Query", "product")
+                    mapOf(
+                        result to
+                            fieldResolverOf(
+                                schema.fragmentFrom(
+                                    """
+                                    fragment ResultInput on Query {
+                                      container {
+                                        products @include(if: ${'$'}enabled) { value }
+                                      }
+                                    }
+                                    """.trimIndent(),
+                                    variableField = result,
+                                ),
+                            ) { _, _ -> 1 },
+                        container to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                schema.objectOf("Container") {
+                                    "products" setTo
+                                        listOf(
+                                            RootFieldReferenceData.of(
+                                                listOf(target),
+                                                emptyMap(),
+                                            ),
+                                        )
+                                }
+                            },
+                        target to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                targetApplications.incrementAndGet()
+                                schema.objectOf("Product") { "value" setTo "target" }
+                            },
+                    )
+                },
+                variableProviders = { schema ->
+                    val result = schema.requireObjectField("Query", "result")
+                    mapOf(
+                        Arguments.Variable.of(result, "enabled") to
+                            schema.fromArgument(result, "enabled"),
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val query = world.fragmentFrom("fragment Result on Query { result(enabled: $enabled) }")
+        val operation = OperationContext(world, resolverObserver = RecordingResolverObserver())
+        val result = context(operation) { resolve(query.subselections) }
+        return ConditionalPassiveListResolution(result, operation, targetApplications)
+    }
+
+    @Test
     fun `referenced resolver cannot declare an object fragment`() {
         val testWorld =
             TestWorld.fromSDL(
@@ -1379,4 +1848,10 @@ class RootFieldReferenceResolutionTest {
             resolve(fragment.subselections)
         }
     }
+
+    private data class ConditionalPassiveListResolution(
+        val result: ObjectEngineResult,
+        val operation: OperationContext,
+        val targetApplications: AtomicInteger,
+    )
 }

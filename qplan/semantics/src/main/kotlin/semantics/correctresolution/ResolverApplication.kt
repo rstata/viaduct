@@ -33,12 +33,15 @@ internal class ReappliedResolver(
 
 internal class ResolverApplicationCache(
     val root: ObjectEngineResult,
+    internal val rootFieldReferenceWitness: RootFieldReferenceWitness,
 ) {
     private val applications =
         IdentityHashMap<
             ObjectEngineResult,
             MutableMap<ObjectEngineResult.ObjectKey, CachedResolverApplication>,
         >()
+    private val rootFieldReferenceApplications =
+        mutableMapOf<List<PathComponent>, CachedRootFieldReferenceApplication>()
 
     fun getOrPut(
         result: ObjectEngineResult,
@@ -50,11 +53,149 @@ internal class ResolverApplicationCache(
             CachedResolverApplication(compute())
         }.application
     }
+
+    fun getOrPutRootFieldReference(
+        reference: RootFieldReferenceData,
+        publicationPath: List<PathComponent>,
+        compute: () -> ReappliedResolver?,
+    ): ReappliedResolver? {
+        val cached = rootFieldReferenceApplications[publicationPath]
+        if (cached != null) {
+            return cached.application.takeIf { cached.reference == reference }
+        }
+        return compute().also { application ->
+            rootFieldReferenceApplications[publicationPath] =
+                CachedRootFieldReferenceApplication(reference, application)
+        }
+    }
+
+    fun rootFieldReferenceCandidates(
+        publicationPath: List<PathComponent>,
+    ): List<IndexedRootFieldReferenceObservation>? =
+        rootFieldReferenceWitness.claim(root, publicationPath)
+
+    fun acceptRootFieldReference(candidate: IndexedRootFieldReferenceObservation) {
+        rootFieldReferenceWitness.accept(candidate)
+    }
+
+    fun hasCompleteRootFieldReferenceWitness(): Boolean = rootFieldReferenceWitness.isComplete()
 }
 
 private class CachedResolverApplication(
     val application: ReappliedResolver?,
 )
+
+private class CachedRootFieldReferenceApplication(
+    val reference: RootFieldReferenceData,
+    val application: ReappliedResolver?,
+)
+
+internal data class IndexedRootFieldReferenceObservation(
+    val index: Int,
+    val observation: RootFieldReferenceInvocationObservation,
+)
+
+internal class RootFieldReferenceWitness(
+    private val observations: List<RootFieldReferenceInvocationObservation>,
+    private val allowedPublicationRoots: List<ObjectEngineResult>,
+) {
+    private val indexedObservations =
+        observations.mapIndexed(::IndexedRootFieldReferenceObservation)
+    private val claimedPublicationPaths =
+        IdentityHashMap<ObjectEngineResult, MutableSet<List<PathComponent>>>()
+    private val acceptedIndices = linkedSetOf<Int>()
+    private val forbiddenInvocationRoots =
+        buildList {
+            addAll(allowedPublicationRoots)
+            addAll(observations.map { observation -> observation.publicationRoot })
+        }
+
+    fun claim(
+        publicationRoot: ObjectEngineResult,
+        publicationPath: List<PathComponent>,
+    ): List<IndexedRootFieldReferenceObservation>? {
+        if (!claimedPublicationPaths.getOrPut(publicationRoot, ::linkedSetOf).add(publicationPath)) {
+            return null
+        }
+        return indexedObservations.filter { candidate ->
+            candidate.observation.publicationRoot === publicationRoot &&
+                candidate.observation.publicationPath == publicationPath
+        }
+    }
+
+    fun accept(candidate: IndexedRootFieldReferenceObservation) {
+        check(acceptedIndices.add(candidate.index)) {
+            "Root-field-reference observation was accepted twice"
+        }
+    }
+
+    fun isComplete(): Boolean =
+        observations.haveDistinctInvocationRoots() &&
+            observations.all { observation ->
+                allowedPublicationRoots.any { allowedRoot ->
+                    observation.publicationRoot === allowedRoot
+                }
+            } &&
+            indexedObservations.none { candidate ->
+                forbiddenInvocationRoots.any { forbiddenRoot ->
+                    candidate.observation.invocationRoot === forbiddenRoot
+                }
+            } &&
+            acceptedIndices == indexedObservations.mapTo(linkedSetOf()) { candidate -> candidate.index }
+
+    fun validatedObservations(): List<RootFieldReferenceInvocationObservation> =
+        indexedObservations
+            .filter { candidate -> candidate.index in acceptedIndices }
+            .map(IndexedRootFieldReferenceObservation::observation)
+}
+
+private fun List<RootFieldReferenceInvocationObservation>.haveDistinctInvocationRoots(): Boolean {
+    val roots = IdentityHashMap<ObjectEngineResult, Unit>()
+    return all { observation -> roots.put(observation.invocationRoot, Unit) == null }
+}
+
+context(operation: OperationContext)
+internal fun rootFieldReferenceWitness(
+    primaryRoot: ObjectEngineResult,
+): RootFieldReferenceWitness {
+    val observations = operation.resolverObserver as? ResolverObservations
+    return RootFieldReferenceWitness(
+        observations = observations?.rootFieldReferenceInvocations().orEmpty(),
+        allowedPublicationRoots =
+            listOf(primaryRoot) +
+                observations
+                    ?.allQueryFragmentResults()
+                    ?.values
+                    ?.flatten()
+                    .orEmpty(),
+    )
+}
+
+internal fun resolverApplicationCache(
+    root: ObjectEngineResult,
+    rootFieldReferenceWitness: RootFieldReferenceWitness,
+): ResolverApplicationCache =
+    ResolverApplicationCache(
+        root = root,
+        rootFieldReferenceWitness = rootFieldReferenceWitness,
+    )
+
+context(operation: OperationContext)
+internal fun resolverApplicationCache(root: ObjectEngineResult): ResolverApplicationCache =
+    resolverApplicationCache(root, rootFieldReferenceWitness(root))
+
+/** Reference invocations published beneath this root and justified by deterministic replay. */
+context(operation: OperationContext)
+internal fun ObjectEngineResult.ownedRootFieldReferenceInvocations(): List<
+    RootFieldReferenceInvocationObservation,
+> {
+    val witness = rootFieldReferenceWitness(this)
+    val cache = resolverApplicationCache(this, witness)
+    check(conformsToResolvers(cache)) {
+        "Cannot reconstruct root-field-reference applications from a nonconforming result"
+    }
+    return witness.validatedObservations()
+}
 
 /**
  * Reconstructs source ownership while traversing the completed result.
@@ -110,7 +251,12 @@ internal fun ObjectEngineResult.reapplyResolver(
                 val querySelections =
                     queryFragment.constructionSelections
                         .merge(operation.schema.requireQueryTypeDef())
-                if (!queryResult.correctResolution(querySelections)) {
+                if (
+                    !queryResult.correctResolution(
+                        querySelections,
+                        resolverApplicationCache.rootFieldReferenceWitness,
+                    )
+                ) {
                     return@getOrPut null
                 }
                 runBlocking {
@@ -135,61 +281,72 @@ internal fun ObjectEngineResult.reapplyResolver(
     }
 
 /** Reapplies every independently rooted resolver hop that justified one consumer value. */
-context(operation: OperationContext)
+context(
+    operation: OperationContext,
+    resolverApplicationCache: ResolverApplicationCache,
+)
 internal fun reapplyRootFieldReference(
     reference: RootFieldReferenceData,
     publicationRoot: ObjectEngineResult,
     publicationPath: List<PathComponent>,
-): ReappliedResolver? {
-    val observations =
-        (operation.resolverObserver as? ResolverObservations)
-            ?.rootFieldReferenceInvocations()
-            ?.filter { observation ->
-                observation.publicationRoot === publicationRoot &&
-                    observation.publicationPath == publicationPath
-            }
-            .orEmpty()
-    if (observations.isEmpty()) return null
-    if (
-        observations.indices.any { index ->
-            observations.take(index).any { prior ->
-                prior.invocationRoot === observations[index].invocationRoot
-            }
-        }
-    ) {
-        return null
-    }
+    validationDemand: SelectionForest,
+): ReappliedResolver? =
+    resolverApplicationCache.getOrPutRootFieldReference(reference, publicationPath) compute@{
+        if (publicationRoot !== resolverApplicationCache.root) return@compute null
+        val candidates =
+            resolverApplicationCache.rootFieldReferenceCandidates(publicationPath)
+                ?: return@compute null
+        if (candidates.isEmpty()) return@compute null
 
-    var expectedReference = reference
-    observations.forEachIndexed { index, observation ->
-        if (!observation.matches(expectedReference, publicationRoot)) return null
-        val output = observation.reapplyReferencedResolver()?.output
-        if (output is RootFieldReferenceData) {
-            if (index == observations.lastIndex) return null
-            expectedReference = output
-        } else {
-            if (index != observations.lastIndex) return null
-            return ReappliedResolver(output)
+        var expectedReference = reference
+        candidates.forEach { candidate ->
+            val observation = candidate.observation
+            if (!observation.matches(expectedReference, publicationRoot)) return@compute null
+            val application =
+                observation.reapplyReferencedResolver(validationDemand) ?: return@compute null
+            resolverApplicationCache.acceptRootFieldReference(candidate)
+            val output = application.output
+            if (output is RootFieldReferenceData) {
+                expectedReference = output
+            } else {
+                return@compute ReappliedResolver(output)
+            }
         }
+        null
     }
-    return null
-}
 
 context(operation: OperationContext)
 private fun RootFieldReferenceInvocationObservation.matches(
     expectedReference: RootFieldReferenceData,
     expectedPublicationRoot: ObjectEngineResult,
-): Boolean =
-    reference == expectedReference &&
+): Boolean {
+    val expectedInvocationPath: List<PathComponent> =
+        expectedReference.path.mapIndexed { index, field ->
+            ObjectEngineResult.GroundKey.of(
+                field = field,
+                arguments =
+                    if (index == expectedReference.path.lastIndex) {
+                        expectedReference.arguments
+                    } else {
+                        Arguments.Resolved.of(field, emptyMap())
+                    },
+            )
+        }
+    return reference == expectedReference &&
         invocationRoot !== expectedPublicationRoot &&
         invocationRoot.type == operation.schema.requireQueryTypeDef() &&
-        invocationKey.field == reference.targetField &&
-        invocationKey.arguments == reference.arguments &&
-        invocationPath.filterIsInstance<ObjectEngineResult.ObjectKey>().map { key -> key.field } ==
-        reference.path
+        invocationRoot.keys.isEmpty() &&
+        invocationPath == expectedInvocationPath &&
+        invocationKey == expectedInvocationPath.last()
+}
 
-context(operation: OperationContext)
-private fun RootFieldReferenceInvocationObservation.reapplyReferencedResolver(): ReappliedResolver? {
+context(
+    operation: OperationContext,
+    resolverApplicationCache: ResolverApplicationCache,
+)
+private fun RootFieldReferenceInvocationObservation.reapplyReferencedResolver(
+    validationDemand: SelectionForest,
+): ReappliedResolver? {
     if (!invocationKey.isContextuallyGrounded()) return null
     val arguments = invocationKey.groundedArguments() as? Arguments.Resolved ?: return null
     val resolver = operation.resolverRegistry.resolver(invocationKey.field)
@@ -227,7 +384,14 @@ private fun RootFieldReferenceInvocationObservation.reapplyReferencedResolver():
                     ?: return null
             val querySelections =
                 queryFragment.constructionSelections.merge(operation.schema.requireQueryTypeDef())
-            if (!queryResult.correctResolution(querySelections)) return null
+            if (
+                !queryResult.correctResolution(
+                    querySelections,
+                    resolverApplicationCache.rootFieldReferenceWitness,
+                )
+            ) {
+                return null
+            }
             runBlocking {
                 context(operation, CycleCheckState.createNOP()) {
                     queryResult.materialize(
@@ -243,7 +407,7 @@ private fun RootFieldReferenceInvocationObservation.reapplyReferencedResolver():
                 input = input,
                 queryValue = queryValue,
                 arguments = resolverArguments,
-                selections = suppliedDemand,
+                selections = validationDemand,
             )
         },
     )
@@ -257,7 +421,7 @@ private fun RootFieldReferenceInvocationObservation.reapplyReferencedResolver():
  * different demands, so this demand is sufficient for completed-result correctness without adding
  * scheduler witnesses to the judgment.
  */
-private fun EngineResult?.completedOutputDemand(): SelectionForest =
+internal fun EngineResult?.completedOutputDemand(): SelectionForest =
     when (this) {
         is ObjectEngineResult ->
             keys

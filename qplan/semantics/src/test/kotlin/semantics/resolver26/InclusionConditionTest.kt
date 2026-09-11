@@ -28,6 +28,37 @@ import kotlin.test.assertTrue
 
 class InclusionConditionTest {
     @Test
+    fun `statically excluded demand below parent does not invoke ancestor resolver`() {
+        val world =
+            TestWorld.fromDSL(
+                """
+                extend type Query {
+                  root: Root! @resolver(result: {})
+                }
+
+                type Root {
+                  child: Child! @resolver(result: {})
+                  expensive: Int! @resolver(result: 7)
+                }
+
+                type Child {
+                  parent: Root @parent
+                  result: Int!
+                    @resolver(
+                      of: "parent { expensive @skip(if: true) }"
+                      result: 1
+                    )
+                }
+                """.trimIndent(),
+            )
+        val resolution = world.resolve("query { root { child { result } } }")
+        val expensive = world.schema.requireObjectField("Root", "expensive")
+
+        assertTrue(resolution.correct)
+        assertEquals(0, resolution.applications.count { it == expensive })
+    }
+
+    @Test
     fun `field and fragment conditions are conjoined`() {
         listOf(
             ConditionCase(fragment = false, field = false, skipped = false, included = false),

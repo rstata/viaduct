@@ -303,7 +303,7 @@ class GeneratorTest {
     }
 
     @Test
-    fun `random parent generation varies chains lists abstract targets and resolver inputs`() {
+    fun `random parent generation covers deep chains lists abstract targets and resolver inputs`() {
         val config =
             Config.default +
                 (ParentFieldsEnabled to true) +
@@ -320,12 +320,15 @@ class GeneratorTest {
         var parentDemandResolvers = 0
         var argumentBearingParentScalars = 0
         var boundedDiagonalResolvers = 0
+        var recursivelyComposedDiagonalResolvers = 0
 
         repeat(100) {
             val schema = Arb.schema(config).next(random)
             val registry = schema.registry(config).next(random)
 
             assertTrue(schema.features.randomParentFieldCount > 0)
+            assertTrue(schema.features.randomParentFieldCount in 6..8)
+            assertTrue(schema.features.maximumParentChainDepth in 3..4)
             assertTrue(
                 schema.query.fields
                     .filter { field -> field.name.startsWith("query") }
@@ -355,6 +358,12 @@ class GeneratorTest {
                     field.typeName.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX) &&
                         source.contains("resolverParentCoverage: parent {\n    __typename")
                 }
+            recursivelyComposedDiagonalResolvers +=
+                registry.objectFragmentSources.count { (field, source) ->
+                    field.typeName.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX) &&
+                        source.contains("resolverParentCoverage: parent {") &&
+                        source.contains("value0")
+                }
         }
 
         assertTrue(listProducers > 0)
@@ -363,6 +372,7 @@ class GeneratorTest {
         assertTrue(parentDemandResolvers > 0)
         assertTrue(argumentBearingParentScalars > 0)
         assertTrue(boundedDiagonalResolvers > 0)
+        assertTrue(recursivelyComposedDiagonalResolvers > 0)
     }
 
     @Test

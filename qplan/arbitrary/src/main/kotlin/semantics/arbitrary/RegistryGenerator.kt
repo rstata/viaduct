@@ -744,6 +744,7 @@ private class RegistryGenerator(
                         )
                 }.map(FieldDefinitionSpec::coordinate)
                 .shuffled(random)
+                .withGeneratedRandomParentResolverOrder(config[RandomParentFieldsEnabled])
                 .withGeneratedParentResultAfterAncestor(config[ParentFieldsEnabled])
                 .toCollection(linkedSetOf())
 
@@ -1235,10 +1236,15 @@ private class RegistryGenerator(
                         consumer = consumer,
                         ranks = ranks,
                         enabled = config[ResolverQueryFragmentsEnabled],
-                        weight = config[ResolverQueryFragmentWeight],
+                        weight =
+                            if (consumer.isGeneratedRandomParentDiagonalResolver()) {
+                                1.0
+                            } else {
+                                config[ResolverQueryFragmentWeight]
+                            },
                     ),
             )
-                .withTopLevelRandomParentDemand(consumer)
+                .withTopLevelRandomParentDemand(consumer, ranks)
                 .withFromArgumentVariableProvider(consumer, ranks, variableProviders)
                 .withFromProviderVariableProvider(consumer, ranks, variableProviders)
         return ProviderFragment.entries.fold(fragments) { result, providerFragment ->
@@ -1370,6 +1376,7 @@ private class RegistryGenerator(
 
     private fun ResolverFragmentPlans.withTopLevelRandomParentDemand(
         consumer: FieldCoordinate,
+        ranks: Map<FieldCoordinate, Int>,
     ): ResolverFragmentPlans {
         val parentField =
             schema
@@ -1391,6 +1398,31 @@ private class RegistryGenerator(
         ) {
             return this
         }
+        val lowerRankedParentResolver =
+            schema
+                .possibleObjects(parentField.type.namedType)
+                .mapNotNull { possibleParent ->
+                    FieldCoordinate(possibleParent.name, "value0").takeIf { candidate ->
+                        candidate in fieldSites &&
+                            ranks.getValue(candidate) < ranks.getValue(consumer)
+                    }
+                }.maxByOrNull(ranks::getValue)
+        val nestedParentResolverSelection =
+            lowerRankedParentResolver?.let { candidate ->
+                val candidateField = field(candidate)
+                FragmentSelectionPlan(
+                    fieldName = candidate.fieldName,
+                    arguments =
+                        candidateField.arguments.associate { argument ->
+                            argument.name to inputLiteral(argument.type)
+                        },
+                    subselections = emptyList(),
+                    typeCondition =
+                        candidate.typeName.takeUnless { typeName ->
+                            typeName == parentField.type.namedType
+                        },
+                )
+            }
         return copy(
             objectFragment =
                 objectFragment.copy(
@@ -1407,7 +1439,7 @@ private class RegistryGenerator(
                                             arguments = emptyMap(),
                                             subselections = emptyList(),
                                         ),
-                                    ),
+                                    ) + listOfNotNull(nestedParentResolverSelection),
                             ),
                 ),
         )
@@ -1681,15 +1713,19 @@ private class RegistryGenerator(
         ranks: Map<FieldCoordinate, Int>,
         variableProviders: MutableList<VariableProviderPlan>,
     ): ResolverFragmentPlans {
+        val directedParentCoverage = consumer.isGeneratedRandomParentDiagonalResolver()
         if (
             !config[ResolverFromArgumentVariablesEnabled] ||
-            !chance(config[ResolverVariableWeight])
+            (!directedParentCoverage && !chance(config[ResolverVariableWeight]))
         ) {
             return this
         }
         val resolverArguments = field(consumer).arguments
-        val variableCount = Arb.int(config[ResolverVariableCount]).next(random)
+        val variableCount =
+            if (directedParentCoverage) 2 else Arb.int(config[ResolverVariableCount]).next(random)
         return (0 until variableCount).fold(this) { fragments, variableIndex ->
+            val preferredLocation =
+                if (variableIndex % 2 == 0) FragmentLocation.OBJECT else FragmentLocation.QUERY
             val candidates =
                 fragments.argumentOccurrences()
                     .shuffled(random)
@@ -1730,6 +1766,14 @@ private class RegistryGenerator(
                                     )
                                 }
                         }
+                    }.let { candidates ->
+                        if (directedParentCoverage) {
+                            candidates.sortedBy { candidate ->
+                                candidate.location != preferredLocation
+                            }
+                        } else {
+                            candidates
+                        }
                     }
             val convergenceCandidate =
                 candidates.firstOrNull { candidate ->
@@ -1769,6 +1813,7 @@ private class RegistryGenerator(
                             config[ResolverVariableSingletonCoercionEnabled],
                         )
                     }
+                    .takeUnless { directedParentCoverage }
             val variableName = "resolverArgVar${ranks.getValue(consumer)}_$variableIndex"
             variableProviders +=
                 FromArgumentVariableProviderPlan(
@@ -1968,6 +2013,7 @@ private class RegistryGenerator(
         variableProviders: MutableList<VariableProviderPlan>,
         providerFragment: ProviderFragment,
     ): ResolverFragmentPlans {
+        val directedParentCoverage = consumer.isGeneratedRandomParentDiagonalResolver()
         val providerLocation = providerFragment.location()
         val providerPlan = fragment(providerLocation)
         val providerOwnerName = providerPlan.ownerName
@@ -1985,11 +2031,12 @@ private class RegistryGenerator(
                 .map(VariableProviderPlan::owner)
                 .distinct()
                 .size >= config[ResolverFromFieldVariableOwnerLimit] ||
-            !chance(config[ResolverVariableWeight])
+            (!directedParentCoverage && !chance(config[ResolverVariableWeight]))
         ) {
             return this
         }
-        val variableCount = Arb.int(config[ResolverVariableCount]).next(random)
+        val variableCount =
+            if (directedParentCoverage) 2 else Arb.int(config[ResolverVariableCount]).next(random)
         return (0 until variableCount).fold(this) { fragments, variableIndex ->
             val existingOwners =
                 variableProviders.mapTo(linkedSetOf(), VariableProviderPlan::owner)
@@ -2053,6 +2100,18 @@ private class RegistryGenerator(
                 orderedOccurrences =
                     providerArgumentOccurrences +
                         orderedOccurrences.filterNot(providerArgumentOccurrences::contains)
+            }
+            if (directedParentCoverage) {
+                val preferredLocation =
+                    if (variableIndex % 2 == 0) {
+                        FragmentLocation.OBJECT
+                    } else {
+                        FragmentLocation.QUERY
+                    }
+                orderedOccurrences =
+                    orderedOccurrences.sortedBy { occurrence ->
+                        occurrence.location != preferredLocation
+                    }
             }
             val candidate =
                 orderedOccurrences.firstNotNullOfOrNull { locatedOccurrence ->
@@ -2146,6 +2205,7 @@ private class RegistryGenerator(
                                 providerSelection.isCompatibleProviderFor(providerOwnerName, target)
                             }
                     }
+                    .takeUnless { directedParentCoverage }
             val replacedOccurrences =
                 listOfNotNull(
                     LocatedArgumentOccurrence(candidate.location, candidate.occurrence),
@@ -2763,6 +2823,11 @@ private class RegistryGenerator(
             config[SometimesPassiveFieldWeight] > 0.0 &&
             typeName.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX) &&
             fieldName == GENERATED_SOMETIMES_PASSIVE_PARENT_FIELD
+
+    private fun FieldCoordinate.isGeneratedRandomParentDiagonalResolver(): Boolean =
+        config[RandomParentFieldsEnabled] &&
+            typeName.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX) &&
+            fieldName == "value0"
 
     private fun FieldCoordinate.isGeneratedParentResult(): Boolean =
         config[ParentFieldsEnabled] &&
@@ -3913,10 +3978,25 @@ internal data class GeneratedHashPlan(
     override fun containsGeneratedHash(): Boolean = true
 }
 
-// Keeps diagonal-parent witnesses frequent without recursively amplifying every random-parent resolver.
-private const val RANDOM_PARENT_DIAGONAL_RESOLVER_WEIGHT = 0.35
+// Makes the dedicated random-parent scalar resolvers reliable diagonal witnesses.
+private const val RANDOM_PARENT_DIAGONAL_RESOLVER_WEIGHT = 1.0
 private const val MAX_GENERATED_HASH_DEPTH = 4
 private const val GENERATED_HASH_NESTED_SALT = -1640531527
+
+private fun List<FieldCoordinate>.withGeneratedRandomParentResolverOrder(
+    randomParentFieldsEnabled: Boolean,
+): List<FieldCoordinate> {
+    if (!randomParentFieldsEnabled) return this
+    val directedResolvers =
+        filter { coordinate ->
+            coordinate.typeName.startsWith(GENERATED_RANDOM_PARENT_TYPE_PREFIX) &&
+                coordinate.fieldName == "value0"
+        }.sortedBy(FieldCoordinate::typeName)
+    val orderedResolvers = directedResolvers.iterator()
+    return map { coordinate ->
+        if (coordinate in directedResolvers) orderedResolvers.next() else coordinate
+    }
+}
 
 internal fun List<FieldCoordinate>.withGeneratedParentResultAfterAncestor(
     parentFieldsEnabled: Boolean,

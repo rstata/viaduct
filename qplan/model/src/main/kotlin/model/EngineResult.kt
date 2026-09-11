@@ -2,6 +2,8 @@ package model
 
 import viaduct.graphql.schema.ViaductSchema
 
+import java.util.IdentityHashMap
+
 import model.invariants.conformsToResultSchemaType
 
 /**
@@ -467,7 +469,7 @@ private fun validateListValue(
  * @throws UncompletedPromiseException when either tree contains an uncompleted promise
  */
 fun EngineResult?.sameCompletedResultAs(other: EngineResult?): Boolean {
-    val same = hasSameCompletedResultAs(other)
+    val same = CompletedResultComparison().same(this, other)
     if (!same) {
         requireCompleted()
         other.requireCompleted()
@@ -475,38 +477,64 @@ fun EngineResult?.sameCompletedResultAs(other: EngineResult?): Boolean {
     return same
 }
 
-private fun EngineResult?.hasSameCompletedResultAs(other: EngineResult?): Boolean {
-    if (this == null || other == null) return this == other
+private class CompletedResultComparison {
+    private val rightByLeft = IdentityHashMap<ObjectEngineResult, ObjectEngineResult>()
+    private val leftByRight = IdentityHashMap<ObjectEngineResult, ObjectEngineResult>()
 
-    return when (this) {
-        is ErrorEngineResult -> other is ErrorEngineResult
-        is ListEngineResult ->
-            other is ListEngineResult &&
-                typeExpr == other.typeExpr &&
-                size == other.size &&
-                indices.all { index -> this[index].hasSameCompletedCellAs(other[index]) }
-        is ObjectEngineResult ->
-            other is ObjectEngineResult && sameCompletedObjectResultAs(other)
-        else -> isScalarResultMember() && other.isScalarResultMember() && this == other
-    }
-}
+    fun same(
+        left: EngineResult?,
+        right: EngineResult?,
+    ): Boolean {
+        if (left == null || right == null) return left == right
 
-private fun EngineResultCell.hasSameCompletedCellAs(other: EngineResultCell): Boolean =
-    completedValue.hasSameCompletedResultAs(other.completedValue) &&
-        completedAccessResult.hasSameCompletedAccessResultAs(other.completedAccessResult)
-
-private fun EngineResultCell.hasSameCompletedParentCellAs(other: EngineResultCell): Boolean {
-    val leftValue = completedValue
-    val rightValue = other.completedValue
-    val sameValue =
-        when {
-            leftValue == null || rightValue == null -> leftValue == null && rightValue == null
-            leftValue is ObjectEngineResult && rightValue is ObjectEngineResult ->
-                leftValue.type == rightValue.type
-            else -> false
+        return when (left) {
+            is ErrorEngineResult -> right is ErrorEngineResult
+            is ListEngineResult ->
+                right is ListEngineResult &&
+                    left.typeExpr == right.typeExpr &&
+                    left.size == right.size &&
+                    left.indices.all { index -> sameCell(left[index], right[index]) }
+            is ObjectEngineResult -> right is ObjectEngineResult && sameObject(left, right)
+            else -> left.isScalarResultMember() && right.isScalarResultMember() && left == right
         }
-    return sameValue &&
-        completedAccessResult.hasSameCompletedAccessResultAs(other.completedAccessResult)
+    }
+
+    fun sameCell(
+        left: EngineResultCell,
+        right: EngineResultCell,
+    ): Boolean =
+        same(left.completedValue, right.completedValue) &&
+            left.completedAccessResult.hasSameCompletedAccessResultAs(right.completedAccessResult)
+
+    fun sameParentCell(
+        left: EngineResultCell,
+        right: EngineResultCell,
+    ): Boolean {
+        val leftValue = left.completedValue
+        val rightValue = right.completedValue
+        val sameValue =
+            when {
+                leftValue == null || rightValue == null -> leftValue == null && rightValue == null
+                leftValue is ObjectEngineResult && rightValue is ObjectEngineResult ->
+                    rightByLeft[leftValue] === rightValue && leftByRight[rightValue] === leftValue
+                else -> false
+            }
+        return sameValue &&
+            left.completedAccessResult.hasSameCompletedAccessResultAs(
+                right.completedAccessResult,
+            )
+    }
+
+    private fun sameObject(
+        left: ObjectEngineResult,
+        right: ObjectEngineResult,
+    ): Boolean {
+        rightByLeft[left]?.let { mapped -> return mapped === right }
+        if (leftByRight.containsKey(right)) return false
+        rightByLeft[left] = right
+        leftByRight[right] = left
+        return left.sameCompletedObjectResultAs(right, this)
+    }
 }
 
 private fun EngineResult?.hasSameCompletedAccessResultAs(other: EngineResult?): Boolean =
@@ -1072,7 +1100,10 @@ private val ObjectEngineResult.implementation: ObjectResultImpl
  * The result is meaningful only after both object trees are quiescent. Store snapshots and
  * recursive reads do not form one atomic snapshot while promises or cells are being mutated.
  */
-private fun ObjectEngineResult.sameCompletedObjectResultAs(other: ObjectEngineResult): Boolean {
+private fun ObjectEngineResult.sameCompletedObjectResultAs(
+    other: ObjectEngineResult,
+    comparison: CompletedResultComparison,
+): Boolean {
     val leftCells = implementation.completedCells
     val rightCells = other.implementation.completedCells
     if (type != other.type || leftCells.size != rightCells.size) return false
@@ -1089,9 +1120,9 @@ private fun ObjectEngineResult.sameCompletedObjectResultAs(other: ObjectEngineRe
         } else {
             val rightCell = unmatchedRightCells.removeAt(matchIndex).value
             if (leftKey is ObjectEngineResult.ParentKey) {
-                leftCell.hasSameCompletedParentCellAs(rightCell)
+                comparison.sameParentCell(leftCell, rightCell)
             } else {
-                leftCell.hasSameCompletedCellAs(rightCell)
+                comparison.sameCell(leftCell, rightCell)
             }
         }
     }

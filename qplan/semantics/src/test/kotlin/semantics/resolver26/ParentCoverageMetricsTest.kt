@@ -7,6 +7,7 @@ import semantics.shared.RecordingResolverObserver
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class ParentCoverageMetricsTest {
@@ -152,22 +153,30 @@ class ParentCoverageMetricsTest {
             )
         val report = ParentFocusedCoverageReport(schemaCount = 40, sliceCount = 4)
         repeat(40) { schemaOffset ->
-            repeat(25) { report.recordCase(schemaOffset + 1) }
-            report.record(schemaOffset + 1, complete)
+            repeat(25) { report.record(schemaOffset + 1, complete) }
         }
 
         val rendered = report.render()
 
         (1..4).forEach { run -> assertContains(rendered, "RUN $run/4: HIT") }
         (1..9).forEach { criterion -> assertContains(rendered, "  $criterion.") }
+        assertContains(rendered, "COMBINED CRITERION COVERAGE:")
+        ParentFocusedCoverageSnapshot().criteria().forEach { criterion ->
+            assertContains(
+                rendered,
+                "${criterion.number}. ${criterion.name}: slices=4/4, " +
+                    "instances=1000/1000 cases, bySlice=[250/250, 250/250, 250/250, 250/250]",
+            )
+        }
         assertContains(rendered, "FOUR-RUN RESULT: HIT (4/4 runs hit all nine criteria)")
         assertContains(rendered, "COMBINED RESULT: HIT")
+        report.requireCombinedHit()
     }
 
     @Test
-    fun `coverage misses are reported without throwing`() {
+    fun `coverage misses are reported and rejected`() {
         val report = ParentFocusedCoverageReport(schemaCount = 4, sliceCount = 4)
-        repeat(4) { schemaOffset -> report.recordCase(schemaOffset + 1) }
+        repeat(4) { schemaOffset -> report.record(schemaOffset + 1, ParentFocusedCoverageSnapshot()) }
 
         val rendered = report.render()
 
@@ -175,7 +184,64 @@ class ParentCoverageMetricsTest {
         assertContains(rendered, "1. Parent topology: MISS")
         assertContains(rendered, "8. Variable-bearing diagonals: MISS")
         assertContains(rendered, "9. Sometimes-passive parent demand: MISS")
+        assertContains(rendered, "COMBINED CRITERION COVERAGE:")
+        ParentFocusedCoverageSnapshot().criteria().forEach { criterion ->
+            assertContains(
+                rendered,
+                "${criterion.number}. ${criterion.name}: slices=0/4, " +
+                    "instances=0/4 cases, bySlice=[0/1, 0/1, 0/1, 0/1]",
+            )
+        }
         assertContains(rendered, "FOUR-RUN RESULT: MISS (0/4 runs hit all nine criteria)")
         assertContains(rendered, "COMBINED RESULT: MISS")
+        val failure = assertFailsWith<IllegalStateException> { report.requireCombinedHit() }
+        assertContains(failure.message.orEmpty(), "1. Parent topology")
+        assertContains(failure.message.orEmpty(), "9. Sometimes-passive parent demand")
+    }
+
+    @Test
+    fun `counts criterion instances once per recorded generated case`() {
+        val report = ParentFocusedCoverageReport(schemaCount = 4, sliceCount = 2)
+        report.record(
+            schemaIndex = 1,
+            snapshot =
+                ParentFocusedCoverageSnapshot(
+                    parentDepths = setOf(1, 2),
+                    resolverPlacements = setOf(ParentResolverPlacement.DIRECT),
+                    variableSources = setOf(ParentVariableSource.ARGUMENT),
+                ),
+        )
+        report.record(schemaIndex = 1, snapshot = ParentFocusedCoverageSnapshot())
+        report.record(
+            schemaIndex = 3,
+            snapshot =
+                ParentFocusedCoverageSnapshot(
+                    parentDepths = setOf(1),
+                    diagonalDepths = setOf(1),
+                    diagonalVariableFragments =
+                        setOf(
+                            ParentVariableFragment(
+                                ParentVariableSource.ARGUMENT,
+                                ParentResolverInputFragment.OBJECT,
+                            ),
+                        ),
+                ),
+        )
+
+        val rendered = report.render()
+
+        assertContains(
+            rendered,
+            "1. Parent topology: slices=0/2, instances=2/3 cases, bySlice=[1/2, 1/1]",
+        )
+        assertContains(
+            rendered,
+            "2. Resolver placement: slices=0/2, instances=1/3 cases, bySlice=[1/2, 0/1]",
+        )
+        assertContains(
+            rendered,
+            "8. Variable-bearing diagonals: slices=0/2, " +
+                "instances=1/3 cases, bySlice=[0/2, 1/1]",
+        )
     }
 }

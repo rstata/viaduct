@@ -7,6 +7,7 @@ import model.ObjectEngineResult
 import model.Assumptions
 import model.EngineErrorDataReadException
 import model.EngineInputData
+import model.InclusionCondition
 import model.ResolverOutputData
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
@@ -522,6 +523,7 @@ private fun MaterializeSelectionForest.requireNoVariablesBeneathParent(
     resolverField: ViaductSchema.ObjectField,
 ) {
     forEach { selection ->
+        if (selection.inclusionCondition === InclusionCondition.Never) return@forEach
         require(
             selection.possibleTypes.all { possibleType ->
                 val objectKey = selection.key.objectKey(possibleType)
@@ -547,6 +549,7 @@ private fun MaterializeSelectionForest.usedVariablesApplicableTo(
 ): Set<Arguments.Variable> {
     val variables = linkedSetOf<Arguments.Variable>()
     forEach { selection ->
+        if (selection.inclusionCondition === InclusionCondition.Never) return@forEach
         if (type !in selection.possibleTypes) return@forEach
         val objectKey = selection.key.objectKey(type)
         variables += objectKey.arguments.usedVariables()

@@ -125,13 +125,13 @@ class ResolverBroadStressTest {
                             (FieldArgumentWeight to 0.65) +
                             (ResolverFragmentArgumentFieldWeight to 1.0) +
                             (ResolverQueryFragmentsEnabled to true) +
-                            (ResolverQueryFragmentWeight to 0.15) +
+                            (ResolverQueryFragmentWeight to 0.25) +
                             (ResolverVariablesEnabled to true) +
                             (ResolverFromArgumentVariablesEnabled to true) +
                             (ResolverFromObjectFieldVariablesEnabled to true) +
                             (ResolverFromQueryFieldVariablesEnabled to true) +
-                            (ResolverVariableWeight to 0.75) +
-                            (ResolverVariableCount to 1..2) +
+                            (ResolverVariableWeight to 1.0) +
+                            (ResolverVariableCount to 2..3) +
                             (ResolverVariableSingletonCoercionEnabled to true) +
                             (ResolverFromFieldProviderPathLength to 1..3) +
                             (ResolverFromFieldVariableUseDepth to 1..3) +
@@ -329,7 +329,7 @@ internal suspend fun runResolver26BroadStress(
             ) { testWorld, testCase ->
                 attemptedCases += 1
                 val schemaIndex = requireNotNull(testCase.coordinates).schemaIndex
-                parentFocusedReport?.recordCase(schemaIndex)
+                var caseParentFocusedCoverage = ParentFocusedCoverageSnapshot()
                 generatedArgumentVariables +=
                     testCase.registry.features.fromArgumentVariableCount
                 generatedObjectPathVariables +=
@@ -374,10 +374,8 @@ internal suspend fun runResolver26BroadStress(
                             val parentCoverage =
                                 ParentCoverageAnalyzer(world).analyze(application)
                             synchronized(parentCoverageLock) {
-                                parentFocusedReport?.record(
-                                    schemaIndex,
-                                    parentFocusedCoverageSnapshot(world, parentCoverage),
-                                )
+                                caseParentFocusedCoverage +=
+                                    parentFocusedCoverageSnapshot(world, parentCoverage)
                                 materializedParentFieldActivations += parentActivations.size
                                 materializedRandomParentFieldActivations +=
                                     parentActivations.count { activation ->
@@ -696,15 +694,13 @@ internal suspend fun runResolver26BroadStress(
                     caseSometimesPassiveParentDemandDepths.forEach { depth ->
                         sometimesPassiveParentDemandDepths.increment(depth)
                     }
-                    parentFocusedReport?.record(
-                        schemaIndex,
+                    caseParentFocusedCoverage +=
                         ParentFocusedCoverageSnapshot(
                             sometimesPassiveParentDemandOccurrences =
                                 caseSometimesPassiveParentDemandDepths.size,
                             sometimesPassiveParentDemandDepths =
                                 caseSometimesPassiveParentDemandDepths.toSet(),
-                        ),
-                    )
+                        )
                 } else {
                     val expectedOccurrenceCounts =
                         context(operation) {
@@ -727,6 +723,7 @@ internal suspend fun runResolver26BroadStress(
                             .toSet(),
                     )
                 }
+                parentFocusedReport?.record(schemaIndex, caseParentFocusedCoverage)
                 completedCases += 1
             }
 
@@ -866,6 +863,7 @@ internal suspend fun runResolver26BroadStress(
                         "diagonal parent demand",
                 )
             }
+            parentFocusedReport?.requireCombinedHit()
         }
         return completedCases
     } finally {

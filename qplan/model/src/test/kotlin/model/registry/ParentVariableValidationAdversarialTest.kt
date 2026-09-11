@@ -12,6 +12,60 @@ import model.testing.fromArgument
 
 class ParentVariableValidationAdversarialTest {
     @Test
+    fun `accepts unreachable variable below a statically excluded selection beneath parent`() {
+        listOf(
+            "parent { localized(locale: ${'$'}locale) @skip(if: true) }",
+            "parent @skip(if: true) { localized(locale: ${'$'}locale) }",
+        ).forEach { parentSelection ->
+            TestWorld.fromSDL(
+                schemaSDL =
+                    """
+                    directive @parent on FIELD_DEFINITION
+                    type Query { root: Root }
+                    type Root {
+                      child: Child
+                      localized(locale: String!): String
+                      result(locale: String!): String
+                    }
+                    type Child { parent: Root @parent }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    fun resolver(fragment: model.Fragment) =
+                        fieldResolverOf(fragment) { _, _ -> error("not invoked") }
+                    val result = schema.requireObjectField("Root", "result")
+                    mapOf(
+                        schema.requireObjectField("Query", "root") to
+                            resolver(schema.emptyFragmentOf("Query")),
+                        schema.requireObjectField("Root", "child") to
+                            resolver(schema.emptyFragmentOf("Root")),
+                        schema.requireObjectField("Root", "localized") to
+                            resolver(schema.emptyFragmentOf("Root")),
+                        result to
+                            resolver(
+                                schema.fragmentFrom(
+                                    """
+                                    fragment ignored on Root {
+                                      child {
+                                        $parentSelection
+                                      }
+                                    }
+                                    """.trimIndent(),
+                                ),
+                            ),
+                    )
+                },
+                variableProviders = { schema ->
+                    val result = schema.requireObjectField("Root", "result")
+                    mapOf(
+                        Arguments.Variable.of(result, "locale") to
+                            schema.fromArgument(result, "locale"),
+                    )
+                },
+            )
+        }
+    }
+
+    @Test
     fun `accepts variable restricted to non-parent concrete branch of mixed abstract field`() {
         TestWorld.fromDSL(
             """

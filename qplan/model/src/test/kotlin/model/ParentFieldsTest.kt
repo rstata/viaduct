@@ -12,6 +12,60 @@ import kotlin.test.assertTrue
 
 class ParentFieldsTest {
     @Test
+    fun `completed result comparison distinguishes a wrong same-type parent occurrence`() {
+        val assumptions =
+            TestWorld.fromSDL(
+                """
+                directive @parent on FIELD_DEFINITION
+                type Query { root: Link }
+                type Link { child: Link, parent: Link @parent }
+                """.trimIndent(),
+            ).assumptions
+        val schema = assumptions.schema
+        val queryType = schema.requireQueryTypeDef()
+        val linkType = schema.requireType("Link") as viaduct.graphql.schema.ViaductSchema.Object
+        val rootKey =
+            ObjectEngineResult.GroundKey.of(
+                schema.requireObjectField("Query", "root"),
+                emptyMap(),
+            )
+        val childKey =
+            ObjectEngineResult.GroundKey.of(
+                schema.requireObjectField("Link", "child"),
+                emptyMap(),
+            )
+        val parentKey =
+            ObjectEngineResult.ParentKey.of(
+                schema.requireObjectField("Link", "parent"),
+            )
+
+        fun result(wrongParent: Boolean): ObjectEngineResult {
+            val query = ObjectEngineResult.of(queryType, mutable = true)
+            val root = ObjectEngineResult.of(linkType, mutable = true)
+            val child = ObjectEngineResult.of(linkType, mutable = true)
+            child.reserveCell(parentKey).also { cell ->
+                cell.setValue(if (wrongParent) child else root)
+                cell.setAccessResult(true)
+            }
+            root.reserveCell(childKey).also { cell ->
+                cell.setValue(child)
+                cell.setAccessResult(true)
+            }
+            query.reserveCell(rootKey).also { cell ->
+                cell.setValue(root)
+                cell.setAccessResult(true)
+            }
+            return query
+        }
+
+        val valid = result(wrongParent = false)
+        val invalid = result(wrongParent = true)
+        assertTrue(context(assumptions) { valid.conformsToSchema() })
+        assertFalse(context(assumptions) { invalid.conformsToSchema() })
+        assertFalse(valid.sameCompletedResultAs(invalid))
+    }
+
+    @Test
     fun `parent fields create parent keys and identify their list-producing field`() {
         val assumptions = TestWorld.fromSDL(PARENT_SCHEMA).assumptions
         val schema = assumptions.schema

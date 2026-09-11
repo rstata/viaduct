@@ -1234,10 +1234,10 @@ private class SchemaGenerator(
         var maximumChainDepth = 0
         var listProducerCount = 0
         var abstractTargetCount = 0
-        val chainCount = Arb.int(1..3).next(random)
+        val chainCount = 2
 
         repeat(chainCount) { chainIndex ->
-            val chainDepth = Arb.int(1..4).next(random)
+            val chainDepth = Arb.int(3..4).next(random)
             maximumChainDepth = maxOf(maximumChainDepth, chainDepth)
             var parentOwner = "Query"
 

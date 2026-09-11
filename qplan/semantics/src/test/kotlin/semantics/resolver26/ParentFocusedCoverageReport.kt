@@ -136,6 +136,20 @@ internal data class ParentFocusedCoverageCriterion(
     val detail: String,
 )
 
+private fun ParentFocusedCoverageSnapshot.hasCriterionInstance(number: Int): Boolean =
+    when (number) {
+        1 -> parentDepths.isNotEmpty()
+        2 -> resolverPlacements.isNotEmpty()
+        3 -> variableSources.isNotEmpty()
+        4 -> mixedVariableSourcePairs.isNotEmpty()
+        5 -> inputFragments.isNotEmpty()
+        6 -> argumentSelectionDepths.isNotEmpty()
+        7 -> diagonalDepths.isNotEmpty()
+        8 -> diagonalVariableFragments.isNotEmpty()
+        9 -> sometimesPassiveParentDemandOccurrences > 0
+        else -> error("Unknown parent-focused coverage criterion $number")
+    }
+
 internal fun ParentFocusedCoverageSnapshot.criteria(): List<ParentFocusedCoverageCriterion> {
     val expectedDepths = setOf(1, 2, 3)
     val expectedProducerShapes = ParentProducerShape.entries.toSet()
@@ -249,20 +263,25 @@ internal class ParentFocusedCoverageReport(
     private val casesBySlice = IntArray(sliceCount)
     private val coverageBySlice =
         MutableList(sliceCount) { ParentFocusedCoverageSnapshot() }
-
-    fun recordCase(schemaIndex: Int) {
-        casesBySlice[sliceIndex(schemaIndex)] += 1
-    }
+    private val criterionInstancesBySlice =
+        MutableList(sliceCount) { IntArray(ParentFocusedCoverageSnapshot().criteria().size) }
 
     fun record(
         schemaIndex: Int,
         snapshot: ParentFocusedCoverageSnapshot,
     ) {
         val index = sliceIndex(schemaIndex)
+        casesBySlice[index] += 1
         coverageBySlice[index] = coverageBySlice[index] + snapshot
+        snapshot.criteria().forEachIndexed { criterionIndex, criterion ->
+            if (snapshot.hasCriterionInstance(criterion.number)) {
+                criterionInstancesBySlice[index][criterionIndex] += 1
+            }
+        }
     }
 
     fun render(): String {
+        val criteriaBySlice = coverageBySlice.map { coverage -> coverage.criteria() }
         val runReports =
             coverageBySlice.mapIndexed { index, coverage ->
                 renderRun(
@@ -273,11 +292,25 @@ internal class ParentFocusedCoverageReport(
                     coverage = coverage,
                 )
             }
-        val hitRuns = coverageBySlice.count { coverage -> coverage.criteria().all { it.hit } }
-        val overall = coverageBySlice.fold(ParentFocusedCoverageSnapshot(), ParentFocusedCoverageSnapshot::plus)
+        val hitRuns = criteriaBySlice.count { criteria -> criteria.all { it.hit } }
+        val overall = combinedCoverage()
         return buildString {
             appendLine("Resolver26 parent-focused coverage report")
             runReports.forEach { report -> appendLine(report) }
+            appendLine("COMBINED CRITERION COVERAGE:")
+            criteriaBySlice.first().forEachIndexed { index, criterion ->
+                val hitCount = criteriaBySlice.count { criteria -> criteria[index].hit }
+                val instanceCounts = criterionInstancesBySlice.map { counts -> counts[index] }
+                appendLine(
+                    "  ${criterion.number}. ${criterion.name}: " +
+                        "slices=$hitCount/$sliceCount, " +
+                        "instances=${instanceCounts.sum()}/${casesBySlice.sum()} cases, " +
+                        "bySlice=" +
+                        instanceCounts.indices.joinToString(prefix = "[", postfix = "]") { slice ->
+                            "${instanceCounts[slice]}/${casesBySlice[slice]}"
+                        },
+                )
+            }
             appendLine(
                 "FOUR-RUN RESULT: ${if (hitRuns == sliceCount) "HIT" else "MISS"} " +
                     "($hitRuns/$sliceCount runs hit all nine criteria)",
@@ -285,6 +318,20 @@ internal class ParentFocusedCoverageReport(
             appendLine("COMBINED RESULT: ${if (overall.criteria().all { it.hit }) "HIT" else "MISS"}")
         }.trimEnd()
     }
+
+    fun requireCombinedHit() {
+        val missed = combinedCoverage().criteria().filterNot { criterion -> criterion.hit }
+        check(missed.isEmpty()) {
+            "Combined parent-focused coverage missed criteria: " +
+                missed.joinToString { criterion -> "${criterion.number}. ${criterion.name}" }
+        }
+    }
+
+    private fun combinedCoverage(): ParentFocusedCoverageSnapshot =
+        coverageBySlice.fold(
+            ParentFocusedCoverageSnapshot(),
+            ParentFocusedCoverageSnapshot::plus,
+        )
 
     private fun renderRun(
         runNumber: Int,

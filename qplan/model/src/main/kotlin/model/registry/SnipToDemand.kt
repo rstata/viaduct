@@ -26,9 +26,8 @@ import viaduct.engine.api.EngineObjectData
  * Simple, null, and error results are unchanged. List results are projected element-wise. Object
  * projection retains only demanded fields supplied by the returned object. A type-conditioned
  * selection that does not apply to a concrete object is omitted before its key is reconstructed
- * against that object's concrete field. There is no implicit node-reference retention or
- * node-specific root projection; fixture-generated bridge fields appear only when included in
- * [demand].
+ * against that object's concrete field. Node references are root-field references and remain
+ * symbolic until Resolver26 invokes `Query.node`.
  *
  * An output object that supplies an argument-bearing field is rejected: such fields are always
  * active and can never be retained as passive output.

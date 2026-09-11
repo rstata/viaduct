@@ -145,6 +145,9 @@ object GeneratedCaseAssertions {
 
 /** Assertion policy independently extended by each generated resolver test subject. */
 interface GeneratedCaseAssertionPolicy : ResolverContract {
+    val nodeRootFieldReferencesEnabled: Boolean
+        get() = false
+
     val generatedResolverConfigOverrides: Config
         get() = Config.default
 

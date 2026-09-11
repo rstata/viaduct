@@ -10,7 +10,7 @@ Compiling Kotlin is qplan's primary specification language. Model declarations d
 
 Each reasoning exercise fixes one canonical `Assumptions`, lowered `ViaductSchema`, and resolver registry. Source GraphQL parsing, schema lowering, registry assembly, node adaptation, and provider-path compilation are pre-reasoning composition. Semantic code trusts the carrier invariants established at that boundary.
 
-A schema definition may retain a canonical opaque foreign attachment needed at an integration boundary. Such an attachment is not a model value: semantic logic does not inspect it or use it in equality, hashing, conformance, or schema relations. Qplan source-backed objects retain the exact definitions from the unchanged source GraphQL-Java schema for Viaduct Engine API type witnesses; synthetic bridge objects retain generated witnesses for internal values only.
+A schema definition may retain a canonical opaque foreign attachment needed at an integration boundary. Such an attachment is not a model value: semantic logic does not inspect it or use it in equality, hashing, conformance, or schema relations. Qplan source-backed objects retain the exact definitions from the unchanged source GraphQL-Java schema for Viaduct Engine API type witnesses; model-internal synthetic definitions retain generated witnesses only when an integration boundary requires them.
 
 Compilation, examples, generated tests, stress campaigns, and cross-resolver agreement are finite consistency evidence. They are not mathematical proof. The TLA+ baseline proves only its explicitly stated finite calculus and assumptions.
 
@@ -110,7 +110,7 @@ The qplan model owns carriers such as `EngineResult`, typed keys, schema validat
 
 Qplan uses Viaduct engine API carriers where they express the same semantic fact while preserving qplan-only structure needed for formal reasoning. Do not erase occurrence identity, ground-key validation, or model invariants merely to reduce source-level differences.
 
-Qplan-owned EODs retain canonical lowered `ViaductSchema.Object` identity for semantic reasoning, but source-backed EODs expose the exact retained source `GraphQLObjectType` through the Engine API. Resolver inputs must have source-schema field shape, and source resolver outputs must be normalized into qplan-owned lowered values before semantic reasoning. Synthetic bridge witnesses and bridge payload objects remain internal to qplan.
+Qplan-owned EODs retain canonical lowered `ViaductSchema.Object` identity for semantic reasoning, but source-backed EODs expose the exact retained source `GraphQLObjectType` through the Engine API. Resolver inputs must have source-schema field shape, and source resolver outputs must be normalized into qplan-owned lowered values before semantic reasoning. Node-valued source output is normalized into canonical `Query.node` root-field references before semantic reasoning.
 
 EOD is a policy-neutral value boundary. Reading a present erroneous selection should expose its `EngineErrorData`; the Tenant API layer decides how tenant code observes that error, including whether a generated accessor throws. Current Engine API implementations that throw while reading an erroneous selection are transitional behavior that qplan must remain compatible with, not the desired ownership boundary. Until that behavior is removed, qplan-owned EODs should provide an explicit engine-only `outputValue` observation that returns the stored output value without applying Tenant API error policy.
 

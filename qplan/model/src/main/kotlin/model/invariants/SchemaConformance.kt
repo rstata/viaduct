@@ -17,6 +17,7 @@ import model.CoercedDefaultValue
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.RootFieldReferenceData
+import model.nodeReferenceIdentityOrNull
 import model.ResolverOutputData
 import model.canContainPure
 import model.conformsToArgumentDefinition
@@ -233,8 +234,14 @@ private fun Any?.conformsToOutputSchemaType(
                 !typeExpr.isList &&
                 when (val expectedType = typeExpr.baseTypeDef) {
                     is ViaductSchema.CompositeTypeDef ->
-                        type is ViaductSchema.CompositeTypeDef &&
-                            type.possibleObjectTypes.all(expectedType.possibleObjectTypes::contains)
+                        nodeReferenceIdentityOrNull()?.let { identity ->
+                            identity.type in expectedType.possibleObjectTypes
+                        } ?: (
+                            type is ViaductSchema.CompositeTypeDef &&
+                                type.possibleObjectTypes.all(
+                                    expectedType.possibleObjectTypes::contains,
+                                )
+                            )
                     is ViaductSchema.SimpleTypeDef -> type == expectedType
                     else -> false
                 }

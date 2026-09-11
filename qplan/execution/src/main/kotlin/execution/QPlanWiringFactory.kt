@@ -73,11 +73,7 @@ private class ObjectEngineResultDataFetcher(
                 .getCell(key)
                 .getValue()
                 .get()
-        return if (field.name == sourceFieldName) {
-            value.toGraphQLJavaValue(environment)
-        } else {
-            value.toGraphQLJavaNodeValue(environment)
-        }
+        return value.toGraphQLJavaValue(environment)
     }
 }
 
@@ -116,35 +112,6 @@ private fun EngineResult?.toGraphQLJavaValue(
         is String,
         -> this
         else -> throw IllegalStateException("Unexpected qplan engine result: $this")
-    }
-
-private fun EngineResult?.toGraphQLJavaNodeValue(
-    environment: DataFetchingEnvironment,
-    path: ResultPath = environment.executionStepInfo.path,
-): Any? =
-    when (this) {
-        null -> null
-        is ErrorEngineResult -> errorResult(errorData, environment, path)
-        is ListEngineResult ->
-            mapIndexed { index, cell ->
-                cell
-                    .getValue()
-                    .get()
-                    .toGraphQLJavaNodeValue(environment, path.segment(index))
-            }
-        is ObjectEngineResult -> {
-            val payloadField =
-                type.field("node")
-                    ?: throw IllegalStateException(
-                        "QPlan node bridge ${type.name} has no payload field",
-                    )
-            val payloadKey = ObjectEngineResult.GroundKey.of(payloadField, emptyMap())
-            getCell(payloadKey)
-                .getValue()
-                .get()
-                .toGraphQLJavaValue(environment, path)
-        }
-        else -> toGraphQLJavaValue(environment, path)
     }
 
 private fun errorResult(

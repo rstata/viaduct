@@ -3,7 +3,6 @@ package model.lowering
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -15,17 +14,15 @@ class LoweredSourceCoordinatesTest {
         val field = lowered.loweredFieldFromSourceCoordinate("Query", "count")
 
         assertSame(lowered.requireField("Query", "count"), field)
-        assertFalse(field.isLoweredNodeBridgeField())
         assertSame(field.type, lowered.sourceTypeExpr(field))
     }
 
     @Test
-    fun `Node source field resolves to its lowered bridge producer`() {
+    fun `Node source field retains its source coordinate`() {
         val field = lowered.loweredFieldFromSourceCoordinate("Query", "users")
 
-        assertSame(lowered.requireField("Query", nodeBridgeFieldName("users")), field)
-        assertSame(field, lowered.loweredNodeBridgeField("Query", "users"))
-        assertTrue(field.isLoweredNodeBridgeField())
+        assertSame(lowered.requireField("Query", "users"), field)
+        assertSame(field.type, lowered.sourceTypeExpr(field))
     }
 
     @Test
@@ -55,12 +52,12 @@ class LoweredSourceCoordinatesTest {
     }
 
     @Test
-    fun `Node bridge source type preserves source type and every wrapper`() {
-        val bridgeField = lowered.loweredNodeBridgeField("Query", "users")
-        val sourceType = lowered.sourceTypeExpr(bridgeField)
+    fun `Node source type preserves every wrapper`() {
+        val field = lowered.requireField("Query", "users")
+        val sourceType = lowered.sourceTypeExpr(field)
 
         assertSame(lowered.requireType("User"), sourceType.baseTypeDef)
-        assertEquals(bridgeField.type.nullabilityShape(), sourceType.nullabilityShape())
+        assertEquals(field.type.nullabilityShape(), sourceType.nullabilityShape())
         assertEquals(2, sourceType.listDepth)
     }
 

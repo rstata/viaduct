@@ -8,12 +8,10 @@ import semantics.shared.OperationContext
 import model.ObjectEngineResult
 import model.SelectionForest
 import semantics.contract.EmptyObjectFragmentGeneratedResolverContract
-import semantics.contract.NodeGeneratedResolverContract
 import semantics.contract.SometimesPassiveGeneratedResolverContract
 
 class ResolverGeneratedTest :
     EmptyObjectFragmentGeneratedResolverContract,
-    NodeGeneratedResolverContract,
     SometimesPassiveGeneratedResolverContract {
     override val selectiveResolvers: Boolean
         get() = false

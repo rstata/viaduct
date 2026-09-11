@@ -141,19 +141,19 @@ F_User.displayName({ firstName, lastName }, {}) =
 
 The production documentation calls these fragments [required selection sets](https://viaduct.airbnb.tech/docs/developers/resolvers/field_resolvers/). In this model, `objectFragment` and `queryFragment` name the fragments themselves, while their independently resolved values are the field resolver's first two inputs. A query fragment may use response aliases and variables derived from the owning resolver's arguments; each resolver occurrence receives a distinct Query OER even when two occurrences request equal root data.
 
-## Canonical Field-Only Lowering
+## Canonical Field-Only Node Lowering
 
-The qplanning test fixture treats ordinary GraphQL SDL and fragments plus the two source resolver inputs above as a language to compile into one canonical semantic model. It retains the unchanged GraphQL-Java schema for source validation and derives a separate canonical lowered `ViaductSchema` for reasoning. Source schema names containing the reserved token `V_A` are rejected so generated coordinates cannot collide with source coordinates.
+The qplanning test fixture treats ordinary GraphQL SDL and fragments plus the two source resolver inputs above as a language to compile into one canonical semantic model. It retains the unchanged GraphQL-Java schema for source validation and derives a separate canonical lowered `ViaductSchema` for reasoning. Node-valued fields retain their source coordinates, arguments, wrappers, nullability, and covariance. Source schema names containing the reserved token `V_A` are rejected so the remaining generated definitions, such as internal typename fields, cannot collide with source coordinates.
 
-For every Node object or interface `T`, model decoding adds a matching object or interface `T_V_A_Bridge { id: ID, node: T }`, with bridge possible-object relationships mirroring the source implementation hierarchy. Every source `foo(args): W<T>` is omitted from the model schema and represented only by `foo_V_A_node(args): W<T_V_A_Bridge>`, preserving the complete list and nullability wrapper `W`. The GraphQL-Java schema continues to contain `foo` and contains neither synthetic coordinate. The bridge hierarchy therefore preserves an object implementation that narrows a Node-valued interface field's named return type.
+When the source schema declares `Node` but omits the standard root field, model decoding adds `Query.node(id: ID!): Node`. Source-shaped node references produced by field resolvers or passive objects are normalized recursively into `RootFieldReferenceData` values targeting that field. Their internal ID argument encodes the concrete canonical Node object type together with the original resolver ID. No synthetic per-field coordinate or per-type object wrapper is introduced.
 
-If `foo` has a source field resolver, fixture composition registers its canonical producer at `foo_V_A_node` and adapts its source-shaped node-reference output to a concrete bridge EOD containing a typed global ID. The source-facing object builder performs the same adaptation for nested passive values, while EOD remains a canonical lowered carrier. The field resolver producing the Node-valued fringe owns and must provide this ID. Arguments remain only on the producer coordinate, so `foo(a)` and `foo(b)` lower to distinct `foo_V_A_node(a)` and `foo_V_A_node(b)` keys without argument transfer. For each concrete Node object `O` with a raw lookup, the generated argumentless field resolver at `O_V_A_Bridge.node` has fixed `objectFragment` `{ id }`; its function decodes the typed ID and applies that lookup. The raw lookup receives that authoritative fringe ID, and fixture composition may reconstitute the effective node object by combining the lookup payload with the same ID even when the payload does not repeat it.
+Fixture composition equips the canonical `Query.node` field resolver with built-in dispatch for internally encoded identities. It decodes and validates the concrete type, selects that type's raw node resolver, passes it the untouched original ID and node-owned successor demand, and publishes the returned object at the reference's consumer position. The originating ID is authoritative and is restored when demanded even if the node-resolver payload omits or contradicts it. A normal client call whose ID is not internally encoded continues through the ordinary `Query.node` resolver behavior.
 
-Typed fixture IDs carry the concrete object type as well as the internal ID. A list contains one bridge object per non-null node reference, so ordinary list traversal applies `node` independently at each element occurrence, including for abstract `Node` outputs.
+The built-in `Query.nodes` behavior returns a list of `Query.node` references. Ordinary list traversal resolves every non-null element as an independent occurrence, including mixed concrete types and repeated IDs. Qplan deliberately does not batch, cache, or deduplicate those applications.
 
 Qplan currently requires every Node value to cross a node-resolver boundary. The current lowering therefore accepts only fields declared as `Node` or a subtype whose every possible concrete type has a raw node resolver; it rejects direct inline Node object materialization and possible-type sets that mix node-resolved and inline object values. Production execution supports the broader direct-materialization behavior, but it remains deliberately outside qplan's current Engine API contract.
 
-After this composition step, `Resolver.Node`, object-type resolver coordinates, raw node references, and node-specific ownership rules do not exist in the canonical algebra. The registry, resolver-demand graph, correctness predicates, and resolver constructors see only ordinary and generated field resolvers. Synthetic bridge types and fields are absent from GraphQL input text; parsing maps `foo(args) { selections }` directly to `foo_V_A_node(args) { node { selections } }`.
+After this composition step, `Resolver.Node`, object-type resolver coordinates, and raw source node references do not exist in the canonical algebra. The registry exposes node dispatch through the ordinary `Query.node` field coordinate, while `RootFieldReferenceData` retains the symbolic ownership transfer until Resolver26 invokes it. The resolver-demand graph, correctness predicates, and resolver constructors otherwise use the same root-reference and field-resolver machinery as any other symbolic target.
 
 ## Output selection sets and ownership
 
@@ -180,7 +180,7 @@ The containing resolver therefore cannot omit the ID merely because the client d
 
 The OSS rule separates ownership from demand. A client selection, an `objectFragment`, or a `queryFragment` says which values are needed. Resolver boundaries and source presence say which resolver must provide each needed value.
 
-Canonical lowering preserves this transfer as ordinary nested field resolution: the containing producer owns `foo_V_A_node(args)` and its bridge objects, while the generated `node` resolver owns each loaded node payload and requires passive sibling `id`. All further ownership uses the same field-resolver boundary rule.
+Canonical lowering preserves this transfer as root-field-reference resolution: the containing producer owns its unchanged Node-valued source field and supplies a `Query.node` reference, while the built-in dispatcher invokes the concrete node resolver for the demanded remainder. All further ownership uses the same field-resolver boundary rule.
 
 ## Resolution as closure of obligations
 
@@ -197,7 +197,7 @@ This is a closure because resolver inputs can introduce demand that was not writ
 
 The rules describe dependencies, not execution events. An implementation may schedule independent obligations concurrently, batch compatible node lookups, or reuse a materialization, provided the resulting values satisfy the same ownership and input requirements.
 
-Under canonical lowering, rules 4 and 5 are represented without a distinct obligation kind: resolving `foo_V_A_node` recursively reaches `node` on each bridge object, whose fixed `{ id }` input dispatches the raw node lookup, and resolution then activates ordinary field resolvers on the loaded object.
+Under canonical lowering, rules 4 and 5 use the existing symbolic-reference obligation: the Node-valued field supplies a `Query.node` reference, its encoded concrete type dispatches the raw node lookup, and resolution then activates ordinary field resolvers on the loaded object. The static reference-conformance check uses that validated concrete type instead of the abstract `Query.node` return type; the loaded value still undergoes ordinary runtime schema conformance.
 
 ## Example 1: a field resolver and its object fragment
 
@@ -339,7 +339,7 @@ For a validated query `Q`, a schema `S`, a source node-resolver registry `N`, an
 
 These conditions characterize acceptable resolution without choosing a query-plan representation or execution order. A planner and executor are correct relative to this model when their completed primary result and independently resolved query values satisfy the conditions and every resolver application receives the inputs and demand assigned to it.
 
-The canonical qplanning formulation states the same obligations over the lowered model schema and one field-resolver registry: each source node-valued `foo(args): W<T>` is represented only by `foo_V_A_node(args): W<T_V_A_Bridge>` plus the generated loader at `T_V_A_Bridge.node`, and typed IDs preserve the concrete dispatch formerly expressed by `N`. The unchanged GraphQL-Java schema remains the source-facing validation schema.
+The canonical qplanning formulation states the same obligations over the lowered model schema and one field-resolver registry: each source Node-valued `foo(args): W<T>` retains that coordinate and type, while its values normalize to concrete-type-bearing root-field references to the built-in `Query.node`. That field dispatches to `N` without introducing a separate node-obligation carrier. The unchanged GraphQL-Java schema remains the source-facing validation schema.
 
 ## References
 

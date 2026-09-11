@@ -9,7 +9,6 @@ import model.ObjectEngineResult
 import model.SelectionForest
 import semantics.contract.CorrectResolutionPostTestPolicy
 import semantics.contract.EmptyObjectFragmentResolverContract
-import semantics.contract.NodeResolverContract
 import semantics.contract.ObjectFragmentFromArgumentResolverContract
 import semantics.contract.ObjectFragmentResolverContract
 import semantics.contract.QueryFragmentResolverContract
@@ -22,7 +21,6 @@ import semantics.contract.UnsupportedParentFieldResolverContract
 
 class ResolverContractTest :
     EmptyObjectFragmentResolverContract,
-    NodeResolverContract,
     ObjectFragmentResolverContract,
     UnsupportedParentFieldResolverContract,
     ObjectFragmentFromArgumentResolverContract,

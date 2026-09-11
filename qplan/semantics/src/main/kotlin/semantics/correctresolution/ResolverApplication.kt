@@ -5,6 +5,7 @@ import model.Arguments
 import model.ResolverOutputData
 import model.EngineResult
 import model.ListEngineResult
+import model.NodeReferenceIdentity
 import model.ObjectEngineResult
 import model.PathComponent
 import model.ResolverOccurrenceId
@@ -14,8 +15,11 @@ import model.VariableBinding
 import model.concatenateSelectionForests
 import model.engineObjectDataOf
 import model.merge
+import model.nodeReferenceIdentityOrNull
+import model.outputValue
 import model.requireQueryTypeDef
 import model.RootFieldReferenceData
+import model.schemaType
 import semantics.shared.groundedArguments
 import semantics.shared.isContextuallyGrounded
 import model.selectionForestOf
@@ -298,6 +302,7 @@ internal fun reapplyRootFieldReference(
                 ?: return@compute null
         if (candidates.isEmpty()) return@compute null
 
+        val authoritativeNodeIdentity = reference.nodeReferenceIdentityOrNull()
         var expectedReference = reference
         candidates.forEach { candidate ->
             val observation = candidate.observation
@@ -309,11 +314,27 @@ internal fun reapplyRootFieldReference(
             if (output is RootFieldReferenceData) {
                 expectedReference = output
             } else {
-                return@compute ReappliedResolver(output)
+                return@compute ReappliedResolver(
+                    output.withAuthoritativeNodeId(authoritativeNodeIdentity, validationDemand),
+                )
             }
         }
         null
     }
+
+private fun ResolverOutputData?.withAuthoritativeNodeId(
+    identity: NodeReferenceIdentity?,
+    demand: SelectionForest,
+): ResolverOutputData? {
+    if (identity == null || this !is EngineObjectData.Sync) return this
+    if (schemaType != identity.type) return this
+    val idField = identity.type.field("id") ?: return this
+    if (demand.merge(identity.type).byKey().keys.none { key -> key.field == idField }) return this
+    return engineObjectDataOf(
+        identity.type,
+        getSelections().associateWith(::outputValue) + (idField.name to identity.id),
+    )
+}
 
 context(operation: OperationContext)
 private fun RootFieldReferenceInvocationObservation.matches(

@@ -127,7 +127,7 @@ class SelectionForestEngineSelectionSetTest {
     }
 
     @Test
-    fun `restores nested node bridge demand to source fields`() {
+    fun `preserves nested Node field demand at source coordinates`() {
         val fixture = Fixture(NODE_SCHEMA, NODE_ENGINE_SCHEMA)
         val fragment =
             fixture.world.schema.fragmentFrom(

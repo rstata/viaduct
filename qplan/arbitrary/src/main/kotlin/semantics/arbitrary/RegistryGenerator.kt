@@ -299,7 +299,7 @@ class ArbitraryRegistry internal constructor(
         canonicalField: FieldCoordinate,
     ): ResolverProgramKind =
         if (canonicalField.isNodeLoader(schema)) {
-            ResolverProgramKind.INPUT_SENSITIVE
+            ResolverProgramKind.ARGUMENT_SENSITIVE
         } else {
             resolverProgram(sourceField(canonicalField))
         }
@@ -310,7 +310,7 @@ class ArbitraryRegistry internal constructor(
     ): Boolean =
         when {
             canonicalField.fieldName == "V_A_typename" -> false
-            canonicalField.isNodeLoader(schema) -> true
+            canonicalField.isNodeLoader(schema) -> false
             else -> {
                 val sourceField = sourceField(canonicalField)
                 objectFragmentSources.getValue(sourceField).isNotEmpty() ||
@@ -330,33 +330,12 @@ class ArbitraryRegistry internal constructor(
         schema: ArbitrarySchema,
         canonicalField: FieldCoordinate,
     ): Set<String> {
-        if (
-            canonicalField.fieldName != "node" ||
-            !canonicalField.typeName.endsWith("_V_A_Bridge")
-        ) {
-            return emptySet()
-        }
-        val nodeTypeName = canonicalField.typeName.removeSuffix("_V_A_Bridge")
-        if (!schema.isComposite(nodeTypeName)) return emptySet()
-
-        val possibleTypes =
-            schema
-                .possibleObjects(nodeTypeName)
-                .mapTo(linkedSetOf(), ObjectDefinition::name)
-        return possibleTypes.takeIf { types ->
-            types.isNotEmpty() && types.all { type -> type in nodeResolverTypes }
-        }.orEmpty()
+        if (canonicalField != FieldCoordinate("Query", "node")) return emptySet()
+        return nodeResolverTypes
     }
 
     private fun sourceField(canonicalField: FieldCoordinate): FieldCoordinate {
-        if (canonicalField in resolverPrograms) return canonicalField
-        return canonicalField.fieldName
-            .removeSuffix("_V_A_node")
-            .takeIf { fieldName -> fieldName != canonicalField.fieldName }
-            ?.let { fieldName ->
-                FieldCoordinate(canonicalField.typeName, fieldName)
-            }?.takeIf { sourceField -> sourceField in resolverPrograms }
-            ?: canonicalField
+        return canonicalField
     }
 
     private fun FieldCoordinate.isNodeLoader(schema: ArbitrarySchema): Boolean {
@@ -3057,29 +3036,6 @@ private fun List<FragmentSelectionPlan>.materialize(
                     .filterValues { argument -> argument is ErrorInputPlan }
                     .keys,
             ).let { materializedSelection ->
-                if (materializedSelection.key.field.name.endsWith("_V_A_node")) {
-                    val payload = materializedSelection.subselections.single()
-                    return@let MaterializeSelection.of(
-                        responseKey = materializedSelection.responseKey,
-                        key = materializedSelection.key,
-                        possibleTypes = materializedSelection.possibleTypes,
-                        inclusionCondition = materializedSelection.inclusionCondition,
-                        subselections =
-                            materializeSelectionForestOf(
-                                MaterializeSelection.of(
-                                    responseKey = payload.responseKey,
-                                    key = payload.key,
-                                    possibleTypes = payload.possibleTypes,
-                                    inclusionCondition = payload.inclusionCondition,
-                                    subselections =
-                                        plan.subselections.materialize(
-                                            schema,
-                                            payload.subselections,
-                                        ),
-                                ),
-                        ),
-                    )
-                }
                 MaterializeSelection.of(
                     responseKey = materializedSelection.responseKey,
                     key = materializedSelection.key,

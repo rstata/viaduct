@@ -79,21 +79,16 @@ class QPlanWiringFactoryTest {
     }
 
     @Test
-    fun `source Node fields complete through lowered bridge results`() {
+    fun `source Node fields complete directly from resolved node results`() {
         val world = TestWorld.fromSDL(NODE_SCHEMA).assumptions
         val user =
             world.engineResultOf("User") {
                 "id" resolvesTo "user-1"
                 "name" resolvesTo "Ada"
             }
-        val bridge =
-            world.engineResultOf("User_V_A_Bridge") {
-                "id" resolvesTo "user-1"
-                "node" resolvesTo user
-            }
         val root =
             world.engineResultOf("Query") {
-                field("node_V_A_node", "id" to "user-1") resolvesTo bridge
+                field("node", "id" to "user-1") resolvesTo user
             }
         val fixture =
             ExecutionTestFixture.fromResolvedRoot(

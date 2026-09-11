@@ -12,7 +12,6 @@ import semantics.contract.CompleteResolverOutputPolicyContract
 import semantics.contract.CorrectResolutionPostTestPolicy
 import semantics.contract.DepthFirstTaskOrderingContract
 import semantics.contract.EmptyObjectFragmentResolverContract
-import semantics.contract.NodeResolverContract
 import semantics.contract.ObjectFragmentFromArgumentResolverContract
 import semantics.contract.ObjectFragmentResolverContract
 import semantics.contract.QueryFragmentResolverContract
@@ -24,7 +23,6 @@ import semantics.resolvers.resolver06.toContractObservation
 
 class ResolverContractTest :
     EmptyObjectFragmentResolverContract,
-    NodeResolverContract,
     ObjectFragmentResolverContract,
     UnsupportedParentFieldResolverContract,
     ObjectFragmentFromArgumentResolverContract,

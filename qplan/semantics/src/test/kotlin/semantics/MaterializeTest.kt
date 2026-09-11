@@ -168,7 +168,7 @@ class MaterializeTest {
     }
 
     @Test
-    fun `Node bridges do not escape into tenant-visible materialized input`() =
+    fun `Node fields materialize at their source coordinates`() =
         runBlocking {
             val world =
                 TestWorld
@@ -194,20 +194,14 @@ class MaterializeTest {
                     ).assumptions
             val parent = world.schema.requireType("Parent") as ViaductSchema.Object
             val user = world.schema.requireType("User") as ViaductSchema.Object
-            val bridge = world.schema.requireType("User_V_A_Bridge") as ViaductSchema.Object
             val producer =
                 ObjectEngineResult.GroundKey.of(
-                    world.schema.requireObjectField("Parent", "user_V_A_node"),
+                    world.schema.requireObjectField("Parent", "user"),
                     emptyMap(),
                 )
             val listProducer =
                 ObjectEngineResult.GroundKey.of(
-                    world.schema.requireObjectField("Parent", "users_V_A_node"),
-                    emptyMap(),
-                )
-            val payload =
-                ObjectEngineResult.GroundKey.of(
-                    world.schema.requireObjectField("User_V_A_Bridge", "node"),
+                    world.schema.requireObjectField("Parent", "users"),
                     emptyMap(),
                 )
             val id =
@@ -220,24 +214,19 @@ class MaterializeTest {
                     type = user,
                     values = mapOf(id to EngineIDResult.of("user-1")),
                 )
-            val bridgeResult =
-                ObjectEngineResult.of(
-                    type = bridge,
-                    values = mapOf(payload to userResult),
-                )
             val errorData = EngineErrorData.of()
             val parentResult =
                 ObjectEngineResult.of(
                     type = parent,
                     values =
                         mapOf(
-                            producer to bridgeResult,
+                            producer to userResult,
                             listProducer to
                                 ListEngineResult.of(
                                     typeExpr = listProducer.field.outputType.unwrapList()!!,
                                     values =
                                         listOf(
-                                            bridgeResult,
+                                            userResult,
                                             null,
                                             ErrorEngineResult.of(errorData),
                                         ),

@@ -8,11 +8,15 @@ import model.ArgumentResolutionError
 import model.EngineErrorData
 import model.EngineOutputData
 import model.ObjectEngineResult
+import model.RootFieldReferenceData
+import model.SelectionForest
 import model.Arguments
 import model.SourceSchemaAdapter
 import model.fieldExpressions
+import model.fragmentFrom
 import model.objectOf
 import model.outputValue
+import model.selectionForestOf
 import model.registry.ProviderFragment
 import model.registry.VariableDefinition
 import org.junit.jupiter.api.Test
@@ -310,15 +314,19 @@ class ResolverTestDslTest {
                 """.trimIndent(),
             )
         val schema = world.schema
-        val viewer = schema.requireObjectField("Query", "viewer_V_A_node")
-        val bridge =
-            assertIs<EngineObjectData.Sync>(
+        val viewer = schema.requireObjectField("Query", "viewer")
+        val reference =
+            assertIs<RootFieldReferenceData>(
                 world.apply(viewer, arguments = mapOf("id" to "user-2")),
             )
-        val node = schema.requireObjectField("User_V_A_Bridge", "node")
+        val node = schema.requireObjectField("Query", "node")
         val user =
             assertIs<EngineObjectData.Sync>(
-                world.apply(node, bridge),
+                world.apply(
+                    node,
+                    arguments = reference.arguments.fieldValues,
+                    selections = schema.fragmentFrom("fragment UserResult on User { id score }").subselections,
+                ),
             )
 
         assertEquals(
@@ -396,12 +404,13 @@ private fun TestWorld.apply(
     field: ViaductSchema.ObjectField,
     input: EngineObjectData.Sync = resolverRegistry.createRootQueryInput(),
     arguments: Map<String, Any?> = emptyMap(),
+    selections: SelectionForest = selectionForestOf(),
 ): EngineOutputData? =
     when (val grounded = Arguments.of(field, arguments)) {
         Arguments.Error -> EngineErrorData.of()
         is Arguments.Resolved ->
             context(Assumptions.of(assumptions.schema, assumptions.resolverRegistry, false)) {
-                resolverRegistry.resolver(field)(input, grounded)
+                resolverRegistry.resolver(field)(input, grounded, selections = selections)
             }
         else -> error("Direct resolver application requires ground arguments")
     }

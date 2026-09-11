@@ -342,9 +342,9 @@ class MaterializeSelectionFlattenerTest {
             }
 
         val account = selections.collect(schema.requireQueryTypeDef())["account"]
-        assertEquals("user_V_A_node", account.key.field.name)
+        assertEquals("user", account.key.field.name)
         assertEquals(
-            setOf("user_V_A_node"),
+            setOf("user"),
             selections
                 .constructionSelections()
                 .merge(schema.requireQueryTypeDef())
@@ -352,12 +352,9 @@ class MaterializeSelectionFlattenerTest {
                 .mapTo(linkedSetOf()) { key -> key.field.name },
         )
 
-        val bridge = account.key.field.type.baseTypeDef as ViaductSchema.Object
-        val payload = account.subselections.collect(bridge)["node"]
-        assertEquals("node", payload.key.field.name)
         assertEquals(
             setOf("id"),
-            payload.subselections
+            account.subselections
                 .collect(schema.requireType("User") as ViaductSchema.Object)
                 .responseKeys(),
         )

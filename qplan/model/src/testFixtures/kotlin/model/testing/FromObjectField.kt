@@ -236,38 +236,11 @@ private fun GJSchema.matchingFields(
                     emptyList()
                 } else {
                     val field = requireField(typeInScope.name, selection.fieldName)
-                    val loweredNodeField = isLoweredNodeField(field)
-                    val payloadSelection =
-                        if (loweredNodeField) {
-                            selection.subselections
-                                .orEmpty()
-                                .single() as SpecSelection.Field
-                        } else {
-                            null
-                        }
-                    val payloadKey =
-                        payloadSelection?.let { payload ->
-                            val bridgeType =
-                                field.type.baseTypeDef as ViaductSchema.CompositeTypeDef
-                            ObjectEngineResult.Key.of(
-                                field =
-                                    this@matchingFields.requireField(
-                                        bridgeType.name,
-                                        payload.fieldName,
-                                    ),
-                                arguments = payload.arguments,
-                            )
-                        }
                     listOf(
                         MatchingField(
-                            keys =
-                                listOf(ObjectEngineResult.Key.of(field, selection.arguments)) +
-                                    listOfNotNull(payloadKey),
+                            keys = listOf(ObjectEngineResult.Key.of(field, selection.arguments)),
                             typeExpr = SourceSchemaAdapter(this@matchingFields).typeExpr(field),
-                            subselections =
-                                payloadSelection?.subselections.orEmpty()
-                                    .takeIf { loweredNodeField }
-                                    ?: selection.subselections.orEmpty(),
+                            subselections = selection.subselections.orEmpty(),
                             lossyCondition = lossyCondition,
                         ),
                     )

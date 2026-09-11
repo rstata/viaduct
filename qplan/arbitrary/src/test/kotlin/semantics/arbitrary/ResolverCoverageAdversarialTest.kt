@@ -98,52 +98,48 @@ class ResolverCoverageAdversarialTest {
                     ?: error("Could not generate a Node-valued resolver with list=$listOutput")
             val (schema, registry, sourceField) = generated
             val world = registry.world(schema).assumptions
-            val bridgeField =
-                world.schema.requireObjectField(sourceField.typeName, sourceField.fieldName + "_V_A_node")
+            val producerField =
+                world.schema.requireObjectField(sourceField.typeName, sourceField.fieldName)
             val emptyInput = world.schema.objectOf(sourceField.typeName)
-            val bridgeValue =
+            val producerValue =
                 context(Assumptions.of(world.schema, world.resolverRegistry, false)) {
                     world.resolverRegistry
-                        .resolver(bridgeField)(
+                        .resolver(producerField)(
                             input = emptyInput,
                             queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
-                            arguments = Arguments.Resolved.of(bridgeField, emptyMap()),
+                            arguments = Arguments.Resolved.of(producerField, emptyMap()),
                         )
                 }
-            val payloadInput =
+            val nodeReference =
                 if (listOutput) {
-                    assertIs<EngineObjectData.Sync>(
-                        assertIs<List<*>>(bridgeValue).first(),
+                    assertIs<model.RootFieldReferenceData>(
+                        assertIs<List<*>>(producerValue).first(),
                     )
                 } else {
-                    assertIs<EngineObjectData.Sync>(bridgeValue)
+                    assertIs<model.RootFieldReferenceData>(producerValue)
                 }
-            val payloadField =
-                world.schema.requireObjectField(
-                    payloadInput.schemaType.name,
-                    "node",
-                )
+            val queryNode = world.schema.requireObjectField("Query", "node")
 
             registry.clearResolutionWitness()
             context(Assumptions.of(world.schema, world.resolverRegistry, false)) {
                 world.resolverRegistry
-                    .resolver(bridgeField)(
+                    .resolver(producerField)(
                         input = emptyInput,
                         queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
-                        arguments = Arguments.Resolved.of(bridgeField, emptyMap()),
+                        arguments = Arguments.Resolved.of(producerField, emptyMap()),
                     )
                 world.resolverRegistry
-                    .resolver(payloadField)(
-                        input = payloadInput,
+                    .resolver(queryNode)(
+                        input = world.schema.objectOf("Query"),
                         queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
-                        arguments = Arguments.Resolved.of(payloadField, emptyMap()),
+                        arguments = nodeReference.arguments,
                     )
             }
 
             assertEquals(
                 listOf(
-                    FieldCoordinate(sourceField.typeName, sourceField.fieldName + "_V_A_node"),
-                    FieldCoordinate(payloadInput.schemaType.name, "node"),
+                    sourceField,
+                    FieldCoordinate("Query", "node"),
                 ),
                 registry.resolutionWitness().applications.map { application ->
                     application.key.field

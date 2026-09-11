@@ -111,7 +111,7 @@ interface DeepResolverStressContract : ResolverContract {
             var resolverApplications = 0
             var generatedNodeResolvers = 0
             var nodeLoaderApplications = 0
-            var argumentBearingNodeBridgeProducerApplications = 0
+            var argumentBearingNodeProducerApplications = 0
             var polymorphicNodeLoaderApplications = 0
             var generatedFromArgumentVariables = 0
             var generatedObjectPathVariables = 0
@@ -253,7 +253,7 @@ interface DeepResolverStressContract : ResolverContract {
                             activatedNestedObjectPathApplications += 1
                         }
                         if (
-                            application.key.field.fieldName.endsWith("_V_A_node") &&
+                            application.key.field.fieldName.endsWith("") &&
                             world.schema
                                 .requireField(
                                     application.key.field.typeName,
@@ -261,7 +261,7 @@ interface DeepResolverStressContract : ResolverContract {
                                 ).args
                                 .isNotEmpty()
                         ) {
-                            argumentBearingNodeBridgeProducerApplications += 1
+                            argumentBearingNodeProducerApplications += 1
                         }
                         val possibleTypes =
                             testCase.registry.nodeLoaderPossibleTypes(
@@ -300,8 +300,8 @@ interface DeepResolverStressContract : ResolverContract {
                         "resolverApplications=$resolverApplications, " +
                         "generatedNodeResolvers=$generatedNodeResolvers, " +
                         "nodeLoaderApplications=$nodeLoaderApplications, " +
-                        "argumentBearingNodeBridgeProducerApplications=" +
-                        "$argumentBearingNodeBridgeProducerApplications, " +
+                        "argumentBearingNodeProducerApplications=" +
+                        "$argumentBearingNodeProducerApplications, " +
                         "polymorphicNodeLoaderApplications=" +
                         "$polymorphicNodeLoaderApplications, " +
                         "generatedFromArgumentVariables=$generatedFromArgumentVariables, " +
@@ -333,12 +333,12 @@ interface DeepResolverStressContract : ResolverContract {
                 assertTrue(generatedNodeResolvers >= requestedCases / 100)
                 assertTrue(nodeLoaderApplications >= requestedCases / 1_000)
                 assertTrue(
-                    argumentBearingNodeBridgeProducerApplications >= requestedCases / 1_000,
+                    argumentBearingNodeProducerApplications >= requestedCases / 1_000,
                 )
             } else {
                 assertEquals(0, generatedNodeResolvers)
                 assertEquals(0, nodeLoaderApplications)
-                assertEquals(0, argumentBearingNodeBridgeProducerApplications)
+                assertEquals(0, argumentBearingNodeProducerApplications)
             }
             if (objectPathVariablesEnabled) {
                 assertTrue(generatedObjectPathVariables > 0)

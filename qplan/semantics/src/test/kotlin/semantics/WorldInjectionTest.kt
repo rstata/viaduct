@@ -1,22 +1,21 @@
 package semantics
 
-import model.requireType
-import model.requireField
-import model.requireObjectField
 import model.Arguments
 import model.Assumptions
-import model.ObjectEngineResult
-import viaduct.graphql.schema.ViaductSchema
 import model.emptyFragmentOf
 import model.engineObjectDataOf
 import model.fragmentFrom
 import model.objectOf
 import model.registry.ResolverRegistry
+import model.requireField
+import model.requireObjectField
 import model.requireQueryTypeDef
+import model.requireType
 import model.testing.FieldResolverDefinition
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.nodeResolverOf
+import viaduct.graphql.schema.ViaductSchema
 import semantics.contract.selectionValues
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -43,7 +42,7 @@ class WorldInjectionTest {
                     )
                 },
                 fieldResolvers = { schema ->
-                    val userField = schema.requireField("Query", "user_V_A_node")
+                    val userField = schema.requireField("Query", "user")
                     val queryFragment = schema.emptyFragmentOf("Query")
                     mapOf<ViaductSchema.Field, FieldResolverDefinition>(
                         userField to
@@ -68,27 +67,25 @@ class WorldInjectionTest {
         assertEquals(registry, testWorld.instance(ResolverRegistry::class.java))
         assertEquals(world, testWorld.instance(Assumptions::class.java))
 
-        val bridgeField = schema.requireObjectField("Query", "user_V_A_node")
-        val payloadField = schema.requireObjectField("User_V_A_Bridge", "node")
-        val bridge =
-            assertIs<EngineObjectData.Sync>(
+        val userField = schema.requireObjectField("Query", "user")
+        val nodeReference =
+            assertIs<model.RootFieldReferenceData>(
                 context(Assumptions.of(world.schema, world.resolverRegistry, false)) {
                     registry
-                        .resolver(bridgeField)(
+                        .resolver(userField)(
                             input = world.objectOf("Query"),
                             queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
-                            arguments = Arguments.Resolved.of(bridgeField, emptyMap()),
+                            arguments = Arguments.Resolved.of(userField, emptyMap()),
                         )
                 },
             )
 
+        val queryNode = schema.requireObjectField("Query", "node")
         val selections =
             world.fragmentFrom(
                 """
-                fragment ignored on Query {
-                  user {
-                    id
-                  }
+                fragment ignored on User {
+                  id
                 }
                 """.trimIndent(),
             ).subselections
@@ -96,11 +93,11 @@ class WorldInjectionTest {
             assertIs<EngineObjectData.Sync>(
                 context(world) {
                     registry
-                        .resolver(payloadField)(
-                            input = bridge,
+                        .resolver(queryNode)(
+                            input = world.objectOf("Query"),
                             queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
-                            arguments = Arguments.Resolved.of(payloadField, emptyMap()),
-                            selections = selections.single().subselections.single().subselections,
+                            arguments = nodeReference.arguments,
+                            selections = selections,
                         )
                 },
             )
@@ -109,17 +106,13 @@ class WorldInjectionTest {
             field.selectionValues()["id"],
         )
 
+        assertEquals(userField, schema.requireObjectField("Query", "user"))
         assertFailsWith<IllegalStateException> {
-            schema.requireObjectField("Query", "user")
+            schema.requireType("User_V_A_Bridge")
         }
-        assertEquals(bridgeField, selections.single().key.field)
-        assertEquals(
-            payloadField,
-            selections.single().subselections.single().key.field,
-        )
         assertEquals(
             schema.requireField("User", "id"),
-            selections.single().subselections.single().subselections.single().key.field,
+            selections.single().key.field,
         )
     }
 
@@ -129,7 +122,7 @@ class WorldInjectionTest {
 
         assertFalse(world.schema.requireObjectField("User", "id") in world.resolverRegistry)
         world.resolverRegistry.resolver(
-            world.schema.requireObjectField("Query", "user_V_A_node"),
+            world.schema.requireObjectField("Query", "user"),
         )
     }
 
@@ -150,12 +143,3 @@ class WorldInjectionTest {
             """.trimIndent()
     }
 }
-
-private fun ViaductSchema.key(
-    type: ViaductSchema.Object,
-    fieldName: String,
-): ObjectEngineResult.GroundKey =
-    ObjectEngineResult.GroundKey.of(
-        field = requireObjectField(type.name, fieldName),
-        arguments = emptyMap(),
-    )

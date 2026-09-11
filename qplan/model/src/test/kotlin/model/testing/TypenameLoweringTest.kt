@@ -49,7 +49,7 @@ class TypenameLoweringTest {
         }
         listOf("A_V_A_Bridge", "Node_V_A_Bridge").forEach { typeName ->
             assertFailsWith<IllegalStateException> {
-                schema.requireField(typeName, "V_A_typename")
+                schema.requireType(typeName)
             }
         }
         assertIs<ViaductSchema.Union>(schema.requireType("Choice"))
@@ -60,8 +60,6 @@ class TypenameLoweringTest {
             "Choice",
             "A",
             "B",
-            "A_V_A_Bridge",
-            "Node_V_A_Bridge",
         ).forEach { typeName ->
             assertFailsWith<IllegalStateException> {
                 schema.requireField(typeName, "__typename")
@@ -103,12 +101,9 @@ class TypenameLoweringTest {
             schema.fragmentFrom("fragment F on Query { node { __typename } }")
                 .subselections
                 .single()
-        val bridgeType = schema.requireType("A_V_A_Bridge") as ViaductSchema.Object
-        val payload = nodeSelection.subselections.merge(bridgeType).single()
-        assertEquals("node", payload.key.field.name)
         assertEquals(
             "V_A_typename",
-            payload.subselections.single().key.field.name,
+            nodeSelection.subselections.single().key.field.name,
         )
     }
 
@@ -137,11 +132,8 @@ class TypenameLoweringTest {
                 """.trimIndent(),
             )
         val a = nested.merge(world.schema.requireQueryTypeDef()).single()
-        assertEquals("a_V_A_node", a.key.field.name)
-        val bridgeType = a.key.field.type.baseTypeDef as ViaductSchema.Object
-        val payload = a.subselections.merge(bridgeType).single()
-        assertEquals("node", payload.key.field.name)
-        assertTrue(payload.subselections.isEmpty())
+        assertEquals("a", a.key.field.name)
+        assertTrue(a.subselections.isEmpty())
     }
 
     @Test

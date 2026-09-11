@@ -14,6 +14,15 @@ Every maintained resolver uses the aligned Engine API carrier boundary. The vers
 
 Each row changes semantic capability while holding the execution family roughly constant. Each column changes execution structure while holding capability roughly constant.
 
+Every row also supports symbolic root-field references in resolver output. A demanded reference
+invokes its registered target with grounded arguments and an empty object input, follows direct
+reference tails, and publishes the eventual scalar, enum, object, or list-position value at the
+consumer occurrence. Resolver01-08 invoke each target inline before continuing depth-first sibling
+work. Resolver21-23 invoke it inside the current structured coroutine scope. The fragment-capable
+rows execute a target Query fragment and bind its `FromArgument` variables; the selective row
+supplies full successor demand to the target. Resolver26 additionally supports its runtime
+`FromQueryField` and `FromProvider` target bindings and condition-aware activation.
+
 ### Recursive Reference: Resolver01-03
 
 Resolver01 is the smallest result-tree constructor. Resolver02 adds object-fragment closure and `FromArgument`. Resolver03 adds selective projection and full successor demand.
@@ -41,6 +50,11 @@ Resolver22/23 support `@parent`. Their structured suspension and exact promises 
 Resolver26 retains variable-bearing resolver-fragment selections as symbolic OER keys. Variables are instantiated once per resolver occurrence, so equal symbolic keys coalesce within an OER while separate containing OERs remain distinct. It synchronously closes symbolic demand before local installation, uses source presence to let ancestor outputs own argumentless fields that otherwise have standard resolvers, prepares every binding required by the remaining work, reserves active cells once their symbolic keys are contextually grounded, freezes the OER key set, and runs field resolution under one request-owned coroutine scope.
 
 Resolver26 supports `@parent` by extending both input-demand closure and successor-demand closure to lift parent-induced demand before each OER is frozen.
+
+Resolver26 implements the same root-field-reference contract as the comparison grid through its
+sealed occurrence and field-task protocol. That implementation adds conditioned passive
+activation, runtime variable providers, and exact invocation/publication observations; those are
+Resolver26 mechanisms rather than prerequisites for the shared reference behavior.
 
 Resolver26 is the primary algorithm and eventual implementation blueprint. Its aligned qplan shape remains close to what a future Viaduct query executor can use, but that future executor is not part of an ordinary qplan refactor.
 

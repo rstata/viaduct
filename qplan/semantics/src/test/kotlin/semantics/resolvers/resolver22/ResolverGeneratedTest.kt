@@ -12,10 +12,13 @@ import semantics.contract.FeatureInteractionGeneratedResolverContract
 import semantics.contract.ObjectFragmentFromArgumentGeneratedResolverContract
 import semantics.contract.ObjectFragmentGeneratedResolverContract
 import semantics.contract.QueryFragmentGeneratedResolverContract
+import semantics.contract.RootFieldReferenceGeneratedResolverContract
 import semantics.contract.SometimesPassiveGeneratedResolverContract
 
 class ResolverGeneratedTest :
     EmptyObjectFragmentGeneratedResolverContract,
+    NodeGeneratedResolverContract,
+    RootFieldReferenceGeneratedResolverContract,
     ObjectFragmentGeneratedResolverContract,
     ObjectFragmentFromArgumentGeneratedResolverContract,
     QueryFragmentGeneratedResolverContract,

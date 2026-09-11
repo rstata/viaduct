@@ -21,6 +21,7 @@ import semantics.contract.ObjectFragmentFromArgumentGeneratedResolverContract
 import semantics.contract.ObjectFragmentFromObjectPathGeneratedResolverContract
 import semantics.contract.ObjectFragmentGeneratedResolverContract
 import semantics.contract.QueryFragmentGeneratedResolverContract
+import semantics.contract.RootFieldReferenceGeneratedResolverContract
 import semantics.contract.SelectiveNodeGeneratedResolverContract
 import semantics.contract.ResolverResolutionObservation
 import semantics.contract.SometimesPassiveGeneratedResolverContract
@@ -31,6 +32,7 @@ import semantics.shared.RecordingResolverObserver
 class ResolverGeneratedTest :
     EmptyObjectFragmentGeneratedResolverContract,
     NodeGeneratedResolverContract,
+    RootFieldReferenceGeneratedResolverContract,
     SelectiveNodeGeneratedResolverContract,
     ListPassiveDeepeningGeneratedResolverContract,
     ObjectFragmentGeneratedResolverContract,

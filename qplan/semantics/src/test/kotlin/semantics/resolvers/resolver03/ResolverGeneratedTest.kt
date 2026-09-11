@@ -13,6 +13,7 @@ import semantics.contract.ListPassiveDeepeningGeneratedResolverContract
 import semantics.contract.ObjectFragmentFromArgumentGeneratedResolverContract
 import semantics.contract.ObjectFragmentGeneratedResolverContract
 import semantics.contract.QueryFragmentGeneratedResolverContract
+import semantics.contract.RootFieldReferenceGeneratedResolverContract
 import semantics.contract.SometimesPassiveGeneratedResolverContract
 
 /**
@@ -21,6 +22,8 @@ import semantics.contract.SometimesPassiveGeneratedResolverContract
  */
 class ResolverGeneratedTest :
     EmptyObjectFragmentGeneratedResolverContract,
+    NodeGeneratedResolverContract,
+    RootFieldReferenceGeneratedResolverContract,
     ListPassiveDeepeningGeneratedResolverContract,
     ObjectFragmentGeneratedResolverContract,
     ObjectFragmentFromArgumentGeneratedResolverContract,

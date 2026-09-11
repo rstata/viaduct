@@ -5,6 +5,7 @@ import viaduct.graphql.schema.ViaductSchema
 import model.Arguments
 import model.EngineErrorData
 import model.EngineOutputData
+import model.ResolverOutputData
 import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
@@ -14,9 +15,10 @@ import model.outputType
 import model.outputValue
 import model.PathComponent
 import model.SelectionForest
+import model.RootFieldReferenceData
 import viaduct.engine.api.EngineObjectData
 import semantics.shared.applicableGroundSelections
-import model.invariants.conformsToOutputSchemaType
+import model.invariants.conformsToResolverOutputSchemaType
 import model.schemaType
 import model.requireField
 import model.isParentField
@@ -32,6 +34,8 @@ import semantics.shared.OperationContext
 internal class ResolvePassiveValuesResult(
     val engineResult: EngineResult?,
     val objectsNeedingResolution: List<PassiveObjectOccurrence>,
+    /** Object roots whose original source position is symbolic and cannot be rediscovered later. */
+    val referenceObjectsNeedingResolution: List<PassiveObjectOccurrence> = emptyList(),
 )
 
 internal class PassiveObjectOccurrence(
@@ -40,6 +44,18 @@ internal class PassiveObjectOccurrence(
     val selections: SelectionForest,
     val target: ObjectEngineResult,
 )
+
+/** Executes one root-field-reference hop at its stable publication occurrence. */
+internal fun interface RootFieldReferenceResolver {
+    suspend fun resolve(
+        reference: RootFieldReferenceData,
+        publicationRoot: ObjectEngineResult,
+        publicationPath: List<PathComponent>,
+        expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
+        constructionDemand: SelectionForest,
+        invocationDemand: SelectionForest,
+    ): ResolverOutputData?
+}
 
 /** Installs every selected parent field as a reference to [parent] and returns its selections. */
 context(operation: OperationContext)
@@ -81,28 +97,65 @@ internal fun ObjectEngineResult.installParentBackedges(
  * [constructionDemand] determines whether each root object occurrence requires orchestration.
  */
 context(operation: OperationContext)
-internal fun EngineOutputData?.resolvePassiveValues(
+internal suspend fun ResolverOutputData?.resolvePassiveValues(
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     path: List<PathComponent>,
     constructionDemand: SelectionForest,
     invocationDemand: SelectionForest = constructionDemand,
+    publicationRoot: ObjectEngineResult? = null,
+    rootFieldReferenceResolver: RootFieldReferenceResolver? = null,
 ): ResolvePassiveValuesResult {
-    require(conformsToOutputSchemaType(expectedType)) {
+    require(conformsToResolverOutputSchemaType(expectedType)) {
         "Resolver output does not conform to $expectedType"
     }
     return when (this) {
         null -> ResolvePassiveValuesResult(null, emptyList())
         is EngineErrorData ->
             ResolvePassiveValuesResult(ErrorEngineResult.of(this), emptyList())
+        is RootFieldReferenceData -> {
+            val resolver =
+                requireNotNull(rootFieldReferenceResolver) {
+                    "Root-field reference has no execution strategy"
+                }
+            val root =
+                requireNotNull(publicationRoot) {
+                    "Root-field reference has no publication root"
+                }
+            val referencedResult =
+                resolver
+                .resolve(
+                    reference = this,
+                    publicationRoot = root,
+                    publicationPath = path,
+                    expectedType = expectedType,
+                    constructionDemand = constructionDemand,
+                    invocationDemand = invocationDemand,
+                ).resolvePassiveValues(
+                    expectedType = expectedType,
+                    path = path,
+                    constructionDemand = constructionDemand,
+                    invocationDemand = invocationDemand,
+                    publicationRoot = root,
+                    rootFieldReferenceResolver = resolver,
+                )
+            ResolvePassiveValuesResult(
+                engineResult = referencedResult.engineResult,
+                objectsNeedingResolution = referencedResult.objectsNeedingResolution,
+                referenceObjectsNeedingResolution = referencedResult.objectsNeedingResolution,
+            )
+        }
         is EngineObjectData.Sync ->
             resolvePassiveObjectValues(
                 constructionDemand = constructionDemand,
                 invocationDemand = invocationDemand,
                 path = path,
+                publicationRoot = publicationRoot,
+                rootFieldReferenceResolver = rootFieldReferenceResolver,
             )
         is List<*> -> {
             val elementType = checkNotNull(expectedType.unwrapList())
             val objectsNeedingResolution = mutableListOf<PassiveObjectOccurrence>()
+            val referenceObjectsNeedingResolution = mutableListOf<PassiveObjectOccurrence>()
             val values =
                 buildList(this.size) {
                     this@resolvePassiveValues.forEachIndexed { index, value ->
@@ -112,14 +165,20 @@ internal fun EngineOutputData?.resolvePassiveValues(
                                 path = path + ListEngineResult.Index.of(index),
                                 constructionDemand = constructionDemand,
                                 invocationDemand = invocationDemand,
+                                publicationRoot = publicationRoot,
+                                rootFieldReferenceResolver = rootFieldReferenceResolver,
                             )
                         add(element.engineResult)
                         objectsNeedingResolution.addAll(element.objectsNeedingResolution)
+                        referenceObjectsNeedingResolution.addAll(
+                            element.referenceObjectsNeedingResolution,
+                        )
                     }
                 }
             ResolvePassiveValuesResult(
                 engineResult = ListEngineResult.of(elementType, values),
                 objectsNeedingResolution = objectsNeedingResolution,
+                referenceObjectsNeedingResolution = referenceObjectsNeedingResolution,
             )
         }
         else ->
@@ -131,10 +190,12 @@ internal fun EngineOutputData?.resolvePassiveValues(
 }
 
 context(operation: OperationContext)
-private fun EngineObjectData.Sync.resolvePassiveObjectValues(
+private suspend fun EngineObjectData.Sync.resolvePassiveObjectValues(
     constructionDemand: SelectionForest,
     invocationDemand: SelectionForest,
     path: List<PathComponent>,
+    publicationRoot: ObjectEngineResult?,
+    rootFieldReferenceResolver: RootFieldReferenceResolver?,
 ): ResolvePassiveValuesResult {
     val constructionDemandByKey =
         constructionDemand.applicableGroundSelections(schemaType).byGroundKey()
@@ -153,6 +214,11 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
         }
     }
 
+    val passiveDemandKeys =
+        (constructionDemand + invocationDemand)
+            .applicableGroundSelections(schemaType)
+            .byGroundKey()
+            .keys
     val selectedKeys =
         getSelections()
             .mapNotNull { fieldName ->
@@ -161,8 +227,15 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
                 require(field.args.isEmpty()) {
                     "Passive object field ${schemaType.name}/$fieldName must be argumentless"
                 }
-                ObjectEngineResult.GroundKey.of(field, emptyMap())
+                val key = ObjectEngineResult.GroundKey.of(field, emptyMap())
+                val output = outputValue(fieldName)
+                if (output.containsImmediateRootFieldReference() && key !in passiveDemandKeys) {
+                    null
+                } else {
+                    key
+                }
             }.toSet()
+    val referenceObjectsNeedingResolution = mutableListOf<PassiveObjectOccurrence>()
     val values: Map<ObjectEngineResult.ObjectKey, EngineResult?> =
         buildMap(selectedKeys.size) {
             selectedKeys.forEach { key ->
@@ -183,8 +256,13 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
                                 invocationDemandByKey[key]
                                     ?.subselections
                                     ?: selectionForestOf(),
+                            publicationRoot = publicationRoot,
+                            rootFieldReferenceResolver = rootFieldReferenceResolver,
                         )
                 put(key, fieldValue.engineResult)
+                referenceObjectsNeedingResolution.addAll(
+                    fieldValue.referenceObjectsNeedingResolution,
+                )
             }
         }
     val engineResult = ObjectEngineResult.of(schemaType, values, mutable = true)
@@ -203,9 +281,17 @@ private fun EngineObjectData.Sync.resolvePassiveObjectValues(
         }
     return ResolvePassiveValuesResult(
         engineResult = engineResult,
-        objectsNeedingResolution = localResolution,
+        objectsNeedingResolution = localResolution + referenceObjectsNeedingResolution,
+        referenceObjectsNeedingResolution = referenceObjectsNeedingResolution,
     )
 }
+
+private fun ResolverOutputData?.containsImmediateRootFieldReference(): Boolean =
+    when (this) {
+        is RootFieldReferenceData -> true
+        is List<*> -> any { value -> value.containsImmediateRootFieldReference() }
+        else -> false
+    }
 
 context(operation: OperationContext)
 private fun EngineOutputData?.hasUnresolvedDemand(

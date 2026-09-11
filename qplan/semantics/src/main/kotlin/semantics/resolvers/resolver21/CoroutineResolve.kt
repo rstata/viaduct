@@ -12,7 +12,10 @@ import model.ErrorEngineResult
 import model.ObjectEngineResult
 import model.ObjectSelection
 import model.PathComponent
+import model.ResolverOutputData
+import model.RootFieldReferenceData
 import model.SelectionForest
+import viaduct.graphql.schema.ViaductSchema
 import model.engineObjectDataOf
 import model.groundKey
 import model.outputType
@@ -20,12 +23,16 @@ import model.registry.ResolverFragment
 import model.requireQueryTypeDef
 import model.schemaType
 import semantics.resolvers.closeResolverDemand
+import semantics.resolvers.emptyObjectInput
 import semantics.resolvers.materializedChildOccurrences
 import semantics.resolvers.installParentBackedges
 import semantics.resolvers.PassiveObjectOccurrence
+import semantics.resolvers.prepareInvocation
 import semantics.resolvers.resolvePassiveValues
+import semantics.resolvers.RootFieldReferenceResolver
 import semantics.shared.CycleCheckState
 import semantics.shared.OperationContext
+import semantics.shared.RootFieldReferenceInvocationObservation
 import semantics.shared.materialize
 import viaduct.engine.api.EngineObjectData
 
@@ -194,6 +201,24 @@ internal class CoroutineResolve(
                             path = path + key,
                             constructionDemand = selection.subselections,
                             invocationDemand = invocationDemand,
+                            publicationRoot = root,
+                            rootFieldReferenceResolver =
+                                RootFieldReferenceResolver { reference,
+                                    publicationRoot,
+                                    publicationPath,
+                                    expectedType,
+                                    constructionDemand,
+                                    referenceInvocationDemand,
+                                ->
+                                    resolveRootFieldReference(
+                                        reference = reference,
+                                        publicationRoot = publicationRoot,
+                                        publicationPath = publicationPath,
+                                        expectedType = expectedType,
+                                        constructionDemand = constructionDemand,
+                                        invocationDemand = referenceInvocationDemand,
+                                    )
+                                },
                         )
 
                     val occurrence =
@@ -211,6 +236,43 @@ internal class CoroutineResolve(
                     valuePromise.complete(passiveValuesResult.engineResult)
                 }
         }
+    }
+
+    private suspend fun CoroutineScope.resolveRootFieldReference(
+        reference: RootFieldReferenceData,
+        publicationRoot: ObjectEngineResult,
+        publicationPath: List<PathComponent>,
+        @Suppress("UNUSED_PARAMETER")
+        expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
+        @Suppress("UNUSED_PARAMETER")
+        constructionDemand: SelectionForest,
+        invocationDemand: SelectionForest,
+    ): ResolverOutputData? = context(operation, world) {
+        val invocation = reference.prepareInvocation()
+        val queryValue =
+            resolveQueryFragment(
+                queryFragment = invocation.fragments.queryFragment,
+                coordinate = invocation.path,
+            )
+        val output =
+            invocation.resolver(
+                input = invocation.emptyObjectInput(),
+                queryValue = queryValue,
+                arguments = reference.arguments,
+                selections = invocationDemand,
+            )
+        operation.resolverObserver.onRootFieldReferenceInvocation(
+            RootFieldReferenceInvocationObservation(
+                publicationRoot = publicationRoot,
+                publicationPath = publicationPath,
+                reference = reference,
+                invocationRoot = invocation.root,
+                invocationPath = invocation.path,
+                invocationKey = invocation.key,
+                suppliedDemand = invocationDemand,
+            ),
+        )
+        output
     }
 
     private suspend fun CoroutineScope.resolveQueryFragment(

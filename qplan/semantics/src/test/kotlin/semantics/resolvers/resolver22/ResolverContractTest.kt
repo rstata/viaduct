@@ -9,17 +9,24 @@ import model.ObjectEngineResult
 import model.SelectionForest
 import semantics.contract.CompleteObjectFragmentOutputPolicyContract
 import semantics.contract.CompleteResolverOutputPolicyContract
+import semantics.contract.CompleteOutputRootFieldReferenceResolverContract
 import semantics.contract.CorrectResolutionPostTestPolicy
 import semantics.contract.EmptyObjectFragmentResolverContract
 import semantics.contract.ObjectFragmentFromArgumentResolverContract
 import semantics.contract.ObjectFragmentResolverContract
 import semantics.contract.ParentFieldResolverContract
 import semantics.contract.QueryFragmentResolverContract
+import semantics.contract.QueryFragmentRootFieldReferenceResolverContract
+import semantics.contract.RootFieldReferenceResolverContract
 import semantics.contract.SometimesPassiveObjectFragmentResolverContract
 import semantics.contract.SometimesPassiveResolverContract
 
 class ResolverContractTest :
     EmptyObjectFragmentResolverContract,
+    NodeResolverContract,
+    RootFieldReferenceResolverContract,
+    CompleteOutputRootFieldReferenceResolverContract,
+    QueryFragmentRootFieldReferenceResolverContract,
     ObjectFragmentResolverContract,
     ParentFieldResolverContract,
     ObjectFragmentFromArgumentResolverContract,

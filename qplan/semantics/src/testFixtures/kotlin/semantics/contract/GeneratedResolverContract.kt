@@ -30,6 +30,8 @@ import semantics.arbitrary.ResolverFromFieldProviderArgumentVariableWeight
 import semantics.arbitrary.ResolverFromQueryFieldVariablesEnabled
 import semantics.arbitrary.ResolverNestedProviderPathWeight
 import semantics.arbitrary.ResolverQueryFragmentsEnabled
+import semantics.arbitrary.RootFieldReferencesEnabled
+import semantics.arbitrary.RootFieldReferenceWeight
 import semantics.arbitrary.ResolverTestCase
 import semantics.arbitrary.ResolverTestRun
 import semantics.arbitrary.ResolverVariableCount
@@ -66,6 +68,55 @@ interface EmptyObjectFragmentGeneratedResolverContract : GeneratedCaseAssertionP
                 assertTrue(testCase.registry.objectFragmentSources.values.all(String::isEmpty))
                 assertEquals(0, testCase.registry.features.variableCount)
                 observeGeneratedCaseWithCurrentAssertions(testWorld, testCase)
+            }
+        }
+}
+
+/** Generated root-field-reference coverage within the base resolver capability tier. */
+interface RootFieldReferenceGeneratedResolverContract : GeneratedCaseAssertionPolicy {
+    @Test
+    fun `generated root-field-reference worlds resolve correctly`(): Unit =
+        runBlocking {
+            var generatedReferences = 0
+            var activatedReferences = 0
+            val assertions =
+                generatedCaseAssertions.filterNot { assertion ->
+                    assertion === GeneratedCaseAssertions.exactOrdinaryApplicationCounts
+                }
+            val config =
+                Config.default +
+                    (NodeResolversEnabled to false) +
+                    (ResolverFragmentsEnabled to false) +
+                    (ResolverQueryFragmentsEnabled to false) +
+                    (ResolverFromArgumentVariablesEnabled to false) +
+                    (ResolverVariablesEnabled to false) +
+                    (RootFieldReferencesEnabled to true) +
+                    (RootFieldReferenceWeight to 0.25)
+
+            val run =
+                checkGeneratedProfile("root-field-reference", config) { testWorld, testCase ->
+                    generatedReferences +=
+                        testCase.registry.features.generatedRootFieldReferenceCount
+                    val observation =
+                        observeGeneratedCaseWithCurrentAssertions(
+                            testWorld = testWorld,
+                            testCase = testCase,
+                            assertions = assertions,
+                        )
+                    activatedReferences +=
+                        (observation.ordinary.operation.resolverObserver as ResolverObservations)
+                            .rootFieldReferenceInvocations()
+                            .size
+                }
+            if (run.selectedCase == null) {
+                run.assertAggregate(
+                    generatedReferences > 0,
+                    "Root-field-reference profile generated no references",
+                )
+                run.assertAggregate(
+                    activatedReferences > 0,
+                    "Root-field-reference profile activated no references",
+                )
             }
         }
 }

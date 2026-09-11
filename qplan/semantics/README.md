@@ -47,9 +47,21 @@ Model fixture preparation accepts resolver selection documents that retain named
 
 `resolvers/resolver01/DepthFirstResolve.kt` contains the recursive monotonic constructor used by Resolver01-03. `resolvers/ResolvePassiveValues.kt` builds passive result structure shared by Resolver01-23, retains child OERs that require active work, and populates those children without replacing their published parents. The `resolvers` package contains the remaining operations shared by those maintained resolver families.
 
+The shared passive-value path also interprets `RootFieldReferenceData` only at demanded source
+positions. Each hop receives a fresh empty Query identity root, its canonical grounded path and
+arguments, and an empty object input for the target's containing type. A target must have an empty
+object fragment. Pre-Resolver26 targets may use only `FromArgument`; fragment-capable versions run
+the target's independent Query fragment, and selective versions pass complete successor demand.
+Direct reference results form a tail, and active descendants returned by a referenced object are
+retained as detached roots because the original symbolic source cannot later rediscover them.
+Resolver01-08 perform the hop inline at the passive output position, preserving their existing
+depth-first order. Resolver21-23 perform it as part of the suspending field task under the same
+structured scope. An undemanded field containing a reference, including one inside a list, is
+skipped rather than materialized as non-selective over-fetch.
+
 `resolvers/resolver06/DepthFirstReactor.kt` expresses the Resolver06-08 progression as explicit orchestrator and slot-resolver work. `resolvers/resolver21/CoroutineResolve.kt` expresses Resolver21-23 through structured suspension and exact promises. The `shared` package contains the operation context, variable-binding and cycle-check state, observer boundaries, grounding, materialization, and other operations used across resolver and correctness boundaries. [`resolver-versions.md`](../resolver-versions.md) explains the capability grid and how to use it.
 
-Resolver26 is the self-contained advanced resolver with runtime from-field bindings. It supports both `FromObjectField` and `FromQueryField`; its current protocol is documented in [`resolver26/design.md`](./src/main/kotlin/semantics/resolver26/design.md).
+Resolver26 is the self-contained advanced resolver with runtime from-field bindings. It supports both `FromObjectField` and `FromQueryField`, extends reference targets with `FromQueryField` and `FromProvider`, and integrates references with conditioned passive activation; its current protocol is documented in [`resolver26/design.md`](./src/main/kotlin/semantics/resolver26/design.md).
 
 Resolver22/23 and Resolver26 resolve `@parent` selections. Each installs the child's parent cell with the containing ancestor OER itself, including for list and nested-list child occurrences. Resolver input fragments may not use variables beneath a parent selection. Demand on `parent { ... }` is lifted one ancestor at a time, so repeated static closure handles grandparents. Resolver26 transposes parent demand into selective producer output through successor demand and independently adds parent-induced ancestor work through input-demand closure.
 

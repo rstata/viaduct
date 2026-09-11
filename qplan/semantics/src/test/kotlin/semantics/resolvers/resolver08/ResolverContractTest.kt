@@ -8,14 +8,18 @@ import semantics.shared.OperationContext
 import model.ObjectEngineResult
 import model.SelectionForest
 import semantics.contract.CorrectResolutionPostTestPolicy
+import semantics.contract.DepthFirstRootFieldReferenceOrderingContract
 import semantics.contract.DepthFirstTaskOrderingContract
 import semantics.contract.EmptyObjectFragmentResolverContract
 import semantics.contract.ObjectFragmentFromArgumentResolverContract
 import semantics.contract.ObjectFragmentResolverContract
 import semantics.contract.QueryFragmentResolverContract
+import semantics.contract.QueryFragmentRootFieldReferenceResolverContract
+import semantics.contract.RootFieldReferenceResolverContract
 import semantics.contract.ResolverTaskObservation
 import semantics.contract.SelectiveObjectFragmentOutputPolicyContract
 import semantics.contract.SelectiveResolverOutputPolicyContract
+import semantics.contract.SelectiveRootFieldReferenceResolverContract
 import semantics.contract.SometimesPassiveObjectFragmentResolverContract
 import semantics.contract.SometimesPassiveResolverContract
 import semantics.contract.SometimesPassiveSelectiveResolverContract
@@ -24,6 +28,11 @@ import semantics.resolvers.resolver06.toContractObservation
 
 class ResolverContractTest :
     EmptyObjectFragmentResolverContract,
+    NodeResolverContract,
+    RootFieldReferenceResolverContract,
+    DepthFirstRootFieldReferenceOrderingContract,
+    QueryFragmentRootFieldReferenceResolverContract,
+    SelectiveRootFieldReferenceResolverContract,
     ObjectFragmentResolverContract,
     UnsupportedParentFieldResolverContract,
     ObjectFragmentFromArgumentResolverContract,

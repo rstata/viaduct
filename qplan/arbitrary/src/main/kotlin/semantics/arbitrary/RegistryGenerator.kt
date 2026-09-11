@@ -1270,6 +1270,12 @@ private class RegistryGenerator(
             )
 
         val emptyObject = FragmentPlan(consumer.typeName, emptyList())
+        if (!config[ResolverQueryFragmentsEnabled]) {
+            return ResolverFragmentPlans(
+                objectFragment = emptyObject,
+                queryFragment = FragmentPlan("Query", emptyList()),
+            )
+        }
         return when (consumer) {
             family.targets.getValue("zero").path.last() ->
                 ResolverFragmentPlans(

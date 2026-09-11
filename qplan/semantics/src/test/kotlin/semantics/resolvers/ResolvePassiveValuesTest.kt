@@ -1,5 +1,6 @@
 package semantics.resolvers
 
+import kotlinx.coroutines.runBlocking
 import model.requireType
 import model.requireField
 import model.requireObjectField
@@ -98,12 +99,14 @@ class ResolvePassiveValuesTest {
             ).subselections
 
         val resolved =
-            context(OperationContext(world)) {
-                value.resolvePassiveValues(
-                    expectedType = world.schema.requireObjectField("Query", "user").outputType,
-                    path = emptyList(),
-                    constructionDemand = selections,
-                )
+            runBlocking {
+                context(OperationContext(world)) {
+                    value.resolvePassiveValues(
+                        expectedType = world.schema.requireObjectField("Query", "user").outputType,
+                        path = emptyList(),
+                        constructionDemand = selections,
+                    )
+                }
             }
 
         val result = assertIs<ObjectEngineResult>(resolved.engineResult)
@@ -181,12 +184,14 @@ class ResolvePassiveValuesTest {
             ).subselections
 
         val resolved =
-            context(OperationContext(world)) {
-                value.resolvePassiveValues(
-                    expectedType = world.schema.requireObjectField("Query", "user").outputType,
-                    path = emptyList(),
-                    constructionDemand = constructionDemand,
-                )
+            runBlocking {
+                context(OperationContext(world)) {
+                    value.resolvePassiveValues(
+                        expectedType = world.schema.requireObjectField("Query", "user").outputType,
+                        path = emptyList(),
+                        constructionDemand = constructionDemand,
+                    )
+                }
             }
 
         val result = assertIs<ObjectEngineResult>(resolved.engineResult)
@@ -227,12 +232,14 @@ class ResolvePassiveValuesTest {
             ).subselections
 
         assertFailsWith<IllegalArgumentException> {
-            context(OperationContext(world)) {
-                value.resolvePassiveValues(
-                    expectedType = world.schema.requireObjectField("Query", "user").outputType,
-                    path = emptyList(),
-                    constructionDemand = selections,
-                )
+            runBlocking {
+                context(OperationContext(world)) {
+                    value.resolvePassiveValues(
+                        expectedType = world.schema.requireObjectField("Query", "user").outputType,
+                        path = emptyList(),
+                        constructionDemand = selections,
+                    )
+                }
             }
         }
     }
@@ -274,13 +281,15 @@ class ResolvePassiveValuesTest {
             world.fragmentFrom("fragment ignored on Item { computed seed }").subselections
 
         val resolved =
-            context(OperationContext(world)) {
-                value.resolvePassiveValues(
-                    expectedType = world.schema.requireObjectField("Query", "item").outputType,
-                    path = emptyList(),
-                    constructionDemand = constructionDemand,
-                    invocationDemand = invocationDemand,
-                )
+            runBlocking {
+                context(OperationContext(world)) {
+                    value.resolvePassiveValues(
+                        expectedType = world.schema.requireObjectField("Query", "item").outputType,
+                        path = emptyList(),
+                        constructionDemand = constructionDemand,
+                        invocationDemand = invocationDemand,
+                    )
+                }
             }
 
         val result = assertIs<ObjectEngineResult>(resolved.engineResult)
@@ -313,13 +322,15 @@ class ResolvePassiveValuesTest {
             world.fragmentFrom("fragment ignored on Item { computed seed }").subselections
 
         val resolved =
-            context(OperationContext(world)) {
-                value.resolvePassiveValues(
-                    expectedType = world.schema.requireObjectField("Query", "item").outputType,
-                    path = emptyList(),
-                    constructionDemand = constructionDemand,
-                    invocationDemand = invocationDemand,
-                )
+            runBlocking {
+                context(OperationContext(world)) {
+                    value.resolvePassiveValues(
+                        expectedType = world.schema.requireObjectField("Query", "item").outputType,
+                        path = emptyList(),
+                        constructionDemand = constructionDemand,
+                        invocationDemand = invocationDemand,
+                    )
+                }
             }
 
         assertEquals(emptyList(), resolved.objectsNeedingResolution)
@@ -356,12 +367,14 @@ class ResolvePassiveValuesTest {
             ).subselections
 
         val resolved =
-            context(OperationContext(world)) {
-                value.resolvePassiveValues(
-                    expectedType = world.schema.requireObjectField("Query", "user").outputType,
-                    path = emptyList(),
-                    constructionDemand = selections,
-                )
+            runBlocking {
+                context(OperationContext(world)) {
+                    value.resolvePassiveValues(
+                        expectedType = world.schema.requireObjectField("Query", "user").outputType,
+                        path = emptyList(),
+                        constructionDemand = selections,
+                    )
+                }
             }
 
         val result = assertIs<ObjectEngineResult>(resolved.engineResult)
@@ -403,12 +416,14 @@ class ResolvePassiveValuesTest {
             ).subselections
 
         assertFailsWith<IllegalArgumentException> {
-            context(OperationContext(world)) {
-                value.resolvePassiveValues(
-                    expectedType = world.schema.requireObjectField("Query", "item").outputType,
-                    path = emptyList(),
-                    constructionDemand = selections,
-                )
+            runBlocking {
+                context(OperationContext(world)) {
+                    value.resolvePassiveValues(
+                        expectedType = world.schema.requireObjectField("Query", "item").outputType,
+                        path = emptyList(),
+                        constructionDemand = selections,
+                    )
+                }
             }
         }
     }
@@ -486,12 +501,14 @@ class ResolvePassiveValuesTest {
                 rootPath + ListEngineResult.Index.of(1),
             )
         val passiveValuesResult =
-            context(OperationContext(world)) {
-                output.resolvePassiveValues(
-                    expectedType = itemsField.outputType,
-                    path = rootPath,
-                    constructionDemand = selections,
-                )
+            runBlocking {
+                context(OperationContext(world)) {
+                    output.resolvePassiveValues(
+                        expectedType = itemsField.outputType,
+                        path = rootPath,
+                        constructionDemand = selections,
+                    )
+                }
             }
         val callbackPaths = mutableListOf<List<PathComponent>>()
         val replayed =

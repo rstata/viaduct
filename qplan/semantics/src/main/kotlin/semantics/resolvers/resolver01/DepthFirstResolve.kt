@@ -9,7 +9,10 @@ import model.outputType
 import model.ObjectSelection
 import model.Arguments
 import model.PathComponent
+import model.ResolverOutputData
+import model.RootFieldReferenceData
 import model.SelectionForest
+import viaduct.graphql.schema.ViaductSchema
 import viaduct.engine.api.EngineObjectData
 import model.engineObjectDataOf
 import model.groundKey
@@ -18,12 +21,16 @@ import model.registry.ResolverFragment
 import model.schemaType
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.resolvers.ResolvePassiveValuesResult
+import semantics.resolvers.RootFieldReferenceResolver
 import semantics.resolvers.closeResolverDemand
+import semantics.resolvers.emptyObjectInput
 import semantics.resolvers.materializedChildOccurrences
+import semantics.resolvers.prepareInvocation
 import semantics.resolvers.resolvePassiveValues
 import semantics.resolvers.resolveRetainedObjects
 import semantics.shared.CycleCheckState
 import semantics.shared.OperationContext
+import semantics.shared.RootFieldReferenceInvocationObservation
 import semantics.shared.materialize
 
 /** The recursive, dependency-first resolution constructor shared by Resolver01-03 and 06-08. */
@@ -191,16 +198,58 @@ internal class DepthFirstResolve(
                         selections = invocationDemand,
                     )
                 val passiveValuesResult =
-                    fieldValue.resolvePassiveValues(
-                        expectedType = key.field.outputType,
-                        path = path + key,
-                        constructionDemand = fieldSelection.subselections,
-                        invocationDemand = invocationDemand,
-                )
+                    runBlocking {
+                        fieldValue.resolvePassiveValues(
+                            expectedType = key.field.outputType,
+                            path = path + key,
+                            constructionDemand = fieldSelection.subselections,
+                            invocationDemand = invocationDemand,
+                            publicationRoot = root,
+                            rootFieldReferenceResolver =
+                                RootFieldReferenceResolver(::resolveRootFieldReference),
+                        )
+                    }
                 cell.setValue(passiveValuesResult.engineResult)
                 passiveValuesResult
             }
         }
+    }
+
+    private suspend fun resolveRootFieldReference(
+        reference: RootFieldReferenceData,
+        publicationRoot: ObjectEngineResult,
+        publicationPath: List<PathComponent>,
+        @Suppress("UNUSED_PARAMETER")
+        expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
+        @Suppress("UNUSED_PARAMETER")
+        constructionDemand: SelectionForest,
+        invocationDemand: SelectionForest,
+    ): ResolverOutputData? = context(operation, world) {
+        val invocation = reference.prepareInvocation()
+        val queryValue =
+            resolveQueryFragment(
+                queryFragment = invocation.fragments.queryFragment,
+                coordinate = invocation.path,
+            )
+        val output =
+            invocation.resolver(
+                input = invocation.emptyObjectInput(),
+                queryValue = queryValue,
+                arguments = reference.arguments,
+                selections = invocationDemand,
+            )
+        operation.resolverObserver.onRootFieldReferenceInvocation(
+            RootFieldReferenceInvocationObservation(
+                publicationRoot = publicationRoot,
+                publicationPath = publicationPath,
+                reference = reference,
+                invocationRoot = invocation.root,
+                invocationPath = invocation.path,
+                invocationKey = invocation.key,
+                suppliedDemand = invocationDemand,
+            ),
+        )
+        output
     }
 
     private fun resolveQueryFragment(

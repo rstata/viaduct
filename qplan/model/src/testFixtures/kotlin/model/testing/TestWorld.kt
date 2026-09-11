@@ -90,11 +90,11 @@ class TestWorld private constructor(
         /**
          * Composes ordinary GraphQL and raw resolver inputs into one canonical reasoning world.
          *
-         * GraphQL SDL and fragments remain external source text. Raw [nodeResolvers] and node-valued
-         * source fields are lowered through synthetic bridge objects and generated `node` field
-         * resolvers before [Assumptions] is constructed, so semantic code observes only lowered
-         * field-resolver coordinates. Missing Query field resolvers are filled with
-         * nullability-aware fallback producers before supplied field resolvers are overlaid.
+         * GraphQL SDL and fragments remain external source text. Raw [nodeResolvers] are installed
+         * behind the built-in `Query.node`, and node-valued source output is normalized into root
+         * references to that field before [Assumptions] is constructed. Missing Query field
+         * resolvers are filled with nullability-aware fallback producers before supplied field
+         * resolvers are overlaid.
          */
         fun fromSDL(
             schemaSDL: String,

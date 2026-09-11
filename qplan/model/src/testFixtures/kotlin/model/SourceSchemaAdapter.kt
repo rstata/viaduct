@@ -32,8 +32,14 @@ class SourceSchemaAdapter(
     /** Lowers a source-shaped output for storage at a canonical fixture field. */
     fun lowerOutput(
         field: ViaductSchema.Field,
-        output: EngineOutputData?,
-    ): EngineOutputData? = schema.lowerSourceOutput(field, output)
+        output: ResolverOutputData?,
+    ): ResolverOutputData? = schema.lowerSourceOutput(field, output)
+
+    /** Normalizes the materialized result of a concrete node resolver without making another reference. */
+    fun lowerNodeResolverOutput(
+        type: ViaductSchema.Object,
+        output: ResolverOutputData?,
+    ): ResolverOutputData? = schema.lowerNodeResolverOutput(type, output)
 
     /** Converts one production source-schema root-field reference to the canonical qplan carrier. */
     fun lowerRootFieldReference(

@@ -18,7 +18,6 @@ import model.Selection
 import model.SelectionForest
 import model.SourceSchemaAdapter
 import model.objectKey
-import model.selectionForestOf
 import viaduct.engine.api.EngineSelectionSet
 import viaduct.engine.api.ViaductSchema as EngineSchema
 import viaduct.engine.api.mocks.createEngineSelectionSet
@@ -156,19 +155,7 @@ private fun Selection.toField(
                             ).build()
                     },
             )
-    val sourceSubselections =
-        if (fieldName == loweredFieldName) {
-            subselections
-        } else {
-            subselections.flatMap { bridgeSelection ->
-                if (bridgeSelection.key.field.name == NODE_BRIDGE_PAYLOAD_FIELD) {
-                    bridgeSelection.subselections
-                } else {
-                    selectionForestOf()
-                }
-            }
-        }
-    val children = sourceSubselections.toConcreteSelectionSet(schema, sourceSchema)
+    val children = subselections.toConcreteSelectionSet(schema, sourceSchema)
     if (children.selections.isNotEmpty()) {
         field.selectionSet(children)
     }
@@ -176,4 +163,3 @@ private fun Selection.toField(
 }
 
 private const val LOWERED_TYPENAME_FIELD = "V_A_typename"
-private const val NODE_BRIDGE_PAYLOAD_FIELD = "node"

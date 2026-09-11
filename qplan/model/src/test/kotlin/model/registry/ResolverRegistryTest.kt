@@ -14,6 +14,8 @@ import model.Fragment
 import model.ObjectEngineResult
 import model.Selection
 import model.SelectionForest
+import model.RootFieldReferenceData
+import model.nodeReferenceIdentityOrNull
 import model.emptyFragmentOf
 import model.engineObjectDataOf
 import model.fragmentFrom
@@ -219,7 +221,7 @@ class ResolverRegistryTest {
                     )
                 },
                 fieldResolvers = { schema ->
-                    val userField = schema.requireField("Query", "user_V_A_node")
+                    val userField = schema.requireField("Query", "user")
                     val queryFragment = schema.emptyFragmentOf("Query")
                     mapOf<ViaductSchema.Field, FieldResolverDefinition>(
                         userField to
@@ -244,46 +246,33 @@ class ResolverRegistryTest {
                 "id" setTo "42"
                 "name" setTo "Ada"
             }
-        val bridgeField = schema.requireObjectField("Query", "user_V_A_node")
-        val bridgeType = schema.requireType("User_V_A_Bridge") as ViaductSchema.Object
-        val bridgeIdField = schema.requireObjectField("User_V_A_Bridge", "id")
-        val payloadField = schema.requireObjectField("User_V_A_Bridge", "node")
+        val userField = schema.requireObjectField("Query", "user")
+        val queryNode = schema.requireObjectField("Query", "node")
         val registry = world.resolverRegistry
         val assumptions = world.assumptions
 
         assertEquals(registry, assumptions.resolverRegistry)
-        assertFailsWith<IllegalStateException> {
-            schema.requireObjectField("Query", "user")
-        }
-        assertTrue(bridgeField in registry)
-        assertTrue(payloadField in registry)
-        assertTrue(registry.mayDemandFrom(bridgeField).isEmpty())
-        assertTrue(registry.mayDemandFrom(payloadField).isEmpty())
-        val bridgeValue =
+        assertTrue(userField in registry)
+        assertTrue(queryNode in registry)
+        assertTrue(registry.mayDemandFrom(userField).isEmpty())
+        assertTrue(registry.mayDemandFrom(queryNode).isEmpty())
+        val reference =
             context(Assumptions.of(assumptions.schema, assumptions.resolverRegistry, false)) {
                 registry
-                    .resolver(bridgeField)(
+                    .resolver(userField)(
                         input = query,
-                        arguments = Arguments.Resolved.of(bridgeField, emptyMap()),
+                        arguments = Arguments.Resolved.of(userField, emptyMap()),
                     )
             }
-        val bridgeObject = assertIs<EngineObjectData.Sync>(bridgeValue)
-        assertEquals(bridgeType, bridgeObject.schemaType)
-        assertIs<String>(
-            bridgeObject.get(
-                bridgeIdField.name,
-            ),
-        )
-        val payloadResolver = registry.resolver(payloadField)
-        val objectFragment = payloadResolver.objectFragment
-        assertEquals(1, objectFragment.size)
-        assertEquals(bridgeIdField, objectFragment.single().key.field)
-        val payloadValue =
+        val nodeReference = assertIs<RootFieldReferenceData>(reference)
+        assertEquals("User", nodeReference.nodeReferenceIdentityOrNull()?.type?.name)
+        assertEquals("42", nodeReference.nodeReferenceIdentityOrNull()?.id)
+        val nodeValue =
             assertIs<EngineObjectData.Sync>(
                 context(assumptions) {
-                payloadResolver(
-                    input = bridgeObject,
-                    arguments = Arguments.Resolved.of(payloadField, emptyMap()),
+                registry.resolver(queryNode)(
+                    input = query,
+                    arguments = nodeReference.arguments,
                     selections =
                         schema.fragmentFrom(
                             """
@@ -295,13 +284,13 @@ class ResolverRegistryTest {
                         ).subselections,
                 )
                 },
-            )
-        assertEquals(user.schemaType, payloadValue.schemaType)
-        assertEquals(user.getSelections().toSet(), payloadValue.getSelections().toSet())
+        )
+        assertEquals(user.schemaType, nodeValue.schemaType)
+        assertEquals(user.getSelections().toSet(), nodeValue.getSelections().toSet())
         user.getSelections().forEach { selection ->
-            assertEquals(user.get(selection), payloadValue.get(selection))
+            assertEquals(user.get(selection), nodeValue.get(selection))
         }
-        assertEquals(listOf("user_V_A_node", "node"), observedFields)
+        assertEquals(listOf("user", "node"), observedFields)
     }
 
     @Test
@@ -389,7 +378,7 @@ class ResolverRegistryTest {
     }
 
     @Test
-    fun `reuses one bridge type while preserving every source list layer`() {
+    fun `preserves every Node source list layer`() {
         val schema =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -410,27 +399,23 @@ class ResolverRegistryTest {
                     """.trimIndent(),
             ).schema
 
-        assertNotNull(schema.requireQueryTypeDef().field("user_V_A_node"))
-        assertNotNull(schema.requireQueryTypeDef().field("users_V_A_node"))
-        assertNotNull(schema.requireQueryTypeDef().field("matrix_V_A_node"))
-        val userBridge = schema.requireType("User_V_A_Bridge") as ViaductSchema.Object
-        val nodeBridge = schema.requireType("Node_V_A_Bridge") as ViaductSchema.Interface
-        assertEquals(setOf(userBridge), nodeBridge.possibleObjectTypes)
-        assertEquals(
-            setOf("id", "node"),
-            userBridge.fields.mapTo(linkedSetOf(), ViaductSchema.Field::name),
-        )
-        val matrixBridge = schema.requireField("Query", "matrix_V_A_node")
-        val inner = checkNotNull(matrixBridge.type.unwrapList())
+        assertNotNull(schema.requireQueryTypeDef().field("user"))
+        assertNotNull(schema.requireQueryTypeDef().field("users"))
+        assertNotNull(schema.requireQueryTypeDef().field("matrix"))
+        val user = schema.requireType("User") as ViaductSchema.Object
+        val node = schema.requireType("Node") as ViaductSchema.Interface
+        assertEquals(setOf(user), node.possibleObjectTypes)
+        val matrix = schema.requireField("Query", "matrix")
+        val inner = checkNotNull(matrix.type.unwrapList())
         val element = checkNotNull(inner.unwrapList())
-        assertEquals(userBridge, element.baseTypeDef)
-        assertFalse(matrixBridge.type.isNullable)
+        assertEquals(user, element.baseTypeDef)
+        assertFalse(matrix.type.isNullable)
         assertFalse(inner.isNullable)
         assertFalse(element.isNullable)
     }
 
     @Test
-    fun `node bridge keeps producer arguments off its payload resolver`() {
+    fun `Query node dispatch keeps producer arguments separate`() {
         val world =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -453,7 +438,7 @@ class ResolverRegistryTest {
                     mapOf(user to nodeResolverOf { error("Not invoked") })
                 },
                 fieldResolvers = { schema ->
-                    val user = schema.requireField("Query", "user_V_A_node")
+                    val user = schema.requireField("Query", "user")
                     mapOf(
                         schema.requireField("Query", "seed") to
                             fieldResolverOf(
@@ -472,16 +457,15 @@ class ResolverRegistryTest {
                 },
             )
         val schema = world.schema
-        val bridge = schema.requireObjectField("Query", "user_V_A_node")
-        val payload = schema.requireObjectField("User_V_A_Bridge", "node")
-        val bridgeId = schema.requireObjectField("User_V_A_Bridge", "id")
+        val producer = schema.requireObjectField("Query", "user")
+        val queryNode = schema.requireObjectField("Query", "node")
 
-        assertEquals(setOf("id"), bridge.args.mapTo(linkedSetOf(), ViaductSchema.FieldArg::name))
-        assertTrue(world.resolverRegistry.resolver(bridge).variables.isEmpty())
-        val payloadResolver = world.resolverRegistry.resolver(payload)
-        assertTrue(payloadResolver.variables.isEmpty())
-        assertTrue(payload.args.isEmpty())
-        assertEquals(bridgeId, payloadResolver.objectFragment.single().key.field)
+        assertEquals(setOf("id"), producer.args.mapTo(linkedSetOf(), ViaductSchema.FieldArg::name))
+        assertTrue(world.resolverRegistry.resolver(producer).variables.isEmpty())
+        val nodeResolver = world.resolverRegistry.resolver(queryNode)
+        assertTrue(nodeResolver.variables.isEmpty())
+        assertEquals(setOf("id"), queryNode.args.mapTo(linkedSetOf(), ViaductSchema.FieldArg::name))
+        assertTrue(nodeResolver.objectFragment.isEmpty())
     }
 
     @Test
@@ -583,7 +567,7 @@ class ResolverRegistryTest {
     fun `rejects foreign resolver coordinate definitions`() {
         val foreignSchema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val foreignUser = foreignSchema.requireType("User") as ViaductSchema.Object
-        val foreignUserField = foreignSchema.requireField("Query", "user_V_A_node")
+        val foreignUserField = foreignSchema.requireField("Query", "user")
 
         assertFailsWith<IllegalArgumentException> {
             TestWorld.fromSDL(
@@ -672,7 +656,7 @@ class ResolverRegistryTest {
                     val queryFragment = schema.emptyFragmentOf("Query")
                     val nodeFragment = schema.emptyFragmentOf("Node")
                     mapOf(
-                        schema.requireField("Query", "user_V_A_node") to
+                        schema.requireField("Query", "user") to
                             fieldResolverOf(
                                 objectFragment = queryFragment,
                                 function = { _, _ -> error("Not invoked") },
@@ -915,7 +899,7 @@ class ResolverRegistryTest {
     @Test
     fun `snipToDemand rejects a present argument-bearing field`() {
         val fixture = Fixture()
-        val search = fixture.schema.requireObjectField("User", "search_V_A_node")
+        val search = fixture.schema.requireObjectField("User", "search")
         val source =
             engineObjectDataOf(
                 schemaType = fixture.user,
@@ -947,7 +931,7 @@ class ResolverRegistryTest {
             }
 
         assertEquals(
-            "Resolver output must not supply argument-bearing field User/search_V_A_node",
+            "Resolver output must not supply argument-bearing field User/search",
             failure.message,
         )
     }
@@ -1169,7 +1153,7 @@ class ResolverRegistryTest {
         val fixture = Fixture()
 
         val leaf = fixture.selection("Node", "id")
-        val emptyComposite = fixture.selection("User", "friend_V_A_node")
+        val emptyComposite = fixture.selection("User", "friend")
 
         assertTrue(leaf.isLeaf)
         assertTrue(leaf.subselections.isEmpty())
@@ -1192,7 +1176,7 @@ class ResolverRegistryTest {
             fieldResolvers = { schema ->
                 val fragment =
                     Fragment.of(fragmentType(schema), selectionForestOf())
-                val userField = schema.requireField("Query", "user_V_A_node")
+                val userField = schema.requireField("Query", "user")
                 mapOf(
                     userField to
                         fieldResolverOf(
@@ -1221,12 +1205,12 @@ class ResolverRegistryTest {
                     val queryFragment = schema.emptyFragmentOf("Query")
                     val userFragment = schema.emptyFragmentOf("User")
                     mapOf(
-                        schema.requireField("Query", "user_V_A_node") to
+                        schema.requireField("Query", "user") to
                             fieldResolverOf(
                                 objectFragment = queryFragment,
                                 function = { _, _ -> error("Not invoked") },
                             ),
-                        schema.requireField("User", "search_V_A_node") to
+                        schema.requireField("User", "search") to
                             fieldResolverOf(
                                 objectFragment = userFragment,
                                 function = { _, _ -> error("Not invoked") },
@@ -1237,7 +1221,7 @@ class ResolverRegistryTest {
         val schema = world.schema
         val assumptions = world.assumptions
         val user = schema.requireType("User") as ViaductSchema.Object
-        val userField = schema.requireField("Query", "user_V_A_node")
+        val userField = schema.requireField("Query", "user")
 
         fun key(fieldName: String): ObjectEngineResult.Key =
             ObjectEngineResult.Key.of(

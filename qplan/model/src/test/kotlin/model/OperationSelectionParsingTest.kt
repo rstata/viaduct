@@ -77,7 +77,7 @@ class OperationSelectionParsingTest {
     }
 
     @Test
-    fun `reuses inline fragment and Node bridge lowering for operations`() {
+    fun `reuses inline fragments for Node operations`() {
         val fixture = Fixture(NODE_SCHEMA)
         val selections =
             fixture.decode(
@@ -95,20 +95,16 @@ class OperationSelectionParsingTest {
             )
 
         val root = selections.merge(fixture.schema.requireQueryTypeDef()).single()
-        assertEquals("node_V_A_node", root.key.field.name)
+        assertEquals("node", root.key.field.name)
         assertEquals(
             mapOf("id" to "42"),
             root.key.arguments.fieldExpressions(),
         )
 
-        val bridgeType = fixture.schema.requireType("User_V_A_Bridge") as ViaductSchema.Object
-        val payload = root.subselections.merge(bridgeType).single()
-        assertEquals("node", payload.key.field.name)
-
         val userType = fixture.schema.requireType("User") as ViaductSchema.Object
         assertEquals(
             setOf("id", "handle"),
-            payload.subselections
+            root.subselections
                 .merge(userType)
                 .groundKeys()
                 .mapTo(linkedSetOf()) { key -> key.field.name },

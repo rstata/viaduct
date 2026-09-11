@@ -169,26 +169,15 @@ class RootFieldReferenceResolutionTest {
                 },
             )
         val world = testWorld.assumptions
-        val query = world.fragmentFrom("fragment Result on Query { foo { value } }")
+        val query = world.fragmentFrom("fragment Result on Query { foo { id value } }")
         val operation = OperationContext(world, resolverObserver = RecordingResolverObserver())
         val result = context(operation) { resolve(query.subselections) }
-        val bridge =
+        val foo =
             assertIs<ObjectEngineResult>(
                 result
                     .getCell(
                         ObjectEngineResult.GroundKey.of(
-                            world.schema.requireObjectField("Query", "foo_V_A_node"),
-                            emptyMap(),
-                        ),
-                    ).getValue()
-                    .get(),
-            )
-        val foo =
-            assertIs<ObjectEngineResult>(
-                bridge
-                    .getCell(
-                        ObjectEngineResult.GroundKey.of(
-                            world.schema.requireObjectField("Foo_V_A_Bridge", "node"),
+                            world.schema.requireObjectField("Query", "foo"),
                             emptyMap(),
                         ),
                     ).getValue()
@@ -198,6 +187,10 @@ class RootFieldReferenceResolutionTest {
         assertEquals(
             "from-reference",
             foo.getCell(world.schema.contractKey("Foo", "value")).getValue().get(),
+        )
+        assertEquals(
+            model.EngineIDResult.of("source-id"),
+            foo.getCell(world.schema.contractKey("Foo", "id")).getValue().get(),
         )
         assertEquals(1, nodeApplications.get())
         assertEquals(1, targetApplications.get())

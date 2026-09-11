@@ -29,7 +29,6 @@ import model.EngineInputData
 import model.InclusionCondition
 import model.MaterializeSelectionForest
 import model.SourceSchemaAdapter
-import model.lowering.NODE_BRIDGE_PAYLOAD_FIELD
 import model.SelectionForest
 import model.requireField
 import model.requireQueryTypeDef
@@ -41,9 +40,8 @@ import model.spec.flattenForMaterialization
 /**
  * Parses and validates external GraphQL fragment text against the unaugmented source schema.
  *
- * Decoded selections are mapped directly to canonical definitions in [schema]. Every node-valued
- * source field `foo { selections }` becomes
- * `foo_V_A_node { node { selections } }`. Synthetic definitions cannot be selected in source text.
+ * Decoded selections are mapped directly to canonical definitions in [schema]. Node-valued source
+ * fields retain their source coordinates.
  */
 internal class GJSelectionParser(
     private val schema: GJSchema,
@@ -223,33 +221,14 @@ internal class GJSelectionParser(
                 )
             }
         val canonicalField = sourceSchema.field(typeInScope.name, field.name)
-        val loweredNodeField = schema.isLoweredNodeField(canonicalField)
-        val canonicalSubselections =
-            if (loweredNodeField) {
-                val bridgeType =
-                    canonicalField.type.baseTypeDef as ViaductSchema.CompositeTypeDef
-                val payloadField =
-                    schema.requireField(bridgeType.name, NODE_BRIDGE_PAYLOAD_FIELD)
-                listOf(
-                    SpecSelection.Field.of(
-                        alias = null,
-                        field = payloadField,
-                        arguments = emptyMap(),
-                        subselections = subselections,
-                    ),
-                )
-            } else {
-                subselections
-            }
         return SpecSelection.Field.of(
             alias =
                 field.alias ?: field.name.takeIf {
-                    loweredNodeField ||
-                        (preserveSourceResponseKeys && canonicalField.name != field.name)
+                    preserveSourceResponseKeys && canonicalField.name != field.name
                 },
             field = canonicalField,
             arguments = arguments,
-            subselections = canonicalSubselections,
+            subselections = subselections,
             inclusionCondition = argumentDecoder.decodeCondition(field),
         )
     }

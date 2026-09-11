@@ -41,6 +41,9 @@ class ResolverGeneratedTest :
     QueryFragmentGeneratedResolverContract,
     SometimesPassiveGeneratedResolverContract,
     FeatureInteractionGeneratedResolverContract {
+    override val nodeRootFieldReferencesEnabled: Boolean
+        get() = true
+
     override val queryFragmentObjectPathVariablesEnabled: Boolean
         get() = true
 

@@ -13,7 +13,7 @@ These findings come from production investigation, focused counterexamples, or f
 3. A registration barrier proves only that currently known contributors have arrived; running a producer can reveal another contributor.
 4. Lazy concrete-type plans and cycle backedges may be absent from the plan index visible at the initial execution site.
 5. Selection traversal type and variable-provider target are separate dimensions.
-6. Source field-resolver and node-resolver ownership roots differ before fixture composition lowers node resolution through `foo_V_A_node` producers and bridge `node` loaders.
+6. Source field-resolver and node-resolver ownership roots differ; fixture composition preserves that boundary by normalizing node values to `Query.node` references whose concrete-type-bearing IDs dispatch to node resolvers.
 7. Static paths and schema coordinates do not identify runtime object occurrences, list positions, concrete types, argument tuples, or execution epochs.
 8. Alias-free internal demand is not automatically a valid tenant-visible GraphQL fragment.
 9. Broad random campaigns can miss a decisive counterexample or validate a flawed oracle.
@@ -85,7 +85,7 @@ A coverage tree is not by itself a producer-attribution or dependency model. `Ke
 Broad generated campaigns do not replace small cases that directly exercise the obligations above. Retain or introduce focused coverage for:
 
 - split-prediction rejection and sibling convergence on one producer;
-- `foo_V_A_node` production plus per-occurrence bridge `node` loading;
+- Node-valued source production plus per-occurrence `Query.node` reference dispatch, including independent list elements;
 - lazy concrete-type dependencies and legal cycle backedges;
 - abstract concrete recursion and independent list-item occurrences;
 - raw checker reads when checkers enter scope;

@@ -63,33 +63,19 @@ fun engineObjectDataOf(
 fun engineObjectDataOf(
     schemaType: ViaductSchema.Object,
     fields: Iterable<EngineObjectDataEntry>,
-): EngineObjectData.Sync =
-    engineObjectDataOf(
-        schemaType = schemaType,
-        fields = fields,
-        projectNodeBridges = false,
-    )
+): EngineObjectData.Sync = constructEngineObjectData(schemaType, fields)
 
 /**
- * Constructs tenant-visible resolver input from values already validated in the lowered schema.
- *
- * Node bridge producers remain part of qplan's semantic field coordinates, but their bridge
- * objects are projected back to source-shaped values before crossing the Engine API boundary.
+ * Constructs tenant-visible resolver input from values already validated in the canonical schema.
  */
 fun materializedEngineObjectDataOf(
     schemaType: ViaductSchema.Object,
     fields: Iterable<EngineObjectDataEntry>,
-): EngineObjectData.Sync =
-    engineObjectDataOf(
-        schemaType = schemaType,
-        fields = fields,
-        projectNodeBridges = true,
-    )
+): EngineObjectData.Sync = constructEngineObjectData(schemaType, fields)
 
-private fun engineObjectDataOf(
+private fun constructEngineObjectData(
     schemaType: ViaductSchema.Object,
     fields: Iterable<EngineObjectDataEntry>,
-    projectNodeBridges: Boolean,
 ): EngineObjectData.Sync {
     val entries = fields.toList()
     entries.forEach { entry ->
@@ -102,15 +88,7 @@ private fun engineObjectDataOf(
                 entry.field.type
         }
     }
-    val values =
-        entries.associate { entry ->
-            entry.selection to
-                if (projectNodeBridges) {
-                    entry.sourceFacingValue()
-                } else {
-                    entry.value
-                }
-        }
+    val values = entries.associate { entry -> entry.selection to entry.value }
     require(values.size == entries.size) {
         "Object ${schemaType.name} contains duplicate string selections"
     }
@@ -119,30 +97,6 @@ private fun engineObjectDataOf(
         schemaType = schemaType,
         values = values,
     )
-}
-
-private fun EngineObjectDataEntry.sourceFacingValue(): ResolverOutputData? =
-    if (field.name.endsWith(NODE_BRIDGE_FIELD_SUFFIX)) {
-        value.unwrapNodeBridge(field.outputType)
-    } else {
-        value
-    }
-
-private fun ResolverOutputData?.unwrapNodeBridge(
-    type: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
-): ResolverOutputData? {
-    if (this == null || this is EngineErrorData) return this
-    val elementType = type.unwrapList()
-    if (elementType != null) {
-        require(this is List<*>) {
-            "Node bridge value for $type is not a list"
-        }
-        return map { element -> element.unwrapNodeBridge(elementType) }
-    }
-    require(this is EngineObjectData.Sync) {
-        "Node bridge value for $type is not an object"
-    }
-    return outputValue(NODE_BRIDGE_PAYLOAD_FIELD)
 }
 
 internal val qplanEngineObjectDataTypeKey =
@@ -155,9 +109,6 @@ private val ViaductSchema.Object.engineObjectDataType: GraphQLObjectType
         } else {
             gjDef
         }
-
-private const val NODE_BRIDGE_FIELD_SUFFIX = "_V_A_node"
-private const val NODE_BRIDGE_PAYLOAD_FIELD = "node"
 
 /**
  * The canonical qplan schema type retained by this qplan-owned EOD.

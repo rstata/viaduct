@@ -384,6 +384,57 @@ class EngineTestModuleQPlanFeatureTest {
     }
 
     @Test
+    fun `built in Query nodes returns independently resolved node references`() {
+        val firstId = java.util.Base64.getEncoder().encodeToString("User:u1".toByteArray())
+        val secondId = java.util.Base64.getEncoder().encodeToString("User:u2".toByteArray())
+        EngineTestModule(
+            """
+            type User implements Node {
+              id: ID!
+              name: String!
+            }
+            """.trimIndent(),
+        ) {
+            type("User") {
+                nodeUnbatchedExecutor { id, _, _ ->
+                    createEngineObjectData(
+                        objectType,
+                        mapOf(
+                            "id" to id,
+                            "name" to if (id == firstId) "Ada" else "Grace",
+                        ),
+                    )
+                }
+            }
+        }.runQPlanFeatureTest {
+            val result =
+                runQuery(
+                    """
+                    query Nodes(${'$'}ids: [ID!]!) {
+                      nodes(ids: ${'$'}ids) {
+                        id
+                        ... on User { name }
+                      }
+                    }
+                    """.trimIndent(),
+                    mapOf("ids" to listOf(firstId, secondId)),
+                )
+
+            assertTrue(result.errors.isEmpty(), result.errors.joinToString { it.message })
+            assertEquals(
+                mapOf(
+                    "nodes" to
+                        listOf(
+                            mapOf("id" to firstId, "name" to "Ada"),
+                            mapOf("id" to secondId, "name" to "Grace"),
+                        ),
+                ),
+                result.getData(),
+            )
+        }
+    }
+
+    @Test
     fun `rejects batching before constructing qplan`() {
         val module =
             EngineTestModule(

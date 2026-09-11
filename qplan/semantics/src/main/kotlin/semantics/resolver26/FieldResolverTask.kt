@@ -8,6 +8,7 @@ import model.EngineErrorData
 import model.EngineResult
 import model.EngineResultCell
 import model.InclusionCondition
+import model.NodeReferenceIdentity
 import model.ObjectEngineResult
 import model.ObjectSelection
 import model.PathComponent
@@ -21,6 +22,8 @@ import model.engineObjectDataOf
 import model.guardedBy
 import model.invariants.conformsToResolverOutputSchemaType
 import model.merge
+import model.nodeReferenceIdentityOrNull
+import model.outputValue
 import model.registry.ProviderFragment
 import model.registry.ResolverFragment
 import model.registry.VariableDefinition
@@ -108,8 +111,11 @@ internal class FieldResolverTask(
                     is PassiveValueOccurrence -> resolverOccurrenceContext.value
                 }
 
+            var authoritativeNodeIdentity: NodeReferenceIdentity? = null
             while (fieldValue is RootFieldReferenceData) {
                 val reference = fieldValue
+                authoritativeNodeIdentity =
+                    authoritativeNodeIdentity ?: reference.nodeReferenceIdentityOrNull()
                 require(
                     reference.conformsToResolverOutputSchemaType(
                         resolverOccurrenceContext.publicationExpectedType,
@@ -142,6 +148,12 @@ internal class FieldResolverTask(
                 )
             }
 
+            fieldValue =
+                fieldValue.withAuthoritativeNodeId(
+                    identity = authoritativeNodeIdentity,
+                    demand = invocationDemand,
+                )
+
             val passiveValue: EngineResult? =
                 fieldValue.resolvePassiveValues(
                     root = oerOccurrenceContext.root,
@@ -154,6 +166,23 @@ internal class FieldResolverTask(
 
             cell.getValue().complete(passiveValue)
         }
+    }
+
+    private fun ResolverOutputData?.withAuthoritativeNodeId(
+        identity: NodeReferenceIdentity?,
+        demand: SelectionForest,
+    ): ResolverOutputData? {
+        if (identity == null || this !is EngineObjectData.Sync) return this
+        require(schemaType == identity.type) {
+            "Node reference for ${identity.type.name} resolved to ${schemaType.name}"
+        }
+        val idField = identity.type.field("id")
+            ?: throw IllegalArgumentException("Node type ${identity.type.name} has no id field")
+        val idDemanded =
+            demand.merge(identity.type).byKey().keys.any { key -> key.field == idField }
+        if (!idDemanded) return this
+        val fields = getSelections().associateWith(::outputValue) + (idField.name to identity.id)
+        return engineObjectDataOf(identity.type, fields)
     }
 
     private suspend fun activateResolverOccurrence(

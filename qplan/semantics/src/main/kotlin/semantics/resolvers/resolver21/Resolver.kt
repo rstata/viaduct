@@ -7,8 +7,7 @@ import model.SelectionForest
 import semantics.shared.OperationContext
 
 /**
- * Resolves [selections] with structured coroutines when user-declared resolver object fragments are
- * empty, except for generated `T_V_A_Bridge.node` fragments that select passive sibling `id`.
+ * Resolves [selections] with structured coroutines when resolver object fragments are empty.
  */
 context(operation: OperationContext)
 fun resolve(selections: SelectionForest): ObjectEngineResult {

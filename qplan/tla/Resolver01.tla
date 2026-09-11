@@ -4,8 +4,9 @@ EXTENDS ResolverCoreProof
 (*
 Resolver01 is scoped here to the stage requested for this proof: resolver
 object fragments are empty. The Kotlin implementation is more general because
-fixture-lowered node loaders may have direct synthetic-bridge requirements;
-that larger local-demand case is covered by Resolver02.
+ordinary resolver object fragments may have direct requirements; that larger
+local-demand case is covered by Resolver02. Symbolic node-reference resolution
+is outside both resolvers' current domains.
 *)
 
 Resolver01World ==

@@ -33,18 +33,10 @@ class TypenameLoweringTest {
             assertTrue(!field.type.isNullable)
         }
 
-        listOf("A_V_A_Bridge", "Node_V_A_Bridge").forEach { typeName ->
-            assertNull(lowered.requireRecord(typeName).field(LOWERED_TYPENAME_FIELD))
-        }
         assertTrue(
             assertIs<ViaductSchema.Union>(lowered.requireType("Choice"))
                 .possibleObjectTypes
                 .isNotEmpty(),
-        )
-        assertTrue(
-            lowered.types.values
-                .filter { it.name.endsWith(NODE_BRIDGE_TYPE_SUFFIX) }
-                .none { it in allSourceObjects.possibleObjectTypes },
         )
     }
 
@@ -117,4 +109,3 @@ class TypenameLoweringTest {
             """
     }
 }
-

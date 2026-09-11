@@ -18,7 +18,7 @@ class AssumptionsTest {
     @Test
     fun `constructs a resolver fragment variable with its defining field`() {
         val assumptions = TestWorld.fromSDL(SCHEMA_SDL).assumptions
-        val variableField = assumptions.schema.requireObjectField("Query", "node_V_A_node")
+        val variableField = assumptions.schema.requireObjectField("Query", "node")
 
         val fragment =
             assumptions.schema.fragmentFrom(
@@ -61,7 +61,7 @@ class AssumptionsTest {
 
         assertEquals(assumptions.schema.requireQueryTypeDef(), fragment.nominalType)
         val node = fragment.subselections.single()
-        assertEquals("node_V_A_node", node.key.field.name)
+        assertEquals("node", node.key.field.name)
 
         val filter =
             assertIs<EngineInputObjectData>(
@@ -77,9 +77,7 @@ class AssumptionsTest {
             assertIs<String>(tags.single()),
         )
 
-        val payload = node.subselections.single()
-        assertEquals("node", payload.key.field.name)
-        val id = payload.subselections.single()
+        val id = node.subselections.single()
         assertEquals("id", id.key.field.name)
     }
 
@@ -136,7 +134,7 @@ class AssumptionsTest {
     fun `ground input object construction rejects unresolved variables`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val filterType = schema.requireType("Filter") as ViaductSchema.Input
-        val variableField = schema.requireObjectField("Query", "node_V_A_node")
+        val variableField = schema.requireObjectField("Query", "node")
 
         assertFailsWith<ClassCastException> {
             toEngineInputObjectData(
@@ -207,7 +205,7 @@ class AssumptionsTest {
         assertFalse(actors.type.nullableAtDepth(0))
         assertFalse(actors.type.baseTypeNullable)
 
-        val nodeField = schema.requireField("Query", "node_V_A_node")
+        val nodeField = schema.requireField("Query", "node")
         assertEquals(query, nodeField.containingDef)
         assertTrue(nodeField.args.isNotEmpty())
         val filterArgument = nodeField.requireArg("filter")
@@ -264,7 +262,7 @@ class AssumptionsTest {
             )
         assertFalse(interfaceIdKey == objectIdKey)
 
-        val friendField = schema.requireField("User", "friend_V_A_node")
+        val friendField = schema.requireField("User", "friend")
         assertTrue(friendField.args.isNotEmpty())
         val limitArgument: ViaductSchema.FieldArg =
             friendField.requireArg("limit")
@@ -284,7 +282,7 @@ class AssumptionsTest {
     @Test
     fun `nested input errors become an argument error`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val node = schema.requireObjectField("Query", "node_V_A_node")
+        val node = schema.requireObjectField("Query", "node")
         listOf(
             mapOf(
                 "tags" to listOf(ArgumentResolutionError),
@@ -342,7 +340,7 @@ class AssumptionsTest {
             assertIs<String>(filter.getValue("role")),
         )
 
-        val nodeField = schema.requireField("Query", "node_V_A_node")
+        val nodeField = schema.requireField("Query", "node")
         val arguments =
             Arguments.Resolved.of(
                 field = nodeField,
@@ -366,7 +364,7 @@ class AssumptionsTest {
     @Test
     fun `input-like factories apply declared defaults unless explicitly overridden`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
-        val friendField = schema.requireField("User", "friend_V_A_node")
+        val friendField = schema.requireField("User", "friend")
         val defaultFriendArguments = Arguments.Resolved.of(friendField, emptyMap())
 
         assertEquals(
@@ -374,7 +372,7 @@ class AssumptionsTest {
             defaultFriendArguments.fieldValues.getValue("limit"),
         )
 
-        val nodeField = schema.requireField("Query", "node_V_A_node")
+        val nodeField = schema.requireField("Query", "node")
         val defaultArguments = Arguments.Resolved.of(nodeField, emptyMap())
         val defaultFilter =
             assertIs<EngineInputObjectData>(defaultArguments.fieldValues.getValue("filter"))
@@ -434,7 +432,7 @@ class AssumptionsTest {
         }
         assertFailsWith<ClassCastException> {
             Arguments.Resolved.of(
-                field = schema.requireField("Query", "node_V_A_node"),
+                field = schema.requireField("Query", "node"),
                 fields = mapOf("filter" to 1),
             )
         }

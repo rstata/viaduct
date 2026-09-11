@@ -376,7 +376,7 @@ class BranchOrderInvariantTest {
     }
 
     @Test
-    fun `includes lowered node bridge prerequisites in provider production`() {
+    fun `includes node reference prerequisites in provider production`() {
         TestWorld.fromSDL(
             schemaSDL =
                 """
@@ -411,7 +411,7 @@ class BranchOrderInvariantTest {
                                 """.trimIndent(),
                             ),
                         ),
-                    schema.requireField("Query", "user_V_A_node") to
+                    schema.requireField("Query", "user") to
                         resolver(schema.emptyFragmentOf("Query")),
                     schema.requireField("Query", "consume") to
                         resolver(schema.emptyFragmentOf("Query")),

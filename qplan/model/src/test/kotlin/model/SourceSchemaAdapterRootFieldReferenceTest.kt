@@ -21,11 +21,11 @@ class SourceSchemaAdapterRootFieldReferenceTest {
         assertEquals(
             listOf(
                 schema.requireObjectField("Query", "productFactory"),
-                schema.requireObjectField("ProductFactory", "get_V_A_node"),
+                schema.requireObjectField("ProductFactory", "get"),
             ),
             reference.path,
         )
-        assertEquals("Product_V_A_Bridge", reference.type.name)
+        assertEquals("Product", reference.type.name)
         assertEquals(mapOf("id" to "p1"), (reference.arguments as Arguments.Resolved).fieldValues)
     }
 

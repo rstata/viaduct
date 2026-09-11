@@ -7,7 +7,7 @@ import kotlin.test.assertEquals
 
 interface ObjectPathNodeInteractionResolverContract : ResolverContract {
     @Test
-    fun `late provider path deepens an already published node bridge`() {
+    fun `late provider path deepens an already published node reference`() {
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -79,7 +79,7 @@ interface ObjectPathNodeInteractionResolverContract : ResolverContract {
     }
 
     @Test
-    fun `retains potential demand through a passive node bridge`() {
+    fun `retains potential demand through a passive node reference`() {
         var triggerInputKeys: Set<String>? = null
         val testWorld =
             TestWorld.fromDSL(
@@ -152,7 +152,7 @@ interface ObjectPathNodeInteractionResolverContract : ResolverContract {
         )
 
         testWorld.applicationArguments.assertApplicationCount(
-            world.schema.requireObjectField("Query", "driver_V_A_node"),
+            world.schema.requireObjectField("Query", "driver"),
             1,
         )
         assertEquals(setOf("account"), triggerInputKeys)

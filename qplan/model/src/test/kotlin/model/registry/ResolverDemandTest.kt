@@ -871,7 +871,7 @@ class ResolverDemandTest {
                             """.trimIndent(),
                         )
                     mapOf(
-                        schema.requireField("Query", "node_V_A_node") to
+                        schema.requireField("Query", "node") to
                             resolver(schema.emptyFragmentOf("Query")),
                         schema.requireField("Query", "consumer") to
                             resolver(consumerFragment),
@@ -887,9 +887,7 @@ class ResolverDemandTest {
         val registry = world.resolverRegistry
         val user = schema.requireType("User") as ViaductSchema.Object
         val admin = schema.requireType("Admin") as ViaductSchema.Object
-        val queryNodeBridge = schema.requireObjectField("Query", "node_V_A_node")
-        val userPayload = schema.requireObjectField("User_V_A_Bridge", "node")
-        val adminPayload = schema.requireObjectField("Admin_V_A_Bridge", "node")
+        val queryNode = schema.requireObjectField("Query", "node")
         val consumer = schema.requireObjectField("Query", "consumer")
         val outer = schema.requireObjectField("Query", "outer")
         val userResolved = schema.requireObjectField("User", "resolved")
@@ -897,18 +895,14 @@ class ResolverDemandTest {
 
         assertEquals(
             setOf(
-                queryNodeBridge,
-                userPayload,
-                adminPayload,
+                queryNode,
                 userResolved,
                 adminResolved,
             ),
             registry.mayDemandFrom(consumer),
         )
         assertEquals(setOf(consumer), registry.mayDemandFrom(outer))
-        assertTrue(registry.mayDemandFrom(queryNodeBridge).isEmpty())
-        assertTrue(registry.mayDemandFrom(userPayload).isEmpty())
-        assertTrue(registry.mayDemandFrom(adminPayload).isEmpty())
+        assertTrue(registry.mayDemandFrom(queryNode).isEmpty())
         assertTrue(registry.mayDemandFrom(userResolved).isEmpty())
         assertTrue(registry.mayDemandFrom(adminResolved).isEmpty())
 

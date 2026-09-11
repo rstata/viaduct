@@ -7,7 +7,9 @@ import model.engineObjectDataOf
 import model.objectOf
 import model.outputType
 import model.RootFieldReferenceData
+import model.nodeRootFieldReferenceOf
 import model.requireField
+import model.requireObjectField
 import model.requireType
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -76,6 +78,23 @@ class SchemaConformanceTest {
     }
 
     @Test
+    fun `Query node references conform by their encoded concrete type including in lists`() {
+        val schema = TestWorld.fromSDL(NODE_SCHEMA_SDL).schema
+        val queryNode = schema.requireObjectField("Query", "node")
+        val user = schema.requireType("User") as ViaductSchema.Object
+        val admin = schema.requireType("Admin") as ViaductSchema.Object
+        val userReference = nodeRootFieldReferenceOf(queryNode, user, "user-1")
+        val adminReference = nodeRootFieldReferenceOf(queryNode, admin, "admin-1")
+        val userField = schema.requireObjectField("Container", "user")
+        val usersField = schema.requireObjectField("Container", "users")
+
+        assertTrue(userReference.conformsToResolverOutputSchemaType(userField.outputType))
+        assertFalse(adminReference.conformsToResolverOutputSchemaType(userField.outputType))
+        assertTrue(listOf(userReference).conformsToResolverOutputSchemaType(usersField.outputType))
+        assertFalse(listOf(adminReference).conformsToResolverOutputSchemaType(usersField.outputType))
+    }
+
+    @Test
     fun `object value factory rejects a field value with the wrong type`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
         val user = schema.requireType("User") as ViaductSchema.Object
@@ -132,6 +151,18 @@ class SchemaConformanceTest {
             type Query {
               search: SearchResult
             }
+            """.trimIndent()
+
+        val NODE_SCHEMA_SDL =
+            """
+            interface Node { id: ID! }
+            type User implements Node { id: ID! }
+            type Admin implements Node { id: ID! }
+            type Container {
+              user: User
+              users: [User]
+            }
+            type Query { container: Container }
             """.trimIndent()
     }
 }

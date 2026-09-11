@@ -169,7 +169,7 @@ interface NodeGeneratedResolverContract : GeneratedCaseAssertionPolicy {
                 Config.default +
                     (FieldArgumentWeight to 1.0) +
                     (ExplicitFieldResolverWeight to 1.0) +
-                    (NodeResolversEnabled to true) +
+                    (NodeResolversEnabled to nodeRootFieldReferencesEnabled) +
                     (NodeObjectWeight to 0.35) +
                     (ResolverFragmentsEnabled to false) +
                     (ResolverFromArgumentVariablesEnabled to false) +
@@ -262,7 +262,7 @@ interface SelectiveNodeGeneratedResolverContract : GeneratedCaseAssertionPolicy 
                 Config.default +
                     (FieldArgumentWeight to 1.0) +
                     (ExplicitFieldResolverWeight to 1.0) +
-                    (NodeResolversEnabled to true) +
+                    (NodeResolversEnabled to nodeRootFieldReferencesEnabled) +
                     (SelectiveNodeResolversEnabled to true) +
                     (NodeObjectWeight to 0.35) +
                     (ResolverFragmentsEnabled to false) +
@@ -285,18 +285,13 @@ interface SelectiveNodeGeneratedResolverContract : GeneratedCaseAssertionPolicy 
                                     application.key.field,
                                 ).isNotEmpty()
                         }
-                    val nodeLoaderDemands =
-                        nodeLoaderApplications.map { application ->
-                            requireNotNull(application.suppliedDemandFingerprint)
-                        }
                     val callbackDemands =
                         observation.selectiveNodeResolverApplications.map { application ->
                             application.suppliedDemandFingerprint
                         }
-                    assertEquals(
-                        nodeLoaderDemands.groupingBy { demand -> demand }.eachCount(),
-                        callbackDemands.groupingBy { demand -> demand }.eachCount(),
-                        "Selective node callbacks must receive each node-loader demand exactly once",
+                    assertTrue(
+                        callbackDemands.size <= nodeLoaderApplications.size,
+                        "A Query.node dispatch may invoke at most one selective node callback",
                     )
                     coverage.nodeLoaderApplications += nodeLoaderApplications.size
                     coverage.nonemptyDemandApplications +=
@@ -934,7 +929,7 @@ interface FeatureInteractionGeneratedResolverContract : GeneratedCaseAssertionPo
                     (ImplementationArgumentDefaultWeight to 1.0) +
                     (FieldArgumentWeight to 1.0) +
                     (ExplicitFieldResolverWeight to 1.0) +
-                    (NodeResolversEnabled to true) +
+                    (NodeResolversEnabled to nodeRootFieldReferencesEnabled) +
                     (NodeObjectWeight to 0.35) +
                     (ResolverFragmentsEnabled to true) +
                     (ResolverFragmentWeight to 1.0) +
@@ -992,18 +987,20 @@ interface FeatureInteractionGeneratedResolverContract : GeneratedCaseAssertionPo
                 generatedFromArgumentVariables > 0,
                 "Feature-interaction profile produced no FromArgument variables",
             )
-            run.assertAggregate(
-                generatedMixedTopologyCases > 0,
-                "Feature-interaction profile produced no mixed node/non-node schemas",
-            )
-            run.assertAggregate(
-                activatedMixedTopologyCases > 0,
-                "Feature-interaction profile activated no mixed node/non-node schemas",
-            )
-            run.assertAggregate(
-                coactivatedNodeAndFromArgumentCases > 0,
-                "Feature-interaction profile never coactivated a node loader and FromArgument",
-            )
+            if (nodeRootFieldReferencesEnabled) {
+                run.assertAggregate(
+                    generatedMixedTopologyCases > 0,
+                    "Feature-interaction profile produced no mixed node/non-node schemas",
+                )
+                run.assertAggregate(
+                    activatedMixedTopologyCases > 0,
+                    "Feature-interaction profile activated no mixed node/non-node schemas",
+                )
+                run.assertAggregate(
+                    coactivatedNodeAndFromArgumentCases > 0,
+                    "Feature-interaction profile never coactivated a node loader and FromArgument",
+                )
+            }
             run.assertAggregate(
                 activatedImplementationDefaults > 0,
                 "Feature-interaction profile activated no abstract implementation defaults",

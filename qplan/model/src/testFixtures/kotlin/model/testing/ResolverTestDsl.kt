@@ -32,8 +32,6 @@ import model.EngineErrorData
 import model.EngineOutputData
 import model.Fragment
 import model.SourceSchemaAdapter
-import model.lowering.NODE_BRIDGE_PAYLOAD_FIELD
-import model.lowering.NODE_BRIDGE_TYPE_SUFFIX
 import model.arg
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -847,11 +845,7 @@ private class ResultEvaluator(
                             "${value.type.name}.$responseKey"
                     }
                     val selected = value.get(responseKey)
-                    if (schema is GJSchema && selected.containsNodeBridge()) {
-                        unwrapNodeBridge(selected).flatMap { visit(it, index + 1) }
-                    } else {
-                        visit(selected, index + 1)
-                    }
+                    visit(selected, index + 1)
                 }
                 else ->
                     throw IllegalArgumentException(
@@ -861,28 +855,6 @@ private class ResultEvaluator(
 
         return visit(input, 0)
     }
-
-    private fun EngineOutputData?.containsNodeBridge(): Boolean =
-        when (this) {
-            is EngineErrorData -> false
-            is EngineObjectData.Sync -> type.name.endsWith(NODE_BRIDGE_TYPE_SUFFIX)
-            is List<*> -> any { value -> value.containsNodeBridge() }
-            else -> false
-        }
-
-    private fun unwrapNodeBridge(value: EngineOutputData?): List<EngineOutputData?> =
-        when (value) {
-            null -> emptyList()
-            is EngineErrorData -> listOf(value)
-            is List<*> -> value.flatMap(::unwrapNodeBridge)
-            is EngineObjectData.Sync -> {
-                val schemaType = value.schemaType
-                val payload =
-                    schema.requireObjectField(schemaType.name, NODE_BRIDGE_PAYLOAD_FIELD)
-                listOf(value.get(payload.name))
-            }
-            else -> throw IllegalArgumentException("Malformed lowered Node bridge")
-        }
 
     private fun isNodeType(type: ViaductSchema.CompositeTypeDef): Boolean =
         type.possibleObjectTypes.isNotEmpty() &&

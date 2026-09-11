@@ -17,16 +17,13 @@ import graphql.schema.idl.SchemaParser
 import graphql.schema.idl.UnExecutableSchemaGenerator
 import model.EngineErrorData
 import model.EngineObjectDataEntry
-import model.EngineOutputData
+import model.ResolverOutputData
 import model.engineObjectDataOf
+import model.nodeRootFieldReferenceOf
 import model.lowering.LOWERING_SYNTHETIC_NAME_TOKEN
-import model.lowering.NODE_BRIDGE_ID_FIELD
-import model.lowering.TYPED_NODE_ID_PREFIX
 import model.lowering.VIADUCT_IGNORE_SYMBOL
-import model.lowering.isLoweredNodeBridgeField
 import model.lowering.lowerSchema
 import model.lowering.loweredFieldFromSourceCoordinate
-import model.lowering.nodeBridgeTypeName
 import model.lowering.sourceTypeExpr
 import model.outputType
 import model.qplanSchemaTypeOrNull
@@ -36,16 +33,15 @@ import model.requireType
 import viaduct.engine.api.EngineObjectData
 import viaduct.graphql.schema.graphqljava.toGraphQLSchema
 import viaduct.graphql.schema.graphqljava.viaductSchema
+import viaduct.graphql.schema.isNode
 import viaduct.graphql.utils.GraphQLTypeRelations
 
 /**
  * A fixture pair of the GraphQL-visible source schema and the canonical decoded [ViaductSchema].
  *
  * Construct the reasoning world's one schema before its values and assumptions so every non-error
- * value is created through this exact canonical graph. The canonical graph may contain synthetic
- * node bridge types and fields absent from the retained GraphQL Java schema. [EngineErrorData] is
- * schema-independent. The retained source schema parses and validates GraphQL selections, ensuring
- * those inputs cannot name synthetic definitions.
+ * value is created through this exact canonical graph. [EngineErrorData] is schema-independent.
+ * The retained source schema parses and validates GraphQL selections.
  */
 internal class GJSchema private constructor(
     internal val graphQLSchema: GraphQLSchema,
@@ -80,18 +76,17 @@ internal class GJSchema private constructor(
         loweredSchema.sourceTypeExpr(field)
 
     internal fun isLoweredNodeField(field: ViaductSchema.Field): Boolean =
-        field.isLoweredNodeBridgeField()
+        sourceTypeExpr(field).baseTypeDef.isNode
 
     internal fun lowerSourceOutput(
         field: ViaductSchema.Field,
-        output: EngineOutputData?,
-    ): EngineOutputData? {
+        output: ResolverOutputData?,
+    ): ResolverOutputData? {
         val sourceTypeExpr = sourceTypeExpr(field)
         return if (isLoweredNodeField(field)) {
             lowerNodeReferences(
                 output = output,
                 sourceTypeExpr = sourceTypeExpr,
-                bridgeTypeExpr = field.outputType,
             )
         } else {
             lowerOrdinaryOutput(
@@ -100,6 +95,22 @@ internal class GJSchema private constructor(
                 loweredTypeExpr = field.outputType,
             )
         }
+    }
+
+    internal fun lowerNodeResolverOutput(
+        type: ViaductSchema.Object,
+        output: ResolverOutputData?,
+    ): ResolverOutputData? {
+        if (output == null || output is EngineErrorData || output is RootFieldReferenceData) {
+            return output
+        }
+        require(output is EngineObjectData.Sync) {
+            "Node resolver for ${type.name} returned a non-object value"
+        }
+        return lowerOrdinaryObject(
+            output,
+            ViaductSchema.TypeExpr(type),
+        )
     }
 
     internal fun lowerRootFieldReference(
@@ -139,27 +150,24 @@ internal class GJSchema private constructor(
     }
 
     private fun lowerNodeReferences(
-        output: EngineOutputData?,
+        output: ResolverOutputData?,
         sourceTypeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
-        bridgeTypeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
-    ): EngineOutputData? =
+    ): ResolverOutputData? =
         when {
             output == null || output is EngineErrorData || output is RootFieldReferenceData -> output
-            sourceTypeExpr.isList && bridgeTypeExpr.isList -> {
+            sourceTypeExpr.isList -> {
                 require(output is List<*>) {
                     "Node-list field resolver did not return a list"
                 }
                 val sourceElementType = checkNotNull(sourceTypeExpr.unwrapList())
-                val bridgeElementType = checkNotNull(bridgeTypeExpr.unwrapList())
                 output.map { value ->
                     lowerNodeReferences(
                         output = value,
                         sourceTypeExpr = sourceElementType,
-                        bridgeTypeExpr = bridgeElementType,
                     )
                 }
             }
-            !sourceTypeExpr.isList && !bridgeTypeExpr.isList -> {
+            else -> {
                 require(output is EngineObjectData.Sync) {
                     "Node field resolver did not return a node reference"
                 }
@@ -173,33 +181,24 @@ internal class GJSchema private constructor(
                 require(id !is EngineErrorData && id is String) {
                     "Node reference ${outputType.name}/id must contain a non-error ID"
                 }
-                val declaredBridgeType =
-                    bridgeTypeExpr.baseTypeDef as ViaductSchema.CompositeTypeDef
-                val bridgeType =
-                    requireType(nodeBridgeTypeName(outputType.name)) as ViaductSchema.Object
-                require(bridgeType in declaredBridgeType.possibleObjectTypes) {
+                val declaredType = sourceTypeExpr.baseTypeDef as ViaductSchema.CompositeTypeDef
+                require(outputType in declaredType.possibleObjectTypes) {
                     "Node reference ${outputType.name} is not valid for " +
                         sourceTypeExpr.baseTypeDef.name
                 }
-                val bridgeId = requireObjectField(bridgeType.name, NODE_BRIDGE_ID_FIELD)
-                engineObjectDataOf(
-                    schemaType = bridgeType,
-                    fields =
-                        mapOf(
-                            bridgeId.name to
-                                "$TYPED_NODE_ID_PREFIX${outputType.name.length}:" +
-                                    "${outputType.name}$id",
-                        ),
+                nodeRootFieldReferenceOf(
+                    queryNode = requireObjectField("Query", "node"),
+                    type = outputType,
+                    id = id,
                 )
             }
-            else -> error("Node and bridge type expressions have different list shapes")
         }
 
     private fun lowerOrdinaryOutput(
-        output: EngineOutputData?,
+        output: ResolverOutputData?,
         sourceTypeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
         loweredTypeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
-    ): EngineOutputData? =
+    ): ResolverOutputData? =
         when {
             output == null || output is EngineErrorData || output is RootFieldReferenceData -> output
             sourceTypeExpr.isList && loweredTypeExpr.isList -> {

@@ -103,18 +103,14 @@ class GeneratorTest {
         val nodePlan = assertIs<RootFieldReferencePlan>(registry.nodeValues.getValue(nodeType))
         val world = registry.world(schema)
         val reference = nodePlan.materializeReference(world.schema)
-        val payload =
-            world.schema.requireObjectField(
-                "${GENERATED_ROOT_REFERENCE_NODE}_V_A_Bridge",
-                "node",
-            )
+        val queryNode = world.schema.requireObjectField("Query", "node")
 
         assertEquals(family.targets.getValue("node"), nodePlan.target)
         assertEquals(1, registry.features.generatedNodeRootFieldReferenceCount)
         assertTrue(GENERATED_ROOT_REFERENCE_NODE_FIELD in query.source)
         assertTrue(
-            reference.conformsToResolverOutputSchemaType(payload.outputType),
-            "${reference.type.name} does not conform to ${payload.outputType}",
+            reference.conformsToResolverOutputSchemaType(queryNode.outputType),
+            "${reference.type.name} does not conform to ${queryNode.outputType}",
         )
     }
 

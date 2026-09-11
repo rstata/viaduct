@@ -9,6 +9,9 @@ import model.EngineErrorData
 import model.EngineOutputData
 import model.ResolverOutputData
 import model.RootFieldReferenceData
+import model.NodeReferenceIdentity
+import model.NODE_REFERENCE_ID_PREFIX
+import model.decodeNodeReferenceId
 import model.InclusionCondition
 import model.Arguments
 import model.Selection
@@ -18,11 +21,6 @@ import model.inputType
 import model.merge
 import model.lowering.ALL_SOURCE_OBJECTS_TYPE
 import model.lowering.LOWERED_TYPENAME_FIELD
-import model.lowering.NODE_BRIDGE_ID_FIELD
-import model.lowering.NODE_BRIDGE_PAYLOAD_FIELD
-import model.lowering.NODE_BRIDGE_TYPE_SUFFIX
-import model.lowering.TYPED_NODE_ID_PREFIX
-import model.lowering.nodeBridgeTypeName
 import model.emptyFragmentOf
 import model.engineObjectDataOf
 import model.fieldExpressions
@@ -38,6 +36,7 @@ import model.registry.MissingResolverException
 import model.registry.ProviderFragment
 import model.registry.ResolverRegistry
 import model.registry.VariableDefinition
+import model.registry.snipToDemand
 import model.selectionForestOf
 import model.toSelectionForest
 import model.usedVariables
@@ -161,10 +160,9 @@ internal fun resolverRegistryOf(
 /**
  * Lowers source-world node references and node lookups into the canonical field-only world.
  *
- * For each node-valued source field `foo(args)`, fixture composition identifies its canonical
- * `foo_V_A_node(args)` producer and adapts source-shaped node references to same-shaped bridge
- * objects. For each concrete Node object `O` with a raw node lookup, one generated resolver at
- * `O_V_A_Bridge.node` requires `id` and dispatches that typed ID to the raw lookup.
+ * Node-valued source fields retain their coordinates and source-shaped node references become
+ * root-field references to the built-in `Query.node`. That built-in decodes the concrete type and
+ * original ID, then dispatches to the corresponding raw node lookup.
  *
  * A lowered field must be declared as `Node` or a subtype whose every possible concrete type has a
  * raw node lookup. Mixed node-resolved and inline possible types are rejected at this composition
@@ -177,8 +175,7 @@ private class NodeResolverLowering(
 ) {
     private val sourceSchema = SourceSchemaAdapter(schema)
     private val nodeType: ViaductSchema.Interface? = canonicalNodeType()
-    private val loweredFields: Set<ViaductSchema.ObjectField> = loweredNodeFields()
-    private val payloadTypes: Set<ViaductSchema.Object> = nodeResolvers.keys
+    private val nodeFields: Set<ViaductSchema.ObjectField> = loweredNodeFields()
 
     val fieldResolvers: Map<ViaductSchema.Field, FieldResolverDefinition>
 
@@ -186,28 +183,14 @@ private class NodeResolverLowering(
         validateRawFieldResolvers(rawFieldResolvers)
 
         val ordinaryResolvers =
-            rawFieldResolvers
-                .filterKeys { it !in loweredFields }
-                .mapValues { (field, resolver) ->
-                    resolver.mapOutput { output ->
-                        sourceSchema.lowerOutput(field, output)
-                    }
-                }
-        val bridgeResolvers =
-            loweredFields.mapNotNull { field ->
-                rawFieldResolvers[field]?.let { resolver ->
-                    field to
-                        resolver
-                            .mapOutput { output ->
-                                sourceSchema.lowerOutput(field, output)
-                            }
-                }
-            }.toMap()
-        val payloadResolvers =
-            payloadTypes.associate { type ->
-                val payload = payloadField(type)
-                payload to payloadResolver(type)
-            }
+            rawFieldResolvers.mapValues { (field, resolver) ->
+                resolver.mapOutput { output -> sourceSchema.lowerOutput(field, output) }
+            }.toMutableMap()
+        nodeType?.let {
+            val queryNode = schema.requireObjectField("Query", "node")
+            ordinaryResolvers[queryNode] =
+                nodeDispatchResolver(queryNode, ordinaryResolvers.getValue(queryNode))
+        }
         val typenameResolvers =
             (schema.requireType(ALL_SOURCE_OBJECTS_TYPE) as ViaductSchema.Interface)
                 .possibleObjectTypes
@@ -220,8 +203,7 @@ private class NodeResolverLowering(
                         )
                 }
 
-        fieldResolvers =
-            ordinaryResolvers + bridgeResolvers + payloadResolvers + typenameResolvers
+        fieldResolvers = ordinaryResolvers + typenameResolvers
     }
 
     private fun canonicalNodeType(): ViaductSchema.Interface? {
@@ -249,6 +231,9 @@ private class NodeResolverLowering(
             .flatMap { it.fields }
             .mapNotNullTo(linkedSetOf()) { field ->
                 if (!schema.isLoweredNodeField(field)) return@mapNotNullTo null
+                if (field.containingDef.name == "Query" && field.name == "node") {
+                    return@mapNotNullTo null
+                }
                 val outputType =
                     sourceSchema.typeExpr(field).baseTypeDef as ViaductSchema.CompositeTypeDef
                 val registeredTypes = outputType.possibleObjectTypes.filterTo(linkedSetOf()) {
@@ -265,8 +250,7 @@ private class NodeResolverLowering(
                             GraphQLTypeRelation.WiderThan,
                         )
                 require(isDeclaredNode) {
-                    "Synthetic bridge ${field.containingDef.name}/${field.name} " +
-                        "does not correspond to a Node-valued source field"
+                    "Field ${field.containingDef.name}/${field.name} is not a Node-valued source field"
                 }
                 require(
                     registeredTypes.isEmpty() ||
@@ -290,9 +274,6 @@ private class NodeResolverLowering(
             require(field.containingDef is ViaductSchema.Object) {
                 "Field resolver $typeName/${field.name} must belong to a concrete object type"
             }
-            require(!field.containingDef.name.endsWith(NODE_BRIDGE_TYPE_SUFFIX)) {
-                "Synthetic node bridge field $typeName/${field.name} cannot be supplied directly"
-            }
             require(field !in nodeIdFields) {
                 "Node id field $typeName/${field.name} cannot have a field resolver"
             }
@@ -310,84 +291,65 @@ private class NodeResolverLowering(
         }
     }
 
-    private fun payloadResolver(nodeOutputType: ViaductSchema.Object): FieldResolverDefinition {
-        val bridgeType = schema.nodeBridgeType(nodeOutputType) as ViaductSchema.Object
-        val idField = schema.requireObjectField(bridgeType.name, NODE_BRIDGE_ID_FIELD)
-        val objectFragment =
-            Fragment.of(
-                nominalType = bridgeType,
-                subselections =
-                    selectionForestOf(
-                        Selection.of(
-                            key = ObjectEngineResult.Key.of(idField, emptyMap()),
-                            possibleTypes = setOf(bridgeType),
-                            subselections = selectionForestOf(),
-                        ),
-                    ),
-            )
-        val resolver = nodeResolvers.getValue(nodeOutputType)
-        return when (resolver.mode) {
-            NodeResolverFunction.Mode.SELECTIVE -> FieldResolverDefinition.ofSelective(
-                objectFragment = objectFragment,
-                queryFragment = null,
-                function = { input, _, _, selections ->
-                    loadNode(
-                        typedId = input.get(idField.name),
-                        nodeOutputType = nodeOutputType,
-                        selections = selections,
-                    )
-                },
-            )
-            NodeResolverFunction.Mode.SELECTION_AWARE_NONSELECTIVE ->
-                FieldResolverDefinition.ofSelectionAwareNonselective(
-                    objectFragment = objectFragment,
-                    queryFragment = null,
-                    function = { input, _, _, selections ->
-                        loadNode(
-                            typedId = input.get(idField.name),
-                            nodeOutputType = nodeOutputType,
-                            selections = selections,
-                        )
-                    },
-                )
-            NodeResolverFunction.Mode.NONSELECTIVE -> FieldResolverDefinition.of(
-                objectFragment = objectFragment,
-                function = { input, _ ->
-                    loadNode(
-                        typedId = input.get(idField.name),
-                        nodeOutputType = nodeOutputType,
-                        selections = selectionForestOf(),
-                    )
-                },
-            )
+    private fun nodeDispatchResolver(
+        queryNode: ViaductSchema.ObjectField,
+        rawQueryNode: FieldResolverDefinition,
+    ): FieldResolverDefinition {
+        require(rawQueryNode.objectFragment.materializeSelections.isEmpty()) {
+            "Built-in Query/node cannot declare an object fragment"
         }
+        return rawQueryNode.withNodeDispatch(
+            isNodeDispatch = { arguments ->
+                (arguments.fieldValues["id"] as? String)
+                    ?.startsWith(NODE_REFERENCE_ID_PREFIX) == true
+            },
+            dispatch = { arguments, selections ->
+                val encodedId = arguments.fieldValues["id"] as? String
+                    ?: throw IllegalArgumentException("Query.node id is not an ID")
+                val identity =
+                    decodeNodeReferenceId(queryNode, encodedId)
+                        ?: throw IllegalArgumentException("Malformed encoded node reference")
+                loadNode(identity, selections)
+            },
+        )
     }
 
     private fun loadNode(
-        typedId: EngineOutputData?,
-        nodeOutputType: ViaductSchema.Object,
+        identity: NodeReferenceIdentity,
         selections: SelectionForest,
     ): ResolverOutputData? {
-        if (typedId == null || typedId is EngineErrorData) return typedId
-        require(typedId is String) {
-            "Node bridge ${nodeBridgeTypeName(nodeOutputType.name)} did not contain an ID"
-        }
-        val (type, id) = decodeTypedId(typedId)
-        require(type in nodeOutputType.possibleObjectTypes) {
-            "Typed node ID ${type.name} is not valid for ${nodeOutputType.name}"
-        }
+        val (type, id) = identity
         val resolver =
             nodeResolvers[type]
                 ?: throw IllegalArgumentException("No fixture node resolver for ${type.name}")
-        val sourceResult = resolver(id, selections)
+        val idField = validateNodeIdField(type)
+        val nodeOwnedDemand =
+            selections.filter { selection -> selection.key.field.name != idField.name }
+        if (
+            nodeOwnedDemand.isEmpty() &&
+            resolver.mode == NodeResolverFunction.Mode.SELECTIVE
+        ) {
+            val includeId =
+                selections.merge(type).byKey().keys.any { key -> key.field == idField }
+            return engineObjectDataOf(
+                type,
+                if (includeId) mapOf(idField.name to id) else emptyMap(),
+            )
+        }
+        val resolverDemand =
+            if (resolver.mode == NodeResolverFunction.Mode.NONSELECTIVE) {
+                selectionForestOf()
+            } else {
+                nodeOwnedDemand
+            }
+        val sourceResult = resolver(id, resolverDemand)
         if (sourceResult == null || sourceResult is EngineErrorData) return sourceResult
         if (sourceResult is RootFieldReferenceData) return sourceResult
         require(sourceResult is EngineObjectData.Sync) {
             "Node resolver for ${type.name} returned a non-object value"
         }
-        val result =
-            sourceSchema.lowerOutput(payloadField(type), sourceResult)
-                as EngineObjectData.Sync
+        val result = sourceSchema.lowerNodeResolverOutput(type, sourceResult)
+            as EngineObjectData.Sync
         val resultType = result.schemaType
         require(resultType == type) {
             "Node resolver for ${type.name} returned ${resultType.name}"
@@ -398,40 +360,21 @@ private class NodeResolverLowering(
             }
 
         /*
-         * Node identity belongs to the producing field's fringe value, which the synthetic bridge
-         * carries into this lookup. Production's NodeEngineObjectDataImpl likewise returns its
-         * NodeReference ID independently of the materialized node-resolver object. Reconstitute
-         * that effective object here, in shared fixture lowering, with the fringe ID authoritative.
+         * Node identity belongs to the reference rather than the materialized node-resolver object.
+         * Reconstitute the effective object with that reference ID authoritative.
          */
-        val idField = validateNodeIdField(type)
         val includeId =
             resolver.mode != NodeResolverFunction.Mode.SELECTIVE ||
                 selections.merge(type).byKey().keys.any { key -> key.field == idField }
-        return engineObjectDataOf(
+        val authoritativeResult = engineObjectDataOf(
             resultType,
             if (includeId) fields + (idField.name to id) else fields - idField.name,
         )
-    }
-
-    private fun payloadField(nodeOutputType: ViaductSchema.Object): ViaductSchema.ObjectField =
-        schema.requireObjectField(
-            nodeBridgeTypeName(nodeOutputType.name),
-            NODE_BRIDGE_PAYLOAD_FIELD,
-        )
-
-    private fun decodeTypedId(id: String): Pair<ViaductSchema.Object, String> {
-        require(id.startsWith(TYPED_NODE_ID_PREFIX)) {
-            "Synthetic node-ID bridge contains an untyped ID"
+        return if (resolver.mode == NodeResolverFunction.Mode.SELECTIVE) {
+            authoritativeResult
+        } else {
+            authoritativeResult.snipToDemand(selections)
         }
-        val encoded = id.removePrefix(TYPED_NODE_ID_PREFIX)
-        val separator = encoded.indexOf(':')
-        require(separator > 0) { "Malformed typed node ID" }
-        val typeNameLength = encoded.substring(0, separator).toInt()
-        val typeNameStart = separator + 1
-        val typeNameEnd = typeNameStart + typeNameLength
-        require(typeNameEnd <= encoded.length) { "Malformed typed node ID" }
-        val type = schema.requireType(encoded.substring(typeNameStart, typeNameEnd)) as ViaductSchema.Object
-        return type to encoded.substring(typeNameEnd)
     }
 
     private fun validateNodeIdField(type: ViaductSchema.Object): ViaductSchema.ObjectField {

@@ -27,7 +27,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * Contract for source fields whose node outputs are resolved through fixture-lowered loaders.
+ * Contract for source fields whose node outputs resolve through root references to `Query.node`.
  */
 interface NodeResolverContract : ResolverContract {
     @Test
@@ -44,6 +44,7 @@ interface NodeResolverContract : ResolverContract {
 
                     type Baz implements Node {
                       id: ID!
+                      name: String!
                       anotherBaz: Baz!
                       z: Int!
                     }
@@ -67,9 +68,8 @@ interface NodeResolverContract : ResolverContract {
                     )
                 },
                 fieldResolvers = { schema ->
-                    val baz = schema.requireObjectField("Query", "baz_V_A_node")
-                    val anotherBaz =
-                        schema.requireObjectField("Baz", "anotherBaz_V_A_node")
+                    val baz = schema.requireObjectField("Query", "baz")
+                    val anotherBaz = schema.requireObjectField("Baz", "anotherBaz")
                     val z = schema.requireObjectField("Baz", "z")
                     mapOf(
                         baz to
@@ -87,7 +87,7 @@ interface NodeResolverContract : ResolverContract {
                         z to
                             fieldResolverOf(
                                 schema.fragmentFrom(
-                                    "fragment Z on Baz { anotherBaz { id } }",
+                                    "fragment Z on Baz { anotherBaz { name } }",
                                 ),
                             ) { input, _ ->
                                 input.get("anotherBaz")
@@ -99,19 +99,15 @@ interface NodeResolverContract : ResolverContract {
         val world = testWorld.assumptions
         val schema = world.schema
         val result = resolveAndValidate(world, "query { baz { z } }")
-        val bridge =
-            assertIs<ObjectEngineResult>(
-                result.getCell(schema.contractKey("Query", "baz_V_A_node")).get(),
-            )
         val baz =
             assertIs<ObjectEngineResult>(
-                bridge.getCell(schema.contractKey("Baz_V_A_Bridge", "node")).get(),
+                result.getCell(schema.contractKey("Query", "baz")).get(),
             )
 
+        assertTrue(failedNodeCompleted.get())
         assertIs<ErrorEngineResult>(
             baz.getCell(schema.contractKey("Baz", "z")).get(),
         )
-        assertTrue(failedNodeCompleted.get())
     }
 
     @Test
@@ -159,7 +155,7 @@ interface NodeResolverContract : ResolverContract {
                 """.trimIndent(),
             )
         testWorld.applicationArguments.assertArguments(
-            world.schema.requireObjectField("Query", "viewer_V_A_node"),
+            world.schema.requireObjectField("Query", "viewer"),
             mapOf("id" to "1"),
         )
         testWorld.applicationArguments.assertArguments(
@@ -169,7 +165,7 @@ interface NodeResolverContract : ResolverContract {
     }
 
     @Test
-    fun `resolves a nested passive node through its synthetic bridge`() {
+    fun `resolves a nested passive node through Query node`() {
         val testWorld =
             TestWorld.fromSDL(
                 selectiveResolvers = selectiveResolvers,
@@ -227,18 +223,13 @@ interface NodeResolverContract : ResolverContract {
             assertIs<ObjectEngineResult>(
                 viewer.getCell(schema.contractKey("Viewer", "card")).get(),
             )
-        val bridgeKey = schema.contractKey("Card", "profile_V_A_node")
-        val bridge = assertIs<ObjectEngineResult>(card.getCell(bridgeKey).get())
+        val profileKey = schema.contractKey("Card", "profile")
         val profile =
             assertIs<ObjectEngineResult>(
-                bridge.getCell(schema.contractKey("Profile_V_A_Bridge", "node")).get(),
+                card.getCell(profileKey).get(),
             )
 
-        assertEquals(expectedPassiveResultKeys(card.type, setOf(bridgeKey)), card.keys)
-        assertEquals(
-            EngineIDResult.of("\$node:7:Profileprofile-1"),
-            bridge.getCell(schema.contractKey("Profile_V_A_Bridge", "id")).get(),
-        )
+        assertEquals(expectedPassiveResultKeys(card.type, setOf(profileKey)), card.keys)
         assertEquals(
             EngineIDResult.of("profile-1"),
             profile.getCell(schema.contractKey("Profile", "id")).get(),
@@ -280,7 +271,7 @@ interface NodeResolverContract : ResolverContract {
                     )
                 },
                 fieldResolvers = { schema ->
-                    val nodes = schema.requireField("Query", "nodes_V_A_node")
+                    val nodes = schema.requireField("Query", "nodes")
                     mapOf(
                         nodes to
                             fieldResolverOf(
@@ -317,9 +308,9 @@ interface NodeResolverContract : ResolverContract {
                 }
                 """.trimIndent(),
         )
-        val bridgeField = schema.requireObjectField("Query", "nodes_V_A_node")
-        val firstKey = ObjectEngineResult.GroundKey.of(bridgeField, mapOf("group" to "first"))
-        val secondKey = ObjectEngineResult.GroundKey.of(bridgeField, mapOf("group" to "second"))
+        val nodesField = schema.requireObjectField("Query", "nodes")
+        val firstKey = ObjectEngineResult.GroundKey.of(nodesField, mapOf("group" to "first"))
+        val secondKey = ObjectEngineResult.GroundKey.of(nodesField, mapOf("group" to "second"))
 
         assertEquals(
             setOf(firstKey, secondKey),
@@ -330,19 +321,13 @@ interface NodeResolverContract : ResolverContract {
         assertEquals(
             expectedTypes,
             first.zip(expectedTypes).map { (cell, expectedType) ->
-                val bridge = assertIs<ObjectEngineResult>(cell.get())
-                val bridgeType = schema.contractObjectType("${expectedType}_V_A_Bridge")
-                assertEquals(bridgeType, bridge.type)
-                val payloadKey = schema.contractKey(bridgeType.name, "node")
-                assertIs<ObjectEngineResult>(
-                    bridge.getCell(payloadKey).get(),
-                ).type.name
+                assertIs<ObjectEngineResult>(cell.get()).type.name
             },
         )
     }
 
     @Test
-    fun `dispatches every nested node-list bridge occurrence`() {
+    fun `dispatches every nested node-list reference occurrence`() {
         val observedFields = mutableListOf<String>()
         val testWorld =
             TestWorld.fromSDL(
@@ -368,7 +353,7 @@ interface NodeResolverContract : ResolverContract {
                     )
                 },
                 fieldResolvers = { schema ->
-                    val matrix = schema.requireField("Query", "matrix_V_A_node")
+                    val matrix = schema.requireField("Query", "matrix")
                     val outer =
                         schema.toTypeExpr("!!!", "User").requireOutputType()
                     fun row(vararg ids: String): EngineOutputListData =
@@ -394,19 +379,16 @@ interface NodeResolverContract : ResolverContract {
             resolveAndValidate(world, "query { matrix { id name } }")
         val matrix =
             assertIs<ListEngineResult>(
-                result.getCell(schema.contractKey("Query", "matrix_V_A_node")).get(),
+                result.getCell(schema.contractKey("Query", "matrix")).get(),
             )
-        val payloadTypes =
+        val resolvedTypes =
             matrix.map { row ->
-                assertIs<ListEngineResult>(row.get()).map { bridgeCell ->
-                    val bridge = assertIs<ObjectEngineResult>(bridgeCell.get())
-                    assertIs<ObjectEngineResult>(
-                        bridge.getCell(schema.contractKey("User_V_A_Bridge", "node")).get(),
-                    ).type.name
+                assertIs<ListEngineResult>(row.get()).map { nodeCell ->
+                    assertIs<ObjectEngineResult>(nodeCell.get()).type.name
                 }
             }.flatten()
 
-        assertEquals(listOf("User", "User", "User"), payloadTypes)
+        assertEquals(listOf("User", "User", "User"), resolvedTypes)
         assertEquals(3, observedFields.count { it == "node" })
     }
 }

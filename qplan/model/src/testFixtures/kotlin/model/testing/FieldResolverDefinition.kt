@@ -5,9 +5,9 @@ import viaduct.graphql.schema.ViaductSchema
 import model.Arguments
 
 import model.Fragment
-import model.EngineOutputData
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
+import model.ResolverOutputData
 import model.SelectionForest
 import model.materializeSelectionForestOf
 import model.objectKey
@@ -40,7 +40,7 @@ class FieldResolverDefinition private constructor(
     internal val variablesProvider: VariablesProviderFunction?,
 ) {
     fun mapOutput(
-        transform: (EngineOutputData?) -> EngineOutputData?,
+        transform: (ResolverOutputData?) -> ResolverOutputData?,
     ): FieldResolverDefinition =
         FieldResolverDefinition(
             objectFragment = objectFragment,
@@ -66,6 +66,29 @@ class FieldResolverDefinition private constructor(
             selective = selective,
             passesDemand = passesDemand,
             projectionDemand = { demand -> transform(projectionDemand(demand)) },
+            applicationObserver = applicationObserver,
+            variablesProviderNames = variablesProviderNames,
+            variablesProvider = variablesProvider,
+        )
+
+    /** Routes internally encoded Query.node identities through qplan's built-in node dispatcher. */
+    internal fun withNodeDispatch(
+        dispatch: (Arguments.Resolved, SelectionForest) -> ResolverOutputData?,
+        isNodeDispatch: (Arguments.Resolved) -> Boolean,
+    ): FieldResolverDefinition =
+        FieldResolverDefinition(
+            objectFragment = objectFragment,
+            queryFragment = queryFragment,
+            function = { input, queryValue, arguments, selections ->
+                if (isNodeDispatch(arguments)) {
+                    dispatch(arguments, selections)
+                } else {
+                    function(input, queryValue, arguments, selections)
+                }
+            },
+            selective = true,
+            passesDemand = true,
+            projectionDemand = { it },
             applicationObserver = applicationObserver,
             variablesProviderNames = variablesProviderNames,
             variablesProvider = variablesProvider,
@@ -260,7 +283,7 @@ class FieldResolverDefinition private constructor(
 
         fun of(
             objectFragment: Fragment,
-            function: (EngineObjectData.Sync, Arguments.Resolved) -> EngineOutputData?,
+            function: (EngineObjectData.Sync, Arguments.Resolved) -> ResolverOutputData?,
         ): FieldResolverDefinition =
             of(
                 objectFragment = objectFragment,
@@ -295,7 +318,7 @@ fun fieldResolverOf(
 
 fun fieldResolverOf(
     objectFragment: Fragment,
-    function: (EngineObjectData.Sync, Arguments.Resolved) -> EngineOutputData?,
+    function: (EngineObjectData.Sync, Arguments.Resolved) -> ResolverOutputData?,
 ): FieldResolverDefinition = FieldResolverDefinition.of(objectFragment, function)
 
 fun selectiveFieldResolverOf(
@@ -322,7 +345,7 @@ fun selectiveFieldResolverOf(
         EngineObjectData.Sync,
         Arguments.Resolved,
         SelectionForest,
-    ) -> EngineOutputData?,
+    ) -> ResolverOutputData?,
 ): FieldResolverDefinition =
     FieldResolverDefinition.ofSelective(
         objectFragment = objectFragment,

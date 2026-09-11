@@ -5,6 +5,7 @@ import model.ObjectEngineResult
 import model.ObjectSelection
 import model.PathComponent
 import model.ResolverOccurrenceId
+import model.ResolverOutputData
 import model.RootFieldReferenceData
 import model.SelectionForest
 import model.outputType
@@ -48,4 +49,13 @@ internal data class RootFieldReferenceOccurrence(
     override val publicationPath: List<PathComponent>,
     override val publicationExpectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef> =
         selection.key.field.outputType,
+) : ResolverOccurrenceContext
+
+/** A conditioned passive value whose embedded references must not launch before activation. */
+internal data class PassiveValueOccurrence(
+    override val selection: ObjectSelection,
+    val value: ResolverOutputData?,
+    val invocationDemand: SelectionForest,
+    override val publicationConstructionDemand: SelectionForest,
+    override val publicationPath: List<PathComponent>,
 ) : ResolverOccurrenceContext

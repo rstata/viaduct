@@ -30,7 +30,7 @@ import viaduct.graphql.schema.ViaductSchema
  */
 context(operation: OperationContext)
 fun ObjectEngineResult.isClosedUnderResolverDemand(): Boolean =
-    isClosedUnderResolverDemand(ResolverApplicationCache(this))
+    isClosedUnderResolverDemand(resolverApplicationCache(this))
 
 context(operation: OperationContext)
 internal fun ObjectEngineResult.isClosedUnderResolverDemand(
@@ -162,6 +162,7 @@ private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
             reference = source,
             publicationRoot = resolverApplicationCache.root,
             publicationPath = path,
+            validationDemand = completedOutputDemand(),
         )?.let { application ->
             engineResultIsClosedUnderResolverDemand(
                 path = path,

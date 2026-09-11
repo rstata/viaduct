@@ -60,7 +60,7 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
                     check(!source.isPresent(objectKey.field.name)) {
                         "Resolver26 attempted to install source-provided key $objectKey"
                     }
-                    installAndLaunchResolver(fieldResolverOccurrenceContext)
+                    occurrence.installAndLaunchResolver(fieldResolverOccurrenceContext)
                 }
             }
             closed.rootFieldReferenceOccurrences.values.forEach { referenceOccurrence ->
@@ -69,34 +69,33 @@ internal suspend fun ObjectOrchestrationTask.launchBindingsAndResolvers(
                     check(source.outputValue(objectKey.field.name) === referenceOccurrence.reference) {
                         "Resolver26 root reference does not match its source value"
                     }
-                    installAndLaunchResolver(referenceOccurrence)
+                    occurrence.installAndLaunchResolver(referenceOccurrence)
                 }
             }
         }
     }
 }
 
-// Installs one active selection while retaining its symbolic cell key.
-private fun ObjectOrchestrationTask.installAndLaunchResolver(
+// Installs one field-resolution task while retaining its symbolic cell key.
+context(operation: Resolver26OperationContext)
+internal fun OEROccurrenceContext.installAndLaunchResolver(
     resolverOccurrenceContext: ResolverOccurrenceContext,
 ) {
-    context(operation) {
-        val objectKey = resolverOccurrenceContext.selection.key
-        val cell = occurrence.target.reserveCell(objectKey)
-        cell.createValuePromise()
-        operation.cycleChecker.registerWriter(
+    val objectKey = resolverOccurrenceContext.selection.key
+    val cell = target.reserveCell(objectKey)
+    cell.createValuePromise()
+    operation.cycleChecker.registerWriter(
+        cell = cell,
+        writer = coordinate(objectKey),
+    )
+    val fieldResolverTask =
+        FieldResolverTask(
+            operationContext = operation,
+            oerOccurrenceContext = this,
+            resolverOccurrenceContext = resolverOccurrenceContext,
             cell = cell,
-            writer = occurrence.coordinate(objectKey),
         )
-        val fieldResolverTask =
-            FieldResolverTask(
-                operationContext = operation,
-                oerOccurrenceContext = occurrence,
-                resolverOccurrenceContext = resolverOccurrenceContext,
-                cell = cell,
-            )
-        operation.requestScope.launch {
-            fieldResolverTask.run()
-        }
+    operation.requestScope.launch {
+        fieldResolverTask.run()
     }
 }

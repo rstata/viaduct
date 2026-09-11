@@ -83,7 +83,7 @@ private suspend fun ObjectEngineResult.readProvider(
 }
 
 // Converts a provider result to an input value and rejects object-valued terminals.
-private fun EngineResult?.toProviderBinding(
+private suspend fun EngineResult?.toProviderBinding(
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
 ): VariableBinding =
     when (this) {
@@ -99,13 +99,13 @@ private fun EngineResult?.toProviderBinding(
     }
 
 // Converts a provider list to an input list after checking its element type.
-private fun ListEngineResult.toProviderInputListBinding(): VariableBinding {
+private suspend fun ListEngineResult.toProviderInputListBinding(): VariableBinding {
     require(typeExpr.baseTypeDef is ViaductSchema.InputTypeDef) {
         "A path-variable provider list must contain input-compatible simple values"
     }
     val values = mutableListOf<EngineInputData?>()
     indices.forEach { index ->
-        when (val binding = get(index).getValue().get().toProviderBinding(typeExpr)) {
+        when (val binding = get(index).getValue().await().toProviderBinding(typeExpr)) {
             VariableBinding.Error -> return VariableBinding.Error
             is VariableBinding.Input -> values += binding.value
         }

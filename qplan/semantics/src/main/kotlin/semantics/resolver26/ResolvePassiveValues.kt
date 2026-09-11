@@ -8,6 +8,7 @@ import model.ResolverOutputData
 import model.EngineResult
 import model.EngineResultCell
 import model.ErrorEngineResult
+import model.InclusionCondition
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.ObjectSelectionForest
@@ -53,16 +54,16 @@ internal fun ResolverOutputData?.resolvePassiveValues(
                 parent = parent,
             )
         is List<*> -> {
+            requireNotNull(parent) {
+                "List value has no containing object occurrence"
+            }
             val elementType = checkNotNull(expectedType.unwrapList())
             val result = ListEngineResult.ofPendingValues(elementType, size)
             forEachIndexed { index, value ->
                 val elementPath = path + ListEngineResult.Index.of(index)
                 val elementCell = result[index]
                 if (value is RootFieldReferenceData) {
-                    val containingOccurrence =
-                        requireNotNull(parent) {
-                            "Root-field-reference list element has no containing object occurrence"
-                        }
+                    val containingOccurrence = parent
                     launchListElementReference(
                         reference = value,
                         publicationCell = elementCell,
@@ -172,6 +173,7 @@ private fun EngineObjectData.Sync.materializePassiveFields(
     closedDemand: ObjectSelectionForest,
 ) {
     val invocationDemandByKey = invocationDemand.merge(schemaType).byKey()
+    val passiveDemandByKey = (invocationDemand + closedDemand).merge(schemaType).byKey()
     if (operation.selectiveResolvers) {
         val selectedFieldNames =
             invocationDemandByKey.keys
@@ -193,16 +195,23 @@ private fun EngineObjectData.Sync.materializePassiveFields(
         }
         val output = outputValue(fieldName)
         if (output is RootFieldReferenceData) return@forEach
-        val demandedKeys = linkedSetOf<ObjectEngineResult.GroundKey>()
-        (invocationDemandByKey.keys + closedDemandByKey.keys).forEach { key ->
-            if (key.field == field) {
-                check(key is ObjectEngineResult.GroundKey) {
-                    "Passive returned field has an open key: $key"
+        // A reference is executable resolver work, so a list containing one cannot be materialized
+        // speculatively like ordinary passive data. Gate the containing field before creating any
+        // element tasks, and omit an undemanded reference-bearing list entirely.
+        val containsListElementReference = output.containsListElementRootFieldReference()
+        val demandedKeys =
+            passiveDemandByKey.keys.mapNotNullTo(linkedSetOf()) { key ->
+                if (key.field != field) {
+                    null
+                } else {
+                    check(key is ObjectEngineResult.GroundKey) {
+                        "Passive returned field has an open key: $key"
+                    }
+                    key
                 }
-                demandedKeys += key
             }
-        }
         if (demandedKeys.isEmpty()) {
+            if (containsListElementReference) return@forEach
             demandedKeys += ObjectEngineResult.GroundKey.of(field, emptyMap())
         }
         demandedKeys.forEach { key ->
@@ -214,17 +223,43 @@ private fun EngineObjectData.Sync.materializePassiveFields(
                 closedDemandByKey[key]
                     ?.subselections
                     ?: selectionForestOf()
-            val value =
-                output
-                    .resolvePassiveValues(
-                        root = occurrence.root,
-                        expectedType = key.field.outputType,
-                        path = occurrence.coordinate(key),
+            val inclusionCondition =
+                passiveDemandByKey[key]
+                    ?.inclusionCondition
+                    ?: InclusionCondition.Always
+            if (
+                containsListElementReference &&
+                inclusionCondition !== InclusionCondition.Always
+            ) {
+                if (inclusionCondition === InclusionCondition.Never) return@forEach
+                occurrence.installAndLaunchResolver(
+                    PassiveValueOccurrence(
+                        selection = passiveDemandByKey.getValue(key),
+                        value = output,
                         invocationDemand = childInvocationDemand,
-                        constructionDemand = childConstructionDemand,
-                        parent = occurrence,
-                    )
-            occurrence.target.setCellValue(key, value)
+                        publicationConstructionDemand = childConstructionDemand,
+                        publicationPath = occurrence.coordinate(key),
+                    ),
+                )
+            } else {
+                val value =
+                    output
+                        .resolvePassiveValues(
+                            root = occurrence.root,
+                            expectedType = key.field.outputType,
+                            path = occurrence.coordinate(key),
+                            invocationDemand = childInvocationDemand,
+                            constructionDemand = childConstructionDemand,
+                            parent = occurrence,
+                        )
+                occurrence.target.setCellValue(key, value)
+            }
         }
     }
 }
+
+private fun Any?.containsListElementRootFieldReference(): Boolean =
+    this is List<*> &&
+        any { value ->
+            value is RootFieldReferenceData || value.containsListElementRootFieldReference()
+        }

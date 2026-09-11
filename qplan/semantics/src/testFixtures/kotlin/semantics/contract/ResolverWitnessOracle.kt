@@ -18,6 +18,7 @@ import semantics.arbitrary.ResolverOccurrenceApplicationKey
 import semantics.arbitrary.ResolverOccurrenceApplicationIdentity
 import semantics.arbitrary.resolutionFingerprint
 import semantics.correctresolution.conformsToSelectionsAt
+import semantics.correctresolution.ownedRootFieldReferenceInvocations
 import semantics.shared.materialize
 import semantics.shared.groundedArguments
 import semantics.shared.OperationContext
@@ -28,8 +29,9 @@ import semantics.shared.RootFieldReferenceInvocationObservation
  * Expected deterministic resolver applications reconstructed from every request-local Query root.
  *
  * The receiver is the primary result root; Query-fragment roots come from resolver observations.
- * This is independent of the observed application stream, but not of the completed results under
- * test: an extra result cell paired with an extra invocation can increase both counts together.
+ * Ordinary occurrences are independent of the observed application stream. Symbolic-reference
+ * occurrences necessarily use invocation observations for their fresh roots and paths, but only
+ * after source-ownership replay justifies each observed hop from the completed results under test.
  */
 context(operation: OperationContext)
 fun EngineResult?.registeredResolverApplicationIdentityCounts():
@@ -207,8 +209,10 @@ private fun EngineResult?.requestQueryRoots(): List<ObjectEngineResult> {
 }
 
 context(operation: OperationContext)
-private fun rootFieldReferenceOccurrences(): List<RootFieldReferenceInvocationObservation> =
-    operation.resolverObservations().rootFieldReferenceInvocations()
+private fun EngineResult?.rootFieldReferenceOccurrences(): List<
+    RootFieldReferenceInvocationObservation,
+> =
+    (this as? ObjectEngineResult)?.ownedRootFieldReferenceInvocations().orEmpty()
 
 context(operation: OperationContext)
 private fun RootFieldReferenceInvocationObservation.applicationKey(): ResolverApplicationKey =

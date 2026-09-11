@@ -79,6 +79,7 @@ internal class FieldResolverTask(
                     "Root-field-reference target has no resolver"
                 }
             }
+            is PassiveValueOccurrence -> Unit
         }
     }
 
@@ -86,7 +87,11 @@ internal class FieldResolverTask(
         context(operationContext, world, operationContext.cycleChecker) {
             val selection = resolverOccurrenceContext.selection
             val constructionDemand = resolverOccurrenceContext.publicationConstructionDemand
-            val invocationDemand: SelectionForest = constructionDemand.successorDemand()
+            val invocationDemand: SelectionForest =
+                when (resolverOccurrenceContext) {
+                    is PassiveValueOccurrence -> resolverOccurrenceContext.invocationDemand
+                    else -> constructionDemand.successorDemand()
+                }
 
             val activated = activateResolverOccurrence(resolverOccurrenceContext)
             if (!activated) return
@@ -100,6 +105,7 @@ internal class FieldResolverTask(
                             invocationDemand = invocationDemand,
                         )
                     is RootFieldReferenceOccurrence -> resolverOccurrenceContext.reference
+                    is PassiveValueOccurrence -> resolverOccurrenceContext.value
                 }
 
             while (fieldValue is RootFieldReferenceData) {

@@ -27,10 +27,20 @@ context(operation: OperationContext)
 fun ObjectEngineResult.correctResolution(
     selections: ObjectSelectionForest,
 ): Boolean {
+    val rootFieldReferenceWitness = rootFieldReferenceWitness(this)
+    return correctResolution(selections, rootFieldReferenceWitness) &&
+        rootFieldReferenceWitness.isComplete()
+}
+
+context(operation: OperationContext)
+internal fun ObjectEngineResult.correctResolution(
+    selections: ObjectSelectionForest,
+    rootFieldReferenceWitness: RootFieldReferenceWitness,
+): Boolean {
     require(selections.type == operation.schema.requireQueryTypeDef()) {
         "Correct-resolution selections must be rooted at Query"
     }
-    val resolverApplicationCache = ResolverApplicationCache(this)
+    val resolverApplicationCache = resolverApplicationCache(this, rootFieldReferenceWitness)
     val structurallyValid =
         context(operation.world) {
             rootedAndWellTyped()

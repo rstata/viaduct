@@ -5,8 +5,8 @@ EXTENDS ResolverCoreProof
 Resolver01 is scoped here to the stage requested for this proof: resolver
 object fragments are empty. The Kotlin implementation is more general because
 ordinary resolver object fragments may have direct requirements; that larger
-local-demand case is covered by Resolver02. Symbolic node-reference resolution
-is outside both resolvers' current domains.
+local-demand case is covered by Resolver02. This TLA abstraction does not model
+the Kotlin resolvers' symbolic root-field-reference execution.
 *)
 
 Resolver01World ==

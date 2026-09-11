@@ -38,7 +38,7 @@ The prefix induction invariant, using Lemma 3 for keys already resolved, says th
 
 The canonical registry's acyclic resolver-demand invariant guarantees that every nonempty unresolved set contains a ready key. `dependencyOrder` rejects a nonempty set with no ready member as a cycle. Independent ready keys may appear in any order because no member requires another member of that ready set.
 
-Node resolution is outside Resolver02's current domain. Node values are represented by root-field references to `Query.node`, and symbolic root-field-reference execution is implemented only by Resolver26. Unequal argument tuples on ordinary Node-valued source fields remain distinct ground producer keys.
+Node resolution needs no separate dependency-order case. A Node-valued source producer returns a root-field reference to `Query.node`; after the producer is ready, Resolver02 executes that grounded reference inline through the same root-reference mechanism and recursively resolves the returned object's demanded fields. The `Query.node` target has an empty object fragment, so it adds no sibling prerequisite to this ordering. Unequal argument tuples on ordinary Node-valued source fields remain distinct ground producer keys.
 
 ## Lemma 3: Recursive Resolution Satisfies Selections And Closes Descendants
 

@@ -8,6 +8,7 @@ import semantics.shared.OperationContext
 import model.ObjectEngineResult
 import model.SelectionForest
 import semantics.contract.EmptyObjectFragmentGeneratedResolverContract
+import semantics.contract.NodeGeneratedResolverContract
 import semantics.contract.FeatureInteractionGeneratedResolverContract
 import semantics.contract.ObjectFragmentFromArgumentGeneratedResolverContract
 import semantics.contract.ObjectFragmentGeneratedResolverContract

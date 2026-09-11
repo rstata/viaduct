@@ -9,6 +9,7 @@ import model.SourceSchemaAdapter
 import viaduct.graphql.schema.ViaductSchema
 import model.fragmentFrom
 import model.objectOf
+import model.nodeReferenceIdentityOrNull
 import semantics.arbitrary.ArbitraryRegistry
 import semantics.arbitrary.Config
 import semantics.arbitrary.ErrorValueWeight
@@ -170,15 +171,7 @@ interface DeepResolverStressContract : ResolverContract {
                         activatedRootFieldReferences += references.size
                         activatedNodeRootFieldReferences +=
                             references.count { observation ->
-                                val field =
-                                    (observation.publicationPath.lastOrNull()
-                                        as? ObjectEngineResult.ObjectKey)?.field
-                                        ?: return@count false
-                                testCase.registry
-                                    .nodeLoaderPossibleTypes(
-                                        testCase.schema,
-                                        FieldCoordinate(field.containingDef.name, field.name),
-                                    ).isNotEmpty()
+                                observation.reference.nodeReferenceIdentityOrNull() != null
                             }
                     }
                     val witness = testCase.registry.resolutionWitness()

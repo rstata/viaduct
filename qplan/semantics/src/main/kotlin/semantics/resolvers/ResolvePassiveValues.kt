@@ -9,10 +9,12 @@ import model.ResolverOutputData
 import model.EngineResult
 import model.ErrorEngineResult
 import model.ListEngineResult
+import model.NodeReferenceIdentity
 import model.ObjectEngineResult
 import model.ObjectSelectionForest
 import model.outputType
 import model.outputValue
+import model.engineObjectDataOf
 import model.PathComponent
 import model.SelectionForest
 import model.RootFieldReferenceData
@@ -20,6 +22,8 @@ import viaduct.engine.api.EngineObjectData
 import semantics.shared.applicableGroundSelections
 import model.invariants.conformsToResolverOutputSchemaType
 import model.schemaType
+import model.merge
+import model.nodeReferenceIdentityOrNull
 import model.requireField
 import model.isParentField
 import model.selectionForestOf
@@ -104,6 +108,7 @@ internal suspend fun ResolverOutputData?.resolvePassiveValues(
     invocationDemand: SelectionForest = constructionDemand,
     publicationRoot: ObjectEngineResult? = null,
     rootFieldReferenceResolver: RootFieldReferenceResolver? = null,
+    authoritativeNodeIdentity: NodeReferenceIdentity? = null,
 ): ResolvePassiveValuesResult {
     require(conformsToResolverOutputSchemaType(expectedType)) {
         "Resolver output does not conform to $expectedType"
@@ -113,6 +118,7 @@ internal suspend fun ResolverOutputData?.resolvePassiveValues(
         is EngineErrorData ->
             ResolvePassiveValuesResult(ErrorEngineResult.of(this), emptyList())
         is RootFieldReferenceData -> {
+            val nodeIdentity = authoritativeNodeIdentity ?: nodeReferenceIdentityOrNull()
             val resolver =
                 requireNotNull(rootFieldReferenceResolver) {
                     "Root-field reference has no execution strategy"
@@ -121,23 +127,27 @@ internal suspend fun ResolverOutputData?.resolvePassiveValues(
                 requireNotNull(publicationRoot) {
                     "Root-field reference has no publication root"
                 }
-            val referencedResult =
-                resolver
-                .resolve(
+            val referencedOutput =
+                resolver.resolve(
                     reference = this,
                     publicationRoot = root,
                     publicationPath = path,
                     expectedType = expectedType,
                     constructionDemand = constructionDemand,
                     invocationDemand = invocationDemand,
-                ).resolvePassiveValues(
-                    expectedType = expectedType,
-                    path = path,
-                    constructionDemand = constructionDemand,
-                    invocationDemand = invocationDemand,
-                    publicationRoot = root,
-                    rootFieldReferenceResolver = resolver,
                 )
+            val referencedResult =
+                referencedOutput
+                    .withAuthoritativeNodeId(nodeIdentity, invocationDemand)
+                    .resolvePassiveValues(
+                        expectedType = expectedType,
+                        path = path,
+                        constructionDemand = constructionDemand,
+                        invocationDemand = invocationDemand,
+                        publicationRoot = root,
+                        rootFieldReferenceResolver = resolver,
+                        authoritativeNodeIdentity = nodeIdentity,
+                    )
             ResolvePassiveValuesResult(
                 engineResult = referencedResult.engineResult,
                 objectsNeedingResolution = referencedResult.objectsNeedingResolution,
@@ -151,6 +161,7 @@ internal suspend fun ResolverOutputData?.resolvePassiveValues(
                 path = path,
                 publicationRoot = publicationRoot,
                 rootFieldReferenceResolver = rootFieldReferenceResolver,
+                retainInvocationDemand = authoritativeNodeIdentity != null,
             )
         is List<*> -> {
             val elementType = checkNotNull(expectedType.unwrapList())
@@ -189,6 +200,25 @@ internal suspend fun ResolverOutputData?.resolvePassiveValues(
     }
 }
 
+private fun ResolverOutputData?.withAuthoritativeNodeId(
+    identity: NodeReferenceIdentity?,
+    demand: SelectionForest,
+): ResolverOutputData? {
+    if (identity == null || this !is EngineObjectData.Sync) return this
+    require(schemaType == identity.type) {
+        "Node reference for ${identity.type.name} resolved to ${schemaType.name}"
+    }
+    val idField = identity.type.field("id")
+        ?: throw IllegalArgumentException("Node type ${identity.type.name} has no id field")
+    val idDemanded =
+        demand.merge(identity.type).byKey().keys.any { key -> key.field == idField }
+    if (!idDemanded) return this
+    return engineObjectDataOf(
+        identity.type,
+        getSelections().associateWith(::outputValue) + (idField.name to identity.id),
+    )
+}
+
 context(operation: OperationContext)
 private suspend fun EngineObjectData.Sync.resolvePassiveObjectValues(
     constructionDemand: SelectionForest,
@@ -196,6 +226,7 @@ private suspend fun EngineObjectData.Sync.resolvePassiveObjectValues(
     path: List<PathComponent>,
     publicationRoot: ObjectEngineResult?,
     rootFieldReferenceResolver: RootFieldReferenceResolver?,
+    retainInvocationDemand: Boolean,
 ): ResolvePassiveValuesResult {
     val constructionDemandByKey =
         constructionDemand.applicableGroundSelections(schemaType).byGroundKey()
@@ -266,13 +297,19 @@ private suspend fun EngineObjectData.Sync.resolvePassiveObjectValues(
             }
         }
     val engineResult = ObjectEngineResult.of(schemaType, values, mutable = true)
+    val retainedDemand =
+        if (retainInvocationDemand) {
+            constructionDemand + invocationDemand
+        } else {
+            constructionDemand
+        }
     val localResolution =
-        if (hasUnresolvedDemand(constructionDemand)) {
+        if (hasUnresolvedDemand(retainedDemand)) {
             listOf(
                 PassiveObjectOccurrence(
                     path = path,
                     source = this,
-                    selections = constructionDemand,
+                    selections = retainedDemand,
                     target = engineResult,
                 ),
             )

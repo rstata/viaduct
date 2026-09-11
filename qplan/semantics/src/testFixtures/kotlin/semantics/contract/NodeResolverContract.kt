@@ -9,10 +9,12 @@ import model.EngineOutputListData
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
+import model.RootFieldReferenceData
 import viaduct.graphql.schema.ViaductSchema
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.objectOf
+import model.outputValue
 import model.requireOutputType
 import model.requireType
 import model.testing.FieldResolverDefinition
@@ -21,7 +23,9 @@ import model.testing.fieldResolverOf
 import model.testing.nodeResolverOf
 import org.junit.jupiter.api.Test
 import viaduct.graphql.schema.toTypeExpr
+import viaduct.engine.api.EngineObjectData
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
@@ -30,6 +34,144 @@ import kotlin.test.assertTrue
  * Contract for source fields whose node outputs resolve through root references to `Query.node`.
  */
 interface NodeResolverContract : ResolverContract {
+    @Test
+    fun `retains successor demand beneath a node reference`() {
+        if (this !is ObjectFragmentResolverContract) return
+        val testWorld =
+            TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    interface Node { id: ID! }
+                    type Viewer { item: Item!, result: String! }
+                    type Leaf { value: String! }
+                    type Item implements Node { id: ID!, leaf: Leaf! }
+                    type Query { viewer: Viewer! }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val viewer = schema.requireObjectField("Query", "viewer")
+                    val result = schema.requireObjectField("Viewer", "result")
+                    val value = schema.requireObjectField("Leaf", "value")
+                    mapOf(
+                        viewer to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                schema.objectOf("Viewer") {
+                                    "item" setTo
+                                        schema.objectOf("Item") {
+                                            "id" setTo "item-1"
+                                        }
+                                }
+                            },
+                        value to
+                            fieldResolverOf(schema.emptyFragmentOf("Leaf")) { _, _ ->
+                                "resolved"
+                            },
+                        result to
+                            fieldResolverOf(
+                                schema.fragmentFrom(
+                                    "fragment Result on Viewer { item { leaf { value } } }",
+                                ),
+                            ) { input, _ ->
+                                val item =
+                                    assertIs<EngineObjectData.Sync>(input.outputValue("item"))
+                                val leaf =
+                                    assertIs<EngineObjectData.Sync>(item.outputValue("leaf"))
+                                leaf.outputValue("value")
+                            },
+                    )
+                },
+                nodeResolvers = { schema ->
+                    mapOf(
+                        schema.contractObjectType("Item") to
+                            nodeResolverOf { id ->
+                                schema.objectOf("Item") {
+                                    "id" setTo id
+                                    "leaf" setTo schema.objectOf("Leaf")
+                                }
+                            },
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val schema = world.schema
+        val result = resolveAndValidate(world, "query { viewer { result } }")
+        val viewer =
+            assertIs<ObjectEngineResult>(
+                result.getCell(schema.contractKey("Query", "viewer")).get(),
+            )
+        assertEquals(
+            "resolved",
+            viewer.getCell(schema.contractKey("Viewer", "result")).get(),
+        )
+    }
+
+    @Test
+    fun `node resolver root reference retains the originating id`() {
+        val nodeApplications = AtomicInteger()
+        val targetApplications = AtomicInteger()
+        val testWorld =
+            TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    interface Node { id: ID! }
+                    interface ReferencedFoo { id: ID!, value: String! }
+                    type Foo implements Node & ReferencedFoo { id: ID!, value: String! }
+                    type Query { foo: Foo!, referencedFoo: ReferencedFoo! }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val foo = schema.requireObjectField("Query", "foo")
+                    val referencedFoo = schema.requireObjectField("Query", "referencedFoo")
+                    mapOf(
+                        foo to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                schema.objectOf("Foo") { "id" setTo "source-id" }
+                            },
+                        referencedFoo to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                targetApplications.incrementAndGet()
+                                schema.objectOf("Foo") {
+                                    "id" setTo "target-id"
+                                    "value" setTo "from-reference"
+                                }
+                            },
+                    )
+                },
+                nodeResolvers = { schema ->
+                    val foo = schema.requireType("Foo") as ViaductSchema.Object
+                    val referencedFoo = schema.requireObjectField("Query", "referencedFoo")
+                    mapOf(
+                        foo to
+                            nodeResolverOf { id ->
+                                nodeApplications.incrementAndGet()
+                                assertEquals("source-id", id)
+                                RootFieldReferenceData.of(
+                                    path = listOf(referencedFoo),
+                                    arguments = emptyMap(),
+                                )
+                            },
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val result = resolveAndValidate(world, "query { foo { id value } }")
+        val resolvedFoo =
+            assertIs<ObjectEngineResult>(
+                result.getCell(world.schema.contractKey("Query", "foo")).get(),
+            )
+
+        assertEquals(
+            "from-reference",
+            resolvedFoo.getCell(world.schema.contractKey("Foo", "value")).get(),
+        )
+        assertEquals(
+            EngineIDResult.of("source-id"),
+            resolvedFoo.getCell(world.schema.contractKey("Foo", "id")).get(),
+        )
+        assertEquals(1, nodeApplications.get())
+        assertEquals(1, targetApplications.get())
+    }
+
     @Test
     fun `awaits completion for node in required selection set`() {
         val failedNodeCompleted = AtomicBoolean()

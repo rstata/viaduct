@@ -9,6 +9,7 @@ import model.ResolverOccurrenceId
 import model.Fragment
 import model.fragmentFrom
 import model.outputValue
+import model.nodeReferenceIdentityOrNull
 import model.schemaType
 import org.junit.jupiter.api.Test
 import semantics.arbitrary.Config
@@ -518,17 +519,7 @@ internal suspend fun runResolver26BroadStress(
                     val publicationField =
                         (observation.publicationPath.lastOrNull()
                             as? ObjectEngineResult.ObjectKey)?.field
-                    if (
-                        publicationField != null &&
-                        testCase.registry
-                            .nodeLoaderPossibleTypes(
-                                testCase.schema,
-                                FieldCoordinate(
-                                    publicationField.containingDef.name,
-                                    publicationField.name,
-                                ),
-                            ).isNotEmpty()
-                    ) {
+                    if (observation.reference.nodeReferenceIdentityOrNull() != null) {
                         activatedNodeRootFieldReferences += 1
                     }
                     if (

@@ -21,8 +21,8 @@ fun Assumptions.selectionsFrom(fragment: String): Pair<ViaductSchema.CompositeTy
 /**
  * Decodes one post-validation query operation with already-coerced operation variables.
  *
- * Applied directives are outside the current selection model. Named fragment spreads are inlined
- * while decoding.
+ * Delivery-only `@defer` directives are transparent to qplan so deferred selections remain part of
+ * full-operation demand. Named fragment spreads are inlined while decoding.
  */
 fun Assumptions.selectionsFrom(
     operation: OperationDefinition,

@@ -1,6 +1,7 @@
 package semantics.shared
 
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CancellationException
 import model.EngineInputData
 import model.Promise
 import model.VariableBinding
@@ -33,18 +34,22 @@ class VariableBindingsState {
         value: EngineInputData?,
     ) = bindVariable(variableId, VariableBinding.of(value))
 
-    /** Completes one previously declared binding. */
+    /** Atomically completes one declared binding and reports whether this call won. */
     fun completeBinding(
         variableId: VariableInstanceId,
         binding: VariableBinding,
-    ) {
-        bindingPromise(variableId).complete(binding)
-    }
+    ): Boolean = bindingPromise(variableId).complete(binding)
 
     fun completeBinding(
         variableId: VariableInstanceId,
         value: EngineInputData?,
     ) = completeBinding(variableId, VariableBinding.of(value))
+
+    /** Atomically cancels one declared binding and reports whether this call won. */
+    fun cancelBinding(
+        variableId: VariableInstanceId,
+        cause: CancellationException,
+    ): Boolean = bindingPromise(variableId).cancel(cause)
 
     /** Reads one completed binding without suspending. */
     fun getBinding(variableId: VariableInstanceId): VariableBinding =

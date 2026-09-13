@@ -38,7 +38,9 @@ internal fun Iterable<ObjectEngineResult.GroundKey>.bindFromArguments(
                     val variableId = requireNotNull(instantiated.instanceId)
                     val value = definition.read(arguments)
                     operation.variableBindingsState.declareBinding(variableId)
-                    operation.variableBindingsState.completeBinding(variableId, value)
+                    check(operation.variableBindingsState.completeBinding(variableId, value)) {
+                        "Resolver variable binding was completed twice"
+                    }
                 }
             }
     }

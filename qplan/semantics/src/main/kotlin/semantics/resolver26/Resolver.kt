@@ -1,6 +1,7 @@
 package semantics.resolver26
 
 import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -40,6 +41,41 @@ internal fun resolve(
     selections: SelectionForest,
     coroutineContext: CoroutineContext,
     applicationObserver: Resolver26ApplicationObserver = {},
+): ObjectEngineResult =
+    runBlocking(coroutineContext) {
+        withTimeout(15_000) {
+            coroutineScope {
+                startResolve(
+                    selections = selections,
+                    requestScope = this,
+                    applicationObserver = applicationObserver,
+                )
+            }
+        }
+    }
+
+/**
+ * Starts one Resolver26 request and returns its live root result.
+ *
+ * The returned root has its complete selected key set installed and frozen, but its cell promises
+ * may still be pending. All remaining work is owned by [requestScope].
+ */
+context(operation: OperationContext)
+fun startResolve(
+    selections: SelectionForest,
+    requestScope: CoroutineScope,
+): ObjectEngineResult =
+    startResolve(
+        selections = selections,
+        requestScope = requestScope,
+        applicationObserver = {},
+    )
+
+context(operation: OperationContext)
+private fun startResolve(
+    selections: SelectionForest,
+    requestScope: CoroutineScope,
+    applicationObserver: Resolver26ApplicationObserver,
 ): ObjectEngineResult {
     require(operation.selectiveResolvers) {
         "Resolver26 requires selective resolvers"
@@ -50,34 +86,28 @@ internal fun resolve(
             type = source.schemaType,
             mutable = true,
         )
-    return runBlocking(coroutineContext) {
-        withTimeout(15_000) {
-            coroutineScope {
-                val resolver26Operation =
-                    Resolver26OperationContext(
-                        base = operation,
-                        requestScope = this,
-                        resolverObserver =
-                            operation.resolverObserver.withResolver26Applications(
-                                applicationObserver,
-                            ),
-                    )
-                val orchestration =
-                    ObjectOrchestrationTask(
-                        operation = resolver26Operation,
-                        occurrence =
-                            OEROccurrenceContext(
-                                root = result,
-                                path = emptyList(),
-                                target = result,
-                            ),
-                        source = source,
-                        initialDemand = selections,
-                    )
-                orchestration.prepare()
-                orchestration.launch()
-            }
-            result
-        }
-    }
+    val resolver26Operation =
+        Resolver26OperationContext(
+            base = operation,
+            requestScope = requestScope,
+            resolverObserver =
+                operation.resolverObserver.withResolver26Applications(
+                    applicationObserver,
+                ),
+        )
+    val orchestration =
+        ObjectOrchestrationTask(
+            operation = resolver26Operation,
+            occurrence =
+                OEROccurrenceContext(
+                    root = result,
+                    path = emptyList(),
+                    target = result,
+                ),
+            source = source,
+            initialDemand = selections,
+        )
+    orchestration.prepare()
+    orchestration.launch()
+    return result
 }

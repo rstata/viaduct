@@ -1,6 +1,7 @@
 package model
 
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 class UncompletedPromiseException : IllegalStateException("Promise has not been completed")
@@ -15,11 +16,11 @@ sealed interface Promise<T> {
     /** @throws UncompletedPromiseException when this promise has not been completed */
     fun get(): T
 
-    /** @throws IllegalStateException when this promise has already been completed */
-    fun complete(value: T)
+    /** Atomically completes this promise, returning whether this call performed the transition. */
+    fun complete(value: T): Boolean
 
-    /** @throws IllegalStateException when this promise has already been completed */
-    fun fail(cause: Throwable)
+    /** Atomically cancels this promise, returning whether this call performed the transition. */
+    fun cancel(cause: CancellationException): Boolean
 
     companion object {
         fun <T> of(value: T): Promise<T> = CompletedPromiseImpl(value)
@@ -32,7 +33,8 @@ internal fun <T> Promise.Companion.ofDeferred(
     validate: (T) -> Unit,
 ): Promise<T> = DeferredPromiseImpl(validate)
 
-private class CompletedPromiseImpl<T>(private val value: T) : Promise<T> {
+private class CompletedPromiseImpl<T>(private val value: T) : Promise<T>,
+    ExceptionallyCompletablePromise {
     override val isCompleted: Boolean
         get() = true
 
@@ -40,14 +42,15 @@ private class CompletedPromiseImpl<T>(private val value: T) : Promise<T> {
 
     override fun get(): T = value
 
-    override fun complete(value: T): Nothing =
-        throw IllegalStateException("Promise has already been completed")
+    override fun complete(value: T): Boolean = false
 
-    override fun fail(cause: Throwable): Nothing =
-        throw IllegalStateException("Promise has already been completed")
+    override fun cancel(cause: CancellationException): Boolean = false
+
+    override fun completeExceptionally(cause: Exception): Boolean = false
 }
 
-private class DeferredPromiseImpl<T>(private val validate: (T) -> Unit = {}) : Promise<T> {
+private class DeferredPromiseImpl<T>(private val validate: (T) -> Unit = {}) : Promise<T>,
+    ExceptionallyCompletablePromise {
     private val deferred = CompletableDeferred<T>()
 
     override val isCompleted: Boolean
@@ -61,14 +64,22 @@ private class DeferredPromiseImpl<T>(private val validate: (T) -> Unit = {}) : P
         return deferred.getCompleted()
     }
 
-    override fun complete(value: T) {
-        check(!deferred.isCompleted) { "Promise has already been completed" }
+    override fun complete(value: T): Boolean {
         validate(value)
-        check(deferred.complete(value)) { "Promise has already been completed" }
+        return deferred.complete(value)
     }
 
-    override fun fail(cause: Throwable) {
-        check(!deferred.isCompleted) { "Promise has already been completed" }
-        check(deferred.completeExceptionally(cause)) { "Promise has already been completed" }
-    }
+    override fun cancel(cause: CancellationException): Boolean =
+        completeExceptionally(cause)
+
+    override fun completeExceptionally(cause: Exception): Boolean =
+        deferred.completeExceptionally(cause)
 }
+
+/** Internal support for strict model promises that must wake readers with a protocol exception. */
+internal interface ExceptionallyCompletablePromise {
+    fun completeExceptionally(cause: Exception): Boolean
+}
+
+internal fun Promise<*>.completeExceptionally(cause: Exception): Boolean =
+    (this as ExceptionallyCompletablePromise).completeExceptionally(cause)

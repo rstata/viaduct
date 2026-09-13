@@ -4,7 +4,7 @@
 
 Resolver26 is the primary qplan algorithm and eventual implementation blueprint. It is a selective query resolver based on structured concurrency and synchronous symbolic closure.
 
-The exercise assumes every field resolver completes normally, including with respect to `CancellationException`. Recovery after a resolver exception and partial promise claiming is outside the modeled domain.
+Every asynchronous Resolver26 producer terminates the promise it claims or declares when its `Job` is cancelled, including when cancellation prevents the coroutine body from entering. Ordinary `Exception`s, including a task-local `CancellationException` thrown while the coroutine remains active, become modeled outcomes owned by the corresponding field task. `Error`s escape Resolver26 without a cleanup guarantee. The complete protocol is recorded under [Failure And Cancellation Protocol](#failure-and-cancellation-protocol).
 
 ## Root-field references
 
@@ -39,9 +39,35 @@ Shared correctness validation has no resolver-family addressing mode. Every stor
 
 ## Request And Task Ownership
 
-One root `coroutineScope` owns the request. Every orchestration task and field-resolution task is a direct child of that request scope. Successful synchronous return therefore means all request work has reached quiescence.
+One root `coroutineScope` owns the request. Every orchestration task and field-resolution task is a direct child of that request scope. Each asynchronously produced field publication, Query value, and provider binding is also coupled to its producer job's terminal state, so cancellation before coroutine entry cannot strand its promise. Successful synchronous return therefore means all request work has reached quiescence.
 
 Task completion is not a cross-task readiness protocol. Cross-task reads use OER value promises, binding promises, or an OER's bindings-declared signal. The dispatcher changes scheduling only; it does not change resolver, variable, path, or task identity.
+
+### Failure And Cancellation Protocol
+
+Field-resolution failures are result values. An exception attributable to a field-resolution task completes that field's value slot with `ErrorEngineResult`; it does not exceptionally complete the slot and does not fail the request. Synchronous object-fragment input construction throws unexpected exceptions directly to the owning field task's `run` boundary. Query-fragment production runs in a separate coroutine and therefore publishes the model-level structured union `EngineObjectOrErrorData.Success | EngineObjectOrErrorData.Error` through `QueryValuesState`; the owning field task invokes tenant code only after receiving its successful object variant. Provider readers continue to complete their bindings with `VariableBinding.Error`. Genuine request cancellation is not a data variant: it cancels the relevant promise so `await()` throws `CancellationException` according to structured-concurrency rules.
+
+`CancellationException` is not sufficient by itself to identify request cancellation because tenant or framework code may throw one while the current coroutine remains active. Every field-task and asynchronous bridge exception boundary calls `currentCoroutineContext().ensureActive()`. If the coroutine is active, the caught `Exception`—including a task-local `CancellationException`—is an ordinary field failure. If the coroutine has been cancelled, `ensureActive()` throws the coroutine's cancellation and the boundary propagates it according to Kotlin structured-concurrency rules.
+
+The canonical field-task boundary is:
+
+```kotlin
+catch (cause: Exception) {
+    try {
+        currentCoroutineContext().ensureActive()
+    } catch (cancellation: CancellationException) {
+        throw cancellation
+    }
+
+    publishFieldError(cause)
+}
+```
+
+Promises expose `complete(value)` and `cancel(CancellationException)`, both as atomic Boolean-returning transitions. Cancellation is the only public exceptional terminal transition: it exists so a coroutine suspended in `Promise.await()` resumes by throwing Kotlin's cancellation exception. Job-completion handlers are the sole cancellation-cleanup authority: after a producer job reaches terminal cancellation, its handler cancels any outstanding owned promises, including when cancellation prevented the coroutine body from entering. Ordinary exceptions are converted to modeled outcomes inside the coroutine body before the job completes.
+
+Kotlin cancellation remains a `CancellationException` until the owning `Job` has reached its terminal cancelled state. A Kotlin coroutine must not replace that exception with a non-cancellation wrapper from inside its body because Kotlin would treat the wrapper as task failure. The GraphQL `CompletableFuture` bridge translates only after job completion: it completes the Java future exceptionally with `CoroutineCancellationBridgeException`, whose cause is the original Kotlin cancellation but which is not itself a `CancellationException`. Consequently Kotlin cancellation does not accidentally set Java `CompletableFuture.isCancelled`, while an explicit Java `future.cancel()` remains distinguishable and cancels the bridge task in the opposite direction.
+
+Resolver26 does not catch, convert, record, or use `java.lang.Error` to complete promises. An `Error` escapes the Resolver26 task unchanged for a broader fault-tolerance boundary; Resolver26 makes no cleanup or quiescence guarantee after such a failure.
 
 `Resolver26OperationContext` is the stable reference bundle for this scope. It extends the shared `OperationContext`, retains the request coroutine scope and Resolver26 observer, and exposes three independent mutable protocols as properties: `cycleChecker: CycleCheckState`, `bindingDeclarationsState: BindingDeclarationsState`, and `queryValuesState: QueryValuesState`. The context neither implements those protocols nor owns their mutable storage.
 
@@ -69,7 +95,7 @@ Each `FromObjectField` definition launches a provider reader that follows its co
 
 Before reading a provider component inside an OER, its reader awaits that OER's bindings-declared signal and every argument binding needed to make the component key contextually grounded. `ObjectOrchestrationTask.prepare` marks bindings declared immediately after synchronous demand closure declares every binding in the OER's binding domain, before recursively materializing passive children or launching local field work.
 
-`BindingDeclarationsState` owns these per-OER readiness signals. `VariableBindingsState` separately owns actual variable-instance bindings, and `QueryValuesState` owns the declared-then-completed Query input for each resolver occurrence. Declaration and completion are strict one-shot transitions; consumers never manufacture undeclared query values or variable bindings.
+`BindingDeclarationsState` owns these per-OER readiness signals. `VariableBindingsState` separately owns actual variable-instance bindings, and `QueryValuesState` owns the declared-then-completed Query input for each resolver occurrence. Declaration is strict, while each atomic completion attempt returns whether it performed the terminal transition; consumers never manufacture undeclared query values or variable bindings.
 
 Nested provider keys resolve their argument values against the owning resolver occurrence and use the original symbolic key for OER lookup. The separately resolved arguments are a readiness and invocation witness; they do not replace the key.
 
@@ -85,13 +111,13 @@ After passive children have launched, the parent launch validates its materializ
 
 ## Active Installation And Freeze
 
-The orchestrator reserves each closed active selection's original symbolic cell, claims its value promise, registers its writer, and launches one field-resolution task before freezing the OER. The task then awaits argument bindings, derives the invocation `Arguments.Ground`, completes delayed `FromArgument` bindings, and evaluates the selection's merged inclusion condition. Negative activation returns without invoking tenant code; positive activation permits the already-claimed promise to be used. Keeping reservation and writer registration synchronous preserves discoverability before freeze while moving readiness work into the conservatively launched task.
+The orchestrator reserves each closed active selection's original symbolic cell, claims its value promise, registers its writer, and launches one field-resolution task before freezing the OER. A root-field reference occupying a list element likewise claims that element's pre-reserved promise before its task launches. The task then awaits argument bindings, derives the invocation `Arguments.Ground`, completes delayed `FromArgument` bindings, and evaluates the selection's merged inclusion condition. Negative activation returns without invoking tenant code; positive activation permits the already-claimed promise to be used. Keeping reservation and writer registration synchronous preserves discoverability before freeze while moving readiness work into the conservatively launched task.
 
 Resolver26's `CycleCheckState` is explicit operation state. Installation registers each active cell's exact writer through `operation.cycleChecker`, and provider and resolver-input reads record their dependency through the same property. Other resolvers and correctness materialization may supply a separate state or the NOP implementation; `Resolver26OperationContext` does not masquerade as a cycle checker.
 
 `reserveCell` explicitly creates an unclaimed cell placeholder when needed. `Cell.createValuePromise` claims that placeholder for the writer. Strict claiming makes disagreement between readers and writers observable.
 
-After every local active key has claimed its symbolic cell, the orchestrator calls `freeze`. Freezing seals the OER key set and fails any unclaimed value placeholders. Claimed promises may complete or their cells may be negatively activated after the OER is frozen.
+After every local active key has claimed its symbolic cell, the orchestrator calls `freeze`. Freezing seals the OER key set and completes any unclaimed reader placeholder with a strict missing-cell exception. Claimed promises may complete or their cells may be negatively activated after the OER is frozen.
 
 ## Field Resolution
 
@@ -129,7 +155,7 @@ Sometimes-passive active fields can make transitive ancestor demand speculative.
 
 ## Strictness
 
-Binding declaration and completion, cell reservation and claiming, writer ownership, and OER freezing are strict. Repeated or contradictory transitions are protocol defects, not harmless idempotence.
+Binding declaration, cell reservation and claiming, writer ownership, and OER freezing are strict. Promise, cell-activation, cell-value, binding, and Query-value completion operations atomically report whether each caller performed the terminal transition. Producer call sites explicitly check that result where losing would be a protocol defect; cancellation and terminal-cleanup paths intentionally tolerate losing to another terminal transition. Invalid values, missing ownership, undeclared state, and prohibited writes still throw rather than becoming a `false` completion result.
 
 ## Deliberate Scope
 

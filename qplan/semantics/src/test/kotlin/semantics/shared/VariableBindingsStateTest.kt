@@ -1,5 +1,6 @@
 package semantics.shared
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import model.Arguments
@@ -32,7 +33,7 @@ class VariableBindingsStateTest {
             assertFalse(fetched.isCompleted)
             assertFailsWith<UncompletedPromiseException> { state.getBinding(variable) }
 
-            state.completeBinding(variable, null)
+            assertTrue(state.completeBinding(variable, null))
             assertTrue(state.isBound(variable))
             assertEquals(VariableBinding.of(null), state.getBinding(variable))
             assertEquals(VariableBinding.of(null), fetched.await())
@@ -46,10 +47,34 @@ class VariableBindingsStateTest {
 
         state.declareBinding(variable)
         assertFailsWith<IllegalStateException> { state.declareBinding(variable) }
-        state.completeBinding(variable, 1)
-        assertFailsWith<IllegalStateException> { state.completeBinding(variable, 2) }
+        assertTrue(state.completeBinding(variable, 1))
+        assertFalse(state.completeBinding(variable, 2))
+        assertFalse(state.cancelBinding(variable, CancellationException("late")))
         assertEquals(VariableBinding.of(1), state.getBinding(variable))
     }
+
+    @Test
+    fun `declared bindings cancel exactly once`(): Unit =
+        runBlocking {
+            val state = VariableBindingsState()
+            val variable = variableAt(emptyList())
+            val cancellation = CancellationException("binding producer cancelled")
+
+            state.declareBinding(variable)
+            assertTrue(state.cancelBinding(variable, cancellation))
+
+            assertTrue(state.isBound(variable))
+            assertEquals(
+                cancellation.message,
+                assertFailsWith<CancellationException> { state.getBinding(variable) }.message,
+            )
+            assertEquals(
+                cancellation.message,
+                assertFailsWith<CancellationException> { state.fetchBinding(variable) }.message,
+            )
+            assertFalse(state.cancelBinding(variable, cancellation))
+            assertFalse(state.completeBinding(variable, 1))
+        }
 
     @Test
     fun `bindings can be installed immediately exactly once`(): Unit =

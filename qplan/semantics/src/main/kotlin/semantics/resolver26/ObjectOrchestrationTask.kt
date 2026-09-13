@@ -2,7 +2,6 @@ package semantics.resolver26
 
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
-import kotlinx.coroutines.launch
 import model.Arguments
 import model.Assumptions
 import model.InclusionCondition
@@ -64,7 +63,7 @@ internal class ObjectOrchestrationTask(
 
     /**
      * Finishes synchronous orchestration after passive materialization.
-     * Launches a coroutine only when provider reads or active field installation may suspend.
+     * Installs every active cell before freezing the key set; value production remains asynchronous.
      */
     fun launch() {
         require(launched.compareAndSet(false, true)) {
@@ -81,13 +80,9 @@ internal class ObjectOrchestrationTask(
             closed.rootFieldReferenceOccurrences.isNotEmpty() ||
             closed.objectProviderReads.isNotEmpty()
         ) {
-            operation.requestScope.launch {
-                this@ObjectOrchestrationTask.launchBindingsAndResolvers(closed)
-                occurrence.target.freeze()
-            }
-        } else {
-            occurrence.target.freeze()
+            launchBindingsAndResolvers(closed)
         }
+        occurrence.target.freeze()
     }
 
     // Checks that passive values selected by closed demand were installed before task dispatch.

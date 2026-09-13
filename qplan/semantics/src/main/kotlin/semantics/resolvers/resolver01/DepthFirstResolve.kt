@@ -163,7 +163,7 @@ internal class DepthFirstResolve(
         when (val arguments = key.arguments) {
             Arguments.Error -> {
                 val errorResult = ErrorEngineResult.of(EngineErrorData.of())
-                cell.setValue(errorResult)
+                check(cell.setValue(errorResult)) { "Cell value was completed twice" }
                 null
             }
 
@@ -209,7 +209,9 @@ internal class DepthFirstResolve(
                                 RootFieldReferenceResolver(::resolveRootFieldReference),
                         )
                     }
-                cell.setValue(passiveValuesResult.engineResult)
+                check(cell.setValue(passiveValuesResult.engineResult)) {
+                    "Cell value was completed twice"
+                }
                 passiveValuesResult
             }
         }

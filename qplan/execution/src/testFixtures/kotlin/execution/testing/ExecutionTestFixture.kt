@@ -1,7 +1,9 @@
 package execution.testing
 
 import execution.QPlanExecutionStrategy
+import execution.QPlanInstrumentation
 import execution.QPlanWiringFactory
+import graphql.Directives
 import graphql.ExecutionInput
 import graphql.ExecutionResult
 import graphql.GraphQL
@@ -15,9 +17,13 @@ import graphql.parser.Parser
 import graphql.schema.idl.RuntimeWiring
 import graphql.schema.idl.SchemaGenerator
 import graphql.schema.idl.SchemaParser
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
+import kotlin.coroutines.CoroutineContext
 import model.ObjectEngineResult
 import model.SourceSchemaAdapter
 import model.testing.TestWorld
+import semantics.resolver26.resolver26CoroutineContext
 import viaduct.graphql.schema.ViaductSchema
 
 /**
@@ -30,14 +36,33 @@ class ExecutionTestFixture private constructor(
     fun runQuery(
         query: String,
         variables: Map<String, Any?> = emptyMap(),
-    ): ExecutionResult {
+        incrementalSupport: Boolean = false,
+    ): ExecutionResult =
+        try {
+            runQueryAsync(query, variables, incrementalSupport).join()
+        } catch (exception: CompletionException) {
+            throw exception.cause ?: exception
+        }
+
+    fun runQueryAsync(
+        query: String,
+        variables: Map<String, Any?> = emptyMap(),
+        incrementalSupport: Boolean = false,
+    ): CompletableFuture<ExecutionResult> {
         val input =
             ExecutionInput
                 .newExecutionInput()
                 .query(query)
                 .variables(variables)
+        if (incrementalSupport) {
+            GraphQL
+                .unusualConfiguration(input)
+                .incrementalSupport()
+                .enableIncrementalSupport(true)
+                .enableEarlyIncrementalFieldExecution(true)
+        }
         root?.let(input::root)
-        return graphQL.execute(input.build())
+        return graphQL.executeAsync(input.build())
     }
 
     companion object {
@@ -71,6 +96,7 @@ class ExecutionTestFixture private constructor(
         internal fun fromWorld(
             schemaSDL: String,
             world: TestWorld,
+            resolverCoroutineContext: CoroutineContext = resolver26CoroutineContext(),
         ): ExecutionTestFixture {
             val runtimeWiring =
                 RuntimeWiring
@@ -81,11 +107,17 @@ class ExecutionTestFixture private constructor(
                 SchemaGenerator().makeExecutableSchema(
                     SchemaParser().parse(schemaSDL),
                     runtimeWiring,
-                )
+                ).transform { builder -> builder.additionalDirective(Directives.DeferDirective) }
             val graphQL =
                 GraphQL
                     .newGraphQL(graphQLSchema)
-                    .queryExecutionStrategy(QPlanExecutionStrategy(world.assumptions))
+                    .queryExecutionStrategy(
+                        QPlanExecutionStrategy(
+                            world = world.assumptions,
+                            resolverCoroutineContext = resolverCoroutineContext,
+                        ),
+                    )
+                    .instrumentation(QPlanInstrumentation())
                     .build()
             return ExecutionTestFixture(graphQL)
         }
@@ -107,7 +139,7 @@ class ExecutionTestFixture private constructor(
                 SchemaGenerator().makeExecutableSchema(
                     SchemaParser().parse(schemaSDL),
                     runtimeWiring,
-                )
+                ).transform { builder -> builder.additionalDirective(Directives.DeferDirective) }
             return ExecutionTestFixture(
                 graphQL = GraphQL.newGraphQL(graphQLSchema).build(),
                 root = root,

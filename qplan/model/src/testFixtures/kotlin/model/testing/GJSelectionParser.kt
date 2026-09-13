@@ -417,7 +417,13 @@ internal class GJSelectionParser(
         }
 
         override fun decodeCondition(container: DirectivesContainer<*>): InclusionCondition {
-            require(container.directives.all { it.name == "skip" || it.name == "include" }) {
+            require(
+                container.directives.all { directive ->
+                    directive.name == "skip" ||
+                        directive.name == "include" ||
+                        directive.name == "defer"
+                },
+            ) {
                 "Unsupported applied directive"
             }
             return if (

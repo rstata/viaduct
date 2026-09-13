@@ -128,7 +128,7 @@ internal class CoroutineResolve(
         unresolvedKeys.forEach { key ->
             val cell = target.reserveCell(key)
             cell.createValuePromise()
-            cell.setActivated(true)
+            check(cell.setActivated(true)) { "Cell activation was decided twice" }
             cycleChecker.registerWriter(
                 cell = cell,
                 writer = path + key,
@@ -164,7 +164,7 @@ internal class CoroutineResolve(
         when (val arguments = key.arguments) {
             Arguments.Error -> {
                 val errorResult = ErrorEngineResult.of(EngineErrorData.of())
-                valuePromise.complete(errorResult)
+                check(valuePromise.complete(errorResult)) { "Cell value was completed twice" }
             }
 
             is Arguments.Resolved ->
@@ -233,7 +233,9 @@ internal class CoroutineResolve(
                             ancestors = ancestors + occurrence,
                         )
                     }
-                    valuePromise.complete(passiveValuesResult.engineResult)
+                    check(valuePromise.complete(passiveValuesResult.engineResult)) {
+                        "Cell value was completed twice"
+                    }
                 }
         }
     }

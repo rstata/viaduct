@@ -1,6 +1,6 @@
 # Qplan Execution
 
-The execution module is qplan's GraphQL-Java execution harness. It converts a validated query into qplan selections, resolves those selections with Resolver26, and gives the resulting `ObjectEngineResult` tree back to GraphQL Java for ordinary response completion.  This module's main integration surface is a feature-test adapter that runs real Engine API mock executors against qplan.
+The execution module is qplan's GraphQL-Java execution harness. It converts a validated query into qplan selections, starts Resolver26, and gives its live promise-backed `ObjectEngineResult` tree back to GraphQL Java for ordinary or incremental response completion. This module's main integration surface is a feature-test adapter that runs real Engine API mock executors against qplan.
 
 ## Architecture
 
@@ -26,14 +26,15 @@ Per-request execution has the following shape:
 GraphQL Java parsing, validation, and input coercion
   -> QPlanExecutionStrategy
   -> operation decoding into SelectionForest
-  -> Resolver26.resolve under Assumptions
-  -> ObjectEngineResult tree
-  -> QPlanWiringFactory data fetchers and type resolvers
-  -> GraphQL Java output completion
-  -> ExecutionResult
+  -> Resolver26.startResolve under Assumptions and a request-owned coroutine scope
+  -> live ObjectEngineResult tree with a frozen key shape and possibly pending values
+  -> QPlanWiringFactory immediate values or request-owned CompletionStage bridges
+  -> GraphQL Java output completion and @defer payload splitting
+  -> QPlanInstrumentation incremental publisher lifetime cleanup
+  -> ExecutionResult or IncrementalExecutionResult
 ```
 
-`QPlanExecutionStrategy` establishes the request's `Assumptions` context and invokes Resolver26 once for the complete query demand. `QPlanWiringFactory` does not resolve tenant fields; it only projects already-resolved OER cells into the values GraphQL Java expects while preserving GraphQL null, list, abstract-type, and error completion.  (You can think of `Assumptions` as basically the top-level request execution context, containing for example the schema under which an operation is being executed.)
+`QPlanExecutionStrategy` establishes the request's `Assumptions` context and invokes Resolver26 once for the complete query demand, including selections inside deferred fragments. `QPlanWiringFactory` does not resolve tenant fields; it projects completed OER cells immediately and exposes pending promises as request-owned completion stages while preserving GraphQL null, list, abstract-type, and error completion. Each completion bridge is coupled to its coroutine job's terminal state and prefers a promise's recorded terminal failure over the parent-job cancellation that failure initiates, so cancellation before coroutine entry cannot strand a future and deferred errors retain their originating cause. List elements are awaited concurrently, and a terminal non-cancellation element failure takes precedence over sibling cancellations regardless of list order. `QPlanInstrumentation` must be installed with the strategy because graphql-java adds its incremental publisher after the query strategy returns; the instrumentation keeps the Resolver26 request alive until that publisher completes, fails, or is cancelled. (You can think of `Assumptions` as basically the top-level request execution context, containing for example the schema under which an operation is being executed.)
 
 Feature tests may provide a scoped executable schema distinct from the full schema used to build the reasoning world and executor registry. GraphQL Java validates and completes the public operation against the scoped schema, while Resolver26 retains private fields from the full schema for resolver-required selections.
 
@@ -97,6 +98,7 @@ The feature-test adapter currently supports:
 - Partially populated Query executor maps, with missing nullable fields resolving to null and missing non-null fields resolving to an error.
 - Node-valued fields and built-in `Query.node` and `Query.nodes`.
 - `__typename` through canonical qplan lowering and GraphQL-Java completion.
+- GraphQL Java 26 `@defer` delivery for qplan-backed fields, including conditional defer, nested objects, deferred errors, and downstream cancellation. `@stream` remains outside this scope; lists are conservatively bridged as whole values.
 - Distinct scoped executable schemas whose resolver-required selections read private fields from the full schema.
 
 The adapter rejects or does not yet model:

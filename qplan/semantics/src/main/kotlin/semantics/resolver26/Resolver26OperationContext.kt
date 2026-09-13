@@ -7,7 +7,7 @@ import semantics.shared.OperationContext
 /** Request-local state and observation boundary specific to Resolver26. */
 internal class Resolver26OperationContext(
     base: OperationContext,
-    val requestScope: CoroutineScope,
+    requestScope: CoroutineScope,
     override val resolverObserver: Resolver26Observer,
     val cycleChecker: CycleCheckState = CycleCheckState.create(),
     val bindingDeclarationsState: BindingDeclarationsState = BindingDeclarationsState(),
@@ -16,4 +16,7 @@ internal class Resolver26OperationContext(
         world = base.world,
         variableBindingsState = base.variableBindingsState,
         resolverObserver = resolverObserver,
-    )
+    ) {
+    /** The narrow capability for launching permitted request-root Resolver26 tasks. */
+    val rootTaskLauncher = Resolver26RootTaskLauncher(requestScope)
+}

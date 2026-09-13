@@ -1,7 +1,5 @@
 package semantics.resolver26
 
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import model.Arguments
@@ -11,7 +9,6 @@ import model.EngineObjectOrErrorData
 import model.EngineResult
 import model.EngineResultCell
 import model.ErrorEngineResult
-import model.InclusionCondition
 import model.NodeReferenceIdentity
 import model.ObjectEngineResult
 import model.ObjectSelection
@@ -23,13 +20,11 @@ import model.Selection
 import model.SelectionForest
 import model.VariableBinding
 import model.engineObjectDataOf
-import model.guardedBy
 import model.invariants.conformsToResolverOutputSchemaType
 import model.merge
 import model.nodeReferenceIdentityOrNull
 import model.outputValue
 import model.registry.ProviderFragment
-import model.registry.ResolverFragment
 import model.registry.VariableDefinition
 import model.requireQueryTypeDef
 import model.schemaType
@@ -42,33 +37,31 @@ import semantics.shared.fetchGroundedArguments
 import viaduct.engine.api.EngineObjectData
 
 /** Invokes and publishes one already-installed field resolver or root-field reference. */
-internal class FieldResolverTask(
-    private val operationContext: Resolver26OperationContext,
-    private val oerOccurrenceContext: OEROccurrenceContext,
-    private val resolverOccurrenceContext: ResolverOccurrenceContext,
-    private val cell: EngineResultCell,
-    private val fieldTaskScope: CoroutineScope,
-) {
+internal class FieldResolutionLogic(
+    private val fieldResolverTask: FieldResolverTask,
+    private val publicationCell: EngineResultCell,
+) : FieldResolverTaskContext by fieldResolverTask {
     private val world: Assumptions = operationContext.world
 
-    private fun validate() {
-        val selection = resolverOccurrenceContext.selection
+    fun validate() {
+        val occurrenceContext = resolverOccurrenceContext
+        val selection = occurrenceContext.selection
         require(selection.key.field.containingDef == oerOccurrenceContext.target.type) {
             "Resolver selection does not belong to its target occurrence"
         }
 
         val objectFieldPublication =
-            resolverOccurrenceContext.publicationPath.lastOrNull() is ObjectEngineResult.ObjectKey
+            occurrenceContext.publicationPath.lastOrNull() is ObjectEngineResult.ObjectKey
         if (objectFieldPublication) {
-            require(oerOccurrenceContext.target.getCell(selection.key) === cell) {
+            require(oerOccurrenceContext.target.getCell(selection.key) === publicationCell) {
                 "Resolver cell does not belong to its target occurrence and selection"
             }
         }
 
-        when (resolverOccurrenceContext) {
+        when (occurrenceContext) {
             is FieldResolverOccurrenceContext -> {
-                val resolver = resolverOccurrenceContext.resolver
-                val resolverOccurrenceId = resolverOccurrenceContext.resolverOccurrenceId
+                val resolver = occurrenceContext.resolver
+                val resolverOccurrenceId = occurrenceContext.resolverOccurrenceId
                 require(resolver.field == selection.key.field) {
                     "Resolver field ${resolver.field.name} does not match ${selection.key.field.name}"
                 }
@@ -83,7 +76,7 @@ internal class FieldResolverTask(
                 }
             }
             is RootFieldReferenceOccurrence -> {
-                require(resolverOccurrenceContext.reference.targetField in world.resolverRegistry) {
+                require(occurrenceContext.reference.targetField in world.resolverRegistry) {
                     "Root-field-reference target has no resolver"
                 }
             }
@@ -91,23 +84,8 @@ internal class FieldResolverTask(
         }
     }
 
-    suspend fun run() {
-        try {
-            validate()
-            publishResult()
-        } catch (cause: Exception) {
-            try {
-                currentCoroutineContext().ensureActive()
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            }
-            publishFieldError(cause)
-        }
-    }
-
-    private fun publishFieldError(cause: Exception) {
-        val fieldResolverContext = resolverOccurrenceContext as? FieldResolverOccurrenceContext
-        fieldResolverContext?.variableDefinitions?.forEach { definition ->
+    fun publishFieldError(cause: Exception) {
+        fieldResolverOccurrenceContext?.variableDefinitions?.forEach { definition ->
             if (
                 definition.definition == VariableDefinition.FromProvider ||
                 definition.definition is VariableDefinition.FromArgument
@@ -118,33 +96,34 @@ internal class FieldResolverTask(
                 )
             }
         }
-        cell.setActivated(true)
-        cell.getValue().complete(ErrorEngineResult.of(EngineErrorData.of(cause)))
+        publicationCell.setActivated(true)
+        publicationCell.getValue().complete(ErrorEngineResult.of(EngineErrorData.of(cause)))
     }
 
-    private suspend fun publishResult() {
+    suspend fun publishResult() {
         context(operationContext, world, operationContext.cycleChecker) {
-            val selection = resolverOccurrenceContext.selection
-            val constructionDemand = resolverOccurrenceContext.publicationConstructionDemand
+            val occurrenceContext = resolverOccurrenceContext
+            val selection = occurrenceContext.selection
+            val constructionDemand = occurrenceContext.publicationConstructionDemand
             val invocationDemand: SelectionForest =
-                when (resolverOccurrenceContext) {
-                    is PassiveValueOccurrence -> resolverOccurrenceContext.invocationDemand
+                when (occurrenceContext) {
+                    is PassiveValueOccurrence -> occurrenceContext.invocationDemand
                     else -> constructionDemand.successorDemand()
                 }
 
-            val activated = activateResolverOccurrence(resolverOccurrenceContext)
+            val activated = activateResolverOccurrence()
             if (!activated) return
 
             var fieldValue: ResolverOutputData? =
-                when (resolverOccurrenceContext) {
+                when (occurrenceContext) {
                     is FieldResolverOccurrenceContext ->
                         runFieldResolver(
-                            fieldResolverContext = resolverOccurrenceContext,
+                            fieldResolverContext = occurrenceContext,
                             selection = selection,
                             invocationDemand = invocationDemand,
                         )
-                    is RootFieldReferenceOccurrence -> resolverOccurrenceContext.reference
-                    is PassiveValueOccurrence -> resolverOccurrenceContext.value
+                    is RootFieldReferenceOccurrence -> occurrenceContext.reference
+                    is PassiveValueOccurrence -> occurrenceContext.value
                 }
 
             var authoritativeNodeIdentity: NodeReferenceIdentity? = null
@@ -154,7 +133,7 @@ internal class FieldResolverTask(
                     authoritativeNodeIdentity ?: reference.nodeReferenceIdentityOrNull()
                 require(
                     reference.conformsToResolverOutputSchemaType(
-                        resolverOccurrenceContext.publicationExpectedType,
+                        occurrenceContext.publicationExpectedType,
                     ),
                 ) {
                     "Root-field-reference target ${reference.type.name} does not conform to " +
@@ -174,7 +153,7 @@ internal class FieldResolverTask(
                 operationContext.resolverObserver.onRootFieldReferenceInvocation(
                     RootFieldReferenceInvocationObservation(
                         publicationRoot = oerOccurrenceContext.root,
-                        publicationPath = resolverOccurrenceContext.publicationPath,
+                        publicationPath = occurrenceContext.publicationPath,
                         reference = reference,
                         invocationRoot = invocation.invocationRoot,
                         invocationPath = invocation.invocationPath,
@@ -193,14 +172,14 @@ internal class FieldResolverTask(
             val passiveValue: EngineResult? =
                 fieldValue.resolvePassiveValues(
                     root = oerOccurrenceContext.root,
-                    expectedType = resolverOccurrenceContext.publicationExpectedType,
-                    path = resolverOccurrenceContext.publicationPath,
+                    expectedType = occurrenceContext.publicationExpectedType,
+                    path = occurrenceContext.publicationPath,
                     invocationDemand = invocationDemand,
                     constructionDemand = constructionDemand,
                     parent = oerOccurrenceContext,
                 )
 
-            cell.getValue().complete(passiveValue)
+            publicationCell.getValue().complete(passiveValue)
         }
     }
 
@@ -221,14 +200,13 @@ internal class FieldResolverTask(
         return engineObjectDataOf(identity.type, fields)
     }
 
-    private suspend fun activateResolverOccurrence(
-        context: ResolverOccurrenceContext,
-    ): Boolean {
+    private suspend fun activateResolverOccurrence(): Boolean {
+        val context = resolverOccurrenceContext
         val publicationCellNeedsActivation =
             context.publicationPath.lastOrNull() is ObjectEngineResult.ObjectKey
         if (!publicationCellNeedsActivation) return true
 
-        val fieldResolverContext = context as? FieldResolverOccurrenceContext
+        val fieldResolverContext = fieldResolverOccurrenceContext
         val fromArgumentVariableIds =
             fieldResolverContext
                 ?.variableDefinitions
@@ -261,7 +239,7 @@ internal class FieldResolverTask(
                             ?: error("Inclusion-condition variable must contain a Boolean")
                 }
             }
-        check(cell.setActivated(activated)) {
+        check(publicationCell.setActivated(activated)) {
             "Resolver26 field-task cell activation was already decided"
         }
         return activated
@@ -389,41 +367,8 @@ internal class FieldResolverTask(
             )
         declareRootFieldInvocationBindings(fieldResolverContext, reference.arguments)
         operationContext.queryValuesState.declare(resolverOccurrenceId)
-        operationContext.queryValuesState
-            .launchProducer(
-                scope = fieldTaskScope,
-                resolverOccurrenceId = resolverOccurrenceId,
-            ) {
-                try {
-                    context(operationContext) {
-                        fieldResolverContext.fragments.queryFragment.resolveQueryFragment(
-                            coordinate = invocationPath,
-                            inclusionCondition = InclusionCondition.Always,
-                        )
-                    }
-                } catch (cause: Exception) {
-                    currentCoroutineContext().ensureActive()
-                    operationContext.completeQueryPathBindingsWithError(fieldResolverContext)
-                    throw cause
-                }
-            }.invokeOnCompletion { cause ->
-                if (cause is CancellationException) {
-                    cancelQueryPathBindings(fieldResolverContext, cause)
-                }
-            }
+        fieldResolverTask.launchQueryFragmentProducer(fieldResolverContext)
         return fieldResolverContext
-    }
-
-    private fun cancelQueryPathBindings(
-        fieldResolverContext: FieldResolverOccurrenceContext,
-        cause: CancellationException,
-    ) {
-        fieldResolverContext.fragments.queryFragment.pathVariableDefinitions.forEach { definition ->
-            operationContext.variableBindingsState.cancelBinding(
-                requireNotNull(definition.variable.instanceId),
-                cause,
-            )
-        }
     }
 
     private fun declareRootFieldInvocationBindings(
@@ -560,60 +505,5 @@ internal class FieldResolverTask(
                 bindingFor(groundedArguments, definition),
             )
         }
-    }
-}
-
-context(operation: Resolver26OperationContext)
-internal suspend fun ResolverFragment.resolveQueryFragment(
-    coordinate: List<PathComponent>,
-    inclusionCondition: InclusionCondition,
-): EngineObjectData.Sync {
-    if (constructionSelections.isEmpty()) {
-        return engineObjectDataOf(operation.schema.requireQueryTypeDef())
-    }
-
-    val symbolicSelections = materializeSelections.guardedBy(inclusionCondition)
-    val providerDemand =
-        constructionSelections.providerDemand(
-            definitions = pathVariableDefinitions,
-            inclusionCondition = inclusionCondition,
-        )
-    val source = operation.resolverRegistry.createRootQueryInput()
-    val queryResult =
-        ObjectEngineResult.of(
-            type = source.schemaType,
-            mutable = true,
-        )
-    val orchestration =
-        ObjectOrchestrationTask(
-            operation = operation,
-            occurrence =
-                OEROccurrenceContext(
-                    root = queryResult,
-                    path = emptyList(),
-                    target = queryResult,
-                ),
-            source = source,
-            initialDemand = symbolicSelections.constructionSelections() + providerDemand,
-        )
-    orchestration.prepare()
-    operation.resolverObserver.onQueryFragmentResult(resolverOccurrenceId, queryResult)
-    orchestration.launch()
-    queryResult.completeProviderBindings(
-        reads =
-            pathVariableDefinitions.map { definition ->
-                ProviderDefinitionRead(
-                    definition = definition,
-                    readerPath = coordinate,
-                    inclusionCondition = inclusionCondition,
-                )
-            },
-    )
-    return context(operation.cycleChecker) {
-        queryResult.materializeResolverInput(
-            selections = symbolicSelections,
-            reader = coordinate,
-            resultPath = emptyList(),
-        )
     }
 }

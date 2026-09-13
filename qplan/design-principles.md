@@ -84,6 +84,8 @@ Substitution precedes exact-key grouping in Resolver01 through Resolver23. Resol
 
 One request-root scope owns all request coroutines. Successful synchronous return means request quiescence, and failure cancels sibling work through structured ownership.
 
+Resolution code MUST treat the request scope as a root-task capability, not as a convenient general-purpose coroutine scope. Only orchestration-task roots and field-resolution-task roots may launch directly on it. Object orchestration MUST retain its own conditionally launched request-root coroutine whenever an OER has active work, while an OER with no active work freezes synchronously without launching one. This orchestration root is an architectural placeholder for future asynchronous orchestration, not an operational requirement of the current algorithm: today its body performs only non-suspending installation and freeze work during undispatched entry. Query-fragment producers, provider readers, binding producers, materializers, and every other auxiliary coroutine MUST be children of the nearest owning orchestration or field-resolution task. Introducing another request-root task kind requires an explicit design change rather than a direct request-scope launch.
+
 Cross-task readiness travels through named promises or value-bearing deferreds, not through another task's call stack or `Job` completion. Independent object and list occurrences should not require a global barrier.
 
 ## Use Earlier Resolvers To Remove Accidental Complexity

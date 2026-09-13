@@ -15,7 +15,12 @@ import model.schemaType
 import viaduct.engine.api.EngineObjectData
 import semantics.shared.OperationContext
 
-/** Installs and launches the work associated with one object-result occurrence. */
+/**
+ * Installs and launches the work associated with one object-result occurrence.
+ *
+ * An occurrence with active work retains a request-root coroutine as an architectural placeholder
+ * for future asynchronous orchestration. The current orchestration body does not suspend.
+ */
 internal class ObjectOrchestrationTask(
     internal val operation: Resolver26OperationContext,
     internal val occurrence: OEROccurrenceContext,
@@ -62,8 +67,9 @@ internal class ObjectOrchestrationTask(
     }
 
     /**
-     * Finishes synchronous orchestration after passive materialization.
-     * Installs every active cell before freezing the key set; value production remains asynchronous.
+     * Creates the orchestration root after passive materialization when this occurrence has active
+     * work. Its current body synchronously installs every active cell and freezes the key set; the
+     * coroutine boundary is retained for future asynchronous orchestration rather than present need.
      */
     fun launch() {
         require(launched.compareAndSet(false, true)) {
@@ -78,11 +84,15 @@ internal class ObjectOrchestrationTask(
         if (
             closed.fieldResolverOccurrenceContexts.isNotEmpty() ||
             closed.rootFieldReferenceOccurrences.isNotEmpty() ||
-            closed.objectProviderReads.isNotEmpty()
+            closed.objectProviderReadsByResolverOccurrence.values.any { it.isNotEmpty() }
         ) {
-            launchBindingsAndResolvers(closed)
+            operation.rootTaskLauncher.launchObjectOrchestrationTask {
+                FieldResolverTask.launchAll(this@ObjectOrchestrationTask, closed)
+                occurrence.target.freeze()
+            }
+        } else {
+            occurrence.target.freeze()
         }
-        occurrence.target.freeze()
     }
 
     // Checks that passive values selected by closed demand were installed before task dispatch.
@@ -167,7 +177,7 @@ private fun declareBindings(closed: CloseInputDemandResult) {
             }
         }
     }
-    closed.objectProviderReads.forEach { read ->
+    closed.objectProviderReadsByResolverOccurrence.values.flatten().forEach { read ->
         operation.variableBindingsState.declareBinding(
             requireNotNull(read.definition.variable.instanceId),
         )

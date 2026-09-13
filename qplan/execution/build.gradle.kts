@@ -8,6 +8,7 @@ dependencies {
     implementation(project(":semantics"))
     implementation(testFixtures(project(":model")))
     implementation("com.graphql-java:graphql-java:26.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.8.1")
 
     testFixturesImplementation(project(":model"))
     testFixturesImplementation(testFixtures(project(":model")))

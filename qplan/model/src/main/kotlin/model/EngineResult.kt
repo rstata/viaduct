@@ -1,5 +1,6 @@
 package model
 
+import kotlinx.coroutines.CancellationException
 import viaduct.graphql.schema.ViaductSchema
 
 import java.util.IdentityHashMap
@@ -62,8 +63,8 @@ internal fun List<PathComponent>?.toSelectionPath():
  * activation or either slot may be completed after publication.
  */
 sealed interface EngineResultCell {
-    /** Completes this cell's activation decision exactly once. */
-    fun setActivated(activated: Boolean)
+    /** Atomically completes this cell's activation decision and reports whether this call won. */
+    fun setActivated(activated: Boolean): Boolean
 
     /** Suspends until activation is decided and throws when this cell is not activated. */
     suspend fun awaitActivated()
@@ -83,9 +84,13 @@ sealed interface EngineResultCell {
      */
     fun reserveValue(): Promise<EngineResult?>
 
-    fun setValue(value: EngineResult?)
+    /** Claims and atomically completes the value slot, reporting whether completion succeeded. */
+    fun setValue(value: EngineResult?): Boolean
 
     fun createValuePromise(): Promise<EngineResult?>
+
+    /** Positively activates and atomically cancels the claimed value, reporting whether this call won. */
+    fun cancelValue(cause: CancellationException): Boolean
 
     /** @throws IllegalStateException when this cell has no access-result promise */
     fun getAccessResult(): Promise<EngineResult>
@@ -705,10 +710,9 @@ private class CellImpl(
             cell = this,
         )
 
-    override fun setActivated(activated: Boolean) {
+    override fun setActivated(activated: Boolean): Boolean {
         checkMutable()
-        synchronized(activationLock) {
-            check(!activation.isCompleted) { "Cell activation has already been decided" }
+        return synchronized(activationLock) {
             activation.complete(activated)
         }
     }
@@ -732,14 +736,25 @@ private class CellImpl(
 
     override fun reserveValue(): Promise<EngineResult?> = valueStore.reserve()
 
-    override fun setValue(value: EngineResult?) {
+    override fun setValue(value: EngineResult?): Boolean {
         checkMayWrite()
         validateValue(value)
         activateForWrite()
-        valueStore.claimAndComplete(value)
+        return valueStore.claimAndComplete(value)
     }
 
     override fun createValuePromise(): Promise<EngineResult?> = valueStore.claim()
+
+    override fun cancelValue(cause: CancellationException): Boolean {
+        checkMutable()
+        val mayCancel =
+            synchronized(activationLock) {
+                activation.complete(true)
+                activation.get()
+            }
+        if (!mayCancel) return false
+        return valueStore.cancelClaimed(cause)
+    }
 
     override fun getAccessResult(): Promise<EngineResult> =
         checkNotNull(accessResultStore.readOrNull(Unit)) {
@@ -758,11 +773,11 @@ private class CellImpl(
         return accessResultStore.create(Unit, this, ::validateAccessResult)
     }
 
-    inline fun freezeValue(cause: () -> Throwable) {
+    inline fun freezeValue(cause: () -> Exception) {
         if (mutable) {
             valueStore.freeze(cause)?.let { failure ->
                 synchronized(activationLock) {
-                    if (!activation.isCompleted) activation.fail(failure)
+                    activation.completeExceptionally(failure)
                 }
             }
         }
@@ -796,7 +811,7 @@ private class CellImpl(
     private fun activateForWrite() {
         checkMutable()
         synchronized(activationLock) {
-            if (!activation.isCompleted) activation.complete(true)
+            activation.complete(true)
             check(activation.get()) { "Cell was not activated" }
         }
     }
@@ -852,11 +867,18 @@ private class CellValueStore(
             }
         }
 
-    fun claimAndComplete(value: EngineResult?) {
-        claim().complete(value)
+    fun claimAndComplete(value: EngineResult?): Boolean = claim().complete(value)
+
+    fun cancelClaimed(cause: CancellationException): Boolean {
+        val claimedPromise =
+            synchronized(lock) {
+                check(claimed) { "Cell value has no writer" }
+                checkNotNull(promise) { "Cell has no value promise" }
+            }
+        return claimedPromise.cancel(cause)
     }
 
-    inline fun freeze(cause: () -> Throwable): Throwable? {
+    inline fun freeze(cause: () -> Exception): Exception? {
         val unclaimed =
             synchronized(lock) {
                 check(mutable) { "Cell is immutable" }
@@ -865,7 +887,9 @@ private class CellValueStore(
                 promise?.takeUnless { claimed }
             }
         return unclaimed?.let { promise ->
-            cause().also(promise::failWithoutActivation)
+            cause().also { failure ->
+                check(promise.completeExceptionallyWithoutActivation(failure))
+            }
         }
     }
 }
@@ -977,7 +1001,7 @@ private class ObjectCellStore(
                         }
                     }
             }
-        if (!installed) cell.setValue(value)
+        if (!installed) check(cell.setValue(value))
         return cell
     }
 
@@ -1175,7 +1199,7 @@ private fun unionAccessResult(
 private class ActivationAwarePromise<T>(
     private val cell: EngineResultCell,
     private val delegate: Promise<T>,
-) : Promise<T> {
+) : Promise<T>, ExceptionallyCompletablePromise {
     override val isCompleted: Boolean
         get() = delegate.isCompleted
 
@@ -1189,19 +1213,23 @@ private class ActivationAwarePromise<T>(
         return delegate.get()
     }
 
-    override fun complete(value: T) {
+    override fun complete(value: T): Boolean {
         cell.checkActivated()
-        delegate.complete(value)
+        return delegate.complete(value)
     }
 
-    override fun fail(cause: Throwable) {
+    override fun cancel(cause: CancellationException): Boolean {
         cell.checkActivated()
-        delegate.fail(cause)
+        return delegate.cancel(cause)
     }
 
-    fun failWithoutActivation(cause: Throwable) {
-        delegate.fail(cause)
+    override fun completeExceptionally(cause: Exception): Boolean {
+        cell.checkActivated()
+        return delegate.completeExceptionally(cause)
     }
+
+    fun completeExceptionallyWithoutActivation(cause: Exception): Boolean =
+        delegate.completeExceptionally(cause)
 }
 
 private fun <T> activationAwarePromise(

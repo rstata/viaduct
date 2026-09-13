@@ -1,10 +1,19 @@
 package semantics.resolver26
 
-import kotlinx.coroutines.runBlocking
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import model.Arguments
 import model.EngineErrorData
+import model.EngineResultCell
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
@@ -331,13 +340,19 @@ class RootFieldReferenceResolutionTest {
                 },
             )
 
-        val failure =
-            assertFailsWith<IllegalArgumentException> {
-                resolve(
-                    testWorld.assumptions,
-                    "fragment Result on Query { container { item { value } } }",
-                )
-            }
+        val result =
+            resolve(
+                testWorld.assumptions,
+                "fragment Result on Query { container { item { value } } }",
+            )
+        val error =
+            assertIs<ErrorEngineResult>(
+                result
+                    .getCell(testWorld.schema.contractKey("Query", "container"))
+                    .getValue()
+                    .get(),
+            )
+        val failure = assertIs<IllegalArgumentException>(error.errorData.cause)
 
         assertEquals(0, targetApplications.get())
         assertTrue(failure.message.orEmpty().contains("Container/item"))
@@ -1122,6 +1137,101 @@ class RootFieldReferenceResolutionTest {
     }
 
     @Test
+    fun `task-local cancellation becomes a list-element field error and preserves siblings`() =
+        runBlocking {
+            listOf(1, 4).forEach { workerCount ->
+                Executors.newFixedThreadPool(workerCount).asCoroutineDispatcher().use { dispatcher ->
+                    val successfulReferenceCompleted = CompletableDeferred<Unit>()
+                    val world =
+                        listReferenceFailureWorld(
+                            fatal = false,
+                            successfulReferenceCompleted = successfulReferenceCompleted,
+                        ).assumptions
+                    val requestJob = Job()
+                    val requestScope = CoroutineScope(dispatcher + requestJob)
+
+                    try {
+                        val root =
+                            context(OperationContext(world)) {
+                                startResolve(
+                                    world.fragmentFrom(
+                                        "fragment Result on Query { container { numbers } }",
+                                    ).subselections,
+                                    requestScope,
+                                )
+                            }
+                        val numbers = root.awaitReferenceNumbers(world)
+                        withTimeout(5_000) { successfulReferenceCompleted.await() }
+
+                        assertEquals(1, withTimeout(5_000) { numbers[0].getValue().await() })
+                        val error =
+                            assertIs<ErrorEngineResult>(
+                                withTimeout(5_000) { numbers[1].getValue().await() },
+                            )
+                        assertEquals(
+                            "list reference cancelled",
+                            assertIs<CancellationException>(error.errorData.cause).message,
+                        )
+                        assertEquals(3, withTimeout(5_000) { numbers[2].getValue().await() })
+                        assertTrue(requestJob.isActive, "workerCount=$workerCount")
+                    } finally {
+                        requestJob.cancelAndJoin()
+                    }
+                }
+            }
+        }
+
+    @Test
+    fun `list-element exception becomes an error value and preserves siblings`() =
+        runBlocking {
+            listOf(1, 4).forEach { workerCount ->
+                Executors.newFixedThreadPool(workerCount).asCoroutineDispatcher().use { dispatcher ->
+                    val successfulReferenceCompleted = CompletableDeferred<Unit>()
+                    val world =
+                        listReferenceFailureWorld(
+                            fatal = true,
+                            successfulReferenceCompleted = successfulReferenceCompleted,
+                        ).assumptions
+                    val requestJob = Job()
+                    val requestScope = CoroutineScope(dispatcher + requestJob)
+
+                    try {
+                        val root =
+                            context(OperationContext(world)) {
+                                startResolve(
+                                    world.fragmentFrom(
+                                        "fragment Result on Query { container { numbers } }",
+                                    ).subselections,
+                                    requestScope,
+                                )
+                            }
+                        val numbers = root.awaitReferenceNumbers(world)
+                        withTimeout(5_000) { successfulReferenceCompleted.await() }
+                        assertEquals(1, withTimeout(5_000) { numbers[0].getValue().await() })
+                        val error =
+                            assertIs<ErrorEngineResult>(
+                                withTimeout(5_000) { numbers[1].getValue().await() },
+                            )
+                        assertTrue(
+                            assertIs<IllegalStateException>(error.errorData.cause)
+                                .message
+                                .orEmpty()
+                                .contains(
+                                    "VariablesProvider returned invalid variables. " +
+                                        "Missing keys: ready",
+                                ),
+                            "workerCount=$workerCount",
+                        )
+                        assertEquals(3, withTimeout(5_000) { numbers[2].getValue().await() })
+                        assertTrue(requestJob.isActive, "workerCount=$workerCount")
+                    } finally {
+                        requestJob.cancelAndJoin()
+                    }
+                }
+            }
+        }
+
+    @Test
     fun `static resolver root-field reference overrides a registered consumer resolver`() {
         val testWorld =
             TestWorld.fromSDL(
@@ -1775,6 +1885,96 @@ class RootFieldReferenceResolutionTest {
         return ConditionalPassiveListResolution(result, operation, targetApplications)
     }
 
+    private fun listReferenceFailureWorld(
+        fatal: Boolean,
+        successfulReferenceCompleted: CompletableDeferred<Unit>,
+    ): TestWorld =
+        TestWorld.fromSDL(
+            schemaSDL =
+                """
+                type Query {
+                  container: Container!
+                  number(id: Int!): Int!
+                  dependency: Int!
+                }
+
+                type Container {
+                  numbers: [Int!]!
+                }
+                """.trimIndent(),
+            fieldResolvers = { schema ->
+                val container = schema.requireObjectField("Query", "container")
+                val number = schema.requireObjectField("Query", "number")
+                val dependency = schema.requireObjectField("Query", "dependency")
+                mapOf(
+                    container to
+                        fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                            schema.objectOf("Container") {
+                                "numbers" setTo
+                                    listOf(
+                                        RootFieldReferenceData.of(
+                                            listOf(number),
+                                            mapOf("id" to 1),
+                                        ),
+                                        RootFieldReferenceData.of(
+                                            listOf(number),
+                                            mapOf("id" to 2),
+                                        ),
+                                        3,
+                                    )
+                            }
+                        },
+                    number to
+                        fieldResolverOf(
+                            objectFragment = schema.emptyFragmentOf("Query"),
+                            queryFragment =
+                                schema.fragmentFrom(
+                                    "fragment NumberQuery on Query { " +
+                                        "dependency @include(if: ${'$'}ready) }",
+                                    variableField = number,
+                                ),
+                        ) { _, _, arguments ->
+                            val id = arguments.fieldValues.getValue("id") as Int
+                            if (id == 1) successfulReferenceCompleted.complete(Unit)
+                            id
+                        }.withVariablesProvider(setOf("ready")) { arguments ->
+                            val id = arguments.fieldValues.getValue("id") as Int
+                            if (id == 2) {
+                                successfulReferenceCompleted.await()
+                                if (fatal) {
+                                    emptyMap()
+                                } else {
+                                    throw CancellationException("list reference cancelled")
+                                }
+                            } else {
+                                mapOf("ready" to false)
+                            }
+                        },
+                    dependency to
+                        fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> 0 },
+                )
+            },
+        )
+
+    private suspend fun ObjectEngineResult.awaitReferenceNumbers(
+        world: model.Assumptions,
+    ): ListEngineResult {
+        val container =
+            assertIs<ObjectEngineResult>(
+                withTimeout(5_000) {
+                    getCell(world.schema.contractKey("Query", "container")).getValue().await()
+                },
+            )
+        return assertIs(
+            withTimeout(5_000) {
+                container
+                    .getCell(world.schema.contractKey("Container", "numbers"))
+                    .getValue()
+                    .await()
+            },
+        )
+    }
+
     @Test
     fun `referenced resolver cannot declare an object fragment`() {
         val testWorld =
@@ -1819,13 +2019,26 @@ class RootFieldReferenceResolutionTest {
                 },
             )
 
-        val failure =
-            assertFailsWith<IllegalArgumentException> {
-                resolve(
-                    testWorld.assumptions,
-                    "fragment Result on Query { container { product { value } } }",
-                )
-            }
+        val result =
+            resolve(
+                testWorld.assumptions,
+                "fragment Result on Query { container { product { value } } }",
+            )
+        val container =
+            assertIs<ObjectEngineResult>(
+                result
+                    .getCell(testWorld.schema.contractKey("Query", "container"))
+                    .getValue()
+                    .get(),
+            )
+        val error =
+            assertIs<ErrorEngineResult>(
+                container
+                    .getCell(testWorld.schema.contractKey("Container", "product"))
+                    .getValue()
+                    .get(),
+            )
+        val failure = assertIs<IllegalArgumentException>(error.errorData.cause)
         assertEquals(
             "Root-field-reference target Query/product must not declare an object fragment",
             failure.message,

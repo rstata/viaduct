@@ -53,6 +53,33 @@ private data class PresentCoercedDefaultValueImpl(
  */
 typealias EngineOutputData = Any
 
+/** The structured outcome of asynchronously producing one resolver Query-fragment input. */
+sealed interface EngineObjectOrErrorData {
+    /** A successfully materialized Query-fragment object. */
+    sealed interface Success : EngineObjectOrErrorData {
+        val value: EngineObjectData.Sync
+    }
+
+    /** An error that prevented Query-fragment materialization. */
+    sealed interface Error : EngineObjectOrErrorData {
+        val error: EngineErrorData
+    }
+
+    companion object {
+        fun of(value: EngineObjectData.Sync): Success = SuccessEngineObjectOrErrorDataImpl(value)
+
+        fun of(error: EngineErrorData): Error = ErrorEngineObjectOrErrorDataImpl(error)
+    }
+}
+
+private data class SuccessEngineObjectOrErrorDataImpl(
+    override val value: EngineObjectData.Sync,
+) : EngineObjectOrErrorData.Success
+
+private data class ErrorEngineObjectOrErrorDataImpl(
+    override val error: EngineErrorData,
+) : EngineObjectOrErrorData.Error
+
 /**
  * [EngineOutputData] or [RootFieldReferenceData].
  *

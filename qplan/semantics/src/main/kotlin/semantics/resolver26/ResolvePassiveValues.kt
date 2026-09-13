@@ -1,6 +1,5 @@
 package semantics.resolver26
 
-import kotlinx.coroutines.launch
 import viaduct.graphql.schema.ViaductSchema
 
 import model.EngineErrorData
@@ -110,21 +109,20 @@ private fun launchListElementReference(
                 subselections = constructionDemand,
             ),
         ).merge(parent.target.type).byKey().getValue(consumerKey)
+    publicationCell.createValuePromise()
     operation.cycleChecker.registerWriter(publicationCell, publicationPath)
-    val task =
-        FieldResolverTask(
-            operationContext = operation,
-            oerOccurrenceContext = parent,
-            resolverOccurrenceContext =
-                RootFieldReferenceOccurrence(
-                    selection = selection,
-                    reference = reference,
-                    publicationPath = publicationPath,
-                    publicationExpectedType = expectedType,
-                ),
-            cell = publicationCell,
-        )
-    operation.requestScope.launch { task.run() }
+    launchFieldResolverTask(
+        operationContext = operation,
+        oerOccurrenceContext = parent,
+        resolverOccurrenceContext =
+            RootFieldReferenceOccurrence(
+                selection = selection,
+                reference = reference,
+                publicationPath = publicationPath,
+                publicationExpectedType = expectedType,
+            ),
+        cell = publicationCell,
+    )
 }
 
 // Creates one mutable OER and enters its orchestration lifecycle before descending into children.

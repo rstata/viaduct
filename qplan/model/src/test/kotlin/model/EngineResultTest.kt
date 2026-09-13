@@ -2,6 +2,7 @@ package model
 
 import viaduct.graphql.schema.ViaductSchema
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import model.testing.TestWorld
@@ -121,8 +122,8 @@ class EngineResultTest {
         val firstPlaceholder = result[0].getValue()
         val firstWriter = result[0].createValuePromise()
         assertSame(firstPlaceholder, firstWriter)
-        firstWriter.complete("first")
-        result[1].setValue("second")
+        assertTrue(firstWriter.complete("first"))
+        assertTrue(result[1].setValue("second"))
 
         assertEquals(listOf("first", "second"), result.map { cell -> cell.getValue().get() })
         assertFailsWith<IllegalStateException> { result[0].createValuePromise() }
@@ -189,12 +190,31 @@ class EngineResultTest {
 
         assertTrue(result.isCellSet(key))
         assertSame(firstValue, result.getCell(key).getValue().get())
+        assertFalse(cell.cancelValue(CancellationException("late")))
         assertEquals(setOf(key), result.keys)
 
         assertFailsWith<IllegalStateException> {
             cell.setValue("second")
         }
         assertSame(firstValue, result.getCell(key).getValue().get())
+    }
+
+    @Test
+    fun `cancelling a claimed cell value activates and terminates its promise`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val key = schema.key("Query", "first")
+        val result = ObjectEngineResult.of(schema.requireQueryTypeDef(), mutable = true)
+        val cell = result.reserveCell(key)
+        val promise = cell.createValuePromise()
+        val cancellation = CancellationException("writer cancelled")
+
+        assertTrue(cell.cancelValue(cancellation))
+
+        cell.checkActivated()
+        assertTrue(promise.isCompleted)
+        assertSame(cancellation, assertFailsWith<CancellationException> { promise.get() })
+        assertFalse(cell.cancelValue(cancellation))
+        assertFalse(promise.complete("late"))
     }
 
     @Test
@@ -227,7 +247,7 @@ class EngineResultTest {
 
             assertFalse(activation.isCompleted)
 
-            cell.setActivated(false)
+            assertTrue(cell.setActivated(false))
 
             assertFalse(activation.await())
             assertFailsWith<IllegalStateException> { cell.checkActivated() }
@@ -235,7 +255,7 @@ class EngineResultTest {
             assertFailsWith<IllegalStateException> { promise.complete("excluded") }
             assertFailsWith<IllegalStateException> { promise.await() }
             assertFailsWith<IllegalStateException> { cell.setValue("excluded") }
-            assertFailsWith<IllegalStateException> { cell.setActivated(true) }
+            assertFalse(cell.setActivated(true))
         }
 
     @Test

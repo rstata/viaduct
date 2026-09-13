@@ -78,8 +78,8 @@ internal fun configuredResolver26ThreadCount(): Int {
         )
 }
 
-// Returns the process-scoped fixed dispatcher selected for Resolver26 requests.
-internal fun resolver26CoroutineContext(): CoroutineContext =
+/** Returns the process-scoped fixed dispatcher selected for Resolver26 request scopes. */
+fun resolver26CoroutineContext(): CoroutineContext =
     Resolver26Dispatchers.dispatcher(configuredResolver26ThreadCount())
 
 // Retains one daemon-backed dispatcher for each configured worker count used in this JVM.

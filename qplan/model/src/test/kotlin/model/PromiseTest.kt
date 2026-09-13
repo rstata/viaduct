@@ -1,6 +1,10 @@
 package model
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -11,16 +15,15 @@ import kotlin.test.assertTrue
 
 class PromiseTest {
     @Test
-    fun `completed promise returns its value and rejects completion`() =
+    fun `completed promise returns its value and reports losing completion`() =
         runBlocking {
             val promise = Promise.of("ready")
 
             assertTrue(promise.isCompleted)
             assertEquals("ready", promise.get())
             assertEquals("ready", promise.await())
-            assertFailsWith<IllegalStateException> {
-                promise.complete("again")
-            }
+            assertFalse(promise.complete("again"))
+            assertFalse(promise.cancel(CancellationException("late")))
         }
 
     @Test
@@ -35,28 +38,71 @@ class PromiseTest {
             }
             assertFalse(awaited.isCompleted)
 
-            promise.complete("ready")
+            assertTrue(promise.complete("ready"))
 
             assertTrue(promise.isCompleted)
             assertEquals("ready", awaited.await())
             assertEquals("ready", promise.get())
-            assertFailsWith<IllegalStateException> {
-                promise.complete("again")
-            }
+            assertFalse(promise.complete("again"))
         }
 
     @Test
-    fun `failed promise throws its cause from get and await`() =
+    fun `cancelled promise throws its cause from get and await`() =
         runBlocking {
             val promise = Promise.ofDeferred<String>()
-            val failure = NoSuchElementException("missing")
+            val cancellation = CancellationException("cancelled")
 
-            promise.fail(failure)
+            assertTrue(promise.cancel(cancellation))
 
-            assertFailsWith<NoSuchElementException> { promise.get() }
-            assertFailsWith<NoSuchElementException> { promise.await() }
-            assertFailsWith<IllegalStateException> { promise.complete("late") }
-            assertFailsWith<IllegalStateException> { promise.fail(failure) }
+            assertFailsWith<CancellationException> { promise.get() }
+            assertFailsWith<CancellationException> { promise.await() }
+            assertFalse(promise.complete("late"))
+            assertFalse(promise.cancel(cancellation))
+        }
+
+    @Test
+    fun `cancel atomically admits one concurrent caller`() =
+        runBlocking {
+            val promise = Promise.ofDeferred<String>()
+            val start = CompletableDeferred<Unit>()
+            val attempts =
+                List(64) { index ->
+                    async(Dispatchers.Default) {
+                        start.await()
+                        promise.cancel(CancellationException("cancellation-$index"))
+                    }
+                }
+
+            start.complete(Unit)
+            val results = attempts.awaitAll()
+
+            assertEquals(1, results.count { it })
+            assertTrue(promise.isCompleted)
+            assertFailsWith<CancellationException> { promise.get() }
+            assertFalse(promise.cancel(CancellationException("late")))
+        }
+
+    @Test
+    fun `complete atomically admits one concurrent caller`() =
+        runBlocking {
+            val promise = Promise.ofDeferred<String>()
+            val start = CompletableDeferred<Unit>()
+            val attempts =
+                List(64) { index ->
+                    async(Dispatchers.Default) {
+                        start.await()
+                        promise.complete("value-$index")
+                    }
+                }
+
+            start.complete(Unit)
+            val results = attempts.awaitAll()
+            val winner = results.indexOf(true)
+
+            assertTrue(winner >= 0)
+            assertEquals(1, results.count { it })
+            assertEquals("value-$winner", promise.get())
+            assertFalse(promise.complete("late"))
         }
 
     @Test
@@ -87,7 +133,9 @@ class PromiseTest {
             promise.get()
         }
 
-        promise.complete("ready")
+        assertTrue(promise.complete("ready"))
         assertEquals("ready", promise.get())
+        assertFalse(promise.complete("late"))
+        assertFailsWith<IllegalArgumentException> { promise.complete(null) }
     }
 }

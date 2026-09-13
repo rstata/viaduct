@@ -16,8 +16,10 @@ internal class BindingDeclarationsState {
     }
 
     fun markBindingsDeclared(target: ObjectEngineResult) {
-        declarationsByObject
-            .computeIfAbsent(target) { Promise.ofDeferred() }
-            .complete(Unit)
+        check(
+            declarationsByObject
+                .computeIfAbsent(target) { Promise.ofDeferred() }
+                .complete(Unit),
+        ) { "Resolver26 bindings were declared twice for one object occurrence" }
     }
 }

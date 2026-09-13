@@ -8,8 +8,29 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotSame
+import kotlin.test.assertSame
 
 class EngineValueDataTest {
+    @Test
+    fun `object-or-error data retains its precise outcome`() {
+        val schema = TestWorld.fromSDL(SCHEMA_SDL).schema
+        val objectValue = engineObjectDataOf(schema.requireQueryTypeDef())
+        val errorValue = EngineErrorData.of()
+
+        assertSame(
+            objectValue,
+            assertIs<EngineObjectOrErrorData.Success>(
+                EngineObjectOrErrorData.of(objectValue),
+            ).value,
+        )
+        assertSame(
+            errorValue,
+            assertIs<EngineObjectOrErrorData.Error>(
+                EngineObjectOrErrorData.of(errorValue),
+            ).error,
+        )
+    }
+
     @Test
     fun `simple casts use production-compatible strings for String ID and enum`() {
         val schema = TestWorld.fromSDL(SCHEMA_SDL).schema

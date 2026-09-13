@@ -67,6 +67,7 @@ class VariablesResolverTest {
             runQuery("{foo(y:1)}").assertJson("{data: {foo: 30}}")
         }
 
+    @Disabled("ALT: Production treats an invalid variables-provider key set as request failure; qplan models the provider exception as an error on the owning field")
     @Test
     fun `variables provider -- returns extra variables`() =
         EngineTestModule("extend type Query { foo: Int!, bar(x:Int!): Int! }") {
@@ -90,6 +91,33 @@ class VariablesResolverTest {
         }
 
     @Test
+    fun `ALTERNATIVE variables provider -- returns extra variables`() =
+        EngineTestModule("extend type Query { foo: Int!, bar(x:Int!): Int! }") {
+            field("Query" to "foo") {
+                resolver {
+                    objectSelections("bar(x:\$varx)") {
+                        variables("varx") { _, _ -> mapOf("varx" to 2, "extra" to 3) }
+                    }
+                    fn { _, obj, _, _, _ -> obj.fetchAs<Int>("bar") * 5 }
+                }
+            }
+            field("Query" to "bar") {
+                resolver {
+                    fn { args, _, _, _, _ -> args.getAs<Int>("x") * 3 }
+                }
+            }
+        }.runQPlanFeatureTest {
+            val result = runQuery("{foo}")
+            assertEquals(null, result.getData<Any?>())
+            assertEquals(listOf("foo"), result.errors.single().path)
+            assertTrue(
+                result.errors.single().message.contains(
+                    "VariablesProvider returned invalid variables. Extra keys: extra",
+                ),
+            )
+        }
+
+    @Test
     fun `variables provider -- returns null value`() =
         EngineTestModule("extend type Query { foo: Int!, bar(x:Int): Int! }") {
             field("Query" to "foo") {
@@ -109,6 +137,7 @@ class VariablesResolverTest {
             runQuery("{foo}").assertJson("{data: {foo:10}}")
         }
 
+    @Disabled("ALT: Production treats an invalid variables-provider key set as request failure; qplan models the provider exception as an error on the owning field")
     @Test
     fun `variables provider -- does not return declared variable value`() =
         EngineTestModule("extend type Query { foo: Int!, bar(x:Int!): Int! }") {
@@ -129,6 +158,33 @@ class VariablesResolverTest {
             assertThrows<IllegalStateException> {
                 runQuery("{foo}")
             }
+        }
+
+    @Test
+    fun `ALTERNATIVE variables provider -- does not return declared variable value`() =
+        EngineTestModule("extend type Query { foo: Int!, bar(x:Int!): Int! }") {
+            field("Query" to "foo") {
+                resolver {
+                    objectSelections("bar(x:\$varx)") {
+                        variables("varx") { _, _ -> emptyMap<String, Any?>() }
+                    }
+                    fn { _, obj, _, _, _ -> obj.fetchAs<Int>("bar") * 5 }
+                }
+            }
+            field("Query" to "bar") {
+                resolver {
+                    fn { args, _, _, _, _ -> args.getAs<Int>("x") * 3 }
+                }
+            }
+        }.runQPlanFeatureTest {
+            val result = runQuery("{foo}")
+            assertEquals(null, result.getData<Any?>())
+            assertEquals(listOf("foo"), result.errors.single().path)
+            assertTrue(
+                result.errors.single().message.contains(
+                    "VariablesProvider returned invalid variables. Missing keys: varx",
+                ),
+            )
         }
 
     @Test

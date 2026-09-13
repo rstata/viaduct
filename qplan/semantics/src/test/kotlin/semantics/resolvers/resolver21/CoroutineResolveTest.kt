@@ -27,6 +27,7 @@ import semantics.shared.OperationContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -318,9 +319,7 @@ private fun assertCompletedAndWriteOnce(result: EngineResult?) {
             result.keys.forEach { key ->
                 val promise = result.getCell(key).getValue()
                 val value = promise.get()
-                assertFailsWith<IllegalStateException> {
-                    promise.complete(value)
-                }
+                assertFalse(promise.complete(value))
                 if (key !is ObjectEngineResult.ParentKey) {
                     assertCompletedAndWriteOnce(value)
                 }

@@ -1,12 +1,9 @@
 package semantics.resolver26
 
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
-import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.runBlocking
+import model.EngineErrorData
 import model.EngineObjectOrErrorData
 import model.ListEngineResult
 import model.ResolverOccurrenceId
@@ -28,19 +25,17 @@ class QueryValuesStateTest {
         runBlocking {
             val fixture = Fixture()
             val state = QueryValuesState()
-            val releaseProducer = CompletableDeferred<Unit>()
 
             state.declare(fixture.occurrence)
-            val producer =
-                state.launchProducer(this, fixture.occurrence) {
-                    releaseProducer.await()
-                    fixture.queryValue
-                }
             val fetched = async { state.fetch(fixture.occurrence) }
             assertFalse(fetched.isCompleted)
 
-            releaseProducer.complete(Unit)
-            producer.join()
+            assertTrue(
+                state.complete(
+                    fixture.occurrence,
+                    EngineObjectOrErrorData.of(fixture.queryValue),
+                ),
+            )
             assertEquals(
                 fixture.queryValue,
                 assertIs<EngineObjectOrErrorData.Success>(fetched.await()).value,
@@ -48,13 +43,19 @@ class QueryValuesStateTest {
         }
 
     @Test
-    fun `Query value declarations are strict and producer launch requires declaration`(): Unit =
+    fun `Query value declarations and transitions require declaration`(): Unit =
         runBlocking {
             val fixture = Fixture()
             val state = QueryValuesState()
 
             assertFailsWith<NoSuchElementException> {
-                state.launchProducer(this, fixture.occurrence) { fixture.queryValue }
+                state.complete(
+                    fixture.occurrence,
+                    EngineObjectOrErrorData.of(fixture.queryValue),
+                )
+            }
+            assertFailsWith<NoSuchElementException> {
+                state.cancel(fixture.occurrence, CancellationException("cancelled"))
             }
             assertFailsWith<NoSuchElementException> {
                 state.fetch(fixture.occurrence)
@@ -65,18 +66,19 @@ class QueryValuesStateTest {
         }
 
     @Test
-    fun `producer exception becomes an explicit error outcome for its owning field task`() {
+    fun `an explicit error outcome is fetched as a value`() {
         val fixture = Fixture()
         val state = QueryValuesState()
         val failure = IllegalStateException("Query producer failed")
         state.declare(fixture.occurrence)
 
         runBlocking {
-            val producer =
-                state.launchProducer(this, fixture.occurrence) {
-                    throw failure
-                }
-            producer.join()
+            assertTrue(
+                state.complete(
+                    fixture.occurrence,
+                    EngineObjectOrErrorData.of(EngineErrorData.of(failure)),
+                ),
+            )
             val fetched =
                 assertIs<EngineObjectOrErrorData.Error>(
                     state.fetch(fixture.occurrence),
@@ -87,29 +89,21 @@ class QueryValuesStateTest {
     }
 
     @Test
-    fun `cancellation before producer entry terminates the declared Query value`(): Unit =
+    fun `cancellation terminates the declared Query value`(): Unit =
         runBlocking {
             val fixture = Fixture()
             val state = QueryValuesState()
-            val requestJob = Job()
-            val requestScope = CoroutineScope(requestJob)
-            var producerStarted = false
             state.declare(fixture.occurrence)
-            requestJob.cancel(CancellationException("request cancelled before dispatch"))
+            val cancellation = CancellationException("request cancelled")
 
-            val producer =
-                state.launchProducer(requestScope, fixture.occurrence) {
-                    producerStarted = true
-                    fixture.queryValue
-                }
-            joinAll(producer)
+            assertTrue(state.cancel(fixture.occurrence, cancellation))
+            assertFalse(state.cancel(fixture.occurrence, cancellation))
             val failure =
                 assertFailsWith<CancellationException> {
                     state.fetch(fixture.occurrence)
                 }
 
-            assertFalse(producerStarted)
-            assertTrue(failure.message.orEmpty().contains("request cancelled before dispatch"))
+            assertEquals(cancellation.message, failure.message)
         }
 
     private class Fixture {

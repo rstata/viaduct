@@ -111,7 +111,7 @@ private fun launchListElementReference(
         ).merge(parent.target.type).byKey().getValue(consumerKey)
     publicationCell.createValuePromise()
     operation.cycleChecker.registerWriter(publicationCell, publicationPath)
-    launchFieldResolverTask(
+    FieldResolverTask.launchForListElement(
         operationContext = operation,
         oerOccurrenceContext = parent,
         resolverOccurrenceContext =
@@ -121,7 +121,7 @@ private fun launchListElementReference(
                 publicationPath = publicationPath,
                 publicationExpectedType = expectedType,
             ),
-        cell = publicationCell,
+        publicationCell = publicationCell,
     )
 }
 
@@ -230,14 +230,17 @@ private fun EngineObjectData.Sync.materializePassiveFields(
                 inclusionCondition !== InclusionCondition.Always
             ) {
                 if (inclusionCondition === InclusionCondition.Never) return@forEach
-                occurrence.installAndLaunchResolver(
-                    PassiveValueOccurrence(
-                        selection = passiveDemandByKey.getValue(key),
-                        value = output,
-                        invocationDemand = childInvocationDemand,
-                        publicationConstructionDemand = childConstructionDemand,
-                        publicationPath = occurrence.coordinate(key),
-                    ),
+                FieldResolverTask.installAndLaunch(
+                    operationContext = operation,
+                    oerOccurrenceContext = occurrence,
+                    resolverOccurrenceContext =
+                        PassiveValueOccurrence(
+                            selection = passiveDemandByKey.getValue(key),
+                            value = output,
+                            invocationDemand = childInvocationDemand,
+                            publicationConstructionDemand = childConstructionDemand,
+                            publicationPath = occurrence.coordinate(key),
+                        ),
                 )
             } else {
                 val value =

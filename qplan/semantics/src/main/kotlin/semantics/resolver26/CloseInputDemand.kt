@@ -108,23 +108,32 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                 demand = mergedDemand,
                 fieldResolverOccurrenceContexts = resolverContexts,
                 rootFieldReferenceOccurrences = referenceOccurrences,
-                objectProviderReads =
-                    expansionAccumulators.flatMap { (objectKey, expansion) ->
-                        if (
-                            objectKey is ObjectEngineResult.GroundKey &&
-                            objectKey.arguments.argumentsContainErrorValue()
-                        ) {
-                            return@flatMap emptyList()
-                        }
-                        expansion.fragments.objectFragment.pathVariableDefinitions.map { definition ->
-                            ProviderDefinitionRead(
-                                definition = definition,
-                                readerPath = occurrence.coordinate(objectKey),
-                                inclusionCondition =
-                                    mergedDemand.byKey().getValue(objectKey).inclusionCondition,
-                            )
-                        }
-                    },
+                objectProviderReadsByResolverOccurrence =
+                    expansionAccumulators.map { (objectKey, expansion) ->
+                        val resolverOccurrenceId =
+                            resolverContexts.getValue(objectKey).resolverOccurrenceId
+                        val reads =
+                            if (
+                                objectKey is ObjectEngineResult.GroundKey &&
+                                objectKey.arguments.argumentsContainErrorValue()
+                            ) {
+                                emptyList()
+                            } else {
+                                expansion.fragments.objectFragment.pathVariableDefinitions.map {
+                                        definition ->
+                                    ProviderDefinitionRead(
+                                        definition = definition,
+                                        readerPath = occurrence.coordinate(objectKey),
+                                        inclusionCondition =
+                                            mergedDemand
+                                                .byKey()
+                                                .getValue(objectKey)
+                                                .inclusionCondition,
+                                    )
+                                }
+                            }
+                        resolverOccurrenceId to reads
+                    }.toMap(),
             )
         }
     }
@@ -252,7 +261,8 @@ internal class CloseInputDemandResult(
         Map<ObjectEngineResult.ObjectKey, FieldResolverOccurrenceContext>,
     val rootFieldReferenceOccurrences:
         Map<ObjectEngineResult.ObjectKey, RootFieldReferenceOccurrence>,
-    val objectProviderReads: List<ProviderDefinitionRead>,
+    val objectProviderReadsByResolverOccurrence:
+        Map<ResolverOccurrenceId, List<ProviderDefinitionRead>>,
 ) {
     var bindingDeclarationStarted: Boolean = false
 }

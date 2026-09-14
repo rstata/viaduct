@@ -1,5 +1,6 @@
 package model
 
+import viaduct.engine.api.CheckerResult
 import viaduct.graphql.schema.ViaductSchema
 
 import model.invariants.conformsToResultSchemaType
@@ -50,7 +51,10 @@ class EngineResultScope internal constructor(
     private val type: ViaductSchema.Object,
 ) {
     private val values = linkedMapOf<ObjectEngineResult.GroundKey, EngineResult?>()
-    private val accessResults = linkedMapOf<ObjectEngineResult.GroundKey, EngineResult>()
+    private val fieldCheckerResults =
+        linkedMapOf<ObjectEngineResult.GroundKey, CheckerResult?>()
+    private val typeCheckerResults =
+        linkedMapOf<ObjectEngineResult.GroundKey, CheckerResult?>()
 
     /** Selects a field coordinate on this scope's object type. */
     fun field(
@@ -74,29 +78,32 @@ class EngineResultScope internal constructor(
         field(this).resolvesTo(value)
     }
 
-    /** Resolves this argumentless field to [value], with [accessResult] determining access. */
+    /** Resolves this argumentless field to [value] with the supplied checker results. */
     fun String.resolvesTo(
         value: Any?,
-        accessResult: EngineResult,
+        fieldCheckerResult: CheckerResult?,
+        typeCheckerResult: CheckerResult? = null,
     ) {
-        field(this).resolvesTo(value, accessResult)
+        field(this).resolvesTo(value, fieldCheckerResult, typeCheckerResult)
     }
 
     /** Resolves this exact field coordinate to [value] with accepted access. */
     infix fun EngineResultFieldReference.resolvesTo(value: Any?) {
-        resolvesTo(value, true)
+        resolvesTo(value, null, null)
     }
 
-    /** Resolves this exact field coordinate to [value], with [accessResult] determining access. */
+    /** Resolves this exact field coordinate to [value] with the supplied checker results. */
     fun EngineResultFieldReference.resolvesTo(
         value: Any?,
-        accessResult: EngineResult,
+        fieldCheckerResult: CheckerResult?,
+        typeCheckerResult: CheckerResult? = null,
     ) {
         require(key !in values) {
             "Duplicate engine-result field ${type.name}/${key.field.name}"
         }
         values[key] = coerceEngineResult(key.field.outputType, value)
-        accessResults[key] = accessResult
+        fieldCheckerResults[key] = fieldCheckerResult
+        typeCheckerResults[key] = typeCheckerResult
     }
 
     /** Constructs a nested object engine result using the same schema. */
@@ -109,7 +116,8 @@ class EngineResultScope internal constructor(
         ObjectEngineResult.of(
             type = type,
             values = values.toMap(),
-            accessResults = accessResults.toMap(),
+            fieldCheckerResults = fieldCheckerResults.toMap(),
+            typeCheckerResults = typeCheckerResults.toMap(),
         )
 }
 

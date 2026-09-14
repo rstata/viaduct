@@ -8,6 +8,7 @@ import model.Assumptions
 import model.EngineErrorData
 import model.EngineOutputData
 import model.EngineResult
+import model.EngineResultCell
 import model.EngineInputData
 import model.EngineInputListData
 import model.EngineInputObjectData
@@ -118,14 +119,14 @@ private fun EngineResult.conformsToSchema(
                             ancestors + StructuralAncestor(result, key.field),
                         ) ?: true
                     } &&
-                    cell.getAccessResult().get().conformsToAccessResult()
+                    cell.hasCompletedCheckerResults()
             }
         is ListEngineResult ->
             result.all { cell ->
                 val value = cell.getValue().get()
                 value.conformsToResultSchemaType(result.typeExpr) &&
                     (value?.conformsToSchema(ancestors) ?: true) &&
-                    cell.getAccessResult().get().conformsToAccessResult()
+                    cell.hasCompletedCheckerResults()
             }
         is ViaductSchema.EnumValue ->
             result.containingDef.value(result.name) == result
@@ -327,5 +328,8 @@ private fun ViaductSchema.TypeExpr<*>.hasScalarType(expectedName: String): Boole
     !isList &&
         (baseTypeDef as? ViaductSchema.Scalar)?.name == expectedName
 
-internal fun EngineResult.conformsToAccessResult(): Boolean =
-    this is Boolean || this is ErrorEngineResult
+private fun EngineResultCell.hasCompletedCheckerResults(): Boolean {
+    getFieldCheckerResult().get()
+    getTypeCheckerResult().get()
+    return true
+}

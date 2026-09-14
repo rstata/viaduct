@@ -66,7 +66,7 @@ Resolver object and Query fragments determine input requirements. Resolver argum
 
 ## Progress Is Monotonic And Strict
 
-Mutable semantic state is limited to documented monotonic stores. An OER or LER cell value, a cell's access result, and a request-local variable binding move from absent to one immediate or deferred promise; a deferred promise completes once.
+Mutable semantic state is limited to documented monotonic stores. An OER or LER cell value, each of a cell's field- and type-checker results, and a request-local variable binding move from absent to one immediate or deferred promise; a deferred promise completes once.
 
 A parent may publish a stable child OER before the child is complete. Later work fills absent child cells without replacing the parent or rebuilding the subtree.
 

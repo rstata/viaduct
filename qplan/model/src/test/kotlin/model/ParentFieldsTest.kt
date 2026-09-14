@@ -45,15 +45,18 @@ class ParentFieldsTest {
             val child = ObjectEngineResult.of(linkType, mutable = true)
             child.reserveCell(parentKey).also { cell ->
                 cell.setValue(if (wrongParent) child else root)
-                cell.setAccessResult(true)
+                cell.setFieldCheckerResult(null)
+                cell.setTypeCheckerResult(null)
             }
             root.reserveCell(childKey).also { cell ->
                 cell.setValue(child)
-                cell.setAccessResult(true)
+                cell.setFieldCheckerResult(null)
+                cell.setTypeCheckerResult(null)
             }
             query.reserveCell(rootKey).also { cell ->
                 cell.setValue(root)
-                cell.setAccessResult(true)
+                cell.setFieldCheckerResult(null)
+                cell.setTypeCheckerResult(null)
             }
             return query
         }
@@ -158,7 +161,8 @@ class ParentFieldsTest {
             )
         parent.reserveCell(alternateProducer).also { cell ->
             cell.setValue(child)
-            cell.setAccessResult(true)
+            cell.setFieldCheckerResult(null)
+            cell.setTypeCheckerResult(null)
         }
 
         assertFalse(context(assumptions) { parent.conformsToSchema() })
@@ -178,7 +182,8 @@ class ParentFieldsTest {
                 values = mapOf(parentKey to (parentOverride ?: parent)),
             )
         parent.reserveCell(childKey).setValue(child)
-        parent.reserveCell(childKey).setAccessResult(true)
+        parent.reserveCell(childKey).setFieldCheckerResult(null)
+        parent.reserveCell(childKey).setTypeCheckerResult(null)
         return parent
     }
 

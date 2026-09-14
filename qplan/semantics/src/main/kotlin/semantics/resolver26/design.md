@@ -136,7 +136,7 @@ Query fragments reuse the defining resolver occurrence's variable bindings, reta
 
 The owning selection condition guards ordinary Query-fragment construction demand and provider reads, while explicit provider-path demand keeps the values needed to evaluate nested Query-fragment conditions available. Query-fragment materialization removes false source occurrences before response-key collection. Thus a conservatively launched Query task may produce an empty resolver-visible object and physical inactive cells without invoking the suppressed dependency resolvers.
 
-Argument errors complete the value slot with `ErrorEngineResult` without invoking the resolver. Successful values complete the value slot once. Resolver26 does not publish access-result slots: access-check execution and its validation are future work, and the `true` access results written by some earlier resolver experiments are not part of the current resolver contract.
+Argument errors complete the value slot with `ErrorEngineResult` without invoking the resolver. Successful values complete the value slot once. Resolver26 does not yet publish field- or type-checker-result slots: access-check resolution and execution are future work, and checker slots are not part of the current resolver contract.
 
 Resolver observations are semantically passive evidence. Resolver26 records Query-fragment results and application facts for validation, but replacing a normally returning, non-mutating observer with a NOP preserves semantic resolution results. Because callbacks are synchronous, an observer that throws or blocks can still change failure or latency and violates the intended instrumentation contract.
 

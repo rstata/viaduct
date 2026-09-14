@@ -1,6 +1,7 @@
 package model
 
 import kotlinx.coroutines.CancellationException
+import viaduct.engine.api.CheckerResult
 import viaduct.graphql.schema.ViaductSchema
 
 import java.util.IdentityHashMap
@@ -53,14 +54,14 @@ internal fun List<PathComponent>?.toSelectionPath():
 
 /**
  * One result occurrence with one write-once activation decision and independent write-once value
- * and access-result slots.
+ * and field- and type-checker-result slots.
  *
- * Pending cells permit either slot's promise to be reserved, but those promises cannot be read or
- * completed until the cell is activated. A negative activation decision permanently prohibits both
+ * Pending cells permit any slot's promise to be reserved, but those promises cannot be read or
+ * completed until the cell is activated. A negative activation decision permanently prohibits all
  * slots. Direct slot setters activate a pending cell before completing it. The value slot contains
- * [EngineResult] or GraphQL null. The access-result slot contains a Boolean result or
- * [ErrorEngineResult]. Cells use reference equality and stable identity hashing because their
- * activation or either slot may be completed after publication.
+ * [EngineResult] or GraphQL null. Each checker-result slot contains [CheckerResult] or null, where
+ * null means that no checker applies to that slot. Cells use reference equality and stable identity
+ * hashing because their activation or any slot may be completed after publication.
  */
 sealed interface EngineResultCell {
     /** Atomically completes this cell's activation decision and reports whether this call won. */
@@ -92,12 +93,25 @@ sealed interface EngineResultCell {
     /** Positively activates and atomically cancels the claimed value, reporting whether this call won. */
     fun cancelValue(cause: CancellationException): Boolean
 
-    /** @throws IllegalStateException when this cell has no access-result promise */
-    fun getAccessResult(): Promise<EngineResult>
+    /** @throws IllegalStateException when this cell has no field-checker-result promise */
+    fun getFieldCheckerResult(): Promise<CheckerResult?>
 
-    fun setAccessResult(result: EngineResult)
+    fun setFieldCheckerResult(result: CheckerResult?)
 
-    fun createAccessResultPromise(): Promise<EngineResult>
+    fun createFieldCheckerResultPromise(): Promise<CheckerResult?>
+
+    /** Positively activates and atomically cancels the field-checker result. */
+    fun cancelFieldCheckerResult(cause: CancellationException): Boolean
+
+    /** @throws IllegalStateException when this cell has no type-checker-result promise */
+    fun getTypeCheckerResult(): Promise<CheckerResult?>
+
+    fun setTypeCheckerResult(result: CheckerResult?)
+
+    fun createTypeCheckerResultPromise(): Promise<CheckerResult?>
+
+    /** Positively activates and atomically cancels the type-checker result. */
+    fun cancelTypeCheckerResult(cause: CancellationException): Boolean
 }
 
 /**
@@ -332,21 +346,23 @@ sealed interface ObjectEngineResult {
          *
          * Every initially present cell value satisfies its field's schema type. When [mutable]
          * is false, cell creation throws. When it is true, each absent exact cell may be
-         * installed once and each slot of that cell may be installed once.
+         * installed once and each slot of that cell may be installed once. Cells supplied in
+         * [values] default both checker results to completed nulls, meaning no checker applies.
          */
         fun of(
             type: ViaductSchema.Object,
             values: Map<ObjectKey, EngineResult?> = emptyMap(),
-            accessResults: Map<ObjectKey, EngineResult> =
-                values.keys.associateWith { true },
+            fieldCheckerResults: Map<ObjectKey, CheckerResult?> =
+                values.keys.associateWith { null },
+            typeCheckerResults: Map<ObjectKey, CheckerResult?> =
+                values.keys.associateWith { null },
             mutable: Boolean = false,
         ): ObjectEngineResult {
-            val fields = values.keys + accessResults.keys
+            val fields = values.keys + fieldCheckerResults.keys + typeCheckerResults.keys
             fields.forEach { field ->
                 validateObjectField(type, field)
             }
             values.forEach { (field, value) -> validateObjectValue(field, value) }
-            accessResults.values.forEach(::validateAccessResult)
             return ObjectResultImpl(
                 type = type,
                 cells =
@@ -354,7 +370,10 @@ sealed interface ObjectEngineResult {
                         CellImpl(
                             initialValue = values[field],
                             initiallyValueSet = field in values,
-                            accessResult = accessResults[field],
+                            fieldCheckerResult = fieldCheckerResults[field],
+                            initiallyFieldCheckerResultSet = field in fieldCheckerResults,
+                            typeCheckerResult = typeCheckerResults[field],
+                            initiallyTypeCheckerResultSet = field in typeCheckerResults,
                             mutable = mutable,
                             validateValue = { value -> validateObjectValue(field, value) },
                         )
@@ -394,7 +413,8 @@ sealed interface ListEngineResult : List<EngineResultCell> {
     companion object {
         /**
          * Constructs a fixed-size list whose activated element cells each expose one uncompleted,
-         * writable value promise.
+         * writable value promise. Their checker-result slots remain unclaimed for future checker
+         * resolution.
          *
          * Every eventual element value must satisfy
          * `value.conformsToResultSchemaType(typeExpr)`. The list positions and their cell identities
@@ -408,7 +428,7 @@ sealed interface ListEngineResult : List<EngineResultCell> {
             val cells =
                 List(size) {
                     CellImpl(
-                        accessResult = true,
+                        initiallyActivated = true,
                         mutable = true,
                         validateValue = { value -> validateListValue(typeExpr, value) },
                     ).also { cell -> cell.reserveValue() }
@@ -420,28 +440,35 @@ sealed interface ListEngineResult : List<EngineResultCell> {
          * ### Invariant: list-engine-result-factory-schema-conformance
          *
          * Every cell value satisfies `value.conformsToResultSchemaType(typeExpr)` in its reasoning
-         * world.
+         * world. Omitted checker-result lists default to completed nulls, meaning no checker applies.
          */
         fun of(
             typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
             values: List<EngineResult?>,
-            accessResults: List<EngineResult?> =
-                values.map { true },
+            fieldCheckerResults: List<CheckerResult?> =
+                values.map { null },
+            typeCheckerResults: List<CheckerResult?> =
+                values.map { null },
             mutableCells: Boolean = false,
         ): ListEngineResult {
             require(values.all { value -> value.conformsToResultSchemaType(typeExpr) }) {
                 "List engine result contains an element incompatible with $typeExpr"
             }
-            require(accessResults.size == values.size) {
-                "List engine result access results must match its value count"
+            require(fieldCheckerResults.size == values.size) {
+                "List engine result field-checker results must match its value count"
             }
-            accessResults.filterNotNull().forEach(::validateAccessResult)
+            require(typeCheckerResults.size == values.size) {
+                "List engine result type-checker results must match its value count"
+            }
             val cells =
                 values.mapIndexed { index, value ->
                     CellImpl(
                         initialValue = value,
                         initiallyValueSet = true,
-                        accessResult = accessResults[index],
+                        fieldCheckerResult = fieldCheckerResults[index],
+                        initiallyFieldCheckerResultSet = true,
+                        typeCheckerResult = typeCheckerResults[index],
+                        initiallyTypeCheckerResultSet = true,
                         mutable = mutableCells,
                         validateValue = { updated -> validateListValue(typeExpr, updated) },
                     )
@@ -461,7 +488,7 @@ private fun validateListValue(
 }
 
 /**
- * Returns whether two completed result trees contain the same values and access results.
+ * Returns whether two completed result trees contain the same values and checker results.
  *
  * This explicit extensional comparison is distinct from ordinary equality because
  * [EngineResultCell] and [ObjectEngineResult] use reference equality. Symbolic object keys compare
@@ -470,6 +497,8 @@ private fun validateListValue(
  * root-qualified. Both trees must be finite and every present promise they contain must be
  * completed. Its result is meaningful only after both trees are quiescent; the comparison does not
  * take an atomic snapshot while promises or cells are being mutated concurrently.
+ * Unpublished checker slots differ from completed null slots. Two completed checker errors compare
+ * extensionally as errors without invoking their externally supplied equality.
  *
  * @throws UncompletedPromiseException when either tree contains an uncompleted promise
  */
@@ -509,7 +538,12 @@ private class CompletedResultComparison {
         right: EngineResultCell,
     ): Boolean =
         same(left.completedValue, right.completedValue) &&
-            left.completedAccessResult.hasSameCompletedAccessResultAs(right.completedAccessResult)
+            left.completedFieldCheckerResult.hasSameCompletedCheckerSlotAs(
+                right.completedFieldCheckerResult,
+            ) &&
+            left.completedTypeCheckerResult.hasSameCompletedCheckerSlotAs(
+                right.completedTypeCheckerResult,
+            )
 
     fun sameParentCell(
         left: EngineResultCell,
@@ -525,8 +559,11 @@ private class CompletedResultComparison {
                 else -> false
             }
         return sameValue &&
-            left.completedAccessResult.hasSameCompletedAccessResultAs(
-                right.completedAccessResult,
+            left.completedFieldCheckerResult.hasSameCompletedCheckerSlotAs(
+                right.completedFieldCheckerResult,
+            ) &&
+            left.completedTypeCheckerResult.hasSameCompletedCheckerSlotAs(
+                right.completedTypeCheckerResult,
             )
     }
 
@@ -542,10 +579,14 @@ private class CompletedResultComparison {
     }
 }
 
-private fun EngineResult?.hasSameCompletedAccessResultAs(other: EngineResult?): Boolean =
-    when (this) {
-        is ErrorEngineResult -> other is ErrorEngineResult
-        else -> this == other
+private fun CompletedCheckerSlot.hasSameCompletedCheckerSlotAs(
+    other: CompletedCheckerSlot,
+): Boolean =
+    when {
+        !isSet || !other.isSet -> isSet == other.isSet
+        value is CheckerResult.Error -> other.value is CheckerResult.Error
+        value === CheckerResult.Success -> other.value === CheckerResult.Success
+        else -> other.value == null
     }
 
 /**
@@ -618,12 +659,13 @@ private fun EngineResult.containsParentBackedge(): Boolean =
 /**
  * Returns the union of this completed cell and [other].
  *
- * @throws IllegalArgumentException when their values have no union or their access results differ
+ * @throws IllegalArgumentException when their values have no union or their checker results differ
  */
 private fun CompletedCell.union(other: CompletedCell): CompletedCell =
     CompletedCell(
         value = value.union(other.value),
-        accessResult = unionAccessResult(accessResult, other.accessResult),
+        fieldCheckerResult = unionCheckerResult(fieldCheckerResult, other.fieldCheckerResult),
+        typeCheckerResult = unionCheckerResult(typeCheckerResult, other.typeCheckerResult),
     )
 
 /**
@@ -645,10 +687,14 @@ internal fun ObjectEngineResult.union(other: ObjectEngineResult): ObjectEngineRe
     return ObjectEngineResult.of(
         type = type,
         values = cells.mapValues { (_, cell) -> cell.value },
-        accessResults =
-            cells.mapNotNull { (key, cell) ->
-                cell.accessResult?.let { key to it }
-            }.toMap(),
+        fieldCheckerResults =
+            cells
+                .filterValues { cell -> cell.fieldCheckerResult.isSet }
+                .mapValues { (_, cell) -> cell.fieldCheckerResult.value },
+        typeCheckerResults =
+            cells
+                .filterValues { cell -> cell.typeCheckerResult.isSet }
+                .mapValues { (_, cell) -> cell.typeCheckerResult.value },
     )
 }
 
@@ -671,27 +717,42 @@ internal fun ListEngineResult.union(other: ListEngineResult): ListEngineResult {
         "Cannot union list engine results of different lengths"
     }
     val cells = indices.map { index -> this[index].completed().union(other[index].completed()) }
-    return ListEngineResult.of(
+    return ListResultImpl(
         typeExpr = typeExpr,
-        values = cells.map(CompletedCell::value),
-        accessResults = cells.map(CompletedCell::accessResult),
+        cells =
+            cells.map { cell ->
+                CellImpl(
+                    initialValue = cell.value,
+                    initiallyValueSet = true,
+                    fieldCheckerResult = cell.fieldCheckerResult.value,
+                    initiallyFieldCheckerResultSet = cell.fieldCheckerResult.isSet,
+                    typeCheckerResult = cell.typeCheckerResult.value,
+                    initiallyTypeCheckerResultSet = cell.typeCheckerResult.isSet,
+                    mutable = false,
+                    validateValue = { value -> validateListValue(typeExpr, value) },
+                )
+            },
     )
 }
 
 private class CellImpl(
+    initiallyActivated: Boolean = false,
     initialValue: EngineResult? = null,
     initiallyValueSet: Boolean = false,
-    accessResult: EngineResult? = null,
+    fieldCheckerResult: CheckerResult? = null,
+    initiallyFieldCheckerResultSet: Boolean = false,
+    typeCheckerResult: CheckerResult? = null,
+    initiallyTypeCheckerResultSet: Boolean = false,
     private val mutable: Boolean,
     private val validateValue: (EngineResult?) -> Unit = {},
 ) : EngineResultCell {
-    init {
-        accessResult?.let(::validateAccessResult)
-    }
-
     private val activationLock = Any()
     private val activation: Promise<Boolean> =
-        if (initiallyValueSet || accessResult != null) {
+        if (
+            initiallyActivated || initiallyValueSet ||
+            initiallyFieldCheckerResultSet ||
+            initiallyTypeCheckerResultSet
+        ) {
             Promise.of(true)
         } else {
             Promise.ofDeferred()
@@ -704,9 +765,24 @@ private class CellImpl(
             mutable = mutable,
             validateValue = validateValue,
         )
-    private val accessResultStore =
+    private val fieldCheckerResultStore =
         promiseStore(
-            values = accessResult?.let { mapOf(Unit to it) }.orEmpty(),
+            values =
+                if (initiallyFieldCheckerResultSet) {
+                    mapOf(Unit to fieldCheckerResult)
+                } else {
+                    emptyMap()
+                },
+            cell = this,
+        )
+    private val typeCheckerResultStore =
+        promiseStore(
+            values =
+                if (initiallyTypeCheckerResultSet) {
+                    mapOf(Unit to typeCheckerResult)
+                } else {
+                    emptyMap()
+                },
             cell = this,
         )
 
@@ -756,21 +832,58 @@ private class CellImpl(
         return valueStore.cancelClaimed(cause)
     }
 
-    override fun getAccessResult(): Promise<EngineResult> =
-        checkNotNull(accessResultStore.readOrNull(Unit)) {
-            "Cell has no access result"
+    override fun getFieldCheckerResult(): Promise<CheckerResult?> =
+        checkNotNull(fieldCheckerResultStore.readOrNull(Unit)) {
+            "Cell has no field-checker result"
         }
 
-    override fun setAccessResult(result: EngineResult) {
+    override fun setFieldCheckerResult(result: CheckerResult?) {
         checkMayWrite()
-        validateAccessResult(result)
         activateForWrite()
-        accessResultStore.set(Unit, result, this)
+        fieldCheckerResultStore.set(Unit, result, this)
     }
 
-    override fun createAccessResultPromise(): Promise<EngineResult> {
+    override fun createFieldCheckerResultPromise(): Promise<CheckerResult?> {
         checkMutable()
-        return accessResultStore.create(Unit, this, ::validateAccessResult)
+        return fieldCheckerResultStore.create(Unit, this)
+    }
+
+    override fun cancelFieldCheckerResult(cause: CancellationException): Boolean =
+        cancelCheckerResult(fieldCheckerResultStore, cause)
+
+    override fun getTypeCheckerResult(): Promise<CheckerResult?> =
+        checkNotNull(typeCheckerResultStore.readOrNull(Unit)) {
+            "Cell has no type-checker result"
+        }
+
+    override fun setTypeCheckerResult(result: CheckerResult?) {
+        checkMayWrite()
+        activateForWrite()
+        typeCheckerResultStore.set(Unit, result, this)
+    }
+
+    override fun createTypeCheckerResultPromise(): Promise<CheckerResult?> {
+        checkMutable()
+        return typeCheckerResultStore.create(Unit, this)
+    }
+
+    override fun cancelTypeCheckerResult(cause: CancellationException): Boolean =
+        cancelCheckerResult(typeCheckerResultStore, cause)
+
+    private fun cancelCheckerResult(
+        store: OnceStore<Unit, Promise<CheckerResult?>>,
+        cause: CancellationException,
+    ): Boolean {
+        checkMutable()
+        val mayCancel =
+            synchronized(activationLock) {
+                activation.complete(true)
+                activation.get()
+            }
+        if (!mayCancel) return false
+        return checkNotNull(store.readOrNull(Unit)) {
+            "Cell has no checker-result writer"
+        }.cancel(cause)
     }
 
     inline fun freezeValue(cause: () -> Exception) {
@@ -787,7 +900,8 @@ private class CellImpl(
         val activated = activation.get()
         if (!activated) return
         valueStore.readOrNull()?.get()
-        accessResultStore.snapshot().values.forEach { promise -> promise.get() }
+        fieldCheckerResultStore.snapshot().values.forEach { promise -> promise.get() }
+        typeCheckerResultStore.snapshot().values.forEach { promise -> promise.get() }
     }
 
     val isActivated: Boolean
@@ -796,8 +910,11 @@ private class CellImpl(
     val completedValue: EngineResult?
         get() = checkNotNull(valueStore.readOrNull()) { "Cell has no value" }.get()
 
-    val completedAccessResult: EngineResult?
-        get() = accessResultStore.readOrNull(Unit)?.get()
+    val completedFieldCheckerResult: CompletedCheckerSlot
+        get() = fieldCheckerResultStore.completedCheckerSlot()
+
+    val completedTypeCheckerResult: CompletedCheckerSlot
+        get() = typeCheckerResultStore.completedCheckerSlot()
 
     private fun checkMutable() = check(mutable) { "Cell is immutable" }
 
@@ -1099,13 +1216,20 @@ private data class ParentKeyImpl(
 
 private data class CompletedCell(
     val value: EngineResult?,
-    val accessResult: EngineResult?,
+    val fieldCheckerResult: CompletedCheckerSlot,
+    val typeCheckerResult: CompletedCheckerSlot,
+)
+
+private data class CompletedCheckerSlot(
+    val isSet: Boolean,
+    val value: CheckerResult?,
 )
 
 private fun EngineResultCell.completed(): CompletedCell =
     CompletedCell(
         value = completedValue,
-        accessResult = completedAccessResult,
+        fieldCheckerResult = completedFieldCheckerResult,
+        typeCheckerResult = completedTypeCheckerResult,
     )
 
 private val EngineResultCell.implementation: CellImpl
@@ -1114,8 +1238,11 @@ private val EngineResultCell.implementation: CellImpl
 private val EngineResultCell.completedValue: EngineResult?
     get() = implementation.completedValue
 
-private val EngineResultCell.completedAccessResult: EngineResult?
-    get() = implementation.completedAccessResult
+private val EngineResultCell.completedFieldCheckerResult: CompletedCheckerSlot
+    get() = implementation.completedFieldCheckerResult
+
+private val EngineResultCell.completedTypeCheckerResult: CompletedCheckerSlot
+    get() = implementation.completedTypeCheckerResult
 
 private val ObjectEngineResult.implementation: ObjectResultImpl
     get() = this as ObjectResultImpl
@@ -1181,17 +1308,17 @@ private fun <K, V> unionMaps(
         }
     }
 
-private fun unionAccessResult(
-    first: EngineResult?,
-    second: EngineResult?,
-): EngineResult? =
+private fun unionCheckerResult(
+    first: CompletedCheckerSlot,
+    second: CompletedCheckerSlot,
+): CompletedCheckerSlot =
     when {
-        first == null -> second
-        second == null -> first
+        !first.isSet -> second
+        !second.isSet -> first
         else ->
             first.also {
-                require(first == second) {
-                    "Cannot union cells with unequal access results"
+                require(first.value === second.value) {
+                    "Cannot union cells with unequal checker results"
                 }
             }
     }
@@ -1250,6 +1377,12 @@ private fun <K : Any, V> promiseStore(
 private fun <K : Any, V> OnceStore<K, Promise<V>>.readOrNull(key: K): Promise<V>? =
     if (isSet(key)) read(key) else null
 
+private fun OnceStore<Unit, Promise<CheckerResult?>>.completedCheckerSlot():
+    CompletedCheckerSlot =
+    readOrNull(Unit)?.let { promise ->
+        CompletedCheckerSlot(isSet = true, value = promise.get())
+    } ?: CompletedCheckerSlot(isSet = false, value = null)
+
 private fun <K : Any, V> OnceStore<K, Promise<V>>.set(
     key: K,
     value: V,
@@ -1296,9 +1429,3 @@ private fun EngineResult.isScalarResultMember(): Boolean =
         this is String ||
         this is EngineIDResult ||
         this is ViaductSchema.EnumValue
-
-private fun validateAccessResult(result: EngineResult) {
-    require(result is Boolean || result is ErrorEngineResult) {
-        "Cell access result must be Boolean or ErrorEngineResult"
-    }
-}

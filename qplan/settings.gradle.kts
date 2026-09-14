@@ -19,5 +19,8 @@ dependencyResolutionManagement {
 rootProject.name = "qplanning"
 
 includeBuild("../core")
+includeBuild("spec") {
+    name = "graphql-spec"
+}
 
 include("arbitrary", "execution", "model", "semantics")

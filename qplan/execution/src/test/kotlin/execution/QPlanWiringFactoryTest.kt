@@ -6,6 +6,8 @@ import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import viaduct.engine.api.CheckerResult
+import viaduct.engine.api.CheckerResultContext
 
 class QPlanWiringFactoryTest {
     @Test
@@ -20,7 +22,7 @@ class QPlanWiringFactoryTest {
             }
         val user =
             world.engineResultOf("User") {
-                "id".resolvesTo("user-1", accessResult = false)
+                "id".resolvesTo("user-1", fieldCheckerResult = TestCheckerError)
                 "role" resolvesTo "ADMIN"
                 "tags" resolvesTo listOf("engineer", null)
                 "friends" resolvesTo listOf(friend)
@@ -29,7 +31,7 @@ class QPlanWiringFactoryTest {
             world.engineResultOf("Query") {
                 field("user", "id" to "user-1").resolvesTo(
                     value = user,
-                    accessResult = false,
+                    fieldCheckerResult = TestCheckerError,
                 )
             }
         val fixture =
@@ -160,4 +162,12 @@ class QPlanWiringFactoryTest {
             }
             """.trimIndent()
     }
+}
+
+private object TestCheckerError : CheckerResult.Error {
+    override val error: Exception = SecurityException("denied")
+
+    override fun isErrorForResolver(ctx: CheckerResultContext): Boolean = true
+
+    override fun combine(fieldResult: CheckerResult.Error): CheckerResult.Error = this
 }

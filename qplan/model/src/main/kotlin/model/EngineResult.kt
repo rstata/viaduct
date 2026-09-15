@@ -96,6 +96,9 @@ sealed interface EngineResultCell {
     /** @throws IllegalStateException when this cell has no field-checker-result promise */
     fun getFieldCheckerResult(): Promise<CheckerResult?>
 
+    /** Returns whether this cell has a field-checker-result promise. */
+    fun isFieldCheckerResultSet(): Boolean
+
     fun setFieldCheckerResult(result: CheckerResult?)
 
     fun createFieldCheckerResultPromise(): Promise<CheckerResult?>
@@ -836,6 +839,8 @@ private class CellImpl(
         checkNotNull(fieldCheckerResultStore.readOrNull(Unit)) {
             "Cell has no field-checker result"
         }
+
+    override fun isFieldCheckerResultSet(): Boolean = fieldCheckerResultStore.isSet(Unit)
 
     override fun setFieldCheckerResult(result: CheckerResult?) {
         checkMayWrite()

@@ -1,0 +1,232 @@
+# Access-Check Semantics
+
+This document records the access-check behavior that qplan is intended to model. It describes semantic obligations rather than the implementation status of any resolver version. In particular, an incremental implementation may resolve checker-result slots before it begins enforcing those results during input materialization or GraphQL completion.
+
+The examples below specify the schema, value resolvers, checker registrations, required selections, and returned values. Nothing about a field's ownership, value, or access policy is left implicit.
+
+## Terminology
+
+- A **field occurrence** is one selection of one field at one object-result occurrence, including its grounded arguments.
+- The **base type** of a GraphQL type expression is the type left after removing all list and non-null wrappers.
+- A **base cell** is the cell left after following all list wrappers in an engine result. For type checking, the relevant base cells are those whose value is an object engine result.
+- **Resolving a check** means running a checker and publishing its `CheckerResult`.
+- **Enforcing a check** means allowing a `CheckerResult.Error` to prevent a consumer from reading the corresponding value. Resolution and enforcement are separate operations.
+- An **unchecked read** reads the raw value without enforcing its checker results. It does not mark the value, resolver, or descendant work as permanently unchecked.
+
+## Logical Cell Results
+
+Each result cell logically has three independent results:
+
+1. The value result.
+2. The field-checker result for the field occurrence that produced the cell.
+3. The type-checker result for the cell's base object, when its base type has a type checker.
+
+A checker-result value of `null` means that no checker applies. This is different from an unpublished checker-result promise: `null` is a completed semantic result, while an unpublished promise is work that has not yet been claimed or completed.
+
+Field and type results remain distinct while they are resolved. A consumer that enforces access must account for both. If both are errors, the production `CheckerResult` contract determines how they combine; the engine must not invent an independent generic precedence rule.
+
+## Field Checks
+
+A field checker belongs to a field occurrence, not to a field resolver invocation. A checker therefore applies whether the checked value was produced actively by that field's registered resolver or supplied passively by an ancestor producer.
+
+Selecting a passive checked field must still create enough demand to run its checker. Conversely, a checker required selection can create value demand: if the checker selects an active field, that field's value resolver must run so the checker can receive its raw value.
+
+## Type Checks And Base Cells
+
+A type checker applies to each object-valued base cell of the checked type. List wrappers are significant because they can contain multiple such base cells.
+
+For example, consider this complete schema and execution world:
+
+```graphql
+type Query {
+  users: [[User]]!
+}
+
+type User {
+  id: ID!
+}
+```
+
+The registered `Query.users` resolver has no required selections and returns:
+
+```text
+[
+  [User { id: "1" }, User { id: "2" }],
+  [User { id: "3" }]
+]
+```
+
+No field checker is registered for `Query.users` or `User.id`. A type checker is registered for `User`; it requires the object-rooted selection `id` and grants access exactly when the ID is not `"2"`.
+
+The client asks for:
+
+```graphql
+query {
+  users {
+    id
+  }
+}
+```
+
+There are three `User` base cells, so the `User` type checker runs three times: once for each returned object, not once for `Query.users`, once per list wrapper, or once per selected `User` field. The checker for the second base cell denies access only to that `User` occurrence; ordinary GraphQL null propagation then follows the declared nullable list and element wrappers.
+
+This per-base-cell behavior is why type checks are first-class results rather than field checks copied onto every field of the type. Copying a type checker onto fields would repeat the same logical decision for every selected field and would fail to represent an object occurrence that must be checked even before choosing a particular child field.
+
+## Checker Required Selections
+
+A field or type checker declares its named required selection sets in two maps: one rooted at the checked field's containing object and one rooted at `Query`. The names in both maps share the single namespace exposed to the checker, so an object-rooted entry and a Query-rooted entry cannot use the same name. An object-rooted entry may be null, which requests an empty containing-object value; Query-rooted entries are non-null because production uses null specifically for that containing-object case.
+
+Construction unions the selections independently within each root: the containing occurrence is extended with the union of all object-rooted selections, and one fresh Query OER is extended with the union of all Query-rooted selections. Materialization does not lose the original map boundaries. Each named selection set is materialized independently, and the checker receives one combined name-to-object map containing those separate values. If the Query-rooted map is nonempty, the checker occurrence owns a fresh Query OER even when every Query-rooted selection set is empty.
+
+The fresh Query OER is a logical occurrence boundary. It does not require an implementation to forgo safe physical batching, but work from the primary operation's Query OER or another checker occurrence must not be substituted as though it had the same occurrence identity.
+
+Consider this complete world:
+
+```graphql
+type Query {
+  viewerId: ID!
+  records: [Record!]!
+}
+
+type Record {
+  ownerId: ID!
+  secret: String
+}
+```
+
+The registered `Query.viewerId` resolver has no required selections and returns `"viewer"`. The registered `Query.records` resolver has no required selections and returns two passive records, `Record { ownerId: "viewer", secret: "first" }` and `Record { ownerId: "other", secret: "second" }`. A field checker is registered for `Record.secret`. Its object-rooted map contains the named entry `record = { ownerId }`; its Query-rooted map contains the named entry `viewer = { viewerId }`. It grants access exactly when `record.ownerId` equals `viewer.viewerId`.
+
+The client asks for:
+
+```graphql
+query {
+  viewerId
+  records {
+    secret
+  }
+}
+```
+
+This execution has one primary Query OER for the client operation and two additional Query OERs, one for each `Record.secret` checker occurrence. The two checker occurrences do not share the primary Query OER or each other's Query OER. Consequently, this semantic model contains three distinct `Query.viewerId` resolver occurrences even if a later execution layer can physically coalesce some underlying work.
+
+## Where Checks Are Enforced
+
+The consumer of a value determines whether its checker results are enforced:
+
+| Consumer | Enforces checks on its selected value? |
+| --- | --- |
+| GraphQL response completion | Yes |
+| Ordinary value-resolver input materialization | Yes |
+| Checker input materialization | No; it reads raw values |
+
+For query fields, resolving a value and resolving its checker normally proceed concurrently. The checker does not gate whether the query field's value resolver starts; the value and checker results are combined when a checked consumer reads or completes the field. For top-level mutation and subscription fields, production instead runs the field checker first and does not start the value resolver when that field check denies access.
+
+### Checkers Read Raw Values
+
+Access-check executors are not themselves subject to access checks. Their required selections read value slots without enforcing field- or type-checker results. Checker-origin demand therefore requires the selected raw values and any active value resolvers needed to produce them, but it does not require checker execution for coordinates selected only on behalf of that checker.
+
+This rule prevents a checker from waiting on itself directly or indirectly through the access slots of its inputs. It is a property of the checker's input-materialization edge, not a transitive execution mode.
+
+Consider this complete world:
+
+```graphql
+type Query {
+  record: Record!
+}
+
+type Record {
+  protected: Int
+  derived: Int
+  dependency: Int
+}
+```
+
+The registered `Query.record` resolver has no required selections and returns `Record { protected: 7, dependency: 40 }`; `protected` and `dependency` are therefore passive values in this occurrence. The registered `Record.derived` resolver requires the object-rooted selection `dependency` and, if it receives that value, returns `dependency + 1`.
+
+Three field checkers are registered:
+
+- The `Record.protected` checker requires the object-rooted selection `derived` and grants access exactly when `derived` is `41`.
+- The `Record.derived` checker always denies access.
+- The `Record.dependency` checker always denies access.
+
+The client asks for:
+
+```graphql
+query {
+  record {
+    protected
+  }
+}
+```
+
+The `protected` checker creates checker-origin demand for `derived`. That demand launches the `derived` value resolver but does not enforce or, in the absence of any other demand, require resolution of the `derived` field checker. The `derived` resolver is nevertheless an ordinary value resolver: its own selection of `dependency` is resolver-origin demand, so the `dependency` checker is resolved and enforced. The denial on `dependency` prevents `derived` from producing `41`, and the `protected` checker cannot obtain its required value.
+
+Thus a checker can directly read an unchecked active field, but the active field's resolver still reads its own dependencies under normal access checks. “Checker inputs are unchecked” is not transitive.
+
+## `@bypassPolicyCheck`
+
+The exact Airbnb directive spelling is `@bypassPolicyCheck`. It suppresses enforcement for the annotated selection occurrence. It does not establish a transitive unchecked context.
+
+If resolver B selects `c @bypassPolicyCheck`, B may consume C's raw value even when C's checker returned `CheckerResult.Error`. This does not disable C's checker globally, affect another occurrence that selects C without the directive, or cause fields selected by C's value resolver to run unchecked.
+
+For query execution, C's raw value resolver generally starts in parallel with C's checker whether or not the directive is present. The directive controls whether C's checker denial blocks this particular consumption of C; it does not primarily control whether C's resolver executes. A raw resolution failure still prevents consumption of C and takes precedence over a bypassed checker denial.
+
+Consider this complete world:
+
+```graphql
+directive @bypassPolicyCheck on FIELD
+
+type Query {
+  record: Record!
+}
+
+type Record {
+  allowedSeed: Int
+  deniedSeed: Int
+  cAllowed: Int
+  cBlocked: Int
+  bAllowed: Int
+  bBlocked: Int
+}
+```
+
+The registered `Query.record` resolver has no required selections and returns `Record { allowedSeed: 40, deniedSeed: 50 }`. The registered field resolvers are:
+
+- `Record.cAllowed` requires `allowedSeed` and returns `allowedSeed + 1`.
+- `Record.cBlocked` requires `deniedSeed` and returns `deniedSeed + 1`.
+- `Record.bAllowed` requires `cAllowed @bypassPolicyCheck` and returns `cAllowed + 1`.
+- `Record.bBlocked` requires `cBlocked @bypassPolicyCheck` and returns `cBlocked + 1`.
+
+The registered field checkers are:
+
+- The `Record.cAllowed` checker always denies access.
+- The `Record.cBlocked` checker always denies access.
+- The `Record.deniedSeed` checker always denies access.
+- No checker is registered for `Record.allowedSeed`, `Record.bAllowed`, or `Record.bBlocked`.
+
+The client asks for:
+
+```graphql
+query {
+  record {
+    bAllowed
+    bBlocked
+  }
+}
+```
+
+`cAllowed` resolves to `41`. Its checker denies access, but the directive on B's particular selection suppresses that denial, so `bAllowed` consumes `41` and resolves to `42`.
+
+The same directive does not rescue `bBlocked`. The `cBlocked` value resolver's own selection of `deniedSeed` has no bypass directive, so that resolver-origin read enforces the `deniedSeed` checker and `cBlocked` fails to produce a raw value. The directive on `bBlocked`'s selection suppresses only the `cBlocked` checker error; it neither suppresses the raw resolver failure nor propagates to `cBlocked`'s dependency. To bypass the dependency check as well, the `cBlocked` resolver's own selection would have to say `deniedSeed @bypassPolicyCheck` explicitly.
+
+The production completion layer also recognizes the directive on an annotated output selection in trusted Airbnb schemas. That behavior is likewise occurrence-local: it omits checker enforcement for that completion and does not propagate bypass state into descendant resolver execution.
+
+## Demand Provenance Is Semantically Relevant
+
+The same selected coordinate can require different work depending on why it was selected:
+
+- Resolver- or client-origin demand requires the raw value and applicable checker results because those consumers enforce access.
+- Checker-origin demand requires the raw value but does not, by itself, require checker results for that selected coordinate.
+- If an active value resolver is launched by checker-origin demand, the resolver's own required selections introduce new resolver-origin demand and therefore use normal checked semantics.
+
+During demand closure, the implementation must distinguish raw-only checker demand from checked resolver or client demand. Once closure reaches a fixed point, it may discard the derivation history as long as its result separately records the required value and checker slots. Materialization independently preserves whether each consumer performs raw or checked reads.

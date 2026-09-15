@@ -49,6 +49,9 @@ interface ResolverRegistry {
     /** Defined only when [field] is registered. */
     fun resolver(field: ViaductSchema.ObjectField): FieldResolver
 
+    /** Returns the checker for [field], or null when no field checker applies. */
+    fun fieldChecker(field: ViaductSchema.ObjectField): FieldChecker? = null
+
     /**
      * The registered fields that may be directly demanded by [field].
      *

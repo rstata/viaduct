@@ -2,7 +2,7 @@ package semantics.resolver26
 
 import model.operationSelectionsFrom
 import model.testing.TestWorld
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import semantics.shared.RecordingResolverObserver
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -55,7 +55,7 @@ class ParentCoverageMetricsTest {
             )
         val world = testWorld.assumptions
         val operation =
-            OperationContext(
+            SharedOperationContext(
                 world = world,
                 resolverObserver = RecordingResolverObserver(),
             )

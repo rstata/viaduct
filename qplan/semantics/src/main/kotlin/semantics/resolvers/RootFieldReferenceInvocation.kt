@@ -10,7 +10,7 @@ import model.registry.FieldResolver
 import model.registry.ResolverFragments
 import model.registry.VariableDefinition
 import model.requireQueryTypeDef
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 
 /** One independently rooted invocation prepared from a symbolic root-field reference. */
 internal data class PreparedRootFieldReferenceInvocation(
@@ -27,7 +27,7 @@ internal data class PreparedRootFieldReferenceInvocation(
  * The maintained pre-Resolver26 algorithms support only `FromArgument` variables. Reference
  * targets inherit that boundary instead of acquiring Resolver26's runtime binding protocols.
  */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 internal fun RootFieldReferenceData.prepareInvocation(): PreparedRootFieldReferenceInvocation {
     require(targetField in operation.resolverRegistry) {
         "Root-field-reference target has no registered resolver: " +

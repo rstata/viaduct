@@ -23,7 +23,7 @@ import org.reactivestreams.Subscriber
 import org.reactivestreams.Subscription
 import semantics.resolver26.resolver26CoroutineContext
 import semantics.resolver26.startResolve
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 
 /**
  * Query execution boundary for the qplan GraphQL-Java harness.
@@ -72,7 +72,7 @@ class QPlanExecutionStrategy(
 
         val root =
             try {
-                context(OperationContext(world)) {
+                context(SharedOperationContext(world)) {
                     startResolve(selections, requestScope)
                 }
             } catch (throwable: Exception) {

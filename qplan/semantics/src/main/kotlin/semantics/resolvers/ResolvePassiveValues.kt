@@ -28,7 +28,7 @@ import model.requireField
 import model.isParentField
 import model.selectionForestOf
 import model.toEngineResult
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 
 /**
  * An eagerly materialized result tree and its root object occurrences requiring resolver work.
@@ -62,7 +62,7 @@ internal fun interface RootFieldReferenceResolver {
 }
 
 /** Installs every selected parent field as a reference to [parent] and returns its selections. */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 internal fun ObjectEngineResult.installParentBackedges(
     selections: ObjectSelectionForest,
     parent: PassiveObjectOccurrence?,
@@ -100,7 +100,7 @@ internal fun ObjectEngineResult.installParentBackedges(
  * Selective worlds still require every present field to be included in [invocationDemand].
  * [constructionDemand] determines whether each root object occurrence requires orchestration.
  */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 internal suspend fun ResolverOutputData?.resolvePassiveValues(
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     path: List<PathComponent>,
@@ -219,7 +219,7 @@ private fun ResolverOutputData?.withAuthoritativeNodeId(
     )
 }
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 private suspend fun EngineObjectData.Sync.resolvePassiveObjectValues(
     constructionDemand: SelectionForest,
     invocationDemand: SelectionForest,
@@ -330,7 +330,7 @@ private fun ResolverOutputData?.containsImmediateRootFieldReference(): Boolean =
         else -> false
     }
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 private fun EngineOutputData?.hasUnresolvedDemand(
     selections: SelectionForest,
 ): Boolean =
@@ -340,7 +340,7 @@ private fun EngineOutputData?.hasUnresolvedDemand(
         else -> false
     }
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 private fun EngineObjectData.Sync.hasUnresolvedDemand(
     selections: SelectionForest,
 ): Boolean =
@@ -362,7 +362,7 @@ private fun EngineObjectData.Sync.hasUnresolvedDemand(
 /**
  * Returns demanded, already-materialized child object occurrences at this exact object.
  */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 internal fun EngineObjectData.Sync.materializedChildOccurrences(
     path: List<PathComponent>,
     selections: ObjectSelectionForest,

@@ -5,7 +5,7 @@ The semantics project defines transformations, resolver algorithms, and correctn
 ## Principal Judgment
 
 ```kotlin
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun ObjectEngineResult.correctResolution(selections: ObjectSelectionForest): Boolean
 ```
 
@@ -13,7 +13,7 @@ fun ObjectEngineResult.correctResolution(selections: ObjectSelectionForest): Boo
 
 ## Vocabulary
 
-A type with the suffix **Context** is a structurally immutable, scope-specific bundle of stable references that are commonly passed together. A context may refer to mutable state, but it does not expose mutable storage or define state transitions itself. `OperationContext` is the shared semantics boundary for one resolution operation; Resolver26 extends it with request-scope references and Resolver26-specific state.
+A type with the suffix **Context** is a structurally immutable, scope-specific bundle of stable references that are commonly passed together. A context may refer to mutable state, but it does not expose mutable storage or define state transitions itself. `SharedOperationContext` is the shared semantics boundary for one resolution operation; Resolver26 extends it with request-scope references and Resolver26-specific state.
 
 A type with the suffix **State** owns one mutable protocol. Its storage is private, and its methods expose the protocol's legal reads and transitions. `VariableBindingsState`, `CycleCheckState`, `BindingDeclarationsState`, and `QueryValuesState` keep mutation out of configuration and context types.
 
@@ -46,6 +46,8 @@ GraphQL `@skip` and `@include` are lowered into symbolic `InclusionCondition` va
 Model fixture preparation accepts resolver selection documents that retain named fragment definitions. The current selection carrier cannot represent named fragment spreads, so `fragmentFromDocument` owns lowering those spreads to inline fragments before semantic reasoning. Keeping that conversion beside the model carrier's other parsing helpers allows a future carrier to preserve or optimize named fragments without requiring execution adapters to pre-process them. Resolver query fragments are a different concept: they are Query-rooted resolver inputs that are resolved into an independent OER for each owning resolver occurrence.
 
 `resolvers/resolver01/DepthFirstResolve.kt` contains the recursive monotonic constructor used by Resolver01-03. `resolvers/ResolvePassiveValues.kt` builds passive result structure shared by Resolver01-23, retains child OERs that require active work, and populates those children without replacing their published parents. The `resolvers` package contains the remaining operations shared by those maintained resolver families.
+
+Resolver26 uses the extracted `shared/SharedResolvePassiveValues` traversal and shared `SharedOrchestrationTask`, `SharedFieldResolverContext`, and `SharedTaskDispatcher` protocol. The orchestration factory returns a fully prepared task with closed demand; passive resolution fills source-owned fields before dispatch. Resolver26 implements dispatch with request-root coroutines. Earlier resolvers retain their existing passive traversal and scheduling for now.
 
 The shared passive-value path also interprets `RootFieldReferenceData` only at demanded source
 positions. Each hop receives a fresh empty Query identity root, its canonical grounded path and

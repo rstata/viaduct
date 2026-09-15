@@ -12,7 +12,7 @@ import model.testing.fieldResolverOf
 import model.testing.fromArgument
 import kotlin.test.Test
 import kotlin.test.assertTrue
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 
 class IsClosedUnderResolverDemandTest {
     @Test
@@ -23,7 +23,7 @@ class IsClosedUnderResolverDemandTest {
                 "name" resolvesTo "Ada"
             }
 
-        assertTrue(context(OperationContext(world)) { result.isClosedUnderResolverDemand() })
+        assertTrue(context(SharedOperationContext(world)) { result.isClosedUnderResolverDemand() })
     }
 
     @Test
@@ -81,7 +81,7 @@ class IsClosedUnderResolverDemandTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = OperationContext(world)
+        val operation = SharedOperationContext(world)
         val resultField = world.schema.requireObjectField("Parent", "result")
         val resultKey = ObjectEngineResult.GroundKey.of(resultField, mapOf("seed" to 7))
         val result =

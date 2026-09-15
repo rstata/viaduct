@@ -1,19 +1,21 @@
 package semantics.resolver26
 
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicReference
 import model.Arguments
 import model.Assumptions
 import model.InclusionCondition
 import model.ObjectEngineResult
 import model.ObjectSelectionForest
-import model.requireQueryTypeDef
 import model.SelectionForest
 import model.VariableBinding
 import model.registry.VariableDefinition
+import model.requireQueryTypeDef
 import model.schemaType
+import semantics.shared.OEROccurrenceContext
+import semantics.shared.SharedOrchestrationTask
+import semantics.shared.SharedOperationContext
+import semantics.shared.installParentBackedgeFields
 import viaduct.engine.api.EngineObjectData
-import semantics.shared.OperationContext
 
 /**
  * Installs and launches the work associated with one object-result occurrence.
@@ -21,14 +23,14 @@ import semantics.shared.OperationContext
  * An occurrence with active work retains a request-root coroutine as an architectural placeholder
  * for future asynchronous orchestration. The current orchestration body does not suspend.
  */
-internal class ObjectOrchestrationTask(
-    internal val operation: Resolver26OperationContext,
-    internal val occurrence: OEROccurrenceContext,
-    internal val source: EngineObjectData.Sync,
-    private val initialDemand: SelectionForest,
-) {
+internal class OrchestrationTask private constructor(
+    internal val operation: OperationContext,
+    override val occurrence: OEROccurrenceContext,
+    override val source: EngineObjectData.Sync,
+) : SharedOrchestrationTask {
     internal val world: Assumptions = operation.world
-    private val closedDemand = AtomicReference<CloseInputDemandResult?>(null)
+    private lateinit var closed: CloseInputDemandResult
+    override val closedDemand: ObjectSelectionForest get() = closed.demand
     private val launched = AtomicBoolean(false)
 
     init {
@@ -43,56 +45,41 @@ internal class ObjectOrchestrationTask(
         }
     }
 
-    /**
-     * Synchronously closes this object's demand and establishes its binding domain.
-     * Returns the closed demand needed to materialize passive children before launch.
-     */
-    fun prepare(): ObjectSelectionForest {
-        val closed: CloseInputDemandResult =
-            context(world) {
-                source.closeInputDemand(
-                    occurrence = occurrence,
-                    initialDemand = initialDemand,
-                )
+    companion object {
+        /** Creates a fully prepared task without dispatching its active work. */
+        fun create(
+            operation: OperationContext,
+            occurrence: OEROccurrenceContext,
+            source: EngineObjectData.Sync,
+            initialDemand: SelectionForest,
+        ): OrchestrationTask =
+            OrchestrationTask(operation, occurrence, source).apply {
+                closed = context(world) { source.closeInputDemand(occurrence, initialDemand) }
+                context(operation) {
+                    declareBindings(closed)
+                    occurrence.installParentBackedgeFields(closed.demand.byKey().keys.filterIsInstance<ObjectEngineResult.ParentKey>())
+                }
+                operation.bindingDeclarationsState.markBindingsDeclared(occurrence.target)
             }
-        require(closedDemand.compareAndSet(null, closed)) {
-            "Resolver26 orchestration task at ${occurrence.path} was prepared twice"
-        }
-        context(operation) {
-            declareBindings(closed)
-            installParentFields(closed.demand)
-        }
-        operation.bindingDeclarationsState.markBindingsDeclared(occurrence.target)
-        return closed.demand
     }
 
-    /**
-     * Creates the orchestration root after passive materialization when this occurrence has active
-     * work. Its current body synchronously installs every active cell and freezes the key set; the
-     * coroutine boundary is retained for future asynchronous orchestration rather than present need.
-     */
-    fun launch() {
-        require(launched.compareAndSet(false, true)) {
-            "Resolver26 orchestration task at ${occurrence.path} was launched twice"
-        }
-        val closed =
-            requireNotNull(closedDemand.get()) {
-                "Resolver26 orchestration task at ${occurrence.path} launched before preparation"
-            }
-        validatePassiveFields(closed)
-
-        if (
-            closed.fieldResolverOccurrenceContexts.isNotEmpty() ||
+    internal val hasActiveWork: Boolean
+        get() = closed.fieldResolverOccurrenceContexts.isNotEmpty() ||
             closed.rootFieldReferenceOccurrences.isNotEmpty() ||
             closed.objectProviderReadsByResolverOccurrence.values.any { it.isNotEmpty() }
-        ) {
-            operation.rootTaskLauncher.launchObjectOrchestrationTask {
-                FieldResolverTask.launchAll(this@ObjectOrchestrationTask, closed)
-                occurrence.target.freeze()
-            }
-        } else {
-            occurrence.target.freeze()
+
+    /** Checks the one-shot dispatch boundary before entering the request-root coroutine. */
+    internal fun checkDispatch() {
+        require(launched.compareAndSet(false, true)) {
+            "Resolver26 orchestration task at ${occurrence.path} was dispatched twice"
         }
+        validatePassiveFields(closed)
+    }
+
+    /** Installs field tasks and seals this object's field set. */
+    internal fun run() {
+        FieldResolverTask.launchAll(this, closed)
+        occurrence.target.freeze()
     }
 
     // Checks that passive values selected by closed demand were installed before task dispatch.
@@ -115,40 +102,11 @@ internal class ObjectOrchestrationTask(
             }
         }
     }
-
-    context(operation: Resolver26OperationContext)
-    private fun installParentFields(closedDemand: ObjectSelectionForest) {
-        val parentSelections =
-            closedDemand.byKey().filterKeys { key ->
-                key is ObjectEngineResult.ParentKey
-            }
-        if (parentSelections.isEmpty()) return
-        val parent =
-            occurrence.parent
-                ?: error("Parent demand at ${occurrence.path} has no containing occurrence")
-        val producer =
-            occurrence.path
-                .filterIsInstance<ObjectEngineResult.ObjectKey>()
-                .lastOrNull()
-                ?.field
-        parentSelections.keys.forEach { objectKey ->
-            val key = objectKey as ObjectEngineResult.ParentKey
-            require(world.parentFieldRelations[key.field] == producer) {
-                "Parent field ${key.field.containingDef.name}.${key.field.name} maps to " +
-                    "${world.parentFieldRelations[key.field]}, not containing producer $producer " +
-                    "at ${occurrence.path}"
-            }
-            occurrence.target.setCellValue(key, parent.target)
-            check(occurrence.target.getCell(key).getValue().get() === parent.target) {
-                "Parent field ${key.field.name} does not reference its containing object occurrence"
-            }
-        }
-    }
 }
 
 // Adds every binding introduced by the closed demand to the world's binding domain.
 // Grounded argument bindings receive values immediately; open and provider bindings remain pending.
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 private fun declareBindings(closed: CloseInputDemandResult) {
     check(!closed.bindingDeclarationStarted) {
         "Resolver26 closed demand attempted to declare its bindings twice"

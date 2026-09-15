@@ -1,6 +1,6 @@
-# Context Parameters, `Assumptions`, And `OperationContext`
+# Context Parameters, `Assumptions`, And `SharedOperationContext`
 
-Qplan uses Kotlin context parameters at two distinct interpretation boundaries. Pure model operations use the one immutable `Assumptions` value for a reasoning world, while semantics operations use the `OperationContext` for one resolution or correctness operation.
+Qplan uses Kotlin context parameters at two distinct interpretation boundaries. Pure model operations use the one immutable `Assumptions` value for a reasoning world, while semantics operations use the `SharedOperationContext` for one resolution or correctness operation.
 
 ## Model Context
 
@@ -34,16 +34,18 @@ The compiler supplies both calls from the existing context. A context parameter 
 Resolver algorithms, result materialization, and correctness judgments that need operation-local state or observations declare:
 
 ```kotlin
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun ...
 ```
 
 Use the name `operation` consistently. Access stable configuration through `operation.world` or the convenience properties `operation.schema`, `operation.resolverRegistry`, and `operation.selectiveResolvers`. Access mutable protocols through explicit state properties such as `operation.variableBindingsState`.
 
+`SharedOperationContext<D>` preserves the type of its dispatcher. Helpers that only read shared semantics state use `SharedOperationContext<*>`; they need no type parameter of their own. Resolver26's `OperationContext` extends `SharedOperationContext<TaskDispatcher>`, and shared passive resolution accepts `SharedOperationContext<SharedTaskDispatcher<O, *>>` so its factory's orchestration type `O` remains accepted by `operation.dispatcher`. The dispatcher is accessed through the operation rather than passed separately.
+
 When a semantics function calls a pure model operation, establish the model context explicitly from the operation:
 
 ```kotlin
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun ObjectEngineResult.validate(): Boolean =
     context(operation.world) {
         rootedAndWellTyped()
@@ -58,10 +60,12 @@ Context parameters are not global state. Establish the appropriate context at an
 
 ```kotlin
 val modelValue = context(world) { objectValue.snipToDemand(selections) }
-val resolution = context(OperationContext(world)) { resolve(selections) }
+val resolution = context(SharedOperationContext(world)) { resolve(selections) }
 ```
 
-Inside a function with the same context type, call context-dependent operations directly. Add a nested `context(...)` block only when crossing from `OperationContext` to `operation.world`, supplying a separate state context such as `CycleCheckState`, or otherwise changing the available context values.
+`SharedOperationContext(world)` calls the companion's `invoke` factory, which returns a standalone `SharedOperationContext<*>` with no dispatcher. This preserves ordinary construction syntax without requiring callers to choose a dispatcher type for operations that do not dispatch. Execution subclasses supply their concrete dispatcher type and override the dispatcher property.
+
+Inside a function with the same context type, call context-dependent operations directly. Add a nested `context(...)` block only when crossing from `SharedOperationContext` to `operation.world`, supplying a separate state context such as `CycleCheckState`, or otherwise changing the available context values.
 
 ## Receiver-Style Bodies
 

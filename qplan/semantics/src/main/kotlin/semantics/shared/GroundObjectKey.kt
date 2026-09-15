@@ -5,7 +5,7 @@ import model.ObjectEngineResult
 import model.usedVariables
 
 /** Whether every variable in this key has an occurrence identity and a completed binding. */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun ObjectEngineResult.ObjectKey.isContextuallyGrounded(): Boolean =
     arguments.usedVariables().all { variable ->
         variable.isInstantiated &&
@@ -13,7 +13,7 @@ fun ObjectEngineResult.ObjectKey.isContextuallyGrounded(): Boolean =
     }
 
 /** Grounds this key's arguments without changing the symbolic key retained by its OER cell. */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun ObjectEngineResult.ObjectKey.groundedArguments(): Arguments.Ground {
     require(isContextuallyGrounded()) {
         "Object key is not contextually grounded"
@@ -22,7 +22,7 @@ fun ObjectEngineResult.ObjectKey.groundedArguments(): Arguments.Ground {
 }
 
 /** Awaits every variable carried by this key before grounding its arguments. */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 suspend fun ObjectEngineResult.ObjectKey.fetchGroundedArguments(): Arguments.Ground {
     arguments.usedVariables().forEach { variable ->
         require(variable.isInstantiated) {

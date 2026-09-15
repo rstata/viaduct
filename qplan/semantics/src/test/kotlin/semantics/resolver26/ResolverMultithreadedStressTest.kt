@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.CoroutineContext
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import semantics.shared.RecordingResolverObserver
 
 class ResolverMultithreadedStressTest {
@@ -199,7 +199,7 @@ private suspend fun runResolver26MultithreadedStress(
                 testWorld.newAssumptions(selectiveResolvers = true)
             val fragment: Fragment = world.fragmentFrom(testCase.query.source)
             val operation =
-                OperationContext(world, resolverObserver = RecordingResolverObserver())
+                SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
             val appliedResolverOccurrences =
                 ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
             val result: ObjectEngineResult =

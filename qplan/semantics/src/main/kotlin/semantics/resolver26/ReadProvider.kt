@@ -26,14 +26,14 @@ import model.toEngineSimpleData
 import viaduct.graphql.schema.ViaductSchema
 
 // Traverses a provider path through OER promises and returns its terminal input-compatible value.
-context(operation: Resolver26OperationContext)
+context(operation: OperationContext)
 internal suspend fun ObjectEngineResult.readProvider(
     definition: InstantiatedFieldPathDefinition,
     reader: List<PathComponent>,
 ): VariableBinding = readProvider(definition.path, reader)
 
 // Reads and completes all provider bindings rooted in this result.
-context(operation: Resolver26OperationContext)
+context(operation: OperationContext)
 internal suspend fun ObjectEngineResult.completeProviderBindings(
     reads: List<ProviderDefinitionRead>,
 ) {
@@ -62,7 +62,7 @@ internal suspend fun ObjectEngineResult.completeProviderBindings(
     }
 }
 
-context(operation: Resolver26OperationContext)
+context(operation: OperationContext)
 internal fun CoroutineScope.launchProviderBindings(
     target: ObjectEngineResult,
     reads: List<ProviderDefinitionRead>,
@@ -81,7 +81,7 @@ internal fun CoroutineScope.launchProviderBindings(
             }
         }
 
-context(operation: Resolver26OperationContext)
+context(operation: OperationContext)
 private suspend fun ObjectEngineResult.readProvider(
     path: List<ObjectEngineResult.Key>,
     reader: List<PathComponent>,

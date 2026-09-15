@@ -18,7 +18,7 @@ import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import semantics.shared.RecordingResolverObserver
 import semantics.shared.ResolverObservations
 
@@ -63,7 +63,7 @@ class ResolverOccurrenceWitnessTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = OperationContext(world, resolverObserver = RecordingResolverObserver())
+        val operation = SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
         val fragment =
             world.fragmentFrom(
                 "fragment QueryResult on Query { first second }",
@@ -190,7 +190,7 @@ class ResolverOccurrenceWitnessTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = OperationContext(world, resolverObserver = RecordingResolverObserver())
+        val operation = SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
         val fragment =
             world.fragmentFrom(
                 "fragment QueryResult on Query { items { computed } }",

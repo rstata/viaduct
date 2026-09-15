@@ -2,18 +2,18 @@ package semantics.resolvers.resolver06
 
 import model.ObjectEngineResult
 import model.SelectionForest
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 
 /**
  * Resolves [selections] through a depth-first work queue when resolver object fragments are empty.
  * Results are non-selective and may contain more OER nodes than are strictly necessary to resolve
  * the query.
  */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun resolve(selections: SelectionForest): ObjectEngineResult =
     resolve(selections, onTaskStarted = {})
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 internal fun resolve(
     selections: SelectionForest,
     onTaskStarted: (DepthFirstReactor.Task) -> Unit,

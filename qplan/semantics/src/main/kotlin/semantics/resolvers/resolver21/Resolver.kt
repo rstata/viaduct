@@ -4,12 +4,12 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import model.ObjectEngineResult
 import model.SelectionForest
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 
 /**
  * Resolves [selections] with structured coroutines when resolver object fragments are empty.
  */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun resolve(selections: SelectionForest): ObjectEngineResult {
     require(!operation.selectiveResolvers) {
         "Resolver21 requires non-selective resolvers"

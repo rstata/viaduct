@@ -11,7 +11,7 @@ import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 
 sealed interface ResolverTaskObservation {
     val path: List<String>
@@ -32,7 +32,7 @@ sealed interface ResolverTaskObservation {
  */
 interface DepthFirstTaskOrderingContract : ResolverContract {
     fun resolveAndObserveTasks(
-        operation: OperationContext,
+        operation: SharedOperationContext<*>,
         root: EngineObjectData.Sync,
         selections: SelectionForest,
         taskObserver: (ResolverTaskObservation) -> Unit,
@@ -98,7 +98,7 @@ interface DepthFirstTaskOrderingContract : ResolverContract {
         val taskTrace = mutableListOf<ResolverTaskObservation>()
 
         resolveAndObserveTasks(
-            operation = OperationContext(world),
+            operation = SharedOperationContext(world),
             root = world.objectOf("Query"),
             selections = selections,
             taskObserver = taskTrace::add,

@@ -1,10 +1,10 @@
-package semantics.resolver26
+package semantics.shared
 
 import model.ObjectEngineResult
 import model.PathComponent
 
-/** Stable identity and location of one Resolver26 object-result occurrence. */
-internal class OEROccurrenceContext(
+/** Stable identity and location of one object-result occurrence. */
+class OEROccurrenceContext(
     val root: ObjectEngineResult,
     path: List<PathComponent>,
     val target: ObjectEngineResult,

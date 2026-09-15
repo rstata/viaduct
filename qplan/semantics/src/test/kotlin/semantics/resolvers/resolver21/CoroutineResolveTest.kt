@@ -23,7 +23,7 @@ import model.testing.fieldResolverOf
 import semantics.contract.selectionValues
 import semantics.shared.CycleCheckState
 import semantics.shared.ResolverReadCycleException
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -77,7 +77,7 @@ class CoroutineResolveTest {
             }
         val resolver =
             CoroutineResolve(
-                operation = OperationContext(world),
+                operation = SharedOperationContext(world),
                 complete = { completedSelections ->
                     producerStarts += 1
                     assertEquals(expectedKeys, registeredKeys)
@@ -155,7 +155,7 @@ class CoroutineResolveTest {
             }
         val resolver =
             CoroutineResolve(
-                operation = OperationContext(world),
+                operation = SharedOperationContext(world),
                 complete = { completedSelections -> completedSelections },
                 cycleChecker = cycleChecker,
             )
@@ -216,7 +216,7 @@ class CoroutineResolveTest {
 
         val failure =
             assertFailsWith<ResolverReadCycleException> {
-                context(OperationContext(world)) {
+                context(SharedOperationContext(world)) {
                     resolve(selections)
                 }
             }
@@ -255,7 +255,7 @@ class CoroutineResolveTest {
 
         val thrown =
             assertFailsWith<IllegalStateException> {
-                context(OperationContext(world)) {
+                context(SharedOperationContext(world)) {
                     resolve(selections)
                 }
             }
@@ -297,7 +297,7 @@ class CoroutineResolveTest {
             world.fragmentFrom("fragment ignored on Query { items { value } }").subselections
 
         val result =
-            context(OperationContext(world)) {
+            context(SharedOperationContext(world)) {
                 resolve(selections)
             }
 

@@ -17,7 +17,7 @@ import java.util.concurrent.ThreadFactory
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.CoroutineContext
 import model.ObjectEngineResult
-import semantics.shared.ResolverObserver
+import semantics.shared.SharedResolverObserver
 import semantics.shared.RootFieldReferenceInvocationObservation
 
 internal const val RESOLVER26_THREAD_COUNT_PROPERTY = "resolver26.thread.count"
@@ -39,15 +39,15 @@ internal data class Resolver26ApplicationObservation(
 internal typealias Resolver26ApplicationObserver = (Resolver26ApplicationObservation) -> Unit
 
 /** Resolver26's semantically passive extension of the shared observation boundary. */
-internal interface Resolver26Observer : ResolverObserver {
+internal interface ResolverObserver : SharedResolverObserver {
     fun onResolverApplication(observation: Resolver26ApplicationObservation)
 }
 
-internal fun ResolverObserver.withResolver26Applications(
+internal fun SharedResolverObserver.withResolver26Applications(
     applicationObserver: Resolver26ApplicationObserver,
-): Resolver26Observer {
+): ResolverObserver {
     val delegate = this
-    return object : Resolver26Observer {
+    return object : ResolverObserver {
         override fun onQueryFragmentResult(
             resolverOccurrenceId: ResolverOccurrenceId,
             result: ObjectEngineResult,
@@ -58,7 +58,7 @@ internal fun ResolverObserver.withResolver26Applications(
         ) = delegate.onRootFieldReferenceInvocation(observation)
 
         override fun onResolverApplication(observation: Resolver26ApplicationObservation) {
-            (delegate as? Resolver26Observer)?.onResolverApplication(observation)
+            (delegate as? ResolverObserver)?.onResolverApplication(observation)
             applicationObserver(observation)
         }
     }

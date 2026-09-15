@@ -1,6 +1,6 @@
 package semantics.resolvers.resolver06
 
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import model.ObjectEngineResult
 import model.PathComponent
 import model.fragmentFrom
@@ -95,7 +95,7 @@ class DepthFirstReactorTest {
                 .subselections
         val reactor =
             DepthFirstReactor(
-                operation = OperationContext(world),
+                operation = SharedOperationContext(world),
                 complete = { demand -> demand },
                 source = world.resolverRegistry.createRootQueryInput(),
                 selections = selections,

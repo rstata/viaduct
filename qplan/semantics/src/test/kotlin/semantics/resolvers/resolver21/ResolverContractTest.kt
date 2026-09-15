@@ -4,7 +4,7 @@ import semantics.resolvers.resolver21.resolve
 
 import viaduct.engine.api.EngineObjectData
 
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import model.ObjectEngineResult
 import model.SelectionForest
 import semantics.contract.CompleteResolverOutputPolicyContract
@@ -26,7 +26,7 @@ class ResolverContractTest :
     CompleteResolverOutputPolicyContract,
     CorrectResolutionPostTestPolicy {
     override fun resolve(
-        operation: OperationContext,
+        operation: SharedOperationContext<*>,
         root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult =

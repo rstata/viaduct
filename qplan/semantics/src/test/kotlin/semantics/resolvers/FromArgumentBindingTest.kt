@@ -15,7 +15,7 @@ import model.testing.fromArgument
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 
 class FromArgumentBindingTest {
     @Test
@@ -42,7 +42,7 @@ class FromArgumentBindingTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = OperationContext(world)
+        val operation = SharedOperationContext(world)
         val field = world.schema.requireObjectField("Query", "echo")
         val key = ObjectEngineResult.GroundKey.of(field, mapOf("value" to 1))
         val root = ObjectEngineResult.of(world.schema.requireQueryTypeDef(), values = emptyMap())

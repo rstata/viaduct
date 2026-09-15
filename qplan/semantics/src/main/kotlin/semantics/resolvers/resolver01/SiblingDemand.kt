@@ -4,10 +4,10 @@ import model.ObjectEngineResult
 import model.PathComponent
 import model.requireField
 import semantics.shared.objectFragmentAt
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 
 /** Whether this resolver key directly demands [siblingKey] in its top-level object fragment. */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun ObjectEngineResult.GroundKey.demandsFromSibling(
     siblingKey: ObjectEngineResult.GroundKey,
     root: ObjectEngineResult,

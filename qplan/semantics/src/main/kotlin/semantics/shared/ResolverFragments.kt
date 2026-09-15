@@ -6,7 +6,7 @@ import model.PathComponent
 import model.registry.FieldResolver
 
 /** Returns this resolver's object fragment grounded at exact occurrence [path]. */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun FieldResolver.objectFragmentAt(
     root: ObjectEngineResult,
     path: List<PathComponent>,

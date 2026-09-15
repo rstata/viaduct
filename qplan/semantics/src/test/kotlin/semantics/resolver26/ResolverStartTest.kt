@@ -18,7 +18,7 @@ import model.requireField
 import model.requireObjectField
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -43,7 +43,7 @@ class ResolverStartTest {
 
             try {
                 val root =
-                    context(OperationContext(world.assumptions)) {
+                    context(SharedOperationContext(world.assumptions)) {
                         startResolve(selections, requestScope)
                     }
                 val fast = root.cell("fast")
@@ -74,7 +74,7 @@ class ResolverStartTest {
             val requestScope = CoroutineScope(resolver26CoroutineContext() + requestJob)
 
             val root =
-                context(OperationContext(world.assumptions)) {
+                context(SharedOperationContext(world.assumptions)) {
                     startResolve(selections, requestScope)
                 }
             withTimeout(5_000) { providerStarted.await() }
@@ -117,7 +117,7 @@ class ResolverStartTest {
 
             try {
                 val root =
-                    context(OperationContext(world.assumptions)) {
+                    context(SharedOperationContext(world.assumptions)) {
                         startResolve(selections, requestScope)
                     }
                 val slow = root.cell("slow")
@@ -173,7 +173,7 @@ class ResolverStartTest {
 
             try {
                 val root =
-                    context(OperationContext(world.assumptions)) {
+                    context(SharedOperationContext(world.assumptions)) {
                         startResolve(selections, requestScope)
                     }
 
@@ -219,7 +219,7 @@ class ResolverStartTest {
 
             try {
                 val root =
-                    context(OperationContext(world.assumptions)) {
+                    context(SharedOperationContext(world.assumptions)) {
                         startResolve(selections, requestScope)
                     }
                 val error =
@@ -277,7 +277,7 @@ class ResolverStartTest {
 
                 try {
                     val root =
-                        context(OperationContext(world.assumptions)) {
+                        context(SharedOperationContext(world.assumptions)) {
                             startResolve(selections, requestScope)
                         }
                     val fastError =
@@ -332,7 +332,7 @@ class ResolverStartTest {
 
                 try {
                     val root =
-                        context(OperationContext(world.assumptions)) {
+                        context(SharedOperationContext(world.assumptions)) {
                             startResolve(
                                 world.assumptions.operationSelectionsFrom("query { fast }"),
                                 requestScope,
@@ -380,7 +380,7 @@ class ResolverStartTest {
                 )
 
             try {
-                context(OperationContext(world.assumptions)) {
+                context(SharedOperationContext(world.assumptions)) {
                     startResolve(
                         world.assumptions.operationSelectionsFrom("query { fast }"),
                         requestScope,

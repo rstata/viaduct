@@ -59,7 +59,7 @@ import semantics.contract.validateFromFieldBindings
 import semantics.correctresolution.correctResolution
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import semantics.shared.RecordingResolverObserver
 import viaduct.engine.api.EngineObjectData
 import viaduct.graphql.schema.ViaductSchema
@@ -361,7 +361,7 @@ internal suspend fun runResolver26BroadStress(
                 val fragment: Fragment = world.fragmentFrom(testCase.query.source)
                 val recordingObserver = RecordingResolverObserver()
                 val operation =
-                    OperationContext(world, resolverObserver = recordingObserver)
+                    SharedOperationContext(world, resolverObserver = recordingObserver)
                 testCase.registry.clearResolutionWitness()
                 val occurrenceLog = ResolutionOccurrenceApplicationLog()
                 resolutionCalls += 1

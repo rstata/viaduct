@@ -29,13 +29,13 @@ import semantics.resolvers.prepareInvocation
 import semantics.resolvers.resolvePassiveValues
 import semantics.resolvers.resolveRetainedObjects
 import semantics.shared.CycleCheckState
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import semantics.shared.RootFieldReferenceInvocationObservation
 import semantics.shared.materialize
 
 /** The recursive, dependency-first resolution constructor shared by Resolver01-03 and 06-08. */
 internal class DepthFirstResolve(
-    private val operation: OperationContext,
+    private val operation: SharedOperationContext<*>,
     private val complete: (SelectionForest) -> SelectionForest,
 ) {
     private val world: Assumptions = operation.world

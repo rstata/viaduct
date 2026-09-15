@@ -20,32 +20,42 @@ import model.registry.VariableDefinition
 import model.requireQueryTypeDef
 import model.schemaType
 import semantics.correctresolution.argumentsContainErrorValue
+import semantics.shared.SharedFieldResolverContext
+import semantics.shared.SharedFieldResolverTask
+import semantics.shared.OEROccurrenceContext
 import viaduct.engine.api.EngineObjectData
 
-internal interface FieldResolverTaskContext {
-    val operationContext: Resolver26OperationContext
-    val oerOccurrenceContext: OEROccurrenceContext
-    val resolverOccurrenceContext: ResolverOccurrenceContext
-    val fieldResolverOccurrenceContext: FieldResolverOccurrenceContext?
-        get() = resolverOccurrenceContext as? FieldResolverOccurrenceContext
-
-    /** Child scope owned by the field task's request-root job; it cannot launch request roots. */
-    val fieldTaskScope: CoroutineScope
+/** Prepared field publication handed to the request dispatcher before its coroutine exists. */
+internal class FieldResolverContext(
+    override val operationContext: OperationContext,
+    override val oerOccurrenceContext: OEROccurrenceContext,
+    val resolverOccurrenceContext: ResolverOccurrenceContext,
+    override val publicationCell: EngineResultCell,
+    val objectProviderReads: List<ProviderDefinitionRead>,
+) : SharedFieldResolverContext {
+    override val selection get() = resolverOccurrenceContext.selection
+    override val publicationPath get() = resolverOccurrenceContext.publicationPath
+    override val publicationExpectedType get() = resolverOccurrenceContext.publicationExpectedType
+    override val publicationConstructionDemand get() = resolverOccurrenceContext.publicationConstructionDemand
 }
 
 /** Owns setup and resolution for one field publication. */
 internal class FieldResolverTask private constructor(
-    override val operationContext: Resolver26OperationContext,
+    override val operationContext: OperationContext,
     override val oerOccurrenceContext: OEROccurrenceContext,
-    override val resolverOccurrenceContext: ResolverOccurrenceContext,
+    val resolverOccurrenceContext: ResolverOccurrenceContext,
     private val publicationCell: EngineResultCell,
-    override val fieldTaskScope: CoroutineScope,
+    /** Child scope owned by the field task's request-root job; it cannot launch request roots. */
+    val fieldTaskScope: CoroutineScope,
     private val objectProviderReads: List<ProviderDefinitionRead>,
-) : FieldResolverTaskContext {
+) : SharedFieldResolverTask {
+    val fieldResolverOccurrenceContext: FieldResolverOccurrenceContext?
+        get() = resolverOccurrenceContext as? FieldResolverOccurrenceContext
+
     companion object {
         /** Installs and launches every local field task owned by one object orchestration. */
         fun launchAll(
-            orchestrationTask: ObjectOrchestrationTask,
+            orchestrationTask: OrchestrationTask,
             closed: CloseInputDemandResult,
         ) {
             val operationContext = orchestrationTask.operation
@@ -89,9 +99,10 @@ internal class FieldResolverTask private constructor(
             }
         }
 
-        // The caller claims and registers the list-element cell before launching its task.
+        // Called by ResolvePassiveValues to launch a list-element task.
+        // The caller has already claimed the cell and registered its writer.
         fun launchForListElement(
-            operationContext: Resolver26OperationContext,
+            operationContext: OperationContext,
             oerOccurrenceContext: OEROccurrenceContext,
             resolverOccurrenceContext: ResolverOccurrenceContext,
             publicationCell: EngineResultCell,
@@ -107,7 +118,7 @@ internal class FieldResolverTask private constructor(
 
         // Installs one field task while retaining its symbolic cell key.
         fun installAndLaunch(
-            operationContext: Resolver26OperationContext,
+            operationContext: OperationContext,
             oerOccurrenceContext: OEROccurrenceContext,
             resolverOccurrenceContext: ResolverOccurrenceContext,
             objectProviderReads: List<ProviderDefinitionRead> = emptyList(),
@@ -129,56 +140,66 @@ internal class FieldResolverTask private constructor(
         }
 
         private fun launchTask(
-            operationContext: Resolver26OperationContext,
+            operationContext: OperationContext,
             oerOccurrenceContext: OEROccurrenceContext,
             resolverOccurrenceContext: ResolverOccurrenceContext,
             publicationCell: EngineResultCell,
             objectProviderReads: List<ProviderDefinitionRead>,
         ) {
-            operationContext.rootTaskLauncher
-                .launchFieldResolverTask {
-                    FieldResolverTask(
-                        operationContext = operationContext,
-                        oerOccurrenceContext = oerOccurrenceContext,
-                        resolverOccurrenceContext = resolverOccurrenceContext,
-                        publicationCell = publicationCell,
-                        fieldTaskScope = this,
-                        objectProviderReads = objectProviderReads,
-                    ).run()
-                }.invokeOnCompletion { cause ->
-                    if (cause !is CancellationException) return@invokeOnCompletion
+            operationContext.dispatcher.dispatchFieldResolver(
+                FieldResolverContext(
+                    operationContext, oerOccurrenceContext, resolverOccurrenceContext,
+                    publicationCell, objectProviderReads,
+                ),
+            )
+        }
 
-                    publicationCell.cancelValue(cause)
-                    val fieldResolverContext =
-                        resolverOccurrenceContext as? FieldResolverOccurrenceContext
-                            ?: return@invokeOnCompletion
-                    operationContext.queryValuesState.cancel(
-                        fieldResolverContext.resolverOccurrenceId,
-                        cause,
-                    )
-                    fieldResolverContext.variableDefinitions.forEach { definition ->
-                        if (
-                            definition.definition == VariableDefinition.FromProvider ||
-                            definition.definition is VariableDefinition.FromArgument
-                        ) {
-                            operationContext.variableBindingsState.cancelBinding(
-                                requireNotNull(definition.variable.instanceId),
-                                cause,
-                            )
-                        }
-                    }
-                    objectProviderReads.forEach { read ->
+        /** Enters the existing field-task body under its dispatched coroutine's scope. */
+        internal suspend fun execute(context: FieldResolverContext, scope: CoroutineScope) {
+            FieldResolverTask(
+                operationContext = context.operationContext,
+                oerOccurrenceContext = context.oerOccurrenceContext,
+                resolverOccurrenceContext = context.resolverOccurrenceContext,
+                publicationCell = context.publicationCell,
+                fieldTaskScope = scope,
+                objectProviderReads = context.objectProviderReads,
+            ).run()
+        }
+
+        /** Terminates owned promises even when cancellation prevents the task body from entering. */
+        internal fun cancel(context: FieldResolverContext, cause: CancellationException) {
+            with(context) {
+                publicationCell.cancelValue(cause)
+                val fieldResolverContext =
+                    resolverOccurrenceContext as? FieldResolverOccurrenceContext
+                        ?: return
+                operationContext.queryValuesState.cancel(
+                    fieldResolverContext.resolverOccurrenceId,
+                    cause,
+                )
+                fieldResolverContext.variableDefinitions.forEach { definition ->
+                    if (
+                        definition.definition == VariableDefinition.FromProvider ||
+                        definition.definition is VariableDefinition.FromArgument
+                    ) {
                         operationContext.variableBindingsState.cancelBinding(
-                            requireNotNull(read.definition.variable.instanceId),
+                            requireNotNull(definition.variable.instanceId),
                             cause,
                         )
                     }
-                    cancelQueryPathBindings(operationContext, fieldResolverContext, cause)
                 }
+                objectProviderReads.forEach { read ->
+                    operationContext.variableBindingsState.cancelBinding(
+                        requireNotNull(read.definition.variable.instanceId),
+                        cause,
+                    )
+                }
+                cancelQueryPathBindings(operationContext, fieldResolverContext, cause)
+            }
         }
 
         private fun cancelQueryPathBindings(
-            operationContext: Resolver26OperationContext,
+            operationContext: OperationContext,
             fieldResolverContext: FieldResolverOccurrenceContext,
             cause: CancellationException,
         ) {
@@ -214,11 +235,6 @@ internal class FieldResolverTask private constructor(
                 )
             }
         }
-        launchQueryFragmentProducer()
-    }
-
-    fun launchQueryFragmentProducer() {
-        val fieldResolverContext = fieldResolverOccurrenceContext ?: return
         launchQueryFragmentProducer(fieldResolverContext)
     }
 
@@ -275,7 +291,7 @@ internal class FieldResolverTask private constructor(
 }
 
 private suspend fun ResolverFragment.resolveQueryFragment(
-    operationContext: Resolver26OperationContext,
+    operationContext: OperationContext,
     coordinate: List<PathComponent>,
     inclusionCondition: InclusionCondition,
 ): EngineObjectData.Sync {
@@ -296,7 +312,7 @@ private suspend fun ResolverFragment.resolveQueryFragment(
             mutable = true,
         )
     val orchestration =
-        ObjectOrchestrationTask(
+        OrchestrationTask.create(
             operation = operationContext,
             occurrence =
                 OEROccurrenceContext(
@@ -307,9 +323,8 @@ private suspend fun ResolverFragment.resolveQueryFragment(
             source = source,
             initialDemand = symbolicSelections.constructionSelections() + providerDemand,
         )
-    orchestration.prepare()
     operationContext.resolverObserver.onQueryFragmentResult(resolverOccurrenceId, queryResult)
-    orchestration.launch()
+    operationContext.dispatcher.dispatchOrchestrator(orchestration)
     context(operationContext) {
         queryResult.completeProviderBindings(
             reads =

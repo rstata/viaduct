@@ -4,7 +4,7 @@ import semantics.resolvers.resolver06.resolve
 
 import viaduct.engine.api.EngineObjectData
 
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import model.ObjectEngineResult
 import model.SelectionForest
 import semantics.contract.CompleteResolverOutputPolicyContract
@@ -31,7 +31,7 @@ class ResolverContractTest :
     DepthFirstTaskOrderingContract,
     CorrectResolutionPostTestPolicy {
     override fun resolve(
-        operation: OperationContext,
+        operation: SharedOperationContext<*>,
         root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult =
@@ -40,7 +40,7 @@ class ResolverContractTest :
         }
 
     override fun resolveAndObserveTasks(
-        operation: OperationContext,
+        operation: SharedOperationContext<*>,
         root: EngineObjectData.Sync,
         selections: SelectionForest,
         taskObserver: (ResolverTaskObservation) -> Unit,

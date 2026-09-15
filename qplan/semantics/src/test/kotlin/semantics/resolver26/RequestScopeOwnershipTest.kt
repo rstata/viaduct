@@ -20,22 +20,22 @@ class RequestScopeOwnershipTest {
 
         val rawRequestScopeLaunch = Regex("""requestScope\s*\.\s*launch\s*\(""")
         assertEquals(
-            listOf("Resolver26RootTaskLauncher.kt"),
+            listOf("TaskDispatcher.kt"),
             sources.filter { source -> rawRequestScopeLaunch.containsMatchIn(source.readText()) }
                 .map(Path::name)
                 .sorted(),
         )
 
-        val orchestrationRootLaunch = Regex("""\.\s*launchObjectOrchestrationTask\s*\{""")
+        val orchestrationRootLaunch = Regex("""\.\s*dispatchOrchestrator\s*\(""")
         assertEquals(
-            listOf("ObjectOrchestrationTask.kt"),
+            listOf("FieldResolverTask.kt", "Resolver.kt"),
             sources.filter { source ->
                 orchestrationRootLaunch.containsMatchIn(source.readText())
             }.map(Path::name)
                 .sorted(),
         )
 
-        val fieldRootLaunch = Regex("""\.\s*launchFieldResolverTask\s*\{""")
+        val fieldRootLaunch = Regex("""\.\s*dispatchFieldResolver\s*\(""")
         assertEquals(
             listOf("FieldResolverTask.kt"),
             sources.filter { source -> fieldRootLaunch.containsMatchIn(source.readText()) }

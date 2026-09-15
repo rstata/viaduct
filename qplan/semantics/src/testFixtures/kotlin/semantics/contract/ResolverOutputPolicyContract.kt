@@ -96,7 +96,7 @@ private fun ResolverContract.assertRejectsWorldMode(selectiveResolvers: Boolean)
 
     assertFailsWith<IllegalArgumentException> {
         resolve(
-            semantics.shared.OperationContext(world),
+            semantics.shared.SharedOperationContext(world),
             world.objectOf("Query"),
             selections,
         )

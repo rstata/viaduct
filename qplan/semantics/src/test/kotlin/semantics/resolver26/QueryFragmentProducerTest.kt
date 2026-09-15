@@ -24,13 +24,14 @@ import model.schemaType
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import semantics.contract.selectionValues
-import semantics.shared.OperationContext
-import semantics.shared.ResolverObserver
+import semantics.shared.SharedOperationContext
+import semantics.shared.SharedResolverObserver
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import semantics.shared.OEROccurrenceContext
 
 class QueryFragmentProducerTest {
     @Test
@@ -39,7 +40,7 @@ class QueryFragmentProducerTest {
             val failure = IllegalStateException("Query producer failed")
             val consumerInvoked = AtomicBoolean()
             val observer =
-                object : ResolverObserver {
+                object : SharedResolverObserver {
                     override fun onQueryFragmentResult(
                         resolverOccurrenceId: ResolverOccurrenceId,
                         result: ObjectEngineResult,
@@ -88,7 +89,7 @@ class QueryFragmentProducerTest {
             val requestScope = CoroutineScope(dispatcher + requestJob)
             val producerStarted = AtomicBoolean()
             val observer =
-                object : ResolverObserver {
+                object : SharedResolverObserver {
                     override fun onQueryFragmentResult(
                         resolverOccurrenceId: ResolverOccurrenceId,
                         result: ObjectEngineResult,
@@ -123,7 +124,7 @@ class QueryFragmentProducerTest {
 
     private fun startQueryFragmentResolution(
         requestScope: CoroutineScope,
-        observer: ResolverObserver,
+        observer: SharedResolverObserver,
         onConsumerInvocation: () -> Unit,
     ): StartedQueryFragmentResolution {
         val world =
@@ -156,9 +157,9 @@ class QueryFragmentProducerTest {
                 },
             )
         val selections = world.assumptions.operationSelectionsFrom("query { consumer }")
-        val baseOperation = OperationContext(world.assumptions, resolverObserver = observer)
+        val baseOperation = SharedOperationContext(world.assumptions, resolverObserver = observer)
         val operation =
-            Resolver26OperationContext(
+            OperationContext(
                 base = baseOperation,
                 requestScope = requestScope,
                 resolverObserver = observer.withResolver26Applications {},
@@ -172,7 +173,7 @@ class QueryFragmentProducerTest {
         val key = selections.merge(root.type).byKey().keys.single()
         val resolverOccurrenceId = ResolverOccurrenceId.at(root, listOf(key))
         val orchestration =
-            ObjectOrchestrationTask(
+            OrchestrationTask.create(
                 operation = operation,
                 occurrence =
                     OEROccurrenceContext(
@@ -183,13 +184,12 @@ class QueryFragmentProducerTest {
                 source = source,
                 initialDemand = selections,
             )
-        orchestration.prepare()
-        orchestration.launch()
+        operation.dispatcher.dispatchOrchestrator(orchestration)
         return StartedQueryFragmentResolution(operation, root, key, resolverOccurrenceId)
     }
 
     private data class StartedQueryFragmentResolution(
-        val operation: Resolver26OperationContext,
+        val operation: OperationContext,
         val root: ObjectEngineResult,
         val key: ObjectEngineResult.ObjectKey,
         val resolverOccurrenceId: ResolverOccurrenceId,

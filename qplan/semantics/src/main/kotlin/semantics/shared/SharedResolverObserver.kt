@@ -27,7 +27,7 @@ data class RootFieldReferenceInvocationObservation(
  * resolution results. Because callbacks are synchronous, an observer may still affect failure or
  * latency by throwing or blocking.
  */
-interface ResolverObserver {
+interface SharedResolverObserver {
     fun onQueryFragmentResult(
         resolverOccurrenceId: ResolverOccurrenceId,
         result: ObjectEngineResult,
@@ -38,7 +38,7 @@ interface ResolverObserver {
     ) = Unit
 
     companion object {
-        fun createNOP(): ResolverObserver = NOPResolverObserver
+        fun createNOP(): SharedResolverObserver = NOPResolverObserver
     }
 }
 
@@ -54,7 +54,7 @@ interface ResolverObservations {
 }
 
 /** Records every observation without rejecting or overwriting duplicates. */
-class RecordingResolverObserver : ResolverObserver, ResolverObservations {
+class RecordingResolverObserver : SharedResolverObserver, ResolverObservations {
     private val queryResults =
         ConcurrentHashMap<ResolverOccurrenceId, ConcurrentLinkedQueue<ObjectEngineResult>>()
     private val rootFieldReferenceInvocations =
@@ -86,7 +86,7 @@ class RecordingResolverObserver : ResolverObserver, ResolverObservations {
         rootFieldReferenceInvocations.toList()
 }
 
-private object NOPResolverObserver : ResolverObserver {
+private object NOPResolverObserver : SharedResolverObserver {
     override fun onQueryFragmentResult(
         resolverOccurrenceId: ResolverOccurrenceId,
         result: ObjectEngineResult,

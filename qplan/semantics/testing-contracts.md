@@ -22,6 +22,7 @@ Organize contracts by user-visible semantic capability, not by the resolver that
 
 Shared contracts live in `src/testFixtures/kotlin/semantics/contract`:
 
+- `FrozenObjectResolutionContract` checks that active and passive object occurrences, including nested-list elements, reject new fields after resolution. Resolver26 currently opts into this lifecycle contract.
 - `EmptyObjectFragmentResolverContract` covers empty object fragments, arguments, `__typename`, list occurrences, interfaces, and concrete implementation defaults.
 - `NodeResolverContract` covers source-level node resolution across every maintained resolver by retaining Node-valued field coordinates, normalizing their outputs to `Query.node` references, dispatching each reference by the concrete type encoded in its global ID, resolving lists element by element, and retaining the originating node ID through a root-reference tail.
 - `ObjectFragmentResolverContract` covers nonempty object fragments without variables, including response aliases on argumentless and argument-bearing fields, argument-distinct aliases, non-overlapping concrete-type alternatives, transitive and descendant demand, recursive output, defaults, failures, and occurrence identity.

@@ -21,8 +21,9 @@ import model.schemaType
 import model.outputValue
 import model.satisfiableAlternatives
 import semantics.correctresolution.argumentsContainErrorValue
-import semantics.resolvers.inputParentDemand
+import semantics.shared.inputParentDemand
 import viaduct.engine.api.EngineObjectData
+import semantics.shared.OEROccurrenceContext
 
 // Expands resolver object fragments until no new resolver keys or activation alternatives enter
 // the object's demand. A previously expanded key can gain a late disjunct through another resolver,

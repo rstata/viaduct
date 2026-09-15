@@ -21,7 +21,7 @@ import jdk.jfr.Event
 import jdk.jfr.Label
 import jdk.jfr.Name
 import java.util.concurrent.ConcurrentHashMap
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import semantics.shared.RecordingResolverObserver
 
 internal const val DEFAULT_PROPERTY_TEST_LOOP_COUNT = 1
@@ -98,7 +98,7 @@ internal class PropertyTestBenchmarkSupport(
                     preparationEvent?.finish()
                 }
                 val operation =
-                    OperationContext(world, resolverObserver = RecordingResolverObserver())
+                    SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
                 corpus.registry.clearResolutionWitness()
                 val appliedResolverOccurrences =
                     ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()

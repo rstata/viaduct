@@ -23,24 +23,28 @@ import model.engineObjectDataOf
 import model.invariants.conformsToResolverOutputSchemaType
 import model.merge
 import model.nodeReferenceIdentityOrNull
-import model.outputValue
 import model.registry.ProviderFragment
 import model.registry.VariableDefinition
 import model.requireQueryTypeDef
-import model.schemaType
 import model.selectionForestOf
 import model.usedVariables
 import model.variableArgumentNames
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.shared.RootFieldReferenceInvocationObservation
 import semantics.shared.fetchGroundedArguments
+import semantics.shared.withAuthoritativeNodeId
 import viaduct.engine.api.EngineObjectData
 
 /** Invokes and publishes one already-installed field resolver or root-field reference. */
 internal class FieldResolutionLogic(
     private val fieldResolverTask: FieldResolverTask,
     private val publicationCell: EngineResultCell,
-) : FieldResolverTaskContext by fieldResolverTask {
+) {
+    private val operationContext: OperationContext
+        get() = fieldResolverTask.operationContext
+    private val oerOccurrenceContext get() = fieldResolverTask.oerOccurrenceContext
+    private val resolverOccurrenceContext get() = fieldResolverTask.resolverOccurrenceContext
+    private val fieldResolverOccurrenceContext get() = fieldResolverTask.fieldResolverOccurrenceContext
     private val world: Assumptions = operationContext.world
 
     fun validate() {
@@ -181,23 +185,6 @@ internal class FieldResolutionLogic(
 
             publicationCell.getValue().complete(passiveValue)
         }
-    }
-
-    private fun ResolverOutputData?.withAuthoritativeNodeId(
-        identity: NodeReferenceIdentity?,
-        demand: SelectionForest,
-    ): ResolverOutputData? {
-        if (identity == null || this !is EngineObjectData.Sync) return this
-        require(schemaType == identity.type) {
-            "Node reference for ${identity.type.name} resolved to ${schemaType.name}"
-        }
-        val idField = identity.type.field("id")
-            ?: throw IllegalArgumentException("Node type ${identity.type.name} has no id field")
-        val idDemanded =
-            demand.merge(identity.type).byKey().keys.any { key -> key.field == idField }
-        if (!idDemanded) return this
-        val fields = getSelections().associateWith(::outputValue) + (idField.name to identity.id)
-        return engineObjectDataOf(identity.type, fields)
     }
 
     private suspend fun activateResolverOccurrence(): Boolean {

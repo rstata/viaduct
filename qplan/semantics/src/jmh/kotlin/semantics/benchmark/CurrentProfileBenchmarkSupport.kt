@@ -31,7 +31,7 @@ import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.Locale
 import kotlin.math.ceil
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import semantics.shared.RecordingResolverObserver
 
 internal const val DEFAULT_OVERHEAD_LOOP_COUNT = 1
@@ -46,7 +46,7 @@ private const val REPORT_FILE_PROPERTY = "resolverBenchmarkReportFile"
 
 internal fun interface ResolverBenchmarkSubject {
     fun resolve(
-        operation: OperationContext,
+        operation: SharedOperationContext<*>,
         root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult
@@ -54,7 +54,7 @@ internal fun interface ResolverBenchmarkSubject {
 
 internal fun interface ObservedResolverBenchmarkSubject {
     fun resolve(
-        operation: OperationContext,
+        operation: SharedOperationContext<*>,
         root: EngineObjectData.Sync,
         selections: SelectionForest,
         applicationObserver: (ResolverBenchmarkApplicationObservation) -> Unit,
@@ -96,7 +96,7 @@ internal class CurrentProfileBenchmarkSupport(
                 val selections = parsedQueries[index % parsedQueries.size]
                 val world = testWorld.newAssumptions(selectiveResolvers = true)
                 PreparedResolution(
-                    operation = OperationContext(world),
+                    operation = SharedOperationContext(world),
                     root = world.objectOf("Query"),
                     selections = selections,
                 )
@@ -125,7 +125,7 @@ internal class CurrentProfileBenchmarkSupport(
         val samples =
             querySources.map { source ->
                 val world = testWorld.newAssumptions(selectiveResolvers = true)
-                val operation = OperationContext(world)
+                val operation = SharedOperationContext(world)
                 val selections = world.fragmentFrom(source).subselections
                 corpus.registry.clearResolutionWitness()
                 val applicationObservations =
@@ -245,7 +245,7 @@ internal class CurrentProfileBenchmarkSupport(
                     check(testCase.query.selectionDepth >= 4)
                     val world = testWorld.newAssumptions(selectiveResolvers = true)
                     val operation =
-                        OperationContext(world, resolverObserver = RecordingResolverObserver())
+                        SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
                     val fragment = world.fragmentFrom(testCase.query.source)
                     testCase.registry.clearResolutionWitness()
                     val appliedResolverOccurrences =
@@ -285,7 +285,7 @@ internal class CurrentProfileBenchmarkSupport(
         }
 
     private data class PreparedResolution(
-        val operation: OperationContext,
+        val operation: SharedOperationContext<*>,
         val root: EngineObjectData.Sync,
         val selections: SelectionForest,
     )

@@ -7,7 +7,7 @@ import model.ObjectEngineResult
 import model.PathComponent
 import model.ResolverOccurrenceId
 import model.registry.VariableDefinition
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 
 /**
  * Declares and immediately completes every argument-defined variable belonging to these resolver
@@ -17,7 +17,7 @@ import semantics.shared.OperationContext
  * of one resolver field define distinct variable instances. Every occurrence must be declared and
  * completed exactly once.
  */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 internal fun Iterable<ObjectEngineResult.GroundKey>.bindFromArguments(
     root: ObjectEngineResult,
     path: List<PathComponent>,

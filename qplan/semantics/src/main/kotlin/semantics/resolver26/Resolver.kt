@@ -8,7 +8,8 @@ import kotlinx.coroutines.withTimeout
 import model.ObjectEngineResult
 import model.SelectionForest
 import model.schemaType
-import semantics.shared.OperationContext
+import semantics.shared.OEROccurrenceContext
+import semantics.shared.SharedOperationContext
 
 /**
  * Resolves selective demand once per object-local symbolic key.
@@ -17,7 +18,7 @@ import semantics.shared.OperationContext
  * expressions identify their owning resolver occurrences, so equal uses of one variable instance
  * coalesce while variables owned by different resolver occurrences remain distinct.
  */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun resolve(selections: SelectionForest): ObjectEngineResult =
     resolve(
         selections = selections,
@@ -25,7 +26,7 @@ fun resolve(selections: SelectionForest): ObjectEngineResult =
     )
 
 /** Includes validation instrumentation. */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 internal fun resolveObserved(
     selections: SelectionForest,
     applicationObserver: Resolver26ApplicationObserver,
@@ -36,7 +37,7 @@ internal fun resolveObserved(
         applicationObserver = applicationObserver,
     )
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 internal fun resolve(
     selections: SelectionForest,
     coroutineContext: CoroutineContext,
@@ -60,7 +61,7 @@ internal fun resolve(
  * The returned root has its complete selected key set installed and frozen, but its cell promises
  * may still be pending. All remaining work is owned by [requestScope].
  */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun startResolve(
     selections: SelectionForest,
     requestScope: CoroutineScope,
@@ -71,7 +72,7 @@ fun startResolve(
         applicationObserver = {},
     )
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 private fun startResolve(
     selections: SelectionForest,
     requestScope: CoroutineScope,
@@ -87,7 +88,7 @@ private fun startResolve(
             mutable = true,
         )
     val resolver26Operation =
-        Resolver26OperationContext(
+        OperationContext(
             base = operation,
             requestScope = requestScope,
             resolverObserver =
@@ -96,7 +97,7 @@ private fun startResolve(
                 ),
         )
     val orchestration =
-        ObjectOrchestrationTask(
+        OrchestrationTask.create(
             operation = resolver26Operation,
             occurrence =
                 OEROccurrenceContext(
@@ -107,7 +108,6 @@ private fun startResolve(
             source = source,
             initialDemand = selections,
         )
-    orchestration.prepare()
-    orchestration.launch()
+    resolver26Operation.dispatcher.dispatchOrchestrator(orchestration)
     return result
 }

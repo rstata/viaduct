@@ -6,13 +6,13 @@ import model.ObjectEngineResult
 import model.SelectionForest
 import semantics.resolvers.resolver21.CoroutineResolve
 import semantics.resolvers.successorBoundaryDemand
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 
 /**
  * Resolves [selections] through structured coroutines with non-selective resolver applications.
  * Results may contain more OER nodes than are strictly necessary to resolve the query.
  */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun resolve(selections: SelectionForest): ObjectEngineResult {
     require(!operation.selectiveResolvers) {
         "Resolver22 requires non-selective resolvers"

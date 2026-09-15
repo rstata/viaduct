@@ -22,7 +22,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import semantics.shared.RecordingResolverObserver
 
 class CorrectResolutionTest {
@@ -62,7 +62,7 @@ class CorrectResolutionTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = OperationContext(world, resolverObserver = RecordingResolverObserver())
+        val operation = SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
         val selections =
             world
                 .fragmentFrom(
@@ -85,7 +85,7 @@ class CorrectResolutionTest {
     fun `selections must be rooted at Query`() {
         val world = TestWorld.fromSDL(SCHEMA_SDL).assumptions
         val result = world.engineResultOf("Query")
-        val operation = OperationContext(world)
+        val operation = SharedOperationContext(world)
         val profileSelections =
             ObjectSelectionForest.of(
                 type = world.schema.requireType("Profile") as ViaductSchema.Object,
@@ -151,12 +151,12 @@ class CorrectResolutionTest {
                 "consumer" resolvesTo 7
             }
         val occurrenceId = ResolverOccurrenceId.at(result, listOf(consumerKey))
-        val missingObservation = OperationContext(world)
+        val missingObservation = SharedOperationContext(world)
 
         assertFalse(context(missingObservation) { result.correctResolution(selections) })
 
         val incorrectObservation =
-            OperationContext(world, resolverObserver = RecordingResolverObserver())
+            SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
         incorrectObservation.resolverObserver.onQueryFragmentResult(
             occurrenceId,
             world.engineResultOf("Query") {
@@ -166,7 +166,7 @@ class CorrectResolutionTest {
         assertFalse(context(incorrectObservation) { result.correctResolution(selections) })
 
         val correctObservation =
-            OperationContext(world, resolverObserver = RecordingResolverObserver())
+            SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
         correctObservation.resolverObserver.onQueryFragmentResult(
             occurrenceId,
             world.engineResultOf("Query") {
@@ -202,7 +202,7 @@ class CorrectResolutionTest {
                     }
                     """.trimIndent(),
             ).assumptions
-        val operation = OperationContext(world)
+        val operation = SharedOperationContext(world)
         val consumer = world.schema.requireObjectField("Query", "consumer")
         val source = world.schema.requireObjectField("Query", "source")
         val consumerKey =

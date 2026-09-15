@@ -4,7 +4,7 @@ import semantics.resolver26.resolve
 
 import viaduct.engine.api.EngineObjectData
 
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import model.ObjectEngineResult
 import model.SelectionForest
 import semantics.arbitrary.Config
@@ -37,7 +37,7 @@ class ResolverStressTest : DeepResolverStressContract {
             (SometimesPassiveFieldWeight to 0.25)
 
     override fun resolve(
-        operation: OperationContext,
+        operation: SharedOperationContext<*>,
         root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult =

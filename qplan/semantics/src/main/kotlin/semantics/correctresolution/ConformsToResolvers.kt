@@ -26,7 +26,7 @@ import model.registry.ResolverFragments
 import model.registry.VariableDefinition
 import model.merge
 import model.requireQueryTypeDef
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import semantics.shared.ResolverObservations
 
 /**
@@ -39,14 +39,14 @@ import semantics.shared.ResolverObservations
  * This predicate assumes [isClosedUnderResolverDemand] has established that every resolver input
  * value is present. It observes cell values but never access-acceptance results.
  */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun ObjectEngineResult.conformsToResolvers(): Boolean =
     resolverApplicationCache(this).let { resolverApplicationCache ->
         conformsToResolvers(resolverApplicationCache) &&
             resolverApplicationCache.hasCompleteRootFieldReferenceWitness()
     }
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 internal fun ObjectEngineResult.conformsToResolvers(
     resolverApplicationCache: ResolverApplicationCache,
 ): Boolean =
@@ -60,7 +60,7 @@ internal fun ObjectEngineResult.conformsToResolvers(
     }
 
 context(
-    operation: OperationContext,
+    operation: SharedOperationContext<*>,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun ObjectEngineResult.objectConformsToResolvers(
@@ -122,7 +122,7 @@ private fun ObjectEngineResult.objectConformsToResolvers(
     }
 
 context(
-    operation: OperationContext,
+    operation: SharedOperationContext<*>,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun ObjectEngineResult.errorArgumentQueryFragmentConforms(
@@ -149,7 +149,7 @@ private fun ObjectEngineResult.errorArgumentQueryFragmentConforms(
     )
 }
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 internal fun FieldResolver.fragmentsSatisfiedBy(
     root: ObjectEngineResult,
     result: ObjectEngineResult,
@@ -179,7 +179,7 @@ internal fun FieldResolver.fragmentsSatisfiedBy(
     }
 }
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 private fun FieldResolver.fromArgumentBindingsAgree(
     fragments: ResolverFragments,
     arguments: Arguments.Resolved,
@@ -201,7 +201,7 @@ private fun FieldResolver.fromArgumentBindingsAgree(
 }
 
 context(
-    operation: OperationContext,
+    operation: SharedOperationContext<*>,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun EngineResult?.engineResultConformsToResolvers(
@@ -233,7 +233,7 @@ private fun EngineResult?.engineResultConformsToResolvers(
     }
 
 context(
-    operation: OperationContext,
+    operation: SharedOperationContext<*>,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun EngineResult?.engineResultConformsToResolverValue(
@@ -292,7 +292,7 @@ private fun EngineResult?.engineResultConformsToResolverValue(
 }
 
 context(
-    operation: OperationContext,
+    operation: SharedOperationContext<*>,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun ObjectEngineResult.objectFieldsConformToResolverValue(

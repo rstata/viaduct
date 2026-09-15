@@ -16,12 +16,12 @@ import semantics.resolvers.materializedChildOccurrences
 import semantics.resolvers.resolveRetainedObjects
 import semantics.resolvers.resolver01.DepthFirstResolve
 import semantics.resolvers.resolver01.requireGroundKeys
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import viaduct.engine.api.EngineObjectData
 
 /** A single-threaded work queue that preserves the recursive resolver's depth-first traversal. */
 internal class DepthFirstReactor(
-    private val operation: OperationContext,
+    private val operation: SharedOperationContext<*>,
     private val complete: (SelectionForest) -> SelectionForest,
     private val source: EngineObjectData.Sync,
     private val selections: SelectionForest,

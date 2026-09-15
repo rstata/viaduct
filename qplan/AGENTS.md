@@ -7,7 +7,7 @@
 - [`maintainer-guide.md`](./maintainer-guide.md) - Use for validation, replay, failure classification, debugging, documentation conventions, and investigation workflow.
 - [`resolver-versions.md`](./resolver-versions.md) - Use to understand the maintained resolver grid and choose a simpler comparison implementation.
 - [`access-check-semantics.md`](./access-check-semantics.md) - Use for access-check vocabulary, checker demand, enforcement boundaries, type base-cell behavior, fresh checker Query OERs, and bypass semantics.
-- [`context-params.md`](./context-params.md) - Read before changing model or semantics APIs that use the canonical `Assumptions` or `OperationContext` context parameters.
+- [`context-params.md`](./context-params.md) - Read before changing model or semantics APIs that use the canonical `Assumptions` or `SharedOperationContext` context parameters.
 - [`model/guidelines.md`](./model/guidelines.md) - Read before changing semantic carriers, equality, factories, promises, keys, or result structures.
 - [`semantics/README.md`](./semantics/README.md) - Read before changing semantic transformations, resolver implementations, or correctness judgments.
 - [`semantics/testing-contracts.md`](./semantics/testing-contracts.md) - Read before changing or interpreting resolver tests and generated profiles.

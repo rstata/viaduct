@@ -10,7 +10,7 @@ import model.requireQueryTypeDef
 import model.testing.TestWorld
 import semantics.correctresolution.correctResolution
 import semantics.resolver26.resolve
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import semantics.shared.RecordingResolverObserver
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -25,7 +25,7 @@ class InclusionCombinationTest {
             val world = fixture.world.assumptions
             val query = fixture.world.fullChainQuery("t3")
             val operation =
-                OperationContext(
+                SharedOperationContext(
                     world = world,
                     resolverObserver = RecordingResolverObserver(),
                 )
@@ -71,7 +71,7 @@ class InclusionCombinationTest {
         T2CombinationVector.all.forEach { vector ->
             fixture.start(vector)
             val operation =
-                OperationContext(
+                SharedOperationContext(
                     world = world,
                     resolverObserver = RecordingResolverObserver(),
                 )
@@ -146,7 +146,7 @@ class InclusionCombinationTest {
         T1CombinationVector.all.forEach { vector ->
             fixture.start(vector)
             val operation =
-                OperationContext(
+                SharedOperationContext(
                     world = world,
                     resolverObserver = RecordingResolverObserver(),
                 )

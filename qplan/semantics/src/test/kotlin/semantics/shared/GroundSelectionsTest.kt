@@ -105,7 +105,7 @@ class GroundSelectionsTest {
 
     private class Fixture {
         val world = TestWorld.fromSDL(SCHEMA).assumptions
-        val operation = OperationContext(world)
+        val operation = SharedOperationContext(world)
         val schema = world.schema
         val query = schema.requireQueryTypeDef()
 

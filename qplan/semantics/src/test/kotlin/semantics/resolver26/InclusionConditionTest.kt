@@ -19,7 +19,7 @@ import model.testing.fromObjectField
 import model.testing.fromQueryField
 import model.testing.fromArgument
 import semantics.correctresolution.correctResolution
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import semantics.shared.RecordingResolverObserver
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -698,7 +698,7 @@ class InclusionConditionTest {
     private fun TestWorld.resolve(query: String): Resolution {
         val fragment = assumptions.fragmentFrom(query.replace("query", "fragment Query on Query"))
         val operation =
-            OperationContext(
+            SharedOperationContext(
                 world = assumptions,
                 resolverObserver = RecordingResolverObserver(),
             )

@@ -13,7 +13,7 @@ import model.schemaType
 import model.selectionForestOf
 import semantics.correctresolution.argumentsContainErrorValue
 import viaduct.engine.api.EngineObjectData
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 
 /**
  * Returns the applicable demand closed under the direct object fragments of its resolver fields.
@@ -21,7 +21,7 @@ import semantics.shared.OperationContext
  * Each closure step normalizes under existing bindings, binds variables defined by newly discovered
  * resolver occurrences, and instantiates their direct object fragments at their exact identities.
  */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun ViaductSchema.Object.closeResolverDemand(
     root: ObjectEngineResult,
     path: List<PathComponent>,
@@ -37,7 +37,7 @@ fun ViaductSchema.Object.closeResolverDemand(
     )
 
 /** Closes demand only for standard resolvers whose fields are absent from this source object. */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun EngineObjectData.Sync.closeResolverDemand(
     root: ObjectEngineResult,
     path: List<PathComponent>,
@@ -63,7 +63,7 @@ fun EngineObjectData.Sync.closeResolverDemand(
         },
     )
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 private fun ViaductSchema.Object.closeResolverDemand(
     root: ObjectEngineResult,
     path: List<PathComponent>,

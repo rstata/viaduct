@@ -546,7 +546,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
                 selectiveResolvers = false,
             )
         val expected =
-            context(semantics.shared.OperationContext(completeWorld)) {
+            context(semantics.shared.SharedOperationContext(completeWorld)) {
                 resolveWithResolver01(selections)
             }
         val result = resolveAndValidate(world, selections)

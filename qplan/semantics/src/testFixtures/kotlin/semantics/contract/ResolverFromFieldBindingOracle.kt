@@ -21,7 +21,7 @@ import semantics.shared.findStoredKey
 import viaduct.graphql.schema.ViaductSchema
 import viaduct.utils.collections.BitVector
 import kotlin.test.assertEquals
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import semantics.shared.ResolverObservations
 
 /**
@@ -30,7 +30,7 @@ import semantics.shared.ResolverObservations
  * An applied occurrence must have exactly all of its declared bindings and a passive occurrence
  * must have none.
  */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun ObjectEngineResult.validateFromFieldBindings(
     appliedResolverOccurrences: Set<ResolverOccurrenceId>,
 ) {
@@ -112,7 +112,7 @@ internal fun FieldResolver.fieldPathDefinitions(
 ): List<InstantiatedFieldPathDefinition> =
     instantiatedFieldPathVariableDefinitions(ResolverOccurrenceId.at(root, path))
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 private fun ObjectEngineResult.requestQueryRoots(): List<ObjectEngineResult> =
     buildList {
         add(this@requestQueryRoots)
@@ -124,7 +124,7 @@ private fun ObjectEngineResult.requestQueryRoots(): List<ObjectEngineResult> =
         )
     }
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 private fun ObjectEngineResult.readCompletedProvider(
     path: List<ObjectEngineResult.Key>,
 ): VariableBinding {
@@ -152,7 +152,7 @@ private fun ObjectEngineResult.readCompletedProvider(
     error("Provider path must be nonempty")
 }
 
-private fun OperationContext.resolverObservations(): ResolverObservations =
+private fun SharedOperationContext<*>.resolverObservations(): ResolverObservations =
     resolverObserver as? ResolverObservations
         ?: error("Resolver observations were not recorded for this operation")
 

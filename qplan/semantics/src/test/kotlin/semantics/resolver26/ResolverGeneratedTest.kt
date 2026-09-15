@@ -26,7 +26,7 @@ import semantics.contract.SelectiveNodeGeneratedResolverContract
 import semantics.contract.ResolverResolutionObservation
 import semantics.contract.SometimesPassiveGeneratedResolverContract
 import java.util.concurrent.ConcurrentHashMap
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import semantics.shared.RecordingResolverObserver
 
 class ResolverGeneratedTest :
@@ -65,7 +65,7 @@ class ResolverGeneratedTest :
             GeneratedCaseAssertions.fromFieldBindings
 
     override fun resolve(
-        operation: OperationContext,
+        operation: SharedOperationContext<*>,
         root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult =
@@ -79,7 +79,7 @@ class ResolverGeneratedTest :
         selections: SelectionForest,
     ): ResolverResolutionObservation {
         val operation =
-            OperationContext(
+            SharedOperationContext(
                 world = world,
                 resolverObserver = RecordingResolverObserver(),
             )
@@ -101,6 +101,6 @@ class ResolverGeneratedTest :
 
 private data class Resolver26ResolutionObservation(
     override val result: ObjectEngineResult,
-    override val operation: OperationContext,
+    override val operation: SharedOperationContext<*>,
     override val appliedResolverOccurrences: Set<ResolverOccurrenceId>,
 ) : ResolverResolutionObservation

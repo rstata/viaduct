@@ -10,7 +10,7 @@ import model.testing.TestWorld
 import semantics.contract.validateFromFieldBindings
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import semantics.shared.RecordingResolverObserver
 
 class ResolverFromFieldBindingOracleTest {
@@ -62,7 +62,7 @@ class ResolverFromFieldBindingOracleTest {
     fun `object-path bindings in a query-fragment root are validated`() {
         val testWorld = bindingWorld()
         val world = testWorld.assumptions
-        val operation = OperationContext(world, resolverObserver = RecordingResolverObserver())
+        val operation = SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
         val primaryResult = world.engineResultOf("Query")
         val queryResult = completedBindingResult(world)
         val queryFixture = bindingFixture(operation, queryResult)
@@ -87,7 +87,7 @@ class ResolverFromFieldBindingOracleTest {
 }
 
 private data class BindingFixture(
-    val operation: OperationContext,
+    val operation: SharedOperationContext<*>,
     val result: ObjectEngineResult,
     val occurrenceId: ResolverOccurrenceId,
     val definitions: List<InstantiatedFieldPathDefinition>,
@@ -110,13 +110,13 @@ private data class BindingFixture(
 private fun bindingFixture(): BindingFixture {
     val world = bindingWorld().assumptions
     return bindingFixture(
-        OperationContext(world, resolverObserver = RecordingResolverObserver()),
+        SharedOperationContext(world, resolverObserver = RecordingResolverObserver()),
         completedBindingResult(world),
     )
 }
 
 private fun bindingFixture(
-    operation: OperationContext,
+    operation: SharedOperationContext<*>,
     result: ObjectEngineResult,
 ): BindingFixture {
     val world = operation.world

@@ -8,7 +8,7 @@ import viaduct.graphql.schema.ViaductSchema
 import model.SelectionForest
 import model.fragmentFrom
 import semantics.shared.instantiateBindings
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import semantics.shared.RecordingResolverObserver
 import model.merge
 import model.objectOf
@@ -64,7 +64,7 @@ interface ListPassiveDeepeningGeneratedResolverContract : ResolverContract {
                 batch.queries.forEach { query ->
                     val world = testWorld.newAssumptions(selectiveResolvers)
                     val operation =
-                        OperationContext(world, resolverObserver = RecordingResolverObserver())
+                        SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
                     val fragment = world.fragmentFrom(query.source)
                     listDeepeningCases +=
                         context(operation) {
@@ -103,7 +103,7 @@ interface ListPassiveDeepeningGeneratedResolverContract : ResolverContract {
     }
 }
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 private fun countListPassiveDeepening(
     selections: SelectionForest,
     type: ViaductSchema.Object,
@@ -156,7 +156,7 @@ private fun countListPassiveDeepening(
     return count
 }
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 private fun hasMissingDemand(
     required: SelectionForest,
     selected: SelectionForest,

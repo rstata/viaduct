@@ -25,7 +25,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import viaduct.engine.api.EngineObjectData
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import semantics.shared.RecordingResolverObserver
 
 class SymbolicKeyIdentityTest {
@@ -95,7 +95,7 @@ class SymbolicKeyIdentityTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = OperationContext(world, resolverObserver = RecordingResolverObserver())
+        val operation = SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
         val resultKey =
             ObjectEngineResult.GroundKey.of(
                 world.schema.requireObjectField("Query", "result"),
@@ -228,7 +228,7 @@ class SymbolicKeyIdentityTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = OperationContext(world, resolverObserver = RecordingResolverObserver())
+        val operation = SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
         val resultKey =
             ObjectEngineResult.GroundKey.of(
                 world.schema.requireObjectField("Query", "result"),
@@ -370,7 +370,7 @@ class SymbolicKeyIdentityTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = OperationContext(world, resolverObserver = RecordingResolverObserver())
+        val operation = SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
         val leftKey =
             ObjectEngineResult.GroundKey.of(
                 world.schema.requireObjectField("Query", "left"),

@@ -25,7 +25,7 @@ import semantics.shared.isContextuallyGrounded
 import model.selectionForestOf
 import semantics.shared.CycleCheckState
 import semantics.shared.materialize
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import semantics.shared.ResolverObservations
 import semantics.shared.RootFieldReferenceInvocationObservation
 import viaduct.engine.api.EngineObjectData
@@ -158,7 +158,7 @@ private fun List<RootFieldReferenceInvocationObservation>.haveDistinctInvocation
     return all { observation -> roots.put(observation.invocationRoot, Unit) == null }
 }
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 internal fun rootFieldReferenceWitness(
     primaryRoot: ObjectEngineResult,
 ): RootFieldReferenceWitness {
@@ -184,12 +184,12 @@ internal fun resolverApplicationCache(
         rootFieldReferenceWitness = rootFieldReferenceWitness,
     )
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 internal fun resolverApplicationCache(root: ObjectEngineResult): ResolverApplicationCache =
     resolverApplicationCache(root, rootFieldReferenceWitness(root))
 
 /** Reference invocations published beneath this root and justified by deterministic replay. */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 internal fun ObjectEngineResult.ownedRootFieldReferenceInvocations(): List<
     RootFieldReferenceInvocationObservation,
 > {
@@ -209,7 +209,7 @@ internal fun ObjectEngineResult.ownedRootFieldReferenceInvocations(): List<
  * field belongs to its standard resolver.
  */
 context(
-    operation: OperationContext,
+    operation: SharedOperationContext<*>,
     resolverApplicationCache: ResolverApplicationCache,
 )
 internal fun ObjectEngineResult.reapplyResolver(
@@ -286,7 +286,7 @@ internal fun ObjectEngineResult.reapplyResolver(
 
 /** Reapplies every independently rooted resolver hop that justified one consumer value. */
 context(
-    operation: OperationContext,
+    operation: SharedOperationContext<*>,
     resolverApplicationCache: ResolverApplicationCache,
 )
 internal fun reapplyRootFieldReference(
@@ -336,7 +336,7 @@ private fun ResolverOutputData?.withAuthoritativeNodeId(
     )
 }
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 private fun RootFieldReferenceInvocationObservation.matches(
     expectedReference: RootFieldReferenceData,
     expectedPublicationRoot: ObjectEngineResult,
@@ -362,7 +362,7 @@ private fun RootFieldReferenceInvocationObservation.matches(
 }
 
 context(
-    operation: OperationContext,
+    operation: SharedOperationContext<*>,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun RootFieldReferenceInvocationObservation.reapplyReferencedResolver(

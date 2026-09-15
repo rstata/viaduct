@@ -15,7 +15,7 @@ import semantics.correctresolution.correctResolution
 import semantics.correctresolution.isClosedUnderResolverDemand
 import semantics.correctresolution.rootedAndWellTyped
 import kotlin.test.assertTrue
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 
 /**
  * Post-test policy requiring every contract result to satisfy the complete correctness judgment.
@@ -28,7 +28,7 @@ interface CorrectResolutionPostTestPolicy : ResolverContract {
 }
 
 private data class PendingResolutionValidation(
-    val operation: OperationContext,
+    val operation: SharedOperationContext<*>,
     val selections: SelectionForest,
     val result: ObjectEngineResult,
 )

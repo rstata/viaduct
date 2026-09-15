@@ -22,7 +22,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 
 class ResolvePassiveValuesTest {
     @Test
@@ -100,7 +100,7 @@ class ResolvePassiveValuesTest {
 
         val resolved =
             runBlocking {
-                context(OperationContext(world)) {
+                context(SharedOperationContext(world)) {
                     value.resolvePassiveValues(
                         expectedType = world.schema.requireObjectField("Query", "user").outputType,
                         path = emptyList(),
@@ -185,7 +185,7 @@ class ResolvePassiveValuesTest {
 
         val resolved =
             runBlocking {
-                context(OperationContext(world)) {
+                context(SharedOperationContext(world)) {
                     value.resolvePassiveValues(
                         expectedType = world.schema.requireObjectField("Query", "user").outputType,
                         path = emptyList(),
@@ -233,7 +233,7 @@ class ResolvePassiveValuesTest {
 
         assertFailsWith<IllegalArgumentException> {
             runBlocking {
-                context(OperationContext(world)) {
+                context(SharedOperationContext(world)) {
                     value.resolvePassiveValues(
                         expectedType = world.schema.requireObjectField("Query", "user").outputType,
                         path = emptyList(),
@@ -282,7 +282,7 @@ class ResolvePassiveValuesTest {
 
         val resolved =
             runBlocking {
-                context(OperationContext(world)) {
+                context(SharedOperationContext(world)) {
                     value.resolvePassiveValues(
                         expectedType = world.schema.requireObjectField("Query", "item").outputType,
                         path = emptyList(),
@@ -323,7 +323,7 @@ class ResolvePassiveValuesTest {
 
         val resolved =
             runBlocking {
-                context(OperationContext(world)) {
+                context(SharedOperationContext(world)) {
                     value.resolvePassiveValues(
                         expectedType = world.schema.requireObjectField("Query", "item").outputType,
                         path = emptyList(),
@@ -368,7 +368,7 @@ class ResolvePassiveValuesTest {
 
         val resolved =
             runBlocking {
-                context(OperationContext(world)) {
+                context(SharedOperationContext(world)) {
                     value.resolvePassiveValues(
                         expectedType = world.schema.requireObjectField("Query", "user").outputType,
                         path = emptyList(),
@@ -417,7 +417,7 @@ class ResolvePassiveValuesTest {
 
         assertFailsWith<IllegalArgumentException> {
             runBlocking {
-                context(OperationContext(world)) {
+                context(SharedOperationContext(world)) {
                     value.resolvePassiveValues(
                         expectedType = world.schema.requireObjectField("Query", "item").outputType,
                         path = emptyList(),
@@ -502,7 +502,7 @@ class ResolvePassiveValuesTest {
             )
         val passiveValuesResult =
             runBlocking {
-                context(OperationContext(world)) {
+                context(SharedOperationContext(world)) {
                     output.resolvePassiveValues(
                         expectedType = itemsField.outputType,
                         path = rootPath,

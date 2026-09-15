@@ -4,7 +4,7 @@ import semantics.resolver26.resolve
 
 import viaduct.engine.api.EngineObjectData
 
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import model.ObjectEngineResult
 import model.SelectionForest
 import semantics.contract.CorrectResolutionPostTestPolicy
@@ -31,8 +31,10 @@ import semantics.contract.SometimesPassiveResolverContract
 import semantics.contract.SometimesPassiveSelectiveResolverContract
 import semantics.contract.VariableSelectionIdentityResolverContract
 import semantics.contract.VariablesProviderResolverContract
+import semantics.contract.FrozenObjectResolutionContract
 
 class ResolverContractTest :
+    FrozenObjectResolutionContract,
     EmptyObjectFragmentResolverContract,
     NodeResolverContract,
     RootFieldReferenceResolverContract,
@@ -58,7 +60,7 @@ class ResolverContractTest :
     SelectiveObjectFragmentOutputPolicyContract,
     CorrectResolutionPostTestPolicy {
     override fun resolve(
-        operation: OperationContext,
+        operation: SharedOperationContext<*>,
         root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult =

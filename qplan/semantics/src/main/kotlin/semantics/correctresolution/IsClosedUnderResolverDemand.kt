@@ -15,7 +15,7 @@ import model.outputValue
 import model.schemaType
 import model.usedVariables
 import viaduct.engine.api.EngineObjectData
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import viaduct.graphql.schema.ViaductSchema
 
 /**
@@ -28,11 +28,11 @@ import viaduct.graphql.schema.ViaductSchema
  *
  * This predicate observes cell-value presence and content, but never access-acceptance results.
  */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun ObjectEngineResult.isClosedUnderResolverDemand(): Boolean =
     isClosedUnderResolverDemand(resolverApplicationCache(this))
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 internal fun ObjectEngineResult.isClosedUnderResolverDemand(
     resolverApplicationCache: ResolverApplicationCache,
 ): Boolean =
@@ -46,7 +46,7 @@ internal fun ObjectEngineResult.isClosedUnderResolverDemand(
     }
 
 context(
-    operation: OperationContext,
+    operation: SharedOperationContext<*>,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
@@ -148,7 +148,7 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
 }
 
 context(
-    operation: OperationContext,
+    operation: SharedOperationContext<*>,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
@@ -202,7 +202,7 @@ private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
 }
 
 context(
-    operation: OperationContext,
+    operation: SharedOperationContext<*>,
     resolverApplicationCache: ResolverApplicationCache,
 )
 private fun EngineResult?.engineResultIsClosedUnderResolverDemand(

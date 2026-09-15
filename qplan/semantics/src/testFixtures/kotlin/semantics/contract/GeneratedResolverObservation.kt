@@ -16,13 +16,13 @@ import semantics.correctresolution.conformsToResolvers
 import semantics.correctresolution.conformsToSelections
 import semantics.correctresolution.isClosedUnderResolverDemand
 import semantics.correctresolution.rootedAndWellTyped
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /** One generated resolver execution and the request-local state needed to validate it. */
 data class GeneratedResolutionObservation(
-    val operation: OperationContext,
+    val operation: SharedOperationContext<*>,
     val fragment: Fragment,
     val subject: ResolverResolutionObservation,
 ) {

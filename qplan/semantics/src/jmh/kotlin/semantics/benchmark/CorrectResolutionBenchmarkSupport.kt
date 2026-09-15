@@ -11,7 +11,7 @@ import org.openjdk.jmh.infra.Blackhole
 import semantics.arbitrary.ResolverBenchmarkCorpus
 import semantics.arbitrary.resolverBenchmarkOverheadQueryConfig
 import semantics.correctresolution.correctResolution
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import semantics.shared.RecordingResolverObserver
 
 internal const val DEFAULT_CORRECT_RESOLUTION_INPUT_COUNT = 50
@@ -52,7 +52,7 @@ internal class CorrectResolutionBenchmarkSupport(
                 .map { query ->
                     val world = testWorld.newAssumptions(selectiveResolvers = true)
                     val operation =
-                        OperationContext(world, resolverObserver = RecordingResolverObserver())
+                        SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
                     val fragment = world.fragmentFrom(query.source)
                     val result =
                         subject.resolve(
@@ -96,7 +96,7 @@ internal class CorrectResolutionBenchmarkSupport(
     }
 
     private data class PreparedCorrectResolution(
-        val operation: OperationContext,
+        val operation: SharedOperationContext<*>,
         val result: ObjectEngineResult,
         val selections: ObjectSelectionForest,
     )

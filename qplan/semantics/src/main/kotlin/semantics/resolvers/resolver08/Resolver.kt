@@ -4,17 +4,17 @@ import model.ObjectEngineResult
 import model.SelectionForest
 import semantics.resolvers.resolver06.DepthFirstReactor
 import semantics.resolvers.successorDemand
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 
 /**
  * Resolves [selections] through a depth-first work queue with selective resolver applications.
  * Whether the results contain only the necessary OER nodes has not been proved.
  */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun resolve(selections: SelectionForest): ObjectEngineResult =
     resolve(selections, onTaskStarted = {})
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 internal fun resolve(
     selections: SelectionForest,
     onTaskStarted: (DepthFirstReactor.Task) -> Unit,

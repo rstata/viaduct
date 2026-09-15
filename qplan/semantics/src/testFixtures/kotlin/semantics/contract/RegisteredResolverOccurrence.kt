@@ -15,7 +15,7 @@ import semantics.arbitrary.ResolverApplicationKey
 import semantics.arbitrary.resolutionFingerprint
 import semantics.shared.groundedArguments
 import semantics.shared.isContextuallyGrounded
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 
 /** One registered resolver occurrence discovered independently in a completed result tree. */
 data class RegisteredResolverOccurrence(
@@ -28,7 +28,7 @@ data class RegisteredResolverOccurrence(
         get() = applicationKey.field
 }
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun EngineResult?.registeredResolverOccurrences(
     registry: ResolverRegistry,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
@@ -43,7 +43,7 @@ fun EngineResult?.registeredResolverOccurrences(
     return occurrences
 }
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun EngineResult?.forEachRegisteredResolverOccurrence(
     registry: ResolverRegistry,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
@@ -58,7 +58,7 @@ fun EngineResult?.forEachRegisteredResolverOccurrence(
     )
 }
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 internal fun EngineResult?.forEachRegisteredResolverOccurrenceAt(
     registry: ResolverRegistry,
     initialPath: List<PathComponent>,
@@ -74,7 +74,7 @@ internal fun EngineResult?.forEachRegisteredResolverOccurrenceAt(
     )
 }
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 private fun EngineResult?.visitRegisteredResolverOccurrences(
     registry: ResolverRegistry,
     bounds: ResolutionWitnessBounds,
@@ -148,7 +148,7 @@ private fun EngineResult?.visitRegisteredResolverOccurrences(
     visit(this, initialPath)
 }
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun EngineResult?.registeredResolverOccurrenceCounts(
     registry: ResolverRegistry,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),

@@ -8,7 +8,7 @@ import model.ObjectEngineResult
  * Symbolic identity wins when the result retains it. Older resolver families may instead store
  * the key's grounded projection.
  */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 internal fun ObjectEngineResult.findStoredKey(
     candidate: ObjectEngineResult.ObjectKey,
 ): ObjectEngineResult.ObjectKey? {

@@ -10,7 +10,7 @@ import model.SelectionForest
 import model.merge
 import semantics.shared.findStoredKey
 import semantics.shared.isIncluded
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 
 /**
  * Whether this result contains every value required by [selections].
@@ -25,12 +25,12 @@ import semantics.shared.OperationContext
  *
  * This operation is defined only when applicable selection keys contain no unbound variables.
  */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun ObjectEngineResult.conformsToSelections(
     selections: SelectionForest,
 ): Boolean = conformsToSelectionsAt(selections, emptyList())
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun ObjectEngineResult.conformsToSelections(
     selections: ObjectSelectionForest,
 ): Boolean =
@@ -38,13 +38,13 @@ fun ObjectEngineResult.conformsToSelections(
         conformsToSelectionsAt(selections, emptyList())
 
 // Checks selections rooted at an OER whose exact absolute path is supplied by the caller.
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun ObjectEngineResult.conformsToSelectionsAt(
     selections: SelectionForest,
     path: List<PathComponent>,
 ): Boolean = objectConformsToSelections(selections, path)
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 private fun ObjectEngineResult.objectConformsToSelections(
     selections: SelectionForest,
     path: List<PathComponent>,
@@ -62,7 +62,7 @@ private fun ObjectEngineResult.objectConformsToSelections(
                 )
     }
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 private fun EngineResult?.engineResultConformsToSelections(
     selections: SelectionForest,
     path: List<PathComponent>,

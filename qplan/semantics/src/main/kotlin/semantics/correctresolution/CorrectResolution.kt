@@ -3,7 +3,7 @@ package semantics.correctresolution
 import model.ObjectEngineResult
 import model.ObjectSelectionForest
 import model.requireQueryTypeDef
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 
 /**
  * Whether this primary Query-rooted result is a correct field-resolution result for [selections].
@@ -23,7 +23,7 @@ import semantics.shared.OperationContext
  * modeled function relation, not programming-language procedure executions.  These should
  * be reasoned about as inductively-defined relations, not recursive routines.
  */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun ObjectEngineResult.correctResolution(
     selections: ObjectSelectionForest,
 ): Boolean {
@@ -32,7 +32,7 @@ fun ObjectEngineResult.correctResolution(
         rootFieldReferenceWitness.isComplete()
 }
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 internal fun ObjectEngineResult.correctResolution(
     selections: ObjectSelectionForest,
     rootFieldReferenceWitness: RootFieldReferenceWitness,

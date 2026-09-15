@@ -17,14 +17,14 @@ import viaduct.graphql.schema.ViaductSchema
 import model.registry.FieldResolver
 import model.registry.VariableDefinition
 import semantics.shared.instantiateBindings
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 
 /** Extends this demand with every encountered successor resolver's transitive input demand. */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun SelectionForest.successorDemand(): SelectionForest =
     successorDemandWithoutParentLifting().liftParentDemand()
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 private fun SelectionForest.successorDemandWithoutParentLifting(): SelectionForest =
     flatMap { selection ->
         val nestedDemand = selection.subselections.successorDemand()
@@ -60,11 +60,11 @@ private fun SelectionForest.successorDemandWithoutParentLifting(): SelectionFore
     }
 
 /** Extends this demand with the paths needed to find every successor resolver boundary. */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 fun SelectionForest.successorBoundaryDemand(): SelectionForest =
     successorBoundaryDemandWithoutParentLifting().liftParentDemand()
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 private fun SelectionForest.successorBoundaryDemandWithoutParentLifting(): SelectionForest =
     flatMap { selection ->
         val requested =
@@ -85,7 +85,7 @@ private fun SelectionForest.successorBoundaryDemandWithoutParentLifting(): Selec
  * recursive level. Parent selections remain in place for materialization; their subselections are
  * additionally demanded at the ancestor that owns the referenced OER.
  */
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 internal fun SelectionForest.liftParentDemand(): SelectionForest =
     flatMap { selection ->
         val nestedDemand = selection.subselections.liftParentDemand()
@@ -119,7 +119,7 @@ internal fun SelectionForest.liftParentDemand(): SelectionForest =
         selectionForestOf(requested) + lifted.guardedBy(selection.inclusionCondition)
     }
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 private fun Selection.successorInputBoundaries(): SelectionForest =
     possibleTypes.flatMapToSelectionForest { possibleType ->
         val specializedKey = objectKey(possibleType)
@@ -143,7 +143,7 @@ private fun Selection.successorInputBoundaries(): SelectionForest =
         }
     }
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 private fun SelectionForest.boundarySkeleton(): SelectionForest =
     flatMap { selection ->
         val nested = selection.subselections.boundarySkeleton()

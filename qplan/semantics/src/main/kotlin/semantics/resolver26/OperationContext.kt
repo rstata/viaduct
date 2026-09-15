@@ -2,21 +2,21 @@ package semantics.resolver26
 
 import kotlinx.coroutines.CoroutineScope
 import semantics.shared.CycleCheckState
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 
 /** Request-local state and observation boundary specific to Resolver26. */
-internal class Resolver26OperationContext(
-    base: OperationContext,
+internal class OperationContext(
+    base: SharedOperationContext<*>,
     requestScope: CoroutineScope,
-    override val resolverObserver: Resolver26Observer,
+    override val resolverObserver: ResolverObserver,
     val cycleChecker: CycleCheckState = CycleCheckState.create(),
     val bindingDeclarationsState: BindingDeclarationsState = BindingDeclarationsState(),
     val queryValuesState: QueryValuesState = QueryValuesState(),
-) : OperationContext(
+) : SharedOperationContext<TaskDispatcher>(
         world = base.world,
         variableBindingsState = base.variableBindingsState,
         resolverObserver = resolverObserver,
     ) {
-    /** The narrow capability for launching permitted request-root Resolver26 tasks. */
-    val rootTaskLauncher = Resolver26RootTaskLauncher(requestScope)
+    /** Owns dispatch of the two permitted request-root task kinds. */
+    override val dispatcher = TaskDispatcher(requestScope)
 }

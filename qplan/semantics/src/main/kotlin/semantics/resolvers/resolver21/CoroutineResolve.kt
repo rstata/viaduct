@@ -31,14 +31,14 @@ import semantics.resolvers.prepareInvocation
 import semantics.resolvers.resolvePassiveValues
 import semantics.resolvers.RootFieldReferenceResolver
 import semantics.shared.CycleCheckState
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 import semantics.shared.RootFieldReferenceInvocationObservation
 import semantics.shared.materialize
 import viaduct.engine.api.EngineObjectData
 
 /** Resolves one operation through a structured coroutine tree and exact value promises. */
 internal class CoroutineResolve(
-    private val operation: OperationContext,
+    private val operation: SharedOperationContext<*>,
     private val complete: (SelectionForest) -> SelectionForest,
     private val supportsParentFields: Boolean = false,
     private val cycleChecker: CycleCheckState = CycleCheckState.create(),

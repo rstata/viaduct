@@ -49,6 +49,8 @@ Resolver22/23 support `@parent`. Their structured suspension and exact promises 
 
 Resolver26 retains variable-bearing resolver-fragment selections as symbolic OER keys. Variables are instantiated once per resolver occurrence, so equal symbolic keys coalesce within an OER while separate containing OERs remain distinct. It synchronously closes symbolic demand before local installation, uses source presence to let ancestor outputs own argumentless fields that otherwise have standard resolvers, prepares every binding required by the remaining work, reserves active cells once their symbolic keys are contextually grounded, freezes the OER key set, and runs field resolution under one request-owned coroutine scope.
 
+Resolver26 now uses the shared passive traversal and task-context interfaces. Its orchestration factory returns closed demand and fully initialized task state, while its `SharedTaskDispatcher` implements the two dispatch operations with request-root coroutines. Resolver01-23 retain their original scheduling and passive traversal pending incremental migration.
+
 Resolver26 supports `@parent` by extending both input-demand closure and successor-demand closure to lift parent-induced demand before each OER is frozen.
 
 Resolver26 implements the same root-field-reference contract as the comparison grid through its

@@ -5,9 +5,9 @@ import model.Assumptions
 import model.ObjectEngineResult
 import model.Fragment
 import model.merge
-import semantics.shared.OperationContext
+import semantics.shared.SharedOperationContext
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 internal fun ObjectEngineResult.correctResolution(
     fragment: Fragment,
 ): Boolean =
@@ -21,6 +21,6 @@ context(world: Assumptions)
 internal fun ObjectEngineResult.rootedAndWellTyped(fragment: Fragment): Boolean =
     fragment.nominalType == world.schema.requireQueryTypeDef() && this.rootedAndWellTyped()
 
-context(operation: OperationContext)
+context(operation: SharedOperationContext<*>)
 internal fun ObjectEngineResult.conformsToFragment(fragment: Fragment): Boolean =
     conformsToSelections(fragment.subselections)

@@ -48,6 +48,9 @@ internal class FieldResolutionLogic(
     private val fieldResolverOccurrenceContext get() = fieldResolverTask.fieldResolverOccurrenceContext
     private val world: Assumptions = operationContext.world
 
+    /** Owns the bindings that must receive errors if the current invocation fails. */
+    private var currentInvocation = fieldResolverOccurrenceContext
+
     fun validate() {
         val occurrenceContext = resolverOccurrenceContext
         val selection = occurrenceContext.selection
@@ -90,7 +93,7 @@ internal class FieldResolutionLogic(
     }
 
     fun publishFieldError(cause: Exception) {
-        fieldResolverOccurrenceContext?.variableDefinitions?.forEach { definition ->
+        currentInvocation?.variableDefinitions?.forEach { definition ->
             if (
                 definition.definition == VariableDefinition.FromProvider ||
                 definition.definition is VariableDefinition.FromArgument
@@ -385,6 +388,7 @@ internal class FieldResolutionLogic(
         arguments: Arguments.Resolved,
         invocationDemand: SelectionForest,
     ): ResolverOutputData? {
+        currentInvocation = fieldResolverContext
         val queryProducer = fieldResolverTask.launchQueryFragmentProducer(fieldResolverContext)
         completeVariablesProviderBindings(fieldResolverContext, arguments)?.let { return it }
         val input = engineObjectDataOf(fieldResolverContext.resolver.field.containingDef)

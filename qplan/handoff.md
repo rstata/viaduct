@@ -101,7 +101,7 @@ Production-derived execution tests live under `execution/viaductfeaturetests`. W
 
 ## Validation
 
-The current task structure passes the full ordinary check across model, generators, all maintained resolvers, and execution (2026-09-17). JMH sources also compile. Run from `qplan/`:
+The full ordinary check passes across model, generators, all maintained resolvers, and execution, including all ten `QueryFragmentBindingTerminationTest` cases. The field-error boundary now completes the current reference hop's bindings, allowing its Query readers to finish after an unexpected exception. JMH sources also compiled in the earlier validation. Run from `qplan/`:
 
 ```shell
 ./gradlew check

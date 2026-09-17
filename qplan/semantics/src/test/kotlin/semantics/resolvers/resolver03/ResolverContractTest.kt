@@ -7,7 +7,9 @@ import viaduct.engine.api.EngineObjectData
 import semantics.shared.SharedOperationContext
 import model.ObjectEngineResult
 import model.SelectionForest
+import semantics.contract.FrozenObjectResolutionContract
 import semantics.contract.CorrectResolutionPostTestPolicy
+import semantics.contract.DepthFirstQueryFringeOrderingContract
 import semantics.contract.DepthFirstRootFieldReferenceOrderingContract
 import semantics.contract.EmptyObjectFragmentResolverContract
 import semantics.contract.NodeResolverContract
@@ -26,9 +28,11 @@ import semantics.contract.UnsupportedParentFieldResolverContract
 
 class ResolverContractTest :
     EmptyObjectFragmentResolverContract,
+    FrozenObjectResolutionContract,
     NodeResolverContract,
     RootFieldReferenceResolverContract,
     DepthFirstRootFieldReferenceOrderingContract,
+    DepthFirstQueryFringeOrderingContract,
     QueryFragmentRootFieldReferenceResolverContract,
     SelectiveRootFieldReferenceResolverContract,
     ObjectFragmentResolverContract,

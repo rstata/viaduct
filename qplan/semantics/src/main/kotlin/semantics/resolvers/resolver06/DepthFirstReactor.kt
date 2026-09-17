@@ -1,80 +1,32 @@
 package semantics.resolvers.resolver06
 
-import model.Arguments
-import model.Assumptions
-import model.ListEngineResult
-import model.ObjectEngineResult
-import model.ObjectSelection
-import model.ObjectSelectionForest
-import model.PathComponent
-import model.SelectionForest
-import model.groundKey
-import model.schemaType
 import java.util.PriorityQueue
-import semantics.resolvers.closeResolverDemand
-import semantics.resolvers.materializedChildOccurrences
-import semantics.resolvers.resolveRetainedObjects
-import semantics.resolvers.resolver01.DepthFirstResolve
-import semantics.resolvers.resolver01.requireGroundKeys
+import model.ObjectEngineResult
+import model.SelectionForest
+import model.schemaType
+import semantics.resolvers.resolver01.DepthFirstFieldResolverTask
+import semantics.resolvers.resolver01.DepthFirstOperationContext
+import semantics.resolvers.resolver01.DepthFirstOrchestrationTask
+import semantics.resolvers.resolver01.DepthFirstTask
+import semantics.shared.OEROccurrenceContext
 import semantics.shared.SharedOperationContext
+import semantics.shared.SharedTaskDispatcher
 import viaduct.engine.api.EngineObjectData
 
-/** A single-threaded work queue that preserves the recursive resolver's depth-first traversal. */
+/** Queues the same tasks as Resolver01-03, using depth, task kind, and insertion order for readiness. */
 internal class DepthFirstReactor(
-    private val operation: SharedOperationContext<*>,
-    private val complete: (SelectionForest) -> SelectionForest,
+    operation: SharedOperationContext<*>,
+    complete: (SelectionForest) -> SelectionForest,
     private val source: EngineObjectData.Sync,
     private val selections: SelectionForest,
-    private val onTaskStarted: (Task) -> Unit = {},
-) {
-    private val world: Assumptions = operation.world
-
-    sealed interface Task {
-        val path: List<PathComponent>
-    }
-
-    class SlotOrchestrator(
-        override val path: List<PathComponent>,
-        val source: EngineObjectData.Sync,
-        val selections: SelectionForest,
-        val target: ObjectEngineResult,
-    ) : Task {
-        init {
-            require(source.schemaType == target.type) {
-                "Source type ${source.schemaType.name} does not match result type ${target.type.name}"
-            }
-        }
-    }
-
-    class SlotResolver(
-        override val path: List<PathComponent>,
-        val source: EngineObjectData.Sync,
-        val selection: ObjectSelection,
-        val target: ObjectEngineResult,
-    ) : Task {
-        init {
-            require(source.schemaType == target.type) {
-                "Source type ${source.schemaType.name} does not match result type ${target.type.name}"
-            }
-            require(selection.key.field.containingDef == target.type) {
-                "Resolver selection does not belong to its target object"
-            }
-        }
-    }
-
-    private val result =
-        context(operation, world) {
-            ObjectEngineResult.of(source.schemaType, emptyMap(), mutable = true)
-        }
-    private val depthFirstResolve = DepthFirstResolve(operation, complete)
+    private val onTaskStarted: (DepthFirstTask) -> Unit = {},
+) : SharedTaskDispatcher<DepthFirstOrchestrationTask, DepthFirstFieldResolverTask> {
+    private val operation = DepthFirstOperationContext(operation, complete, this)
     private val tasks = PriorityQueue(depthFirstTaskComparator)
-    private val launchedOrchestrators = mutableSetOf<List<PathComponent>>()
-    private val startedOrchestrators = mutableSetOf<List<PathComponent>>()
-    private val finishedOrchestrators = mutableSetOf<List<PathComponent>>()
-    private val orchestratorResults = mutableListOf<OrchestratorResult>()
-    private val launchedResolvers = mutableSetOf<List<PathComponent>>()
-    private val startedResolvers = mutableSetOf<List<PathComponent>>()
-    private val finishedResolvers = mutableSetOf<List<PathComponent>>()
+    private val launched = mutableSetOf<DepthFirstTask>()
+    private val finished = mutableSetOf<DepthFirstTask>()
+    private val orchestrated = mutableSetOf<OEROccurrenceContext>()
+    private val children = mutableMapOf<OEROccurrenceContext, MutableList<DepthFirstOrchestrationTask>>()
     private var nextSequence = 0L
     private var started = false
 
@@ -82,191 +34,69 @@ internal class DepthFirstReactor(
     fun resolve(): ObjectEngineResult {
         check(!started) { "DepthFirstReactor.resolve() may only be called once" }
         started = true
-        enqueue(
-            SlotOrchestrator(
-                path = emptyList(),
-                source = source,
-                selections = selections,
-                target = result,
-            ),
+        val result = ObjectEngineResult.of(source.schemaType, mutable = true)
+        operation.passiveValues.resolvePassiveObjectValues(
+            source, OEROccurrenceContext(result, emptyList(), result), selections,
         )
-
         while (tasks.isNotEmpty()) {
             val task = tasks.remove().task
+            onTaskStarted(task)
             when (task) {
-                is SlotOrchestrator -> {
-                    check(task.path in launchedOrchestrators) {
-                        "Orchestrator started before launching: ${task.path.renderReactorPath()}"
-                    }
-                    check(startedOrchestrators.add(task.path)) {
-                        "Orchestrator started more than once: ${task.path.renderReactorPath()}"
-                    }
-                    onTaskStarted(task)
-                    task.execute()
+                is DepthFirstOrchestrationTask -> {
+                    task.run()
+                    check(orchestrated.add(task.occurrence)) { "Object orchestrated twice: ${task.path}" }
+                    children.remove(task.occurrence)?.forEach(::enqueue)
                 }
-
-                is SlotResolver -> {
-                    check(task.coordinate in launchedResolvers) {
-                        "Resolver coordinate started before launching: " +
-                            task.coordinate.renderReactorPath()
-                    }
-                    check(startedResolvers.add(task.coordinate)) {
-                        "Resolver coordinate started more than once: " +
-                            task.coordinate.renderReactorPath()
-                    }
-                    onTaskStarted(task)
-                    task.execute()
-                }
+                is DepthFirstFieldResolverTask -> task.run()
             }
+            check(finished.add(task)) { "Task finished twice: ${task.path}" }
         }
-        check(startedOrchestrators == launchedOrchestrators) {
-            "Started orchestrators do not equal launched orchestrators"
-        }
-        check(finishedOrchestrators == launchedOrchestrators) {
-            "Finished orchestrators do not equal launched orchestrators"
-        }
-        check(startedResolvers == launchedResolvers) {
-            "Started resolver coordinates do not equal launched coordinates"
-        }
-        check(finishedResolvers == launchedResolvers) {
-            "Finished resolver coordinates do not equal launched coordinates"
-        }
-        orchestratorResults.forEach { orchestratorResult ->
-            val missing =
-                orchestratorResult.closedDemand.groundKeys() -
-                    orchestratorResult.target.requireGroundKeys()
-            check(missing.isEmpty()) {
-                "Completed OER ${orchestratorResult.path.renderReactorPath()} is missing sealed " +
-                    "demand: " +
-                    missing.joinToString { key ->
-                        (orchestratorResult.path + key).renderReactorPath()
-                    }
+        check(children.isEmpty() && finished == launched) { "Reactor returned with unfinished tasks" }
+        launched.filterIsInstance<DepthFirstOrchestrationTask>().forEach { task ->
+            val target = task.occurrence.target
+            check(task.closedDemand.groundKeys().all { target.isCellSet(it) && target.getCell(it).getValue().isCompleted }) {
+                "Completed OER ${task.path} is missing closed demand"
             }
         }
         return result
     }
 
-    private fun SlotOrchestrator.execute() = context(operation, world) {
-        val closedDemand = source.closeResolverDemand(result, path, selections)
-        require(closedDemand.groundKeys().none { key -> key is ObjectEngineResult.ParentKey }) {
-            "Resolver06-08 do not support @parent fields"
-        }
-        source.materializedChildOccurrences(path, closedDemand, target)
-            .forEach { passiveObjectOccurrence ->
-                enqueue(
-                    SlotOrchestrator(
-                        path = passiveObjectOccurrence.path,
-                        source = passiveObjectOccurrence.source,
-                        selections = passiveObjectOccurrence.selections,
-                        target = passiveObjectOccurrence.target,
-                    ),
-                )
-            }
-        val unresolvedKeys = closedDemand.groundKeys() - target.requireGroundKeys()
-        depthFirstResolve
-            .dependencyOrder(source, result, path, unresolvedKeys)
-            .forEach { key ->
-                enqueue(
-                    SlotResolver(
-                        path = path,
-                        source = source,
-                        selection = closedDemand[key],
-                        target = target,
-                    ),
-                )
-            }
-        check(path in startedOrchestrators) {
-            "Orchestrator finished before starting: ${path.renderReactorPath()}"
-        }
-        check(finishedOrchestrators.add(path)) {
-            "Orchestrator finished more than once: ${path.renderReactorPath()}"
-        }
-        orchestratorResults += OrchestratorResult(path, target, closedDemand)
-    }
-
-    private fun SlotResolver.execute() = context(operation, world) {
-        depthFirstResolve
-            .resolveKey(source, result, path, selection, target)
-            ?.resolveRetainedObjects { passiveObjectOccurrence ->
-                enqueue(
-                    SlotOrchestrator(
-                        path = passiveObjectOccurrence.path,
-                        source = passiveObjectOccurrence.source,
-                        selections = passiveObjectOccurrence.selections,
-                        target = passiveObjectOccurrence.target,
-                    ),
-                )
-            }
-        check(coordinate in startedResolvers) {
-            "Resolver coordinate finished before starting: ${coordinate.renderReactorPath()}"
-        }
-        check(finishedResolvers.add(coordinate)) {
-            "Resolver coordinate finished more than once: ${coordinate.renderReactorPath()}"
+    /**
+     * Passive traversal discovers children before parents. Keep children off the runnable queue
+     * until their parent has orchestrated, preserving the reactor's parent-before-child discovery.
+     * Objects produced by a later field can enter the queue immediately because their parent ran.
+     */
+    override fun dispatchOrchestrator(task: DepthFirstOrchestrationTask) {
+        check(launched.add(task)) { "Orchestrator dispatched twice: ${task.path}" }
+        val parent = task.occurrence.parent
+        if (parent == null || parent in orchestrated) {
+            enqueue(task)
+        } else {
+            children.getOrPut(parent) { mutableListOf() } += task
         }
     }
 
-    private fun enqueue(task: Task) {
-        when (task) {
-            is SlotOrchestrator -> {
-                check(launchedOrchestrators.add(task.path)) {
-                    "Orchestrator launched more than once: ${task.path.renderReactorPath()}"
-                }
-            }
-
-            is SlotResolver -> {
-                check(launchedResolvers.add(task.coordinate)) {
-                    "Resolver coordinate launched more than once: " +
-                        task.coordinate.renderReactorPath()
-                }
-            }
-        }
-        tasks += ScheduledTask(task, nextSequence)
-        nextSequence += 1
+    override fun dispatchFieldResolver(context: DepthFirstFieldResolverTask) {
+        check(launched.add(context)) { "Field resolver dispatched twice: ${context.publicationPath}" }
+        enqueue(context)
     }
 
-    private val SlotResolver.coordinate: List<PathComponent>
-        get() = path + selection.groundKey()
+    private fun enqueue(task: DepthFirstTask) {
+        tasks += ScheduledTask(task, nextSequence++)
+    }
 }
 
-private data class OrchestratorResult(
-    val path: List<PathComponent>,
-    val target: ObjectEngineResult,
-    val closedDemand: ObjectSelectionForest,
-)
-
-private fun List<PathComponent>.renderReactorPath(): String =
-    if (isEmpty()) {
-        "<root>"
-    } else {
-        joinToString(separator = "/") { component ->
-            when (component) {
-                is ObjectEngineResult.ObjectKey ->
-                    "${component.field.containingDef.name}.${component.field.name}" +
-                        when (val arguments = component.arguments) {
-                            Arguments.Error -> "(error)"
-                            is Arguments.Resolved ->
-                                arguments.fieldValues.entries.joinToString(
-                                    prefix = "(",
-                                    postfix = ")",
-                                ) { (name, value) -> "$name=$value" }
-                            else -> "(symbolic)"
-                        }
-                is ListEngineResult.Index -> "[${component.index}]"
-            }
-        }
-    }
-
 internal class ScheduledTask(
-    val task: DepthFirstReactor.Task,
+    val task: DepthFirstTask,
     val sequence: Long,
 )
 
 internal val depthFirstTaskComparator =
-    compareByDescending<ScheduledTask> { scheduled -> scheduled.task.path.size }
-        .thenBy { scheduled ->
-            when (scheduled.task) {
-                is DepthFirstReactor.SlotResolver -> 0
-                is DepthFirstReactor.SlotOrchestrator -> 1
+    compareByDescending<ScheduledTask> { it.task.path.size }
+        .thenBy {
+            when (it.task) {
+                is DepthFirstFieldResolverTask -> 0
+                is DepthFirstOrchestrationTask -> 1
             }
         }
-        .thenBy { scheduled -> scheduled.sequence }
+        .thenBy { it.sequence }

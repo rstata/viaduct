@@ -9,6 +9,7 @@ import model.ObjectEngineResult
 import model.SelectionForest
 import semantics.contract.CompleteResolverOutputPolicyContract
 import semantics.contract.CompleteOutputRootFieldReferenceResolverContract
+import semantics.contract.FrozenObjectResolutionContract
 import semantics.contract.CorrectResolutionPostTestPolicy
 import semantics.contract.DepthFirstRootFieldReferenceOrderingContract
 import semantics.contract.DepthFirstTaskOrderingContract
@@ -29,6 +30,7 @@ class ResolverContractTest :
     SometimesPassiveResolverContract,
     CompleteResolverOutputPolicyContract,
     DepthFirstTaskOrderingContract,
+    FrozenObjectResolutionContract,
     CorrectResolutionPostTestPolicy {
     override fun resolve(
         operation: SharedOperationContext<*>,

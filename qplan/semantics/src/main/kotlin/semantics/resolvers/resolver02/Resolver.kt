@@ -15,7 +15,6 @@ fun resolve(selections: SelectionForest): ObjectEngineResult {
     require(!operation.selectiveResolvers) {
         "Resolver02 requires non-selective resolvers"
     }
-    val source = operation.resolverRegistry.createRootQueryInput()
     return DepthFirstResolve(
         operation = operation,
         complete = { completedSelections ->
@@ -23,5 +22,5 @@ fun resolve(selections: SelectionForest): ObjectEngineResult {
                 completedSelections.successorBoundaryDemand()
             }
         },
-    ).resolve(source, selections)
+    ).resolve(selections)
 }

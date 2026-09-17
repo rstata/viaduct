@@ -1,8 +1,12 @@
 package semantics.resolvers.resolver06
 
 import semantics.shared.SharedOperationContext
+import semantics.shared.OEROccurrenceContext
+import semantics.resolvers.resolver01.DepthFirstFieldResolverTask
+import semantics.resolvers.resolver01.DepthFirstOperationContext
+import semantics.resolvers.resolver01.DepthFirstOrchestrationTask
+import semantics.resolvers.resolver01.DepthFirstTaskDispatcher
 import model.ObjectEngineResult
-import model.PathComponent
 import model.fragmentFrom
 import model.merge
 import model.requireType
@@ -37,14 +41,14 @@ class DepthFirstReactorTest {
             )
 
         assertFailsWith<IllegalArgumentException> {
-            DepthFirstReactor.SlotOrchestrator(
-                path = emptyList(),
+            DepthFirstOrchestrationTask.create(
+                operation = DepthFirstOperationContext(SharedOperationContext(world), { it }, DepthFirstTaskDispatcher()),
+                occurrence = OEROccurrenceContext(target, emptyList(), target),
                 source = source,
-                selections =
+                constructionDemand =
                     world
                         .fragmentFrom("fragment ignored on Query { __typename }")
                         .subselections,
-                target = target,
             )
         }
     }
@@ -64,13 +68,17 @@ class DepthFirstReactorTest {
         val sourceType = source.schemaType
         val selection = selections.merge(sourceType).byGroundKey().values.single()
         val target = ObjectEngineResult.of(sourceType, emptyMap(), mutable = true)
-        val path = emptyList<PathComponent>()
+        val operation = DepthFirstOperationContext(SharedOperationContext(world), { it }, DepthFirstTaskDispatcher())
+        val occurrence = OEROccurrenceContext(target, emptyList(), target)
         val firstResolver =
-            DepthFirstReactor.SlotResolver(path, source, selection, target)
+            DepthFirstFieldResolverTask(operation, occurrence, selection, target.reserveCell(selection.key))
         val secondResolver =
-            DepthFirstReactor.SlotResolver(path, source, selection, target)
+            DepthFirstFieldResolverTask(
+                operation, occurrence, selection,
+                ObjectEngineResult.of(sourceType, mutable = true).reserveCell(selection.key),
+            )
         val orchestrator =
-            DepthFirstReactor.SlotOrchestrator(path, source, selections, target)
+            DepthFirstOrchestrationTask.create(operation, occurrence, source, selections)
         val tasks = PriorityQueue(depthFirstTaskComparator)
 
         tasks += ScheduledTask(orchestrator, sequence = 0)

@@ -10,8 +10,10 @@ import model.SelectionForest
 import semantics.contract.CompleteObjectFragmentOutputPolicyContract
 import semantics.contract.CompleteResolverOutputPolicyContract
 import semantics.contract.CompleteOutputRootFieldReferenceResolverContract
+import semantics.contract.FrozenObjectResolutionContract
 import semantics.contract.CorrectResolutionPostTestPolicy
 import semantics.contract.DepthFirstRootFieldReferenceOrderingContract
+import semantics.contract.DepthFirstQueryFringeOrderingContract
 import semantics.contract.DepthFirstTaskOrderingContract
 import semantics.contract.EmptyObjectFragmentResolverContract
 import semantics.contract.NodeResolverContract
@@ -42,6 +44,8 @@ class ResolverContractTest :
     CompleteResolverOutputPolicyContract,
     CompleteObjectFragmentOutputPolicyContract,
     DepthFirstTaskOrderingContract,
+    DepthFirstQueryFringeOrderingContract,
+    FrozenObjectResolutionContract,
     CorrectResolutionPostTestPolicy {
     override fun resolve(
         operation: SharedOperationContext<*>,

@@ -56,8 +56,8 @@ internal abstract class SharedResolvePassiveValues<O : SharedOrchestrationTask>(
 
     /**
      * Dispatches executable reference work discovered during passive list resolution. Resolver26 uses
-     * its field-task protocol, including runtime binding support; depth-first implementations invoke the
-     * target inline, while coroutine implementations launch it in their owning scope. Each implementation
+     * its field-task protocol, including runtime binding support; Resolver01-03 execute synchronously,
+     * while Resolver06-08 queue reference tasks at their publication depth. Each implementation
      * claims and publishes [cell] at this occurrence.
      */
     protected abstract fun resolveListReference(
@@ -162,7 +162,7 @@ internal abstract class SharedResolvePassiveValues<O : SharedOrchestrationTask>(
 
     /**
      * Passively resolves [source] into the OER in [occurrence]. Prepares the object's closed demand
-     * before resolving passive fields recursively, then launches its active work. The occurrence
+     * before resolving passive fields recursively, then dispatches its active work. The occurrence
      * may be a root or a newly allocated child; it must enter this lifecycle only once.
      */
     fun resolvePassiveObjectValues(

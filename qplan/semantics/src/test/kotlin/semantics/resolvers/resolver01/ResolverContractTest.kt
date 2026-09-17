@@ -8,6 +8,7 @@ import semantics.shared.SharedOperationContext
 import model.ObjectEngineResult
 import model.SelectionForest
 import semantics.contract.CompleteResolverOutputPolicyContract
+import semantics.contract.FrozenObjectResolutionContract
 import semantics.contract.CorrectResolutionPostTestPolicy
 import semantics.contract.CompleteOutputRootFieldReferenceResolverContract
 import semantics.contract.DepthFirstRootFieldReferenceOrderingContract
@@ -19,6 +20,7 @@ import semantics.contract.UnsupportedParentFieldResolverContract
 
 class ResolverContractTest :
     EmptyObjectFragmentResolverContract,
+    FrozenObjectResolutionContract,
     NodeResolverContract,
     RootFieldReferenceResolverContract,
     CompleteOutputRootFieldReferenceResolverContract,

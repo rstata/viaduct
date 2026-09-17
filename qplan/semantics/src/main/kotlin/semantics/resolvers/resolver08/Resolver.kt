@@ -4,6 +4,7 @@ import model.ObjectEngineResult
 import model.SelectionForest
 import semantics.resolvers.resolver06.DepthFirstReactor
 import semantics.resolvers.successorDemand
+import semantics.resolvers.resolver01.DepthFirstTask
 import semantics.shared.SharedOperationContext
 
 /**
@@ -17,7 +18,7 @@ fun resolve(selections: SelectionForest): ObjectEngineResult =
 context(operation: SharedOperationContext<*>)
 internal fun resolve(
     selections: SelectionForest,
-    onTaskStarted: (DepthFirstReactor.Task) -> Unit,
+    onTaskStarted: (DepthFirstTask) -> Unit,
 ): ObjectEngineResult {
     require(operation.selectiveResolvers) {
         "Resolver08 requires selective resolvers"

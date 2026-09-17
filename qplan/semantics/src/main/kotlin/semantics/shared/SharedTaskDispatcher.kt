@@ -15,6 +15,7 @@ import viaduct.graphql.schema.ViaductSchema
  */
 interface SharedOrchestrationTask {
     val occurrence: OEROccurrenceContext
+    /** Source-owned passive values; Query roots supply an empty object. */
     val source: EngineObjectData.Sync
     val closedDemand: ObjectSelectionForest
 }

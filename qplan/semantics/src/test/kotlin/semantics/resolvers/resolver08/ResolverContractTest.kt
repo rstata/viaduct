@@ -7,8 +7,10 @@ import viaduct.engine.api.EngineObjectData
 import semantics.shared.SharedOperationContext
 import model.ObjectEngineResult
 import model.SelectionForest
+import semantics.contract.FrozenObjectResolutionContract
 import semantics.contract.CorrectResolutionPostTestPolicy
 import semantics.contract.DepthFirstRootFieldReferenceOrderingContract
+import semantics.contract.DepthFirstQueryFringeOrderingContract
 import semantics.contract.DepthFirstTaskOrderingContract
 import semantics.contract.EmptyObjectFragmentResolverContract
 import semantics.contract.NodeResolverContract
@@ -44,6 +46,8 @@ class ResolverContractTest :
     SelectiveResolverOutputPolicyContract,
     SelectiveObjectFragmentOutputPolicyContract,
     DepthFirstTaskOrderingContract,
+    DepthFirstQueryFringeOrderingContract,
+    FrozenObjectResolutionContract,
     CorrectResolutionPostTestPolicy {
     override fun resolve(
         operation: SharedOperationContext<*>,

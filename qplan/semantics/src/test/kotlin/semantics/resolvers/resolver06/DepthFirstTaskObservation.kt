@@ -4,18 +4,20 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
 import model.groundKey
-import model.schemaType
 import semantics.contract.ResolverTaskObservation
+import semantics.resolvers.resolver01.DepthFirstTask
+import semantics.resolvers.resolver01.DepthFirstOrchestrationTask
+import semantics.resolvers.resolver01.DepthFirstFieldResolverTask
 
-internal fun DepthFirstReactor.Task.toContractObservation(): ResolverTaskObservation =
+internal fun DepthFirstTask.toContractObservation(): ResolverTaskObservation =
     when (this) {
-        is DepthFirstReactor.SlotOrchestrator ->
+        is DepthFirstOrchestrationTask ->
             ResolverTaskObservation.SlotOrchestrator(
-                objectType = source.schemaType.name,
+                objectType = occurrence.target.type.name,
                 path = path.toContractObservationPath(),
             )
 
-        is DepthFirstReactor.SlotResolver -> {
+        is DepthFirstFieldResolverTask -> {
             ResolverTaskObservation.SlotResolver(
                 fieldName = selection.groundKey().field.name,
                 path = path.toContractObservationPath(),

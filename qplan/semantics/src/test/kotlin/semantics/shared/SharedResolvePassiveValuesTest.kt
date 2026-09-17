@@ -12,6 +12,7 @@ import model.EngineResult
 import model.EngineResultCell
 import model.ListEngineResult
 import model.ObjectEngineResult
+import model.ObjectSelection
 import model.ObjectSelectionForest
 import model.PathComponent
 import model.ResolverOutputData
@@ -589,7 +590,7 @@ private fun ResolverOutputData?.recordPassiveResolution(
             cell: EngineResultCell,
             path: List<PathComponent>,
             expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
-            constructionDemand: SelectionForest,
+            selection: ObjectSelection,
             invocationDemand: SelectionForest,
             parent: OEROccurrenceContext,
         ) = error("Executable references are covered by the resolver contracts")

@@ -11,6 +11,7 @@ import semantics.contract.CompleteObjectFragmentOutputPolicyContract
 import semantics.contract.CompleteResolverOutputPolicyContract
 import semantics.contract.CompleteOutputRootFieldReferenceResolverContract
 import semantics.contract.CorrectResolutionPostTestPolicy
+import semantics.contract.FrozenObjectResolutionContract
 import semantics.contract.EmptyObjectFragmentResolverContract
 import semantics.contract.NodeResolverContract
 import semantics.contract.ObjectFragmentFromArgumentResolverContract
@@ -23,6 +24,7 @@ import semantics.contract.SometimesPassiveObjectFragmentResolverContract
 import semantics.contract.SometimesPassiveResolverContract
 
 class ResolverContractTest :
+    FrozenObjectResolutionContract,
     EmptyObjectFragmentResolverContract,
     NodeResolverContract,
     RootFieldReferenceResolverContract,

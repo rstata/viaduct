@@ -2,8 +2,11 @@ package semantics.resolver26
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import model.EngineErrorData
 import model.EngineObjectOrErrorData
@@ -59,12 +62,6 @@ internal class FieldResolverTask private constructor(
             closed: CloseInputDemandResult,
         ) {
             val operationContext = orchestrationTask.operation
-            // Declare Query values before dispatch so cancellation-before-entry can terminate them.
-            closed.fieldResolverOccurrenceContexts.values.forEach { fieldResolverContext ->
-                operationContext.queryValuesState.declare(
-                    fieldResolverContext.resolverOccurrenceId,
-                )
-            }
             closed.fieldResolverOccurrenceContexts.forEach { (objectKey, fieldResolverContext) ->
                 check(objectKey.field in operationContext.resolverRegistry) {
                     "Resolver26 attempted to install passive key $objectKey"
@@ -173,36 +170,32 @@ internal class FieldResolverTask private constructor(
                 val fieldResolverContext =
                     resolverOccurrenceContext as? FieldResolverOccurrenceContext
                         ?: return
-                operationContext.queryValuesState.cancel(
-                    fieldResolverContext.resolverOccurrenceId,
-                    cause,
-                )
-                fieldResolverContext.variableDefinitions.forEach { definition ->
-                    if (
-                        definition.definition == VariableDefinition.FromProvider ||
-                        definition.definition is VariableDefinition.FromArgument
-                    ) {
-                        operationContext.variableBindingsState.cancelBinding(
-                            requireNotNull(definition.variable.instanceId),
-                            cause,
-                        )
-                    }
-                }
                 objectProviderReads.forEach { read ->
                     operationContext.variableBindingsState.cancelBinding(
                         requireNotNull(read.definition.variable.instanceId),
                         cause,
                     )
                 }
-                cancelQueryPathBindings(operationContext, fieldResolverContext, cause)
+                cancelInvocationBindings(operationContext, fieldResolverContext, cause)
             }
         }
 
-        private fun cancelQueryPathBindings(
+        private fun cancelInvocationBindings(
             operationContext: OperationContext,
             fieldResolverContext: FieldResolverOccurrenceContext,
             cause: CancellationException,
         ) {
+            fieldResolverContext.variableDefinitions.forEach { definition ->
+                if (
+                    definition.definition == VariableDefinition.FromProvider ||
+                    definition.definition is VariableDefinition.FromArgument
+                ) {
+                    operationContext.variableBindingsState.cancelBinding(
+                        requireNotNull(definition.variable.instanceId),
+                        cause,
+                    )
+                }
+            }
             fieldResolverContext.fragments.queryFragment.pathVariableDefinitions.forEach {
                 definition ->
                 operationContext.variableBindingsState.cancelBinding(
@@ -216,64 +209,62 @@ internal class FieldResolverTask private constructor(
     suspend fun run() {
         val resolutionLogic = FieldResolutionLogic(this, publicationCell)
         try {
-            launchTaskSetupCoroutines()
+            val queryProducer = launchTaskSetupCoroutines()
             resolutionLogic.validate()
-            resolutionLogic.publishResult()
+            resolutionLogic.publishResult(queryProducer)
         } catch (cause: Exception) {
             currentCoroutineContext().ensureActive()
             resolutionLogic.publishFieldError(cause)
         }
     }
 
-    private fun launchTaskSetupCoroutines() {
-        val fieldResolverContext = fieldResolverOccurrenceContext ?: return
+    // Only ordinary fields have an initial Query producer; references launch one per invocation.
+    private fun launchTaskSetupCoroutines(): Deferred<EngineObjectOrErrorData>? {
+        val fieldResolverContext = fieldResolverOccurrenceContext ?: return null
         if (objectProviderReads.isNotEmpty()) {
             context(operationContext) {
-                fieldTaskScope.launchProviderBindings(
-                    oerOccurrenceContext.target,
-                    objectProviderReads,
-                )
+                fieldTaskScope.launch {
+                    oerOccurrenceContext.target.completeProviderBindings(objectProviderReads)
+                }
             }
         }
-        launchQueryFragmentProducer(fieldResolverContext)
+        return launchQueryFragmentProducer(fieldResolverContext)
     }
 
+    /** Returns the Query outcome directly, with binding cleanup on production failure or cancellation. */
     fun launchQueryFragmentProducer(
         fieldResolverContext: FieldResolverOccurrenceContext,
-    ) {
-        val resolverOccurrenceId = fieldResolverContext.resolverOccurrenceId
+    ): Deferred<EngineObjectOrErrorData> {
+        // Register each invocation with the field-task root, including later reference hops.
+        // cancel(context, cause) also covers the original bindings before field-task entry.
+        fieldTaskScope.coroutineContext.job.invokeOnCompletion { cause ->
+            if (cause is CancellationException) {
+                cancelInvocationBindings(operationContext, fieldResolverContext, cause)
+            }
+        }
         val selectionKey = fieldResolverContext.selection.key
-        fieldTaskScope
-            .launch {
-                val queryValue =
-                    try {
-                        val objectValue =
-                            if (
-                                selectionKey is ObjectEngineResult.GroundKey &&
-                                selectionKey.arguments.argumentsContainErrorValue()
-                            ) {
-                                engineObjectDataOf(operationContext.schema.requireQueryTypeDef())
-                            } else {
-                                fieldResolverContext.fragments.queryFragment.resolveQueryFragment(
-                                    operationContext = operationContext,
-                                    coordinate = fieldResolverContext.invocationPath,
-                                    inclusionCondition =
-                                        fieldResolverContext.selection.inclusionCondition,
-                                )
-                            }
-                        EngineObjectOrErrorData.of(objectValue)
-                    } catch (cause: Exception) {
-                        currentCoroutineContext().ensureActive()
-                        completeQueryPathBindingsWithError(fieldResolverContext)
-                        EngineObjectOrErrorData.of(EngineErrorData.of(cause))
-                    }
-                check(operationContext.queryValuesState.complete(resolverOccurrenceId, queryValue)) {
-                    "Resolver26 Query value was already completed for $resolverOccurrenceId"
-                }
-            }.invokeOnCompletion { cause ->
-                if (cause is CancellationException) {
-                    operationContext.queryValuesState.cancel(resolverOccurrenceId, cause)
-                    cancelQueryPathBindings(operationContext, fieldResolverContext, cause)
+        return fieldTaskScope
+            .async {
+                try {
+                    val objectValue =
+                        if (
+                            selectionKey is ObjectEngineResult.GroundKey &&
+                            selectionKey.arguments.argumentsContainErrorValue()
+                        ) {
+                            engineObjectDataOf(operationContext.schema.requireQueryTypeDef())
+                        } else {
+                            fieldResolverContext.fragments.queryFragment.resolveQueryFragment(
+                                operationContext = operationContext,
+                                coordinate = fieldResolverContext.invocationPath,
+                                inclusionCondition =
+                                    fieldResolverContext.selection.inclusionCondition,
+                            )
+                        }
+                    EngineObjectOrErrorData.of(objectValue)
+                } catch (cause: Exception) {
+                    currentCoroutineContext().ensureActive()
+                    completeQueryPathBindingsWithError(fieldResolverContext)
+                    EngineObjectOrErrorData.of(EngineErrorData.of(cause))
                 }
             }
     }

@@ -39,7 +39,7 @@ Resolver06-08 also intentionally do not support `@parent`; making their task que
 
 ### Structured Suspension: Resolver21-23
 
-Resolver21-23 express the same stages through request-owned structured coroutines and exact promises. Resolver23 is the clean coroutine baseline for comparing promise installation, suspension, child publication, and request quiescence with Resolver26.
+Resolver21-23 use the same task roles and phase boundaries as Resolver26: a prepared `CoroutineOrchestrationTask`, a `CoroutineFieldResolverContext` passed to the dispatcher, a running `CoroutineFieldResolverTask` owning helper coroutines, and `FieldResolutionLogic` for invocation and publication. Orchestration and field tasks run on the request root; Query-fragment producers run under their owning field task. Resolver23 is the grounded coroutine baseline and initial landing zone for access checks before transferring them to Resolver26.
 
 Resolver22/23 support `@parent`. Their structured suspension and exact promises allow demand to cross to an ancestor and return through an already-started descendant without forcing a depth-first re-entry protocol into local dependency ordering. Resolver21 retains its empty-fragment capability boundary and does not claim parent support.
 
@@ -49,7 +49,7 @@ Resolver22/23 support `@parent`. Their structured suspension and exact promises 
 
 Resolver26 retains variable-bearing resolver-fragment selections as symbolic OER keys. Variables are instantiated once per resolver occurrence, so equal symbolic keys coalesce within an OER while separate containing OERs remain distinct. It synchronously closes symbolic demand before local installation, uses source presence to let ancestor outputs own argumentless fields that otherwise have standard resolvers, prepares every binding required by the remaining work, reserves active cells once their symbolic keys are contextually grounded, freezes the OER key set, and runs field resolution under one request-owned coroutine scope.
 
-Resolver26 now uses the shared passive traversal and task-context interfaces. Its orchestration factory returns closed demand and fully initialized task state, while its `SharedTaskDispatcher` implements the two dispatch operations with request-root coroutines. Resolver01-03 and Resolver06-08 use the same protocol and grounded task implementations, with synchronous and queued dispatch respectively. Both resolve independent Query fragments through a fresh recursive dispatcher. Resolver21-23 retain their original scheduling and passive traversal pending incremental migration.
+Resolver26 now uses the shared passive traversal and task-context interfaces. Its orchestration factory returns closed demand and fully initialized task state, while its `SharedTaskDispatcher` implements the two dispatch operations with request-root coroutines. Resolver01-03 and Resolver06-08 use the same protocol and grounded task implementations, with synchronous and queued dispatch respectively. Both resolve independent Query fragments through a fresh recursive dispatcher. Resolver21-23 also use the shared traversal and prepared-task protocol, with grounded demand and request-root coroutine dispatch. All coroutine implementations close ancestor demand before passive descent and freeze each OER after field installation; ancestor re-orchestration and passive-child rediscovery are unnecessary.
 
 Resolver26 supports `@parent` by extending both input-demand closure and successor-demand closure to lift parent-induced demand before each OER is frozen.
 

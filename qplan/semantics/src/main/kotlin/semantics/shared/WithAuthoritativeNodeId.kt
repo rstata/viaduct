@@ -11,7 +11,7 @@ import viaduct.engine.api.EngineObjectData
 
 /**
  * Preserves the originating node reference's ID in an object result when [demand] selects `id`.
- * Resolver01-03 and Resolver26 use this after following reference tails, whose final resolver may return
+ * All resolvers use this after following reference tails, whose final resolver may return
  * a different ID. The returned object's type must match the originating node identity.
  */
 internal fun ResolverOutputData?.withAuthoritativeNodeId(

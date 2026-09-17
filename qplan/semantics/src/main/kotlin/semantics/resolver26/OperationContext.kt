@@ -11,7 +11,6 @@ internal class OperationContext(
     override val resolverObserver: ResolverObserver,
     val cycleChecker: CycleCheckState = CycleCheckState.create(),
     val bindingDeclarationsState: BindingDeclarationsState = BindingDeclarationsState(),
-    val queryValuesState: QueryValuesState = QueryValuesState(),
 ) : SharedOperationContext<TaskDispatcher>(
         world = base.world,
         variableBindingsState = base.variableBindingsState,

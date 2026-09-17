@@ -9,10 +9,8 @@ import model.ObjectSelectionForest
 import model.PathComponent
 import model.ResolverOutputData
 import model.RootFieldReferenceData
-import model.Selection
 import model.SelectionForest
 import model.merge
-import model.selectionForestOf
 import semantics.shared.OEROccurrenceContext
 import semantics.shared.SharedResolvePassiveValues
 import viaduct.engine.api.EngineObjectData
@@ -50,14 +48,10 @@ private class ResolvePassiveValues(
         cell: EngineResultCell,
         path: List<PathComponent>,
         expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
-        constructionDemand: SelectionForest,
+        selection: ObjectSelection,
         invocationDemand: SelectionForest,
         parent: OEROccurrenceContext,
     ) {
-        val key = path.filterIsInstance<ObjectEngineResult.ObjectKey>().last()
-        val selection = selectionForestOf(
-            Selection.of(key = key, possibleTypes = setOf(parent.target.type), subselections = constructionDemand),
-        ).merge(parent.target.type).byKey().getValue(key)
         cell.createValuePromise()
         resolverOperation.cycleChecker.registerWriter(cell, path)
         FieldResolverTask.launchForListElement(

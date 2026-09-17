@@ -8,6 +8,7 @@ import semantics.shared.SharedOperationContext
 import model.ObjectEngineResult
 import model.SelectionForest
 import semantics.contract.CorrectResolutionPostTestPolicy
+import semantics.contract.FrozenObjectResolutionContract
 import semantics.contract.EmptyObjectFragmentResolverContract
 import semantics.contract.NodeResolverContract
 import semantics.contract.ObjectFragmentFromArgumentResolverContract
@@ -24,6 +25,7 @@ import semantics.contract.SometimesPassiveResolverContract
 import semantics.contract.SometimesPassiveSelectiveResolverContract
 
 class ResolverContractTest :
+    FrozenObjectResolutionContract,
     EmptyObjectFragmentResolverContract,
     NodeResolverContract,
     RootFieldReferenceResolverContract,

@@ -1,0 +1,25 @@
+package semantics.resolvers.resolver22
+
+import kotlinx.coroutines.CoroutineScope
+import model.ObjectEngineResult
+import model.SelectionForest
+import semantics.contract.CoroutineResolverContract
+import semantics.resolvers.resolver21.startCoroutineResolution
+import semantics.resolvers.successorBoundaryDemand
+import semantics.shared.CycleCheckState
+import semantics.shared.SharedOperationContext
+
+class CoroutineResolveTest : CoroutineResolverContract {
+    override val selectiveResolvers = false
+
+    override fun startResolution(
+        operation: SharedOperationContext<*>,
+        requestScope: CoroutineScope,
+        selections: SelectionForest,
+        cycleChecker: CycleCheckState,
+    ): ObjectEngineResult = startCoroutineResolution(
+        operation, requestScope, selections, cycleChecker,
+        supportsParentFields = true,
+        complete = { demand -> context(operation, operation.world) { demand.successorBoundaryDemand() } },
+    )
+}

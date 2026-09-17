@@ -1,5 +1,6 @@
 package semantics.resolver26
 
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import model.Arguments
@@ -104,7 +105,8 @@ internal class FieldResolutionLogic(
         publicationCell.getValue().complete(ErrorEngineResult.of(EngineErrorData.of(cause)))
     }
 
-    suspend fun publishResult() {
+    /** [queryProducer] is present for ordinary fields; references launch one for each invocation. */
+    suspend fun publishResult(queryProducer: Deferred<EngineObjectOrErrorData>?) {
         context(operationContext, world, operationContext.cycleChecker) {
             val occurrenceContext = resolverOccurrenceContext
             val selection = occurrenceContext.selection
@@ -125,6 +127,7 @@ internal class FieldResolutionLogic(
                             fieldResolverContext = occurrenceContext,
                             selection = selection,
                             invocationDemand = invocationDemand,
+                            queryProducer = requireNotNull(queryProducer),
                         )
                     is RootFieldReferenceOccurrence -> occurrenceContext.reference
                     is PassiveValueOccurrence -> occurrenceContext.value
@@ -237,6 +240,7 @@ internal class FieldResolutionLogic(
         fieldResolverContext: FieldResolverOccurrenceContext,
         selection: ObjectSelection,
         invocationDemand: SelectionForest,
+        queryProducer: Deferred<EngineObjectOrErrorData>,
     ): ResolverOutputData? {
         val groundedArguments =
             context(operationContext) {
@@ -265,12 +269,7 @@ internal class FieldResolutionLogic(
                 )
             }
         val queryValue =
-            when (
-                val value =
-                    operationContext.queryValuesState.fetch(
-                        fieldResolverContext.resolverOccurrenceId,
-                    )
-            ) {
+            when (val value = queryProducer.await()) {
                 is EngineObjectOrErrorData.Success -> value.value
                 is EngineObjectOrErrorData.Error -> return value.error
             }
@@ -353,8 +352,6 @@ internal class FieldResolutionLogic(
                 fragments = fragments,
             )
         declareRootFieldInvocationBindings(fieldResolverContext, reference.arguments)
-        operationContext.queryValuesState.declare(resolverOccurrenceId)
-        fieldResolverTask.launchQueryFragmentProducer(fieldResolverContext)
         return fieldResolverContext
     }
 
@@ -388,15 +385,11 @@ internal class FieldResolutionLogic(
         arguments: Arguments.Resolved,
         invocationDemand: SelectionForest,
     ): ResolverOutputData? {
+        val queryProducer = fieldResolverTask.launchQueryFragmentProducer(fieldResolverContext)
         completeVariablesProviderBindings(fieldResolverContext, arguments)?.let { return it }
         val input = engineObjectDataOf(fieldResolverContext.resolver.field.containingDef)
         val queryValue =
-            when (
-                val value =
-                    operationContext.queryValuesState.fetch(
-                        fieldResolverContext.resolverOccurrenceId,
-                    )
-            ) {
+            when (val value = queryProducer.await()) {
                 is EngineObjectOrErrorData.Success -> value.value
                 is EngineObjectOrErrorData.Error -> return value.error
             }

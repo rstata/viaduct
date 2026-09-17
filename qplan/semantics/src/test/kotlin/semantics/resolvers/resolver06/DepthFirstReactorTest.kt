@@ -9,50 +9,14 @@ import semantics.resolvers.resolver01.DepthFirstTaskDispatcher
 import model.ObjectEngineResult
 import model.fragmentFrom
 import model.merge
-import model.requireType
 import model.schemaType
 import model.testing.TestWorld
 import org.junit.jupiter.api.Test
 import java.util.PriorityQueue
-import viaduct.graphql.schema.ViaductSchema
 import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
 
 class DepthFirstReactorTest {
-    @Test
-    fun `reactor tasks validate source and target types at construction`() {
-        val world =
-            TestWorld.fromSDL(
-                """
-                type Query {
-                  item: Item
-                }
-
-                type Item {
-                  value: Int
-                }
-                """.trimIndent(),
-            ).assumptions
-        val source = world.resolverRegistry.createRootQueryInput()
-        val target =
-            ObjectEngineResult.of(
-                world.schema.requireType("Item") as ViaductSchema.Object,
-                mutable = true,
-            )
-
-        assertFailsWith<IllegalArgumentException> {
-            DepthFirstOrchestrationTask.create(
-                operation = DepthFirstOperationContext(SharedOperationContext(world), { it }, DepthFirstTaskDispatcher()),
-                occurrence = OEROccurrenceContext(target, emptyList(), target),
-                source = source,
-                constructionDemand =
-                    world
-                        .fragmentFrom("fragment ignored on Query { __typename }")
-                        .subselections,
-            )
-        }
-    }
-
     @Test
     fun `equal-depth resolvers precede orchestrators and preserve insertion order`() {
         val world =

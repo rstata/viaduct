@@ -17,6 +17,7 @@ import semantics.contract.ParentFieldResolverContract
 import semantics.contract.QueryFragmentResolverContract
 import semantics.contract.QueryFragmentRootFieldReferenceResolverContract
 import semantics.contract.RootFieldReferenceResolverContract
+import semantics.contract.ObjectFragmentRootFieldReferenceResolverContract
 import semantics.contract.SelectiveObjectFragmentOutputPolicyContract
 import semantics.contract.SelectiveResolverOutputPolicyContract
 import semantics.contract.SelectiveRootFieldReferenceResolverContract
@@ -29,6 +30,7 @@ class ResolverContractTest :
     EmptyObjectFragmentResolverContract,
     NodeResolverContract,
     RootFieldReferenceResolverContract,
+    ObjectFragmentRootFieldReferenceResolverContract,
     QueryFragmentRootFieldReferenceResolverContract,
     SelectiveRootFieldReferenceResolverContract,
     ObjectFragmentResolverContract,

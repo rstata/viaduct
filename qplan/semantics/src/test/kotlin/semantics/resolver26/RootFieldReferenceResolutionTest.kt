@@ -13,13 +13,11 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import model.Arguments
 import model.EngineErrorData
-import model.EngineResultCell
 import model.ErrorEngineResult
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.ResolverOccurrenceId
 import model.RootFieldReferenceData
-import model.SourceSchemaAdapter
 import model.VariableBinding
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -27,13 +25,11 @@ import model.merge
 import model.objectOf
 import model.requireQueryTypeDef
 import model.requireObjectField
-import model.requireType
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromArgument
 import model.testing.fromObjectField
 import model.testing.fromQueryField
-import model.testing.nodeResolverOf
 import semantics.contract.contractKey
 import semantics.contract.registeredResolverOccurrenceApplicationIdentityCounts
 import semantics.correctresolution.correctResolution
@@ -41,13 +37,11 @@ import semantics.shared.SharedOperationContext
 import semantics.shared.RecordingResolverObserver
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import viaduct.engine.api.EngineObjectData
-import viaduct.graphql.schema.ViaductSchema
 
 class RootFieldReferenceResolutionTest {
     @Test
@@ -112,179 +106,6 @@ class RootFieldReferenceResolutionTest {
             resolved.getCell(world.schema.contractKey("Query", "result")).getValue().get(),
         )
         assertEquals(1, observer.rootFieldReferenceInvocations().size)
-    }
-
-    @Test
-    fun `node resolver may return a root field reference`() {
-        val nodeApplications = AtomicInteger()
-        val targetApplications = AtomicInteger()
-        val testWorld =
-            TestWorld.fromSDL(
-                schemaSDL =
-                    """
-                    interface Node {
-                      id: ID!
-                    }
-
-                    interface ReferencedFoo {
-                      id: ID!
-                      value: String!
-                    }
-
-                    type Foo implements Node & ReferencedFoo {
-                      id: ID!
-                      value: String!
-                    }
-
-                    type Query {
-                      foo: Foo!
-                      referencedFoo: ReferencedFoo!
-                    }
-                    """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val foo =
-                        SourceSchemaAdapter(schema).field("Query", "foo")
-                            as ViaductSchema.ObjectField
-                    val referencedFoo = schema.requireObjectField("Query", "referencedFoo")
-                    mapOf(
-                        foo to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Foo") { "id" setTo "source-id" }
-                            },
-                        referencedFoo to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                targetApplications.incrementAndGet()
-                                schema.objectOf("Foo") {
-                                    "id" setTo "target-id"
-                                    "value" setTo "from-reference"
-                                }
-                            },
-                    )
-                },
-                nodeResolvers = { schema ->
-                    val foo = schema.requireType("Foo") as ViaductSchema.Object
-                    val referencedFoo = schema.requireObjectField("Query", "referencedFoo")
-                    mapOf(
-                        foo to
-                            nodeResolverOf { id ->
-                                nodeApplications.incrementAndGet()
-                                assertEquals("source-id", id)
-                                RootFieldReferenceData.of(
-                                    path = listOf(referencedFoo),
-                                    arguments = emptyMap(),
-                                )
-                            },
-                    )
-                },
-            )
-        val world = testWorld.assumptions
-        val query = world.fragmentFrom("fragment Result on Query { foo { id value } }")
-        val operation = SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
-        val result = context(operation) { resolve(query.subselections) }
-        val foo =
-            assertIs<ObjectEngineResult>(
-                result
-                    .getCell(
-                        ObjectEngineResult.GroundKey.of(
-                            world.schema.requireObjectField("Query", "foo"),
-                            emptyMap(),
-                        ),
-                    ).getValue()
-                    .get(),
-            )
-
-        assertEquals(
-            "from-reference",
-            foo.getCell(world.schema.contractKey("Foo", "value")).getValue().get(),
-        )
-        assertEquals(
-            model.EngineIDResult.of("source-id"),
-            foo.getCell(world.schema.contractKey("Foo", "id")).getValue().get(),
-        )
-        assertEquals(1, nodeApplications.get())
-        assertEquals(1, targetApplications.get())
-        assertTrue(
-            context(operation) {
-                result.correctResolution(query.subselections.merge(world.schema.requireQueryTypeDef()))
-            },
-        )
-    }
-
-    @Test
-    fun `abstract target resolves when all possible types conform to the consumer`() {
-        val testWorld =
-            TestWorld.fromSDL(
-                schemaSDL =
-                    """
-                    type Query {
-                      container: Container!
-                      lookup(kind: Int!): LookupResult!
-                    }
-
-                    type Container {
-                      item: Entity!
-                    }
-
-                    interface Entity {
-                      value: String!
-                    }
-
-                    type Product implements Entity {
-                      value: String!
-                    }
-
-                    type Service implements Entity {
-                      value: String!
-                    }
-
-                    union LookupResult = Product | Service
-                    """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val container = schema.requireObjectField("Query", "container")
-                    val lookup = schema.requireObjectField("Query", "lookup")
-                    mapOf(
-                        container to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Container") {
-                                    "item" setTo
-                                        RootFieldReferenceData.of(
-                                            path = listOf(lookup),
-                                            arguments = mapOf("kind" to 1),
-                                        )
-                                }
-                            },
-                        lookup to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
-                                schema.objectOf("Service") {
-                                    "value" setTo "service-${arguments.fieldValues.getValue("kind")}"
-                                }
-                            },
-                    )
-                },
-            )
-        val world = testWorld.assumptions
-        val query = world.fragmentFrom("fragment Result on Query { container { item { value } } }")
-        val operation = SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
-        val result = context(operation) { resolve(query.subselections) }
-        val container =
-            assertIs<ObjectEngineResult>(
-                result.getCell(world.schema.contractKey("Query", "container")).getValue().get(),
-            )
-        val item =
-            assertIs<ObjectEngineResult>(
-                container.getCell(world.schema.contractKey("Container", "item")).getValue().get(),
-            )
-
-        assertEquals("Service", item.type.name)
-        assertEquals(
-            "service-1",
-            item.getCell(world.schema.contractKey("Service", "value")).getValue().get(),
-        )
-        assertTrue(
-            context(operation) {
-                result.correctResolution(query.subselections.merge(world.schema.requireQueryTypeDef()))
-            },
-        )
     }
 
     @Test
@@ -799,117 +620,6 @@ class RootFieldReferenceResolutionTest {
     }
 
     @Test
-    fun `root-field references publish scalar and enum values at every consumer shape`() {
-        val testWorld =
-            TestWorld.fromSDL(
-                schemaSDL =
-                    """
-                    type Query {
-                      container: Container!
-                      factory: Factory
-                      indirectNumber: Int!
-                    }
-
-                    type Container {
-                      numbers: [Int!]!
-                      status: Status!
-                    }
-
-                    type Factory {
-                      number(value: Int!): Int!
-                      status: Status!
-                    }
-
-                    enum Status {
-                      READY
-                    }
-                    """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val container = schema.requireObjectField("Query", "container")
-                    val factory = schema.requireObjectField("Query", "factory")
-                    val indirectNumber = schema.requireObjectField("Query", "indirectNumber")
-                    val number = schema.requireObjectField("Factory", "number")
-                    val status = schema.requireObjectField("Factory", "status")
-                    mapOf(
-                        container to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Container") {
-                                    "numbers" setTo
-                                        listOf(
-                                            RootFieldReferenceData.of(
-                                                path = listOf(factory, number),
-                                                arguments = mapOf("value" to 1),
-                                            ),
-                                            2,
-                                            RootFieldReferenceData.of(
-                                                path = listOf(factory, number),
-                                                arguments = mapOf("value" to 3),
-                                            ),
-                                        )
-                                    "status" setTo
-                                        RootFieldReferenceData.of(
-                                            path = listOf(factory, status),
-                                            arguments = emptyMap(),
-                                        )
-                                }
-                            },
-                        factory to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Factory")
-                            },
-                        indirectNumber to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                RootFieldReferenceData.of(
-                                    path = listOf(factory, number),
-                                    arguments = mapOf("value" to 42),
-                                )
-                            },
-                        number to
-                            fieldResolverOf(schema.emptyFragmentOf("Factory")) { _, arguments ->
-                                arguments.fieldValues.getValue("value")
-                            },
-                        status to
-                            fieldResolverOf(schema.emptyFragmentOf("Factory")) { _, _ ->
-                                "READY"
-                            },
-                    )
-                },
-            )
-        val world = testWorld.assumptions
-        val operation =
-            SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
-        val query =
-            world.fragmentFrom(
-                "fragment Result on Query { indirectNumber container { numbers status } }",
-            )
-        val result = context(operation) { resolve(query.subselections) }
-        val container =
-            assertIs<ObjectEngineResult>(
-                result.getCell(world.schema.contractKey("Query", "container")).getValue().get(),
-            )
-        val numbers =
-            assertIs<ListEngineResult>(
-                container.getCell(world.schema.contractKey("Container", "numbers")).getValue().get(),
-            )
-        val status =
-            assertIs<ViaductSchema.EnumValue>(
-                container.getCell(world.schema.contractKey("Container", "status")).getValue().get(),
-            )
-
-        assertEquals(
-            42,
-            result.getCell(world.schema.contractKey("Query", "indirectNumber")).getValue().get(),
-        )
-        assertEquals(listOf(1, 2, 3), numbers.map { cell -> cell.getValue().get() })
-        assertEquals("READY", status.name)
-        assertTrue(
-            context(operation) {
-                result.correctResolution(query.subselections.merge(world.schema.requireQueryTypeDef()))
-            },
-        )
-    }
-
-    @Test
     fun `direct resolver result tail resolves every hop with a fresh occurrence root`() {
         val applications = CopyOnWriteArrayList<Resolver26ApplicationObservation>()
         val testWorld =
@@ -1230,152 +940,6 @@ class RootFieldReferenceResolutionTest {
                 }
             }
         }
-
-    @Test
-    fun `static resolver root-field reference overrides a registered consumer resolver`() {
-        val testWorld =
-            TestWorld.fromSDL(
-                schemaSDL =
-                    """
-                    type Query {
-                      container: Container!
-                      product: Product!
-                    }
-
-                    type Container {
-                      product: Product!
-                    }
-
-                    type Product {
-                      value: String!
-                    }
-                    """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val container = schema.requireObjectField("Query", "container")
-                    val target = schema.requireObjectField("Query", "product")
-                    val consumer = schema.requireObjectField("Container", "product")
-                    mapOf(
-                        container to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Container") {
-                                    "product" setTo
-                                        RootFieldReferenceData.of(listOf(target), emptyMap())
-                                }
-                            },
-                        target to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Product") { "value" setTo "target" }
-                            },
-                        consumer to
-                            fieldResolverOf(schema.emptyFragmentOf("Container")) { _, _ ->
-                                error("registered consumer resolver must not run")
-                            },
-                    )
-                },
-            )
-
-        val world = testWorld.assumptions
-        val result =
-            resolve(
-                world,
-                "fragment Result on Query { container { product { value } } }",
-            )
-        val container =
-            assertIs<ObjectEngineResult>(
-                result.getCell(world.schema.contractKey("Query", "container")).getValue().get(),
-            )
-        val product =
-            assertIs<ObjectEngineResult>(
-                container
-                    .getCell(world.schema.contractKey("Container", "product"))
-                    .getValue()
-                    .get(),
-            )
-
-        assertEquals(
-            "target",
-            product.getCell(world.schema.contractKey("Product", "value")).getValue().get(),
-        )
-    }
-
-    @Test
-    fun `root-field reference override does not activate registered resolver input demand`() {
-        val dependencyApplications = AtomicInteger()
-        val testWorld =
-            TestWorld.fromSDL(
-                schemaSDL =
-                    """
-                    type Query {
-                      container: Container!
-                      product: Product!
-                    }
-
-                    type Container {
-                      product: Product!
-                      dependency: String!
-                    }
-
-                    type Product {
-                      value: String!
-                    }
-                    """.trimIndent(),
-                fieldResolvers = { schema ->
-                    val container = schema.requireObjectField("Query", "container")
-                    val target = schema.requireObjectField("Query", "product")
-                    val consumer = schema.requireObjectField("Container", "product")
-                    val dependency = schema.requireObjectField("Container", "dependency")
-                    mapOf(
-                        container to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Container") {
-                                    "product" setTo
-                                        RootFieldReferenceData.of(listOf(target), emptyMap())
-                                }
-                            },
-                        target to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Product") { "value" setTo "target" }
-                            },
-                        consumer to
-                            fieldResolverOf(
-                                schema.fragmentFrom(
-                                    "fragment ConsumerInput on Container { dependency }",
-                                ),
-                            ) { _, _ ->
-                                error("overridden consumer resolver must not run")
-                            },
-                        dependency to
-                            fieldResolverOf(schema.emptyFragmentOf("Container")) { _, _ ->
-                                dependencyApplications.incrementAndGet()
-                                "dependency"
-                            },
-                    )
-                },
-            )
-        val world = testWorld.assumptions
-        val result =
-            resolve(
-                world,
-                "fragment Result on Query { container { product { value } } }",
-            )
-        val container =
-            assertIs<ObjectEngineResult>(
-                result.getCell(world.schema.contractKey("Query", "container")).getValue().get(),
-            )
-        val product =
-            assertIs<ObjectEngineResult>(
-                container
-                    .getCell(world.schema.contractKey("Container", "product"))
-                    .getValue()
-                    .get(),
-            )
-
-        assertEquals(
-            "target",
-            product.getCell(world.schema.contractKey("Product", "value")).getValue().get(),
-        )
-        assertEquals(0, dependencyApplications.get())
-    }
 
     @Test
     fun `argument condition activates an embedded root-field-reference occurrence`() {

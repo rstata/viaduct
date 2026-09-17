@@ -4,7 +4,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import model.Arguments
 import model.Assumptions
-import model.EngineObjectDataEntry
 import model.EngineOutputData
 import model.EngineResult
 import model.ListEngineResult
@@ -13,7 +12,6 @@ import model.PathComponent
 import model.Selection
 import model.SelectionForest
 import model.emptyFragmentOf
-import model.engineObjectDataOf
 import model.fragmentFrom
 import model.objectOf
 import model.outputType
@@ -252,94 +250,6 @@ class ResolvePassiveValuesTest {
         assertEquals(computedKey, result.keys.single { key -> key == computedKey })
         result.keys.forEach { key ->
             assertEquals("ancestor", result.getCell(key).getValue().get())
-        }
-    }
-
-    @Test
-    fun `selective output rejects passive fields outside projection demand`() {
-        val world =
-            TestWorld
-                .fromSDL(
-                    """
-                    type Query {
-                      item: Item!
-                    }
-
-                    type Item {
-                      selected: String!
-                      extra: String!
-                    }
-                    """.trimIndent(),
-                ).assumptions
-        val schema = world.schema
-        val itemField = schema.requireObjectField("Query", "item")
-        val output =
-            schema.objectOf("Item") {
-                "selected" setTo "selected"
-                "extra" setTo "extra"
-            }
-        val invocationDemand =
-            world.fragmentFrom(
-                "fragment ignored on Item { selected }",
-            ).subselections
-
-        assertFailsWith<IllegalArgumentException> {
-            resolvePassiveValues(
-                world = world,
-                value = output,
-                expectedType = itemField.outputType,
-                path = listOf(itemField.key()),
-                invocationDemand = invocationDemand,
-                constructionDemand = selectionForestOf(),
-            )
-        }
-    }
-
-    @Test
-    fun `passive object fields reject arguments`() {
-        val world =
-            TestWorld
-                .fromSDL(
-                    """
-                    type Query {
-                      item: Item!
-                    }
-
-                    type Item {
-                      value(index: Int): String
-                    }
-                    """.trimIndent(),
-                ).assumptions
-        val schema = world.schema
-        val itemField = schema.requireObjectField("Query", "item")
-        val itemType = schema.requireType("Item") as ViaductSchema.Object
-        val valueField = schema.requireObjectField("Item", "value")
-        val output =
-            engineObjectDataOf(
-                schemaType = itemType,
-                fields =
-                    listOf(
-                        EngineObjectDataEntry.of(
-                            selection = valueField.name,
-                            field = valueField,
-                            value = "one",
-                        ),
-                    ),
-            )
-        val invocationDemand =
-            world.fragmentFrom(
-                "fragment ignored on Item { value(index: 1) }",
-            ).subselections
-
-        assertFailsWith<IllegalArgumentException> {
-            resolvePassiveValues(
-                world = world,
-                value = output,
-                expectedType = itemField.outputType,
-                path = listOf(itemField.key()),
-                invocationDemand = invocationDemand,
-                constructionDemand = selectionForestOf(),
-            )
         }
     }
 

@@ -17,6 +17,7 @@ import model.requireObjectField
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import org.junit.jupiter.api.Test
+import semantics.shared.SharedOperationContext
 import viaduct.engine.api.EngineObjectData
 
 /** Contract for engine-provided parent backedges and transitive ancestor demand. */
@@ -576,6 +577,10 @@ interface ParentFieldResolverContract : ResolverContract {
 
 /** Contract for resolver versions that deliberately exclude parent backedges. */
 interface UnsupportedParentFieldResolverContract : ResolverContract {
+    /** Extracts the rejection according to the implementation's request- or field-error policy. */
+    fun unsupportedParentFailure(resolve: () -> ObjectEngineResult): IllegalArgumentException =
+        assertFailsWith<IllegalArgumentException> { resolve() }
+
     @Test
     fun `parent demand is rejected`() {
         val world =
@@ -601,8 +606,12 @@ interface UnsupportedParentFieldResolverContract : ResolverContract {
             ).assumptions
 
         val failure =
-            assertFailsWith<IllegalArgumentException> {
-                resolveAndValidate(world, "query { root { child { parent { __typename } } } }")
+            unsupportedParentFailure {
+                resolve(
+                    SharedOperationContext(world),
+                    world.resolverRegistry.createRootQueryInput(),
+                    world.operationSelectionsFrom("query { root { child { parent { __typename } } } }"),
+                )
             }
         assertTrue(
             failure.message!!.contains("support @parent fields"),

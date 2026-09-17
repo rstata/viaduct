@@ -1,8 +1,5 @@
 package semantics.resolver26
 
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -32,7 +29,7 @@ internal suspend fun ObjectEngineResult.readProvider(
     reader: List<PathComponent>,
 ): VariableBinding = readProvider(definition.path, reader)
 
-// Reads and completes all provider bindings rooted in this result.
+// Reads and completes provider bindings; the owning field-task root handles cancellation cleanup.
 context(operation: OperationContext)
 internal suspend fun ObjectEngineResult.completeProviderBindings(
     reads: List<ProviderDefinitionRead>,
@@ -41,9 +38,9 @@ internal suspend fun ObjectEngineResult.completeProviderBindings(
         reads.forEach { read ->
             val variableId = requireNotNull(read.definition.variable.instanceId)
             launch {
-                if (!read.inclusionCondition.fetchIncluded()) return@launch
                 val binding =
                     try {
+                        if (!read.inclusionCondition.fetchIncluded()) return@launch
                         readProvider(
                             definition = read.definition,
                             reader = read.readerPath,
@@ -53,33 +50,10 @@ internal suspend fun ObjectEngineResult.completeProviderBindings(
                         VariableBinding.Error
                     }
                 operation.variableBindingsState.completeBinding(variableId, binding)
-            }.invokeOnCompletion { cause ->
-                if (cause is CancellationException) {
-                    operation.variableBindingsState.cancelBinding(variableId, cause)
-                }
             }
         }
     }
 }
-
-context(operation: OperationContext)
-internal fun CoroutineScope.launchProviderBindings(
-    target: ObjectEngineResult,
-    reads: List<ProviderDefinitionRead>,
-): Job =
-    launch { target.completeProviderBindings(reads) }
-        .also { job ->
-            job.invokeOnCompletion { cause ->
-                if (cause is CancellationException) {
-                    reads.forEach { read ->
-                        operation.variableBindingsState.cancelBinding(
-                            requireNotNull(read.definition.variable.instanceId),
-                            cause,
-                        )
-                    }
-                }
-            }
-        }
 
 context(operation: OperationContext)
 private suspend fun ObjectEngineResult.readProvider(

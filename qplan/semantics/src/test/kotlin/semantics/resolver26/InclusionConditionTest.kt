@@ -5,6 +5,7 @@ import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
 import viaduct.graphql.schema.ViaductSchema
 import model.Arguments
+import model.ErrorEngineResult
 import model.emptyFragmentOf
 import model.ObjectEngineResult
 import model.fragmentFrom
@@ -24,9 +25,50 @@ import semantics.shared.RecordingResolverObserver
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class InclusionConditionTest {
+    @Test
+    fun `a failed provider inclusion condition leaves unrelated fields running`() {
+        val world = TestWorld.fromDSL(
+            """
+            extend type Query {
+              controller: Int!
+                @resolver(
+                  of: "outer @include(if: ${'$'}enabled)"
+                  providerVars: {enabled: "ERROR"}
+                  result: 1
+                )
+              outer: Int!
+                @resolver(
+                  of: "provider consume(value: ${'$'}value)"
+                  pathVars: [{name: "value", path: ["provider"]}]
+                  result: 2
+                )
+              provider: Int! @resolver(result: 7)
+              consume(value: Int!): Int! @resolver(result: "sum(${'$'}value)")
+              healthy: Int! @resolver(result: 42)
+            }
+            """.trimIndent(),
+        )
+        val operation = SharedOperationContext(world.assumptions)
+        val applications = Collections.synchronizedList(mutableListOf<String>())
+        val result = context(operation) {
+            resolveObserved(world.assumptions.fragmentFrom("fragment Test on Query { controller healthy }").subselections) {
+                applications += it.field.name
+            }
+        }
+
+        for (name in listOf("controller", "outer")) {
+            val key = ObjectEngineResult.GroundKey.of(world.schema.requireObjectField("Query", name), emptyMap())
+            assertIs<ErrorEngineResult>(result.getCell(key).getValue().get(), name)
+        }
+        val healthy = ObjectEngineResult.GroundKey.of(world.schema.requireObjectField("Query", "healthy"), emptyMap())
+        assertEquals(42, result.getCell(healthy).getValue().get())
+        assertFalse("consume" in applications)
+    }
+
     @Test
     fun `statically excluded demand below parent does not invoke ancestor resolver`() {
         val world =

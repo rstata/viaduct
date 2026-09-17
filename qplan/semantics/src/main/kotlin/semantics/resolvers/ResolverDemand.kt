@@ -14,6 +14,7 @@ import model.selectionForestOf
 import semantics.correctresolution.argumentsContainErrorValue
 import viaduct.engine.api.EngineObjectData
 import semantics.shared.SharedOperationContext
+import semantics.shared.inputParentDemand
 
 /**
  * Returns the applicable demand closed under the direct object fragments of its resolver fields.

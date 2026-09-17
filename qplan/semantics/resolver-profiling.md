@@ -29,7 +29,6 @@ The profile uses the same controls as the overhead benchmark:
 ```shell
 ./gradlew :semantics:resolver26OverheadProfile \
   -PresolverBenchmarkLoopCount=3 \
-  -Presolver26OverheadProfileOutput=/tmp/resolver26-overhead.jfr \
   --console=plain
 ```
 
@@ -52,7 +51,6 @@ The profile uses the same controls as the benchmark:
   -PcorrectResolutionBenchmarkInputCount=50 \
   -PcorrectResolutionBenchmarkQuerySeed=1 \
   -PcorrectResolutionBenchmarkLoopCount=3 \
-  -PcorrectResolutionProfileOutput=/tmp/correct-resolution.jfr \
   --console=plain
 ```
 
@@ -68,12 +66,11 @@ Run:
 
 The task loads the frozen Resolver26 broad-campaign case, runs one unrecorded warmup case, and records one measured case. The recording includes request preparation, Resolver26, witness snapshotting, application-identity reconstruction and comparison, `correctResolution`, and from-field binding validation. Resource decoding and `TestWorld` assembly occur during trial setup and are excluded. The default recording is `semantics/build/reports/resolver-benchmarks/property-test.jfr`.
 
-Repeat the frozen case inside the recording or preserve the result at another location with:
+Repeat the frozen case inside the recording with:
 
 ```shell
 ./gradlew :semantics:propertyTestProfile \
   -PpropertyTestBenchmarkLoopCount=3 \
-  -PpropertyTestProfileOutput=/tmp/property-test.jfr \
   --console=plain
 ```
 
@@ -269,7 +266,7 @@ Tested revision: `91303870b87fe08cbb030ac4f28f4f7b0edbbe24`
 
 Profile evidence: [`profiles/2026-08-22-91303870`](./profiles/2026-08-22-91303870)
 
-This investigation used the existing frozen property-test and Resolver26-overhead JMH benchmarks and the `propertyTestProfile`, `resolver26OverheadProfile`, and diagnostic `correctResolutionProfile` JFR targets. Profiles repeated their prepared workload three times with `propertyTestBenchmarkLoopCount=3`, `resolverBenchmarkLoopCount=3`, or `correctResolutionBenchmarkLoopCount=3` and were written to `/tmp/1rv-property-test-20260822.jfr`, `/tmp/1rv-resolver26-overhead-20260822.jfr`, and `/tmp/1rv-correct-resolution-20260822.jfr`. The requested JMH benchmarks ran serially on an otherwise idle host with their default parameters on Corretto 21.0.4 and JMH 1.36. The property benchmark was repeated because its first result had wider iteration variance. The full four-benchmark closeout suite was not run because this investigation was scoped to the requested frozen property and Resolver26 benchmarks; `correctResolution` was added only as a diagnostic target.
+This investigation used the existing frozen property-test and Resolver26-overhead JMH benchmarks and the `propertyTestProfile`, `resolver26OverheadProfile`, and diagnostic `correctResolutionProfile` JFR targets. Profiles repeated their prepared workload three times with `propertyTestBenchmarkLoopCount=3`, `resolverBenchmarkLoopCount=3`, or `correctResolutionBenchmarkLoopCount=3`. The requested JMH benchmarks ran serially on an otherwise idle host with their default parameters on Corretto 21.0.4 and JMH 1.36. The property benchmark was repeated because its first result had wider iteration variance. The full four-benchmark closeout suite was not run because this investigation was scoped to the requested frozen property and Resolver26 benchmarks; `correctResolution` was added only as a diagnostic target.
 
 | Benchmark | Measured iterations | JMH score | Work per operation | Mean per unit |
 | --- | --- | --- | --- | --- |

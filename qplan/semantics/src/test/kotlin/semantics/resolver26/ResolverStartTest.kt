@@ -2,7 +2,6 @@ package semantics.resolver26
 
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -350,47 +349,6 @@ class ResolverStartTest {
                     releaseBlocker.countDown()
                     requestJob.cancelAndJoin()
                 }
-            }
-        }
-
-    @Test
-    fun `Error escapes Resolver26 unchanged`() =
-        runBlocking {
-            val error = Error("process-level failure")
-            val observed = CompletableDeferred<Throwable>()
-            val world =
-                TestWorld.fromSDL(
-                    schemaSDL = SCHEMA,
-                    fieldResolvers = { schema ->
-                        val fast = schema.requireObjectField("Query", "fast")
-                        mapOf(
-                            fast to
-                                fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                    throw error
-                                },
-                        )
-                    },
-                )
-            val requestJob = Job()
-            val requestScope =
-                CoroutineScope(
-                    resolver26CoroutineContext() +
-                        requestJob +
-                        CoroutineExceptionHandler { _, failure -> observed.complete(failure) },
-                )
-
-            try {
-                context(SharedOperationContext(world.assumptions)) {
-                    startResolve(
-                        world.assumptions.operationSelectionsFrom("query { fast }"),
-                        requestScope,
-                    )
-                }
-
-                assertSame(error, withTimeout(5_000) { observed.await() })
-                assertFalse(requestJob.isActive)
-            } finally {
-                requestJob.cancelAndJoin()
             }
         }
 

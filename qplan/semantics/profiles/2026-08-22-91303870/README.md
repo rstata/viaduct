@@ -4,12 +4,12 @@ Runtime revision: `91303870b87fe08cbb030ac4f28f4f7b0edbbe24`
 
 The runtime tree was clean at this revision while the benchmarks and profiles ran. The performance-log documentation was added afterward. Host, JVM, benchmark iterations, workload statistics, interpretation, and controlled historical runs are recorded in the [corresponding performance-log entry](../../resolver-profiling.md#2026-08-22-171204-utc).
 
-Profiles used three prepared-workload repetitions:
+Profiles used three prepared-workload repetitions. Equivalent commands using the default output paths:
 
 ```shell
-./gradlew :semantics:propertyTestProfile -PpropertyTestBenchmarkLoopCount=3 -PpropertyTestProfileOutput=/tmp/1rv-property-test-20260822.jfr --console=plain
-./gradlew :semantics:resolver26OverheadProfile -PresolverBenchmarkLoopCount=3 -Presolver26OverheadProfileOutput=/tmp/1rv-resolver26-overhead-20260822.jfr --console=plain
-./gradlew :semantics:correctResolutionProfile -PcorrectResolutionBenchmarkLoopCount=3 -PcorrectResolutionProfileOutput=/tmp/1rv-correct-resolution-20260822.jfr --console=plain
+./gradlew :semantics:propertyTestProfile -PpropertyTestBenchmarkLoopCount=3 --console=plain
+./gradlew :semantics:resolver26OverheadProfile -PresolverBenchmarkLoopCount=3 --console=plain
+./gradlew :semantics:correctResolutionProfile -PcorrectResolutionBenchmarkLoopCount=3 --console=plain
 ```
 
 Corpus SHA-256:

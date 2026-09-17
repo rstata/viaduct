@@ -13,15 +13,15 @@ Final validation and default benchmark controls ran serially:
 ./gradlew :semantics:propertyTestBenchmark --console=plain
 ```
 
-Final profiles used three prepared-workload repetitions:
+Final profiles used three prepared-workload repetitions. Equivalent commands using the default output paths:
 
 ```shell
-./gradlew :semantics:resolver26OverheadProfile -PresolverBenchmarkLoopCount=3 -Presolver26OverheadProfileOutput=/tmp/1rv-5193dec7-closeout-resolver26.jfr --console=plain
-./gradlew :semantics:propertyTestProfile -PpropertyTestBenchmarkLoopCount=3 -PpropertyTestProfileOutput=/tmp/1rv-5193dec7-closeout-property.jfr --console=plain
-./gradlew :semantics:correctResolutionProfile -PcorrectResolutionBenchmarkLoopCount=3 -PcorrectResolutionProfileOutput=/tmp/1rv-5193dec7-closeout-correct-resolution.jfr --console=plain
+./gradlew :semantics:resolver26OverheadProfile -PresolverBenchmarkLoopCount=3 --console=plain
+./gradlew :semantics:propertyTestProfile -PpropertyTestBenchmarkLoopCount=3 --console=plain
+./gradlew :semantics:correctResolutionProfile -PcorrectResolutionBenchmarkLoopCount=3 --console=plain
 ```
 
-The reports in each profile subdirectory were produced with `qplan/export-resolver-profile.sh`. Raw JFRs remain at the paths above outside Git; each `recording.sha256` records its checksum.
+The reports in each profile subdirectory were produced with `qplan/export-resolver-profile.sh`. Each `recording.sha256` records the original recording's checksum.
 
 Host and JVM: `raymie-stata-codex`; KVM guest with one Intel Xeon 6975P-C socket, 48 physical cores / 96 vCPUs, 371 GiB RAM, no swap, and two NUMA nodes; Corretto 21.0.4.
 

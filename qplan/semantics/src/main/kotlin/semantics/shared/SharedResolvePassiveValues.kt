@@ -11,9 +11,11 @@ import model.ObjectSelectionForest
 import model.PathComponent
 import model.ResolverOutputData
 import model.RootFieldReferenceData
+import model.Selection
 import model.SelectionForest
 import model.invariants.conformsToResolverOutputSchemaType
 import model.isParentField
+import model.merge
 import model.outputType
 import model.outputValue
 import model.requireField
@@ -56,8 +58,9 @@ internal abstract class SharedResolvePassiveValues<O : SharedOrchestrationTask>(
 
     /**
      * Dispatches executable reference work discovered during passive list resolution. Resolver26 uses
-     * its field-task protocol, including runtime binding support; Resolver01-03 execute synchronously,
-     * while Resolver06-08 queue reference tasks at their publication depth. Each implementation
+     * its field-task protocol, including runtime binding support; Resolver21-23 use grounded field tasks.
+     * Resolver01-03 execute synchronously, while Resolver06-08 queue tasks at their publication depth.
+     * [selection] describes the containing field with this reference's construction demand. Each implementation
      * claims and publishes [cell] at this occurrence.
      */
     protected abstract fun resolveListReference(
@@ -65,7 +68,7 @@ internal abstract class SharedResolvePassiveValues<O : SharedOrchestrationTask>(
         cell: EngineResultCell,
         path: List<PathComponent>,
         expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
-        constructionDemand: SelectionForest,
+        selection: ObjectSelection,
         invocationDemand: SelectionForest,
         parent: OEROccurrenceContext,
     )
@@ -129,12 +132,16 @@ internal abstract class SharedResolvePassiveValues<O : SharedOrchestrationTask>(
                     val elementPath = path + ListEngineResult.Index.of(index)
                     val cell = result[index]
                     if (element is RootFieldReferenceData) {
+                        val key = elementPath.filterIsInstance<ObjectEngineResult.ObjectKey>().last()
+                        val selection = selectionForestOf(
+                            Selection.of(key, setOf(containingOccurrence.target.type), constructionDemand),
+                        ).merge(containingOccurrence.target.type).byKey().getValue(key)
                         resolveListReference(
                             reference = element,
                             cell = cell,
                             path = elementPath,
                             expectedType = elementType,
-                            constructionDemand = constructionDemand,
+                            selection = selection,
                             invocationDemand = invocationDemand,
                             parent = containingOccurrence,
                         )

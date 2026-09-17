@@ -13,14 +13,14 @@ Final validation and default benchmark controls ran serially:
 ./gradlew :model:test :arbitrary:test :semantics:test --console=plain
 ```
 
-Final profiles used three prepared-workload repetitions:
+Final profiles used three prepared-workload repetitions. Equivalent commands using the default output paths:
 
 ```shell
-./gradlew :semantics:resolver26OverheadProfile -PresolverBenchmarkLoopCount=3 -Presolver26OverheadProfileOutput=/tmp/4rv-resolver26-final-20260904.jfr --console=plain
-./gradlew :semantics:correctResolutionProfile -PcorrectResolutionBenchmarkInputCount=50 -PcorrectResolutionBenchmarkQuerySeed=1 -PcorrectResolutionBenchmarkLoopCount=3 -PcorrectResolutionProfileOutput=/tmp/4rv-correct-resolution-final-20260904.jfr --console=plain
+./gradlew :semantics:resolver26OverheadProfile -PresolverBenchmarkLoopCount=3 --console=plain
+./gradlew :semantics:correctResolutionProfile -PcorrectResolutionBenchmarkInputCount=50 -PcorrectResolutionBenchmarkQuerySeed=1 -PcorrectResolutionBenchmarkLoopCount=3 --console=plain
 ```
 
-The reports in each profile subdirectory were produced with `qplan/export-resolver-profile.sh`. Raw JFRs remain at the paths above outside Git; each `recording.sha256` records its checksum.
+The reports in each profile subdirectory were produced with `qplan/export-resolver-profile.sh`. Each `recording.sha256` records the original recording's checksum.
 
 Host and JVM: `raymie-stata-codex`; one Intel Xeon Platinum 8375C socket, 32 physical cores / 64 vCPUs, 495 GiB RAM, no swap, and one NUMA node; Corretto 21.0.4.
 

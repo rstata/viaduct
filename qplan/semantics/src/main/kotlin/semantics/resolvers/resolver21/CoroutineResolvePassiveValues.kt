@@ -1,4 +1,4 @@
-package semantics.resolvers.resolver01
+package semantics.resolvers.resolver21
 
 import model.EngineResultCell
 import model.ObjectSelection
@@ -12,16 +12,15 @@ import semantics.shared.applicableGroundSelections
 import viaduct.engine.api.EngineObjectData
 import viaduct.graphql.schema.ViaductSchema
 
-/** Grounded selection collection and reference dispatch for the shared passive traversal. */
-internal class DepthFirstPassiveValues(
-    private val depthFirstOperation: DepthFirstOperationContext,
-) : SharedResolvePassiveValues<DepthFirstOrchestrationTask>(depthFirstOperation) {
+/** Grounded selection collection and field-task dispatch around the common passive traversal. */
+internal class CoroutineResolvePassiveValues(private val resolverOperation: CoroutineOperationContext) :
+    SharedResolvePassiveValues<CoroutineOrchestrationTask>(resolverOperation) {
     override fun createOrchestrationTask(
         occurrence: OEROccurrenceContext,
         source: EngineObjectData.Sync,
         constructionDemand: SelectionForest,
-    ): DepthFirstOrchestrationTask =
-        DepthFirstOrchestrationTask.create(depthFirstOperation, occurrence, source, constructionDemand)
+    ): CoroutineOrchestrationTask =
+        CoroutineOrchestrationTask.create(resolverOperation, occurrence, source, constructionDemand)
 
     override fun collect(selections: SelectionForest, type: ViaductSchema.Object): ObjectSelectionForest =
         context(operation) { selections.applicableGroundSelections(type) }
@@ -35,9 +34,9 @@ internal class DepthFirstPassiveValues(
         invocationDemand: SelectionForest,
         parent: OEROccurrenceContext,
     ) {
-        depthFirstOperation.dispatcher.dispatchFieldResolver(
-            DepthFirstFieldResolverTask(
-                depthFirstOperation, parent, selection, cell, reference, invocationDemand, path, expectedType,
+        CoroutineFieldResolverTask.launchForListElement(
+            CoroutineFieldResolverContext(
+                resolverOperation, parent, selection, cell, reference, invocationDemand, path, expectedType,
             ),
         )
     }

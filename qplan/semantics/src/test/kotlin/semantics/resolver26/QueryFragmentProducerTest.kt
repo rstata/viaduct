@@ -7,22 +7,26 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import model.EngineObjectOrErrorData
+import model.Arguments
 import model.ErrorEngineResult
 import model.ObjectEngineResult
 import model.ResolverOccurrenceId
+import model.RootFieldReferenceData
+import model.VariableBinding
+import model.VariableInstanceId
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.merge
 import model.operationSelectionsFrom
 import model.requireObjectField
-import model.requireQueryTypeDef
 import model.schemaType
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
+import model.testing.fromQueryField
 import semantics.contract.selectionValues
 import semantics.shared.SharedOperationContext
 import semantics.shared.SharedResolverObserver
@@ -35,7 +39,7 @@ import semantics.shared.OEROccurrenceContext
 
 class QueryFragmentProducerTest {
     @Test
-    fun `producer exception becomes an explicit Query error owned by the field task`() =
+    fun `Query producer failure publishes a field error and terminates its bindings`() =
         runBlocking {
             val failure = IllegalStateException("Query producer failed")
             val consumerInvoked = AtomicBoolean()
@@ -54,14 +58,12 @@ class QueryFragmentProducerTest {
                     startQueryFragmentResolution(requestScope, observer) {
                         consumerInvoked.set(true)
                     }
-                val queryValue =
-                    assertIs<EngineObjectOrErrorData.Error>(
-                        withTimeout(5_000) {
-                            resolution.operation.queryValuesState.fetch(
-                                resolution.resolverOccurrenceId,
-                            )
-                        },
-                    )
+                assertSame(
+                    VariableBinding.Error,
+                    withTimeout(5_000) {
+                        resolution.operation.variableBindingsState.fetchBinding(resolution.variableId())
+                    },
+                )
                 val fieldValue =
                     assertIs<ErrorEngineResult>(
                         withTimeout(5_000) {
@@ -72,7 +74,6 @@ class QueryFragmentProducerTest {
                         },
                     )
 
-                assertSame(failure, queryValue.error.cause)
                 assertSame(failure, fieldValue.errorData.cause)
                 assertFalse(consumerInvoked.get())
                 assertTrue(requestJob.isActive)
@@ -82,49 +83,87 @@ class QueryFragmentProducerTest {
         }
 
     @Test
-    fun `cancellation before producer entry cancels its declared Query value`() =
+    fun `cancellation before field or Query producer entry cancels provider bindings`() =
         runBlocking {
-            val dispatcher = QueuedDispatcher()
-            val requestJob = Job()
-            val requestScope = CoroutineScope(dispatcher + requestJob)
-            val producerStarted = AtomicBoolean()
-            val observer =
-                object : SharedResolverObserver {
-                    override fun onQueryFragmentResult(
-                        resolverOccurrenceId: ResolverOccurrenceId,
-                        result: ObjectEngineResult,
-                    ) {
-                        producerStarted.set(true)
+            for (cancelBeforeFieldEntry in listOf(true, false)) {
+                val dispatcher = QueuedDispatcher()
+                val requestJob = Job()
+                val requestScope = CoroutineScope(dispatcher + requestJob)
+                val producerStarted = AtomicBoolean()
+                val observer =
+                    object : SharedResolverObserver {
+                        override fun onQueryFragmentResult(
+                            resolverOccurrenceId: ResolverOccurrenceId,
+                            result: ObjectEngineResult,
+                        ) {
+                            producerStarted.set(true)
+                        }
                     }
-                }
-            try {
-                val resolution = startQueryFragmentResolution(requestScope, observer) {}
+                try {
+                    val resolution = startQueryFragmentResolution(requestScope, observer) {}
 
-                // Enter the field task so it queues its Query producer and suspends awaiting its value.
-                dispatcher.runNext()
-                requestJob.cancel(CancellationException("cancelled before Query producer entry"))
-                // Give only the cancelled producer its queued turn. Its terminal callback must cancel
-                // the Query value before the field task's own cancellation continuation can do so.
-                dispatcher.runNext()
-
-                kotlin.test.assertFailsWith<CancellationException> {
-                    withTimeout(5_000) {
-                        resolution.operation.queryValuesState.fetch(
-                            resolution.resolverOccurrenceId,
-                        )
+                    // Optionally enter the field task so it queues its Query producer.
+                    if (!cancelBeforeFieldEntry) dispatcher.runNext()
+                    requestJob.cancel(CancellationException("cancelled before coroutine entry"))
+                    // The Query producer can finish cancellation before its owning field task.
+                    dispatcher.runNext()
+                    if (!cancelBeforeFieldEntry) {
+                        assertFalse(resolution.operation.variableBindingsState.isBound(resolution.variableId()))
                     }
+                    dispatcher.runUntilIdle()
+                    requestJob.join()
+
+                    kotlin.test.assertFailsWith<CancellationException> {
+                        resolution.operation.variableBindingsState.getBinding(resolution.variableId())
+                    }
+                    assertFalse(producerStarted.get())
+                } finally {
+                    requestJob.cancel()
+                    dispatcher.runUntilIdle()
+                    requestJob.join()
                 }
-                assertFalse(producerStarted.get())
-            } finally {
-                requestJob.cancel()
-                dispatcher.runUntilIdle()
-                requestJob.join()
             }
         }
+
+    @Test
+    fun `field task cancellation terminates bindings created by a reference hop`() = runBlocking {
+        val dispatcher = QueuedDispatcher()
+        val requestJob = Job()
+        val requestScope = CoroutineScope(dispatcher + requestJob)
+        val queryOccurrences = mutableListOf<ResolverOccurrenceId>()
+        val observer = object : SharedResolverObserver {
+            override fun onQueryFragmentResult(resolverOccurrenceId: ResolverOccurrenceId, result: ObjectEngineResult) {
+                queryOccurrences += resolverOccurrenceId
+                requestJob.cancel(CancellationException("cancelled during reference Query production"))
+            }
+        }
+        try {
+            val resolution = startQueryFragmentResolution(
+                requestScope, observer, useReference = true, suspendVariablesProvider = true,
+            ) {
+                error("Cancelled reference resolver must not be invoked")
+            }
+            dispatcher.runUntilIdle()
+            requestJob.join()
+
+            for (name in listOf("provided", "local")) {
+                val variableId = resolution.variableId(queryOccurrences.single(), name)
+                kotlin.test.assertFailsWith<CancellationException> {
+                    resolution.operation.variableBindingsState.getBinding(variableId)
+                }
+            }
+        } finally {
+            requestJob.cancel()
+            dispatcher.runUntilIdle()
+            requestJob.join()
+        }
+    }
 
     private fun startQueryFragmentResolution(
         requestScope: CoroutineScope,
         observer: SharedResolverObserver,
+        useReference: Boolean = false,
+        suspendVariablesProvider: Boolean = false,
         onConsumerInvocation: () -> Unit,
     ): StartedQueryFragmentResolution {
         val world =
@@ -132,31 +171,57 @@ class QueryFragmentProducerTest {
                 schemaSDL =
                     """
                     type Query {
-                      dependency: Int!
+                      reference: Int!
                       consumer: Int!
+                      dependency: Int!
+                      consume(value: Int!, extra: Int! = 0): Int!
                     }
                     """.trimIndent(),
                 fieldResolvers = { schema ->
                     val dependency = schema.requireObjectField("Query", "dependency")
                     val consumer = schema.requireObjectField("Query", "consumer")
                     mapOf(
+                        schema.requireObjectField("Query", "reference") to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                RootFieldReferenceData.of(listOf(consumer), emptyMap())
+                            },
                         dependency to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> 7 },
+                        schema.requireObjectField("Query", "consume") to
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> 7 },
                         consumer to
                             fieldResolverOf(
                                 objectFragment = schema.emptyFragmentOf("Query"),
                                 queryFragment =
                                     schema.fragmentFrom(
-                                        "fragment ConsumerQuery on Query { dependency }",
+                                        "fragment ConsumerQuery on Query { dependency consume(value: ${'$'}provided, extra: " +
+                                            (if (suspendVariablesProvider) "${'$'}local" else "0") + ") }",
+                                        variableField = consumer,
                                     ),
                             ) { _, queryValue, _ ->
                                 onConsumerInvocation()
-                                queryValue.selectionValues().getValue("dependency")
+                                queryValue.selectionValues().getValue("consume")
+                            }.let { resolver ->
+                                if (suspendVariablesProvider) {
+                                    resolver.withVariablesProvider(setOf("local")) { awaitCancellation() }
+                                } else resolver
                             },
                     )
                 },
+                variableProviders = { schema ->
+                    val consumer = schema.requireObjectField("Query", "consumer")
+                    mapOf(
+                        Arguments.Variable.of(consumer, "provided") to schema.fromQueryField(
+                            queryFragmentSource = "fragment ConsumerQuery on Query { dependency }",
+                            responsePath = listOf("dependency"),
+                            variableField = consumer,
+                        ),
+                    )
+                },
             )
-        val selections = world.assumptions.operationSelectionsFrom("query { consumer }")
+        val selections = world.assumptions.operationSelectionsFrom(
+            if (useReference) "query { reference }" else "query { consumer }",
+        )
         val baseOperation = SharedOperationContext(world.assumptions, resolverObserver = observer)
         val operation =
             OperationContext(
@@ -171,7 +236,6 @@ class QueryFragmentProducerTest {
                 mutable = true,
             )
         val key = selections.merge(root.type).byKey().keys.single()
-        val resolverOccurrenceId = ResolverOccurrenceId.at(root, listOf(key))
         val orchestration =
             OrchestrationTask.create(
                 operation = operation,
@@ -185,15 +249,21 @@ class QueryFragmentProducerTest {
                 initialDemand = selections,
             )
         operation.dispatcher.dispatchOrchestrator(orchestration)
-        return StartedQueryFragmentResolution(operation, root, key, resolverOccurrenceId)
+        return StartedQueryFragmentResolution(operation, root, key)
     }
 
     private data class StartedQueryFragmentResolution(
         val operation: OperationContext,
         val root: ObjectEngineResult,
         val key: ObjectEngineResult.ObjectKey,
-        val resolverOccurrenceId: ResolverOccurrenceId,
-    )
+    ) {
+        fun variableId(
+            occurrence: ResolverOccurrenceId = ResolverOccurrenceId.at(root, listOf(key)),
+            name: String = "provided",
+        ): VariableInstanceId = VariableInstanceId.of(
+            occurrence, operation.schema.requireObjectField("Query", "consumer"), name,
+        )
+    }
 
     private class QueuedDispatcher : CoroutineDispatcher() {
         private val tasks = ArrayDeque<Runnable>()

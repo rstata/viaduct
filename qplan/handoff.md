@@ -97,7 +97,7 @@ The latest feature-test enablement pass reduced the 43 non-`AccessChk`/`ParentFl
 
 The six selective field and node tests whose intent is to verify batching remain source-faithful and disabled with `TODO: Batching`. Singleton executor calls are not treated as batching coverage; these tests should be enabled unchanged when batching is implemented.
 
-Production-derived execution tests live under `execution/viaductfeaturetests`. Whole-file, source-faithful preservation is the migration policy; unsupported tests remain disabled with coded reasons rather than being rewritten. [`execution/viaduct-feature-test-inventory.md`](./execution/viaduct-feature-test-inventory.md) records the current whole-file exclusions and the two ports that have drifted from their source files.
+Production-derived execution tests live under `execution/viaductfeaturetests`. Whole-file, source-faithful preservation is the migration policy; unsupported tests remain disabled with coded reasons rather than being rewritten. [`execution/viaduct-feature-test-inventory.md`](./execution/viaduct-feature-test-inventory.md) records the current whole-file exclusions and the port that has drifted from its source file.
 
 ## Validation
 

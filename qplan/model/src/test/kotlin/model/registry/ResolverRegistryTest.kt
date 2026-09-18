@@ -1,5 +1,7 @@
 package model.registry
 
+import kotlinx.coroutines.runBlocking
+
 import viaduct.graphql.schema.ViaductSchema
 
 import model.requireQueryTypeDef
@@ -44,7 +46,7 @@ import viaduct.engine.api.EngineObjectData
 
 class ResolverRegistryTest {
     @Test
-    fun `selective field resolver receives demand without output projection`() {
+    fun `selective field resolver receives demand without output projection`() = runBlocking {
         val world =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -97,7 +99,7 @@ class ResolverRegistryTest {
     }
 
     @Test
-    fun `nonselective field resolver factory projects output in selective worlds`() {
+    fun `nonselective field resolver factory projects output in selective worlds`() = runBlocking {
         val world =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -146,7 +148,7 @@ class ResolverRegistryTest {
     }
 
     @Test
-    fun `selection-aware nonselective resolver receives demand and projects output`() {
+    fun `selection-aware nonselective resolver receives demand and projects output`() = runBlocking {
         val world =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -199,7 +201,7 @@ class ResolverRegistryTest {
     }
 
     @Test
-    fun `lowers node and field resolvers to field coordinates`() {
+    fun `lowers node and field resolvers to field coordinates`() = runBlocking {
         val observedFields = mutableListOf<String>()
         val world =
             TestWorld.fromSDL(
@@ -294,7 +296,7 @@ class ResolverRegistryTest {
     }
 
     @Test
-    fun `field resolver receives response-preserving query fragment value`() {
+    fun `field resolver receives response-preserving query fragment value`() = runBlocking {
         val world =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -469,7 +471,7 @@ class ResolverRegistryTest {
     }
 
     @Test
-    fun `field resolvers return the complete nullable output-value algebra`() {
+    fun `field resolvers return the complete nullable output-value algebra`() = runBlocking {
         val world =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -673,7 +675,7 @@ class ResolverRegistryTest {
     }
 
     @Test
-    fun `fills missing Query resolvers by nullability and preserves supplied resolvers`() {
+    fun `fills missing Query resolvers by nullability and preserves supplied resolvers`() = runBlocking {
         val world =
             TestWorld.fromSDL(
                 schemaSDL = "type Query { supplied: Int, nullable: Int, required: Int! }",
@@ -688,7 +690,7 @@ class ResolverRegistryTest {
         val registry = world.resolverRegistry
         val query = schema.objectOf("Query")
 
-        fun resolve(fieldName: String): Any? {
+        suspend fun resolve(fieldName: String): Any? {
             val field = schema.requireObjectField("Query", fieldName)
             return context(Assumptions.of(world.schema, world.resolverRegistry, false)) {
                 registry.resolver(field)(
@@ -938,7 +940,7 @@ class ResolverRegistryTest {
 
     @Test
     @Ignore("Runtime argument-bearing resolver-output validation is disabled")
-    fun `field resolver rejects output containing an argument-bearing field`() {
+    fun `field resolver rejects output containing an argument-bearing field`() = runBlocking {
         val testWorld =
             TestWorld.fromSDL(
                 schemaSDL =

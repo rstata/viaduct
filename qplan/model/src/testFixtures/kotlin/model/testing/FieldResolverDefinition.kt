@@ -73,7 +73,7 @@ class FieldResolverDefinition private constructor(
 
     /** Routes internally encoded Query.node identities through qplan's built-in node dispatcher. */
     internal fun withNodeDispatch(
-        dispatch: (Arguments.Resolved, SelectionForest) -> ResolverOutputData?,
+        dispatch: suspend (Arguments.Resolved, SelectionForest) -> ResolverOutputData?,
         isNodeDispatch: (Arguments.Resolved) -> Boolean,
     ): FieldResolverDefinition =
         FieldResolverDefinition(
@@ -283,7 +283,7 @@ class FieldResolverDefinition private constructor(
 
         fun of(
             objectFragment: Fragment,
-            function: (EngineObjectData.Sync, Arguments.Resolved) -> ResolverOutputData?,
+            function: suspend (EngineObjectData.Sync, Arguments.Resolved) -> ResolverOutputData?,
         ): FieldResolverDefinition =
             of(
                 objectFragment = objectFragment,
@@ -318,7 +318,7 @@ fun fieldResolverOf(
 
 fun fieldResolverOf(
     objectFragment: Fragment,
-    function: (EngineObjectData.Sync, Arguments.Resolved) -> ResolverOutputData?,
+    function: suspend (EngineObjectData.Sync, Arguments.Resolved) -> ResolverOutputData?,
 ): FieldResolverDefinition = FieldResolverDefinition.of(objectFragment, function)
 
 fun selectiveFieldResolverOf(
@@ -341,7 +341,7 @@ fun selectionAwareFieldResolverOf(
 
 fun selectiveFieldResolverOf(
     objectFragment: Fragment,
-    function: (
+    function: suspend (
         EngineObjectData.Sync,
         Arguments.Resolved,
         SelectionForest,

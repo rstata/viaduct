@@ -57,7 +57,7 @@ import viaduct.graphql.utils.GraphQLTypeRelation
  */
 class NodeResolverFunction internal constructor(
     internal val mode: Mode,
-    private val function: (String, SelectionForest) -> ResolverOutputData?,
+    private val function: suspend (String, SelectionForest) -> ResolverOutputData?,
 ) {
     internal enum class Mode {
         NONSELECTIVE,
@@ -65,25 +65,25 @@ class NodeResolverFunction internal constructor(
         SELECTIVE,
     }
 
-    internal operator fun invoke(
+    internal suspend operator fun invoke(
         id: String,
         selections: SelectionForest,
     ): ResolverOutputData? = function(id, selections)
 }
 
 /** Marks a raw external node lookup for fixture composition. */
-fun nodeResolverOf(function: (String) -> ResolverOutputData?): NodeResolverFunction =
+fun nodeResolverOf(function: suspend (String) -> ResolverOutputData?): NodeResolverFunction =
     NodeResolverFunction(NodeResolverFunction.Mode.NONSELECTIVE) { id, _ -> function(id) }
 
 /** Marks a stable raw node lookup that receives demand before model-owned output projection. */
 fun selectionAwareNodeResolverOf(
-    function: (String, SelectionForest) -> ResolverOutputData?,
+    function: suspend (String, SelectionForest) -> ResolverOutputData?,
 ): NodeResolverFunction =
     NodeResolverFunction(NodeResolverFunction.Mode.SELECTION_AWARE_NONSELECTIVE, function)
 
 /** Marks a selection-sensitive raw external node lookup for fixture composition. */
 fun selectiveNodeResolverOf(
-    function: (String, SelectionForest) -> ResolverOutputData?,
+    function: suspend (String, SelectionForest) -> ResolverOutputData?,
 ): NodeResolverFunction = NodeResolverFunction(NodeResolverFunction.Mode.SELECTIVE, function)
 
 typealias CanonicalFieldResolverApplicationObserver =
@@ -314,7 +314,7 @@ private class NodeResolverLowering(
         )
     }
 
-    private fun loadNode(
+    private suspend fun loadNode(
         identity: NodeReferenceIdentity,
         selections: SelectionForest,
     ): ResolverOutputData? {

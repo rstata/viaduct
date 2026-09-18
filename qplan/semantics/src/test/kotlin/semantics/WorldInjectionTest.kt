@@ -1,5 +1,7 @@
 package semantics
 
+import kotlinx.coroutines.runBlocking
+
 import model.Arguments
 import model.Assumptions
 import model.emptyFragmentOf
@@ -26,7 +28,7 @@ import viaduct.engine.api.EngineObjectData
 
 class WorldInjectionTest {
     @Test
-    fun `guice assembles one complete reasoning world from qualified inputs`() {
+    fun `guice assembles one complete reasoning world from qualified inputs`() = runBlocking {
         val testWorld =
             TestWorld.fromSDL(
                 schemaSDL = SCHEMA_SDL,

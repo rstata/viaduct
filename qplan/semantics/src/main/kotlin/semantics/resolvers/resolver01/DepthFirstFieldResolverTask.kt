@@ -84,12 +84,14 @@ internal class DepthFirstFieldResolverTask(
                         )
                     }
                 }
-                resolver(
-                    input = input,
-                    queryValue = resolveQueryFragment(fragments.queryFragment, publicationPath),
-                    arguments = arguments,
-                    selections = invocationDemand,
-                )
+                runBlocking {
+                    resolver(
+                        input = input,
+                        queryValue = resolveQueryFragment(fragments.queryFragment, publicationPath),
+                        arguments = arguments,
+                        selections = invocationDemand,
+                    )
+                }
             }
         }
         var nodeIdentity: NodeReferenceIdentity? = null
@@ -129,12 +131,14 @@ internal class DepthFirstFieldResolverTask(
                 coordinate = invocation.path,
             )
         val output =
-            invocation.resolver(
-                input = invocation.emptyObjectInput(),
-                queryValue = queryValue,
-                arguments = reference.arguments,
-                selections = invocationDemand,
-            )
+            runBlocking {
+                invocation.resolver(
+                    input = invocation.emptyObjectInput(),
+                    queryValue = queryValue,
+                    arguments = reference.arguments,
+                    selections = invocationDemand,
+                )
+            }
         operation.resolverObserver.onRootFieldReferenceInvocation(
             RootFieldReferenceInvocationObservation(
                 publicationRoot = publicationRoot,

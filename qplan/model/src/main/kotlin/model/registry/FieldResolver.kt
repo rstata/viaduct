@@ -29,7 +29,7 @@ import viaduct.engine.api.EngineObjectData
 
 /** A deterministic partial map from resolved object and Query fragments plus arguments to an output value. */
 typealias NonselectiveFieldResolverFunction =
-    (EngineObjectData.Sync, EngineObjectData.Sync, Arguments.Resolved) -> ResolverOutputData?
+    suspend (EngineObjectData.Sync, EngineObjectData.Sync, Arguments.Resolved) -> ResolverOutputData?
 
 /**
  * A deterministic partial map from resolved inputs and output demand to an output value.
@@ -39,7 +39,7 @@ typealias NonselectiveFieldResolverFunction =
  * demands. The returned value may omit object fields outside the supplied demand.
  */
 typealias SelectiveFieldResolverFunction =
-    (
+    suspend (
         EngineObjectData.Sync,
         EngineObjectData.Sync,
         Arguments.Resolved,
@@ -217,7 +217,7 @@ class FieldResolver private constructor(
 
     /** Applies this field resolver to the supplied output demand. */
     context(world: Assumptions)
-    internal operator fun invoke(
+    internal suspend operator fun invoke(
         input: EngineObjectData.Sync,
         arguments: Arguments.Resolved,
         selections: SelectionForest = selectionForestOf(),
@@ -231,7 +231,7 @@ class FieldResolver private constructor(
 
     /** Applies this field resolver to the supplied output demand. */
     context(world: Assumptions)
-    operator fun invoke(
+    suspend operator fun invoke(
         input: EngineObjectData.Sync,
         queryValue: EngineObjectData.Sync,
         arguments: Arguments.Resolved,
@@ -251,7 +251,7 @@ class FieldResolver private constructor(
      * This is not an observed resolver application and establishes no execution-count property.
      */
     context(world: Assumptions)
-    fun evaluateRelation(
+    suspend fun evaluateRelation(
         input: EngineObjectData.Sync,
         queryValue: EngineObjectData.Sync,
         arguments: Arguments.Resolved,

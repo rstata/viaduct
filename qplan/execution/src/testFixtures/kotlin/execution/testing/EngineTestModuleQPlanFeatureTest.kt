@@ -12,7 +12,6 @@ import graphql.schema.GraphQLTypeUtil
 import graphql.schema.idl.SchemaPrinter
 import java.util.IdentityHashMap
 import java.util.Locale
-import kotlinx.coroutines.runBlocking
 import model.Arguments
 import model.EngineErrorData
 import model.EngineOutputData
@@ -213,33 +212,31 @@ private fun EngineTestModule.qplanRegistryInputs(
                         "Duplicate variable provider \$${variable.variableName} for ${coordinate.render()}"
                     }
                 }
-            val invokeExecutor =
-                fun(
-                    input: EngineObjectData.Sync,
-                    queryValue: EngineObjectData.Sync,
-                    arguments: Arguments.Resolved,
-                    selections: EngineSelectionSet?,
-                ): EngineOutputData? {
-                    val selector =
-                        FieldResolverExecutor.Selector(
-                            arguments = arguments.fieldValues,
-                            selections = selections,
-                            syncObjectValueGetter = { input },
-                            syncQueryValueGetter = { queryValue },
-                        )
-                    val output =
-                        runBlocking {
-                            executor.batchResolve(listOf(selector), context)[selector]
-                        } ?: Result.failure(
+            suspend fun invokeExecutor(
+                input: EngineObjectData.Sync,
+                queryValue: EngineObjectData.Sync,
+                arguments: Arguments.Resolved,
+                selections: EngineSelectionSet?,
+            ): EngineOutputData? {
+                val selector =
+                    FieldResolverExecutor.Selector(
+                        arguments = arguments.fieldValues,
+                        selections = selections,
+                        syncObjectValueGetter = { input },
+                        syncQueryValueGetter = { queryValue },
+                    )
+                val output =
+                    executor.batchResolve(listOf(selector), context)[selector]
+                        ?: Result.failure(
                             IllegalStateException(
                                 "Field executor ${coordinate.render()} omitted its selector",
                             ),
                         )
-                    return output.fold(
-                        onSuccess = { normalizeSourceOutput(sourceField.type, it, sourceSchema) },
-                        onFailure = { EngineErrorData.of(it) },
-                    )
-                }
+                return output.fold(
+                    onSuccess = { normalizeSourceOutput(sourceField.type, it, sourceSchema) },
+                    onFailure = { EngineErrorData.of(it) },
+                )
+            }
             val isSelective =
                 executor.isSelective || fieldSelectivityProvider.isSelective(coordinate)
             val resolver =
@@ -407,52 +404,53 @@ private fun EngineTestModule.qplanNodeResolvers(
                     .mapNotNullTo(linkedSetOf()) { (coordinate, _) ->
                         coordinate.second.takeIf { coordinate.first == typeName }
                     }
-            val invokeExecutor =
-                fun(id: String, selections: EngineSelectionSet): EngineOutputData? {
-                    if (
-                        executor.isSelective &&
-                        selections.selections().all { selection -> selection.fieldName == "id" }
-                    ) {
-                        return ResolvedEngineObjectData(
-                            requireNotNull(fullSchema.schema.getObjectType(typeName)),
-                            emptyMap(),
-                        )
-                    }
-                    val selector = NodeResolverExecutor.Selector(id, selections)
-                    val output =
-                        runBlocking {
-                            executor.resolve(listOf(selector), context)[selector]
-                        } ?: Result.failure(
+            suspend fun invokeExecutor(
+                id: String,
+                selections: EngineSelectionSet,
+            ): EngineOutputData? {
+                if (
+                    executor.isSelective &&
+                    selections.selections().all { selection -> selection.fieldName == "id" }
+                ) {
+                    return ResolvedEngineObjectData(
+                        requireNotNull(fullSchema.schema.getObjectType(typeName)),
+                        emptyMap(),
+                    )
+                }
+                val selector = NodeResolverExecutor.Selector(id, selections)
+                val output =
+                    executor.resolve(listOf(selector), context)[selector]
+                        ?: Result.failure(
                             IllegalStateException(
                                 "Node executor $typeName omitted its selector",
                             ),
                         )
-                    return output.fold(
-                        onSuccess = {
-                            when (
-                                val normalized =
-                                    normalizeSourceOutput(
-                                        requireNotNull(fullSchema.schema.getObjectType(typeName)),
-                                        it,
-                                        sourceSchema,
+                return output.fold(
+                    onSuccess = {
+                        when (
+                            val normalized =
+                                normalizeSourceOutput(
+                                    requireNotNull(fullSchema.schema.getObjectType(typeName)),
+                                    it,
+                                    sourceSchema,
+                                )
+                        ) {
+                            is RootFieldReferenceData -> normalized
+                            is EngineObjectData.Sync ->
+                                if (executor.isSelective) {
+                                    normalized.projectTopLevel(
+                                        selections = selections,
+                                        excludedFields = fieldResolverOwnedFields,
                                     )
-                            ) {
-                                is RootFieldReferenceData -> normalized
-                                is EngineObjectData.Sync ->
-                                    if (executor.isSelective) {
-                                        normalized.projectTopLevel(
-                                            selections = selections,
-                                            excludedFields = fieldResolverOwnedFields,
-                                        )
-                                    } else {
-                                        completeMissingNodeFields(typeName, normalized)
-                                    }
-                                else -> error("Node executor $typeName returned a non-object value")
-                            }
-                        },
-                        onFailure = { EngineErrorData.of(it) },
-                    )
-                }
+                                } else {
+                                    completeMissingNodeFields(typeName, normalized)
+                                }
+                            else -> error("Node executor $typeName returned a non-object value")
+                        }
+                    },
+                    onFailure = { EngineErrorData.of(it) },
+                )
+            }
             type to
                 if (executor.isSelective) {
                     selectiveNodeResolverOf { id, selections ->

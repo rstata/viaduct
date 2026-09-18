@@ -18,4 +18,14 @@ internal class OperationContext(
     ) {
     /** Owns dispatch of the two permitted request-root task kinds. */
     override val dispatcher = TaskDispatcher(requestScope)
+
+    /** Derives nested execution under its calling field task while retaining operation state. */
+    fun forChildScope(requestScope: CoroutineScope): OperationContext =
+        OperationContext(
+            base = this,
+            requestScope = requestScope,
+            resolverObserver = resolverObserver,
+            cycleChecker = cycleChecker,
+            bindingDeclarationsState = bindingDeclarationsState,
+        )
 }

@@ -12,6 +12,7 @@ import model.EngineErrorData
 import model.EngineObjectOrErrorData
 import model.EngineResultCell
 import model.InclusionCondition
+import model.MaterializeSelectionForest
 import model.ObjectEngineResult
 import model.PathComponent
 import model.VariableBinding
@@ -19,6 +20,7 @@ import model.engineObjectDataOf
 import model.guardedBy
 import model.outputValue
 import model.registry.ResolverFragment
+import model.registry.ResolutionExecutionContext
 import model.registry.VariableDefinition
 import model.requireQueryTypeDef
 import model.schemaType
@@ -26,6 +28,7 @@ import semantics.correctresolution.argumentsContainErrorValue
 import semantics.shared.SharedFieldResolverContext
 import semantics.shared.SharedFieldResolverTask
 import semantics.shared.OEROccurrenceContext
+import semantics.shared.materialize
 import viaduct.engine.api.EngineObjectData
 
 /** Prepared field publication handed to the request dispatcher before its coroutine exists. */
@@ -51,7 +54,7 @@ internal class FieldResolverTask private constructor(
     /** Child scope owned by the field task's request-root job; it cannot launch request roots. */
     val fieldTaskScope: CoroutineScope,
     private val objectProviderReads: List<ProviderDefinitionRead>,
-) : SharedFieldResolverTask {
+) : SharedFieldResolverTask, ResolutionExecutionContext {
     val fieldResolverOccurrenceContext: FieldResolverOccurrenceContext?
         get() = resolverOccurrenceContext as? FieldResolverOccurrenceContext
 
@@ -152,15 +155,19 @@ internal class FieldResolverTask private constructor(
         }
 
         /** Enters the existing field-task body under its dispatched coroutine's scope. */
-        internal suspend fun execute(context: FieldResolverContext, scope: CoroutineScope) {
-            FieldResolverTask(
+        internal suspend fun execute(
+            context: FieldResolverContext,
+            scope: CoroutineScope,
+        ) {
+            val task = FieldResolverTask(
                 operationContext = context.operationContext,
                 oerOccurrenceContext = context.oerOccurrenceContext,
                 resolverOccurrenceContext = context.resolverOccurrenceContext,
                 publicationCell = context.publicationCell,
                 fieldTaskScope = scope,
                 objectProviderReads = context.objectProviderReads,
-            ).run()
+            )
+            task.run()
         }
 
         /** Terminates owned promises even when cancellation prevents the task body from entering. */
@@ -215,6 +222,20 @@ internal class FieldResolverTask private constructor(
         } catch (cause: Exception) {
             currentCoroutineContext().ensureActive()
             resolutionLogic.publishFieldError(cause)
+        }
+    }
+
+    /** Resolves an isolated Query selection as structured child work of this field task. */
+    override suspend fun resolveSelectionSet(
+        selections: MaterializeSelectionForest,
+    ): EngineObjectData.Sync {
+        val childOperation = operationContext.forChildScope(fieldTaskScope)
+        val result = startResolve(selections.constructionSelections(), childOperation)
+        return context(childOperation, childOperation.cycleChecker) {
+            result.materialize(
+                selections = selections,
+                reader = resolverOccurrenceContext.publicationPath,
+            )
         }
     }
 

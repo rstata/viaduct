@@ -357,6 +357,21 @@ fun fieldResolverOf(
     function: suspend (EngineObjectData.Sync, Arguments.Resolved) -> ResolverOutputData?,
 ): FieldResolverDefinition = FieldResolverDefinition.of(objectFragment, function)
 
+fun fieldResolverOf(
+    objectFragment: Fragment,
+    function: suspend (
+        EngineObjectData.Sync,
+        Arguments.Resolved,
+        ResolutionExecutionContext,
+    ) -> ResolverOutputData?,
+): FieldResolverDefinition =
+    FieldResolverDefinition.of(
+        objectFragment = objectFragment,
+        queryFragment = null,
+    ) { input, _, arguments, executionContext ->
+        function(input, arguments, executionContext)
+    }
+
 fun selectiveFieldResolverOf(
     objectFragment: Fragment,
     queryFragment: Fragment,

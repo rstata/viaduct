@@ -6,6 +6,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import model.ObjectEngineResult
@@ -30,6 +32,91 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class ResolverStartTest {
+    @Test
+    fun `nested selection execution is owned by the calling field task`() =
+        runBlocking {
+            val nestedStarted = CompletableDeferred<Unit>()
+            val nestedStopped = CompletableDeferred<Unit>()
+            val outerJob = CompletableDeferred<Job>()
+            val gate = CompletableDeferred<Unit>()
+            val world =
+                TestWorld.fromSDL(
+                    schemaSDL =
+                        """
+                        type Query {
+                          outer: Int!
+                          slow: Int!
+                        }
+                        """.trimIndent(),
+                    fieldResolvers = { schema ->
+                        val outer = schema.requireObjectField("Query", "outer")
+                        val slow = schema.requireObjectField("Query", "slow")
+                        val nestedFragment =
+                            schema.fragmentFrom("fragment Nested on Query { slow }")
+                        mapOf(
+                            outer to
+                                fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _, executionContext ->
+                                    val task = assertIs<FieldResolverTask>(executionContext)
+                                    val childOperation =
+                                        task.operationContext.forChildScope(task.fieldTaskScope)
+                                    assertSame(task.operationContext.world, childOperation.world)
+                                    assertSame(
+                                        task.operationContext.variableBindingsState,
+                                        childOperation.variableBindingsState,
+                                    )
+                                    assertSame(
+                                        task.operationContext.resolverObserver,
+                                        childOperation.resolverObserver,
+                                    )
+                                    assertSame(
+                                        task.operationContext.cycleChecker,
+                                        childOperation.cycleChecker,
+                                    )
+                                    assertSame(
+                                        task.operationContext.bindingDeclarationsState,
+                                        childOperation.bindingDeclarationsState,
+                                    )
+                                    outerJob.complete(currentCoroutineContext().job)
+                                    executionContext
+                                        .resolveSelectionSet(nestedFragment.materializeSelections)
+                                        .get("slow")
+                                },
+                            slow to
+                                fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                    nestedStarted.complete(Unit)
+                                    try {
+                                        gate.await()
+                                        2
+                                    } finally {
+                                        nestedStopped.complete(Unit)
+                                    }
+                                },
+                        )
+                    },
+                )
+            val selections = world.assumptions.operationSelectionsFrom("query { outer }")
+            val requestJob = Job()
+            val requestScope = CoroutineScope(resolver26CoroutineContext() + requestJob)
+
+            try {
+                val root =
+                    context(SharedOperationContext(world.assumptions)) {
+                        startResolve(selections, requestScope)
+                    }
+                withTimeout(5_000) { nestedStarted.await() }
+                withTimeout(5_000) {
+                    outerJob.await().cancelAndJoin()
+                }
+
+                withTimeout(5_000) { nestedStopped.await() }
+                assertIs<CancellationException>(root.cell("outer").getValue().awaitFailure())
+                assertTrue(requestJob.isActive)
+                assertFalse(gate.isCompleted)
+            } finally {
+                requestJob.cancelAndJoin()
+            }
+        }
+
     @Test
     fun `startResolve publishes root shape before resolver values complete`() =
         runBlocking {

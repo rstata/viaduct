@@ -12,8 +12,77 @@ import viaduct.engine.api.mocks.MockFieldUnbatchedResolverExecutor
 import viaduct.engine.api.mocks.MockVariablesResolver
 import viaduct.engine.api.mocks.createRSS
 import viaduct.engine.api.mocks.createEngineObjectData
+import viaduct.engine.api.mocks.fetchAs
+import viaduct.engine.runtime.execution.query
 
 class EngineTestModuleQPlanFeatureTest {
+    @Test
+    fun `ctx query nests under the calling field task`() {
+        EngineTestModule(
+            """
+            extend type Query {
+              base: Int!
+              middle: Int!
+              outer: Int!
+            }
+            """.trimIndent(),
+        ) {
+            fieldWithValue("Query" to "base", 2)
+            field("Query" to "middle") {
+                resolver {
+                    fn { _, _, _, _, context ->
+                        val selections = context.engineSelectionSetFactory
+                            .engineSelectionSet("Query", "base", emptyMap())
+                        context.query(selections).fetchAs<Int>("base") * 3
+                    }
+                }
+            }
+            field("Query" to "outer") {
+                resolver {
+                    fn { _, _, _, _, context ->
+                        val selections = context.engineSelectionSetFactory
+                            .engineSelectionSet("Query", "middle", emptyMap())
+                        context.query(selections).fetchAs<Int>("middle") + 1
+                    }
+                }
+            }
+        }.runQPlanFeatureTest {
+            runQuery("{ outer }").assertJson("{data: {outer: 7}}")
+        }
+    }
+
+    @Test
+    fun `ctx query preserves aliases arguments and variables`() {
+        EngineTestModule(
+            """
+            extend type Query {
+              value(x: Int!): Int!
+              result: Int!
+            }
+            """.trimIndent(),
+        ) {
+            field("Query" to "value") {
+                resolver {
+                    fn { arguments, _, _, _, _ -> arguments.getValue("x") }
+                }
+            }
+            field("Query" to "result") {
+                resolver {
+                    fn { _, _, _, _, context ->
+                        val selections = context.engineSelectionSetFactory.engineSelectionSet(
+                            "Query",
+                            "renamed: value(x: ${'$'}x)",
+                            mapOf("x" to 41),
+                        )
+                        context.query(selections).fetchAs<Int>("renamed") + 1
+                    }
+                }
+            }
+        }.runQPlanFeatureTest {
+            runQuery("{ result }").assertJson("{data: {result: 42}}")
+        }
+    }
+
     @Test
     fun `supplies empty objects for namespace fields`() {
         EngineTestModule(

@@ -46,6 +46,8 @@ The adapter translates field executors into qplan `FieldResolverDefinition` valu
 
 The adapter also honors `EngineConfiguration.fieldSelectivityProvider` when executor metadata itself does not declare a field selective. Other engine configuration remains production-runtime input and is ignored unless a supported adapter behavior explicitly consumes it.
 
+Resolver26 passes its concrete `FieldResolverTask` to each suspending registry function as its `ResolutionExecutionContext`. The adapter constructs an invocation-local `EngineExecutionContext` from that explicit capability; `EngineExecutionContext.resolveSelectionSet` converts a Query selection set into canonical qplan selections and delegates directly to the task. The task creates a fresh Query-rooted OER, derives a dispatcher from its own field-task scope, and materializes the requested response-key shape as structured child work. The nested execution retains the parent operation's world, variable bindings, cycle checker, binding-declaration state, and observer; it does not create another top-level request.
+
 The mock field-executor surface returns `Any?`, permits a raw map or source-shaped EOD as the source for a concrete GraphQL object field, and relies on GraphQL completion to serialize built-in scalar results. Qplan's `EngineOutputData` contract is stricter: object output must be a conforming `EngineObjectData.Sync`, and scalar output must already inhabit its canonical runtime domain. The adapter therefore uses the declared concrete object type to recursively materialize those object sources and applies the source scalar's GraphQL-Java serialization before values cross into qplan. Nested `EngineErrorData` values are preserved during this normalization so Resolver26 can attribute dependency failures at their consumers. The adapter does not accept raw maps for interface or union outputs because those values do not provide the concrete runtime type needed for an unambiguous conversion.
 
 Production `RootFieldReference` values are normalized recursively into qplan-owned `RootFieldReferenceData`, including direct executor results and references nested in EOD fields or lists. `ResolverOutputData` is the resolver-facing union of ordinary `EngineOutputData` and this symbolic reference carrier; references are not members of the engine-data domain supplied as resolver input. The adapter does not call production root-reference resolution. It supplies dependency-free empty objects for unsupplied namespace fields so ordinary Query fragments may traverse namespace paths. Resolver26 gives every reference occurrence and direct-result tail hop its own fresh empty Query-rooted identity OER; those roots contain no namespace execution, are distinct from resolver Query-fragment roots, and are not shared across equivalent descriptors. A referenced target with object RSS is rejected; tenant code must express the corresponding dependency as Query RSS with its namespace path prefixed.
@@ -100,6 +102,7 @@ The feature-test adapter currently supports:
 - `__typename` through canonical qplan lowering and GraphQL-Java completion.
 - GraphQL Java 26 `@defer` delivery for qplan-backed fields, including conditional defer, nested objects, deferred errors, and downstream cancellation. `@stream` remains outside this scope; lists are conservatively bridged as whole values.
 - Distinct scoped executable schemas whose resolver-required selections read private fields from the full schema.
+- Query selection execution through `ctx.query()`/`EngineExecutionContext.resolveSelectionSet`, including nested calls, aliases, arguments, variables, and field- or node-executor callers.
 
 The adapter rejects or does not yet model:
 
@@ -108,7 +111,7 @@ The adapter rejects or does not yet model:
 - Inline object values from a Node-valued field; qplan currently requires every Node value to be resolved by its node resolver.
 - Object required selections and `FromObjectField` variables on resolvers invoked as root-field-reference targets; use Query required selections with the namespace path prefixed.
 - Checker and type-checker executors, including their object- and Query-rooted required selections.
-- Mutations, subscriptions, and custom scalars, which remain outside the current qplan scope.
+- Mutations, including `ctx.mutation()`, subscriptions, and custom scalars, which remain outside the current qplan scope.
 
 The test-only adapter preserves the suspend executor SPI through the qplan resolver function. Resolver21-23 and Resolver26 invoke the adapted executor without introducing a blocking boundary.
 

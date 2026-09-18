@@ -81,12 +81,6 @@ private fun startResolve(
     require(operation.selectiveResolvers) {
         "Resolver26 requires selective resolvers"
     }
-    val source = operation.resolverRegistry.createRootQueryInput()
-    val result: ObjectEngineResult =
-        ObjectEngineResult.of(
-            type = source.schemaType,
-            mutable = true,
-        )
     val resolver26Operation =
         OperationContext(
             base = operation,
@@ -96,9 +90,23 @@ private fun startResolve(
                     applicationObserver,
                 ),
         )
+    return startResolve(selections, resolver26Operation)
+}
+
+/** Starts another independently rooted Query execution in an existing logical operation. */
+internal fun startResolve(
+    selections: SelectionForest,
+    operation: OperationContext,
+): ObjectEngineResult {
+    val source = operation.resolverRegistry.createRootQueryInput()
+    val result: ObjectEngineResult =
+        ObjectEngineResult.of(
+            type = source.schemaType,
+            mutable = true,
+        )
     val orchestration =
         OrchestrationTask.create(
-            operation = resolver26Operation,
+            operation = operation,
             occurrence =
                 OEROccurrenceContext(
                     root = result,
@@ -108,6 +116,6 @@ private fun startResolve(
             source = source,
             initialDemand = selections,
         )
-    resolver26Operation.dispatcher.dispatchOrchestrator(orchestration)
+    operation.dispatcher.dispatchOrchestrator(orchestration)
     return result
 }

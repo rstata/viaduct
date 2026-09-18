@@ -51,11 +51,16 @@ class ResolverApplicationObserverTest {
         val arguments = Arguments.Resolved.of(field, emptyMap())
 
         context(world) {
-            resolver(input, arguments)
-            resolver(input, arguments, suppliedDemand)
+            resolver(input, arguments, executionContext = ResolutionExecutionContext.Unsupported)
+            resolver(
+                input,
+                arguments,
+                suppliedDemand,
+                ResolutionExecutionContext.Unsupported,
+            )
         }
         context(testWorld.newAssumptions(selectiveResolvers = false)) {
-            resolver(input, arguments)
+            resolver(input, arguments, executionContext = ResolutionExecutionContext.Unsupported)
         }
 
         assertEquals(3, observed.size)

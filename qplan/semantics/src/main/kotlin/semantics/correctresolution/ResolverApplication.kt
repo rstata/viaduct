@@ -19,6 +19,7 @@ import model.nodeReferenceIdentityOrNull
 import model.outputValue
 import model.requireQueryTypeDef
 import model.RootFieldReferenceData
+import model.registry.ResolutionExecutionContext
 import model.schemaType
 import semantics.shared.groundedArguments
 import semantics.shared.isContextuallyGrounded
@@ -280,6 +281,7 @@ internal fun ObjectEngineResult.reapplyResolver(
                         queryValue = queryValue,
                         arguments = resolverArguments,
                         selections = getCell(key).getValue().get().completedOutputDemand(),
+                        executionContext = ResolutionExecutionContext.Unsupported,
                     )
                 }
             },
@@ -432,6 +434,7 @@ private fun RootFieldReferenceInvocationObservation.reapplyReferencedResolver(
                     queryValue = queryValue,
                     arguments = resolverArguments,
                     selections = validationDemand,
+                    executionContext = ResolutionExecutionContext.Unsupported,
                 )
             }
         },

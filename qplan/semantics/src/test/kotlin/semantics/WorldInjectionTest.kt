@@ -9,6 +9,7 @@ import model.engineObjectDataOf
 import model.fragmentFrom
 import model.objectOf
 import model.registry.ResolverRegistry
+import model.registry.ResolutionExecutionContext
 import model.requireField
 import model.requireObjectField
 import model.requireQueryTypeDef
@@ -78,6 +79,7 @@ class WorldInjectionTest {
                             input = world.objectOf("Query"),
                             queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
                             arguments = Arguments.Resolved.of(userField, emptyMap()),
+                            executionContext = ResolutionExecutionContext.Unsupported,
                         )
                 },
             )
@@ -100,6 +102,7 @@ class WorldInjectionTest {
                             queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
                             arguments = nodeReference.arguments,
                             selections = selections,
+                            executionContext = ResolutionExecutionContext.Unsupported,
                         )
                 },
             )

@@ -12,6 +12,7 @@ import model.engineObjectDataOf
 import model.objectOf
 import model.requireObjectField
 import model.requireQueryTypeDef
+import model.registry.ResolutionExecutionContext
 import model.schemaType
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -53,6 +54,7 @@ class ResolverCoverageAdversarialTest {
                     input = world.schema.objectOf("Query"),
                     queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
                     arguments = Arguments.Resolved.of(canonicalField, emptyMap()),
+                    executionContext = ResolutionExecutionContext.Unsupported,
                 )
             }
         val outer = assertIs<List<*>>(value)
@@ -110,6 +112,7 @@ class ResolverCoverageAdversarialTest {
                             input = emptyInput,
                             queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
                             arguments = Arguments.Resolved.of(producerField, emptyMap()),
+                            executionContext = ResolutionExecutionContext.Unsupported,
                         )
                 }
             val nodeReference =
@@ -129,12 +132,14 @@ class ResolverCoverageAdversarialTest {
                         input = emptyInput,
                         queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
                         arguments = Arguments.Resolved.of(producerField, emptyMap()),
+                        executionContext = ResolutionExecutionContext.Unsupported,
                     )
                 world.resolverRegistry
                     .resolver(queryNode)(
                         input = world.schema.objectOf("Query"),
                         queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
                         arguments = nodeReference.arguments,
+                        executionContext = ResolutionExecutionContext.Unsupported,
                     )
             }
 

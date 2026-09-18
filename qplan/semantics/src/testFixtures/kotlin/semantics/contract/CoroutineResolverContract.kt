@@ -215,7 +215,7 @@ interface CoroutineResolverContract {
             queryFragment = testWorld.resolverRegistry.resolver(second).queryFragment,
             queryType = testWorld.schema.requireQueryTypeDef(),
             variables = emptyMap(),
-            function = { _, _, _ -> 2 },
+            function = { _, _, _, _ -> 2 },
         )
         val malformedRegistry =
             registryOverride(testWorld.resolverRegistry) { field, delegate ->

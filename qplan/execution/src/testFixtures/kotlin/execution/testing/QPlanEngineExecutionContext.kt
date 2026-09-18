@@ -24,7 +24,7 @@ internal class QPlanEngineExecutionContext(
             "Qplan selection execution currently supports Query only"
         }
         require(selectionSet.type == schema.requireQueryTypeDef().name) {
-            "Selection type ${selectionSet.type} does not match Query root ${schema.requireQueryTypeDef().name}"
+            "Cannot execute selections with type ${selectionSet.type} on schema root type ${schema.requireQueryTypeDef().name}"
         }
         val fragment =
             schema.fragmentFromDocument(

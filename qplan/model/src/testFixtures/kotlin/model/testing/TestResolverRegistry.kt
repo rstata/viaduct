@@ -32,6 +32,7 @@ import model.requireQueryTypeDef
 import model.requireType
 import model.schemaType
 import model.registry.FieldResolver
+import model.registry.ResolutionExecutionContext
 import model.registry.MissingResolverException
 import model.registry.ProviderFragment
 import model.registry.ResolverRegistry
@@ -57,7 +58,11 @@ import viaduct.graphql.utils.GraphQLTypeRelation
  */
 class NodeResolverFunction internal constructor(
     internal val mode: Mode,
-    private val function: suspend (String, SelectionForest) -> ResolverOutputData?,
+    private val function: suspend (
+        String,
+        SelectionForest,
+        ResolutionExecutionContext,
+    ) -> ResolverOutputData?,
 ) {
     internal enum class Mode {
         NONSELECTIVE,
@@ -68,22 +73,52 @@ class NodeResolverFunction internal constructor(
     internal suspend operator fun invoke(
         id: String,
         selections: SelectionForest,
-    ): ResolverOutputData? = function(id, selections)
+        executionContext: ResolutionExecutionContext,
+    ): ResolverOutputData? = function(id, selections, executionContext)
 }
 
 /** Marks a raw external node lookup for fixture composition. */
 fun nodeResolverOf(function: suspend (String) -> ResolverOutputData?): NodeResolverFunction =
-    NodeResolverFunction(NodeResolverFunction.Mode.NONSELECTIVE) { id, _ -> function(id) }
+    NodeResolverFunction(NodeResolverFunction.Mode.NONSELECTIVE) { id, _, _ -> function(id) }
+
+fun nodeResolverOf(
+    function: suspend (String, ResolutionExecutionContext) -> ResolverOutputData?,
+): NodeResolverFunction =
+    NodeResolverFunction(NodeResolverFunction.Mode.NONSELECTIVE) { id, _, executionContext ->
+        function(id, executionContext)
+    }
 
 /** Marks a stable raw node lookup that receives demand before model-owned output projection. */
 fun selectionAwareNodeResolverOf(
     function: suspend (String, SelectionForest) -> ResolverOutputData?,
+): NodeResolverFunction =
+    NodeResolverFunction(NodeResolverFunction.Mode.SELECTION_AWARE_NONSELECTIVE) { id, selections, _ ->
+        function(id, selections)
+    }
+
+fun selectionAwareNodeResolverOf(
+    function: suspend (
+        String,
+        SelectionForest,
+        ResolutionExecutionContext,
+    ) -> ResolverOutputData?,
 ): NodeResolverFunction =
     NodeResolverFunction(NodeResolverFunction.Mode.SELECTION_AWARE_NONSELECTIVE, function)
 
 /** Marks a selection-sensitive raw external node lookup for fixture composition. */
 fun selectiveNodeResolverOf(
     function: suspend (String, SelectionForest) -> ResolverOutputData?,
+): NodeResolverFunction =
+    NodeResolverFunction(NodeResolverFunction.Mode.SELECTIVE) { id, selections, _ ->
+        function(id, selections)
+    }
+
+fun selectiveNodeResolverOf(
+    function: suspend (
+        String,
+        SelectionForest,
+        ResolutionExecutionContext,
+    ) -> ResolverOutputData?,
 ): NodeResolverFunction = NodeResolverFunction(NodeResolverFunction.Mode.SELECTIVE, function)
 
 typealias CanonicalFieldResolverApplicationObserver =
@@ -303,13 +338,13 @@ private class NodeResolverLowering(
                 (arguments.fieldValues["id"] as? String)
                     ?.startsWith(NODE_REFERENCE_ID_PREFIX) == true
             },
-            dispatch = { arguments, selections ->
+            dispatch = { arguments, selections, executionContext ->
                 val encodedId = arguments.fieldValues["id"] as? String
                     ?: throw IllegalArgumentException("Query.node id is not an ID")
                 val identity =
                     decodeNodeReferenceId(queryNode, encodedId)
                         ?: throw IllegalArgumentException("Malformed encoded node reference")
-                loadNode(identity, selections)
+                loadNode(identity, selections, executionContext)
             },
         )
     }
@@ -317,6 +352,7 @@ private class NodeResolverLowering(
     private suspend fun loadNode(
         identity: NodeReferenceIdentity,
         selections: SelectionForest,
+        executionContext: ResolutionExecutionContext,
     ): ResolverOutputData? {
         val (type, id) = identity
         val resolver =
@@ -342,7 +378,7 @@ private class NodeResolverLowering(
             } else {
                 nodeOwnedDemand
             }
-        val sourceResult = resolver(id, resolverDemand)
+        val sourceResult = resolver(id, resolverDemand, executionContext)
         if (sourceResult == null || sourceResult is EngineErrorData) return sourceResult
         if (sourceResult is RootFieldReferenceData) return sourceResult
         require(sourceResult is EngineObjectData.Sync) {

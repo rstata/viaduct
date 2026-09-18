@@ -25,6 +25,7 @@ import model.invariants.conformsToResolverOutputSchemaType
 import model.merge
 import model.nodeReferenceIdentityOrNull
 import model.registry.ProviderFragment
+import model.registry.ResolutionExecutionContext
 import model.registry.VariableDefinition
 import model.requireQueryTypeDef
 import model.selectionForestOf
@@ -303,6 +304,7 @@ internal class FieldResolutionLogic(
             queryValue = queryValue,
             arguments = resolverArguments,
             selections = invocationDemand,
+            executionContext = ResolutionExecutionContext.Unsupported,
         )
     }
 
@@ -410,7 +412,13 @@ internal class FieldResolutionLogic(
                 variableResolverOccurrenceIds = emptySet(),
             ),
         )
-        return fieldResolverContext.resolver(input, queryValue, arguments, invocationDemand)
+        return fieldResolverContext.resolver(
+            input,
+            queryValue,
+            arguments,
+            invocationDemand,
+            ResolutionExecutionContext.Unsupported,
+        )
     }
 
     // Calls the tenant provider once for this occurrence and publishes its complete binding set.

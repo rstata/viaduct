@@ -69,6 +69,7 @@ class ResolverRegistryTest {
                 "fragment ignored on User { name }",
             ).subselections
         var observedDemand: SelectionForest? = null
+        var observedExecutionContext: ResolutionExecutionContext? = null
         val resolver =
             FieldResolver.ofSelective(
                 field = userField,
@@ -76,8 +77,9 @@ class ResolverRegistryTest {
                 queryFragment = selectionForestOf(),
                 queryType = query,
                 variables = emptyMap(),
-                function = { _, _, _, selections ->
+                function = { _, _, _, selections, executionContext ->
                     observedDemand = selections
+                    observedExecutionContext = executionContext
                     schema.objectOf("User") {
                         "name" setTo "Ada"
                         "age" setTo 37
@@ -91,10 +93,12 @@ class ResolverRegistryTest {
                     input = engineObjectDataOf(query),
                     arguments = Arguments.Resolved.of(userField, emptyMap()),
                     selections = demand,
+                    executionContext = ResolutionExecutionContext.Unsupported,
                 )
             }
 
         assertSame(demand, observedDemand)
+        assertSame(ResolutionExecutionContext.Unsupported, observedExecutionContext)
         assertEquals(setOf("name", "age"), assertIs<EngineObjectData.Sync>(output).getSelections().toSet())
     }
 
@@ -124,7 +128,7 @@ class ResolverRegistryTest {
                 queryFragment = selectionForestOf(),
                 queryType = query,
                 variables = emptyMap(),
-                function = { _, _, _ ->
+                function = { _, _, _, _ ->
                     schema.objectOf("User") {
                         "name" setTo "Ada"
                         "age" setTo 37
@@ -141,6 +145,7 @@ class ResolverRegistryTest {
                         schema.fragmentFrom(
                             "fragment ignored on User { name }",
                         ).subselections,
+                    executionContext = ResolutionExecutionContext.Unsupported,
                 )
             }
 
@@ -178,7 +183,7 @@ class ResolverRegistryTest {
                 queryFragment = materializeSelectionForestOf(),
                 queryType = query,
                 variables = emptyMap(),
-                function = { _, _, _, selections ->
+                function = { _, _, _, selections, _ ->
                     observedDemand = selections
                     schema.objectOf("User") {
                         "name" setTo "Ada"
@@ -193,6 +198,7 @@ class ResolverRegistryTest {
                     input = engineObjectDataOf(query),
                     arguments = Arguments.Resolved.of(userField, emptyMap()),
                     selections = demand,
+                    executionContext = ResolutionExecutionContext.Unsupported,
                 )
             }
 
@@ -264,6 +270,7 @@ class ResolverRegistryTest {
                     .resolver(userField)(
                         input = query,
                         arguments = Arguments.Resolved.of(userField, emptyMap()),
+                        executionContext = ResolutionExecutionContext.Unsupported,
                     )
             }
         val nodeReference = assertIs<RootFieldReferenceData>(reference)
@@ -284,6 +291,7 @@ class ResolverRegistryTest {
                             }
                             """.trimIndent(),
                         ).subselections,
+                    executionContext = ResolutionExecutionContext.Unsupported,
                 )
                 },
         )
@@ -355,6 +363,7 @@ class ResolverRegistryTest {
                     input = engineObjectDataOf(query),
                     queryValue = queryValue,
                     arguments = Arguments.Resolved.of(consumer, emptyMap()),
+                    executionContext = ResolutionExecutionContext.Unsupported,
                 )
             }
 
@@ -510,6 +519,7 @@ class ResolverRegistryTest {
                             input = parent,
                             arguments = Arguments.Resolved.of(field, emptyMap()),
                             selections = selectionForestOf(),
+                            executionContext = ResolutionExecutionContext.Unsupported,
                         )
                 }
             }
@@ -696,6 +706,7 @@ class ResolverRegistryTest {
                 registry.resolver(field)(
                     input = query,
                     arguments = Arguments.Resolved.of(field, emptyMap()),
+                    executionContext = ResolutionExecutionContext.Unsupported,
                 )
             }
         }
@@ -987,6 +998,7 @@ class ResolverRegistryTest {
                     resolver(
                         input = world.schema.objectOf("Query"),
                         arguments = Arguments.Resolved.of(itemField, emptyMap()),
+                        executionContext = ResolutionExecutionContext.Unsupported,
                     )
                 }
             }

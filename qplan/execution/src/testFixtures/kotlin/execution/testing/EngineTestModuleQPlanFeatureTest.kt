@@ -25,6 +25,7 @@ import model.fragmentFrom
 import model.fragmentFromDocument
 import model.requireQueryTypeDef
 import model.requireType
+import model.registry.SelectiveFieldResolverFunction
 import model.testing.FieldResolverDefinition
 import model.testing.NodeResolverFunction
 import model.testing.TestWorld
@@ -239,11 +240,8 @@ private fun EngineTestModule.qplanRegistryInputs(
             }
             val isSelective =
                 executor.isSelective || fieldSelectivityProvider.isSelective(coordinate)
-            val resolver =
-                (if (isSelective) ::selectiveFieldResolverOf else ::selectionAwareFieldResolverOf)(
-                    objectFragment,
-                    queryFragment,
-                ) { input, queryValue, arguments, selections ->
+            val resolverFunction: SelectiveFieldResolverFunction =
+                { input, queryValue, arguments, selections, _ ->
                     val selectionSet =
                         (field.type.baseTypeDef as? QPlanSchema.CompositeTypeDef)?.let {
                             type ->
@@ -251,6 +249,12 @@ private fun EngineTestModule.qplanRegistryInputs(
                                 ?.let { selections.toEngineSelectionSet(it, fullSchema, sourceSchema) }
                         }
                     invokeExecutor(input, queryValue, arguments, selectionSet)
+                }
+            val resolver =
+                if (isSelective) {
+                    selectiveFieldResolverOf(objectFragment, queryFragment, resolverFunction)
+                } else {
+                    selectionAwareFieldResolverOf(objectFragment, queryFragment, resolverFunction)
                 }
             val resolverWithVariablesProvider =
                 recoveredVariables.variablesProvider?.let { provider ->

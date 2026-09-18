@@ -18,6 +18,7 @@ import model.invariants.conformsToResolverOutputSchemaType
 import model.nodeReferenceIdentityOrNull
 import model.outputType
 import model.registry.ResolverFragment
+import model.registry.ResolutionExecutionContext
 import model.requireQueryTypeDef
 import semantics.resolvers.emptyObjectInput
 import semantics.resolvers.prepareInvocation
@@ -90,6 +91,7 @@ internal class DepthFirstFieldResolverTask(
                         queryValue = resolveQueryFragment(fragments.queryFragment, publicationPath),
                         arguments = arguments,
                         selections = invocationDemand,
+                        executionContext = ResolutionExecutionContext.Unsupported,
                     )
                 }
             }
@@ -137,6 +139,7 @@ internal class DepthFirstFieldResolverTask(
                     queryValue = queryValue,
                     arguments = reference.arguments,
                     selections = invocationDemand,
+                    executionContext = ResolutionExecutionContext.Unsupported,
                 )
             }
         operation.resolverObserver.onRootFieldReferenceInvocation(

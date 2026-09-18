@@ -8,6 +8,7 @@ import io.kotest.property.Arb
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.next
 import model.registry.ProviderFragment
+import model.registry.ResolutionExecutionContext
 import model.engineObjectDataOf
 import model.invariants.conformsToResolverOutputSchemaType
 import model.objectOf
@@ -644,6 +645,7 @@ class GeneratorTest {
                 input = input,
                 queryValue = engineObjectDataOf(countWorld.schema.requireQueryTypeDef()),
                 arguments = arguments,
+                executionContext = ResolutionExecutionContext.Unsupported,
             )
         }
 
@@ -920,11 +922,13 @@ class GeneratorTest {
                             input,
                             engineObjectDataOf(world.schema.requireQueryTypeDef()),
                             arguments,
+                            executionContext = ResolutionExecutionContext.Unsupported,
                         ).outputResolutionFingerprint(),
                         resolver(
                             input,
                             engineObjectDataOf(world.schema.requireQueryTypeDef()),
                             arguments,
+                            executionContext = ResolutionExecutionContext.Unsupported,
                         ).outputResolutionFingerprint(),
                     )
                 }

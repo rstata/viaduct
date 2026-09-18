@@ -12,6 +12,7 @@ import model.SelectionForest
 import model.groundKey
 import model.invariants.conformsToResolverOutputSchemaType
 import model.nodeReferenceIdentityOrNull
+import model.registry.ResolutionExecutionContext
 import semantics.resolvers.emptyObjectInput
 import semantics.resolvers.prepareInvocation
 import semantics.shared.RootFieldReferenceInvocationObservation
@@ -82,7 +83,13 @@ internal class FieldResolutionLogic(
             is EngineObjectOrErrorData.Success -> value.value
             is EngineObjectOrErrorData.Error -> return@context value.error
         }
-        resolver(input, queryValue, arguments, invocationDemand)
+        resolver(
+            input,
+            queryValue,
+            arguments,
+            invocationDemand,
+            ResolutionExecutionContext.Unsupported,
+        )
     }
 
     private suspend fun invokeRootFieldResolver(
@@ -100,6 +107,7 @@ internal class FieldResolutionLogic(
             queryValue = queryValue,
             arguments = reference.arguments,
             selections = invocationDemand,
+            executionContext = ResolutionExecutionContext.Unsupported,
         )
         operationContext.resolverObserver.onRootFieldReferenceInvocation(
             RootFieldReferenceInvocationObservation(

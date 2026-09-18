@@ -20,6 +20,7 @@ import model.objectOf
 import model.outputValue
 import model.selectionForestOf
 import model.registry.ProviderFragment
+import model.registry.ResolutionExecutionContext
 import model.registry.VariableDefinition
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -434,7 +435,12 @@ private fun TestWorld.apply(
         is Arguments.Resolved ->
             runBlocking {
                 context(Assumptions.of(assumptions.schema, assumptions.resolverRegistry, false)) {
-                    resolverRegistry.resolver(field)(input, grounded, selections = selections)
+                    resolverRegistry.resolver(field)(
+                        input,
+                        grounded,
+                        selections = selections,
+                        executionContext = ResolutionExecutionContext.Unsupported,
+                    )
                 }
             }
         else -> error("Direct resolver application requires ground arguments")

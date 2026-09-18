@@ -14,6 +14,7 @@ import model.objectKey
 import model.registry.FieldResolver
 import model.registry.FieldResolverApplicationObserver
 import model.registry.NonselectiveFieldResolverFunction
+import model.registry.ResolutionExecutionContext
 import model.registry.SelectiveFieldResolverFunction
 import model.registry.VariableDefinition
 import model.registry.VariablesProviderFunction
@@ -45,8 +46,8 @@ class FieldResolverDefinition private constructor(
         FieldResolverDefinition(
             objectFragment = objectFragment,
             queryFragment = queryFragment,
-            function = { input, queryValue, arguments, selections ->
-                transform(function(input, queryValue, arguments, selections))
+            function = { input, queryValue, arguments, selections, executionContext ->
+                transform(function(input, queryValue, arguments, selections, executionContext))
             },
             selective = selective,
             passesDemand = passesDemand,
@@ -73,17 +74,21 @@ class FieldResolverDefinition private constructor(
 
     /** Routes internally encoded Query.node identities through qplan's built-in node dispatcher. */
     internal fun withNodeDispatch(
-        dispatch: suspend (Arguments.Resolved, SelectionForest) -> ResolverOutputData?,
+        dispatch: suspend (
+            Arguments.Resolved,
+            SelectionForest,
+            ResolutionExecutionContext,
+        ) -> ResolverOutputData?,
         isNodeDispatch: (Arguments.Resolved) -> Boolean,
     ): FieldResolverDefinition =
         FieldResolverDefinition(
             objectFragment = objectFragment,
             queryFragment = queryFragment,
-            function = { input, queryValue, arguments, selections ->
+            function = { input, queryValue, arguments, selections, executionContext ->
                 if (isNodeDispatch(arguments)) {
-                    dispatch(arguments, selections)
+                    dispatch(arguments, selections, executionContext)
                 } else {
-                    function(input, queryValue, arguments, selections)
+                    function(input, queryValue, arguments, selections, executionContext)
                 }
             },
             selective = true,
@@ -208,8 +213,14 @@ class FieldResolverDefinition private constructor(
                 queryFragment = normalizedQueryFragment,
                 queryType = queryType,
                 variables = variables,
-                function = { input, queryValue, arguments, selections ->
-                    function(input, queryValue, arguments, projectionDemand(selections))
+                function = { input, queryValue, arguments, selections, executionContext ->
+                    function(
+                        input,
+                        queryValue,
+                        arguments,
+                        projectionDemand(selections),
+                        executionContext,
+                    )
                 },
                 applicationObserver = applicationObserver,
                 variablesProvider = variablesProvider,
@@ -221,8 +232,14 @@ class FieldResolverDefinition private constructor(
                 queryFragment = normalizedQueryFragment,
                 queryType = queryType,
                 variables = variables,
-                function = { input, queryValue, arguments, selections ->
-                    function(input, queryValue, arguments, projectionDemand(selections))
+                function = { input, queryValue, arguments, selections, executionContext ->
+                    function(
+                        input,
+                        queryValue,
+                        arguments,
+                        projectionDemand(selections),
+                        executionContext,
+                    )
                 },
                 applicationObserver = applicationObserver,
                 variablesProvider = variablesProvider,
@@ -234,8 +251,14 @@ class FieldResolverDefinition private constructor(
                 queryFragment = normalizedQueryFragment,
                 queryType = queryType,
                 variables = variables,
-                function = { input, queryValue, arguments ->
-                    function(input, queryValue, arguments, selectionForestOf())
+                function = { input, queryValue, arguments, executionContext ->
+                    function(
+                        input,
+                        queryValue,
+                        arguments,
+                        selectionForestOf(),
+                        executionContext,
+                    )
                 },
                 projectionDemand = projectionDemand,
                 applicationObserver = applicationObserver,
@@ -253,8 +276,8 @@ class FieldResolverDefinition private constructor(
             FieldResolverDefinition(
                 objectFragment = objectFragment,
                 queryFragment = queryFragment,
-                function = { input, queryValue, arguments, _ ->
-                    function(input, queryValue, arguments)
+                function = { input, queryValue, arguments, _, executionContext ->
+                    function(input, queryValue, arguments, executionContext)
                 },
                 selective = false,
                 passesDemand = false,
@@ -288,7 +311,7 @@ class FieldResolverDefinition private constructor(
             of(
                 objectFragment = objectFragment,
                 queryFragment = null,
-                function = { input, _, arguments -> function(input, arguments) },
+                function = { input, _, arguments, _ -> function(input, arguments) },
             )
         fun ofSelectionAwareNonselective(
             objectFragment: Fragment,
@@ -312,6 +335,19 @@ class FieldResolverDefinition private constructor(
 fun fieldResolverOf(
     objectFragment: Fragment,
     queryFragment: Fragment,
+    function: suspend (
+        EngineObjectData.Sync,
+        EngineObjectData.Sync,
+        Arguments.Resolved,
+    ) -> ResolverOutputData?,
+): FieldResolverDefinition =
+    FieldResolverDefinition.of(objectFragment, queryFragment) { input, queryValue, arguments, _ ->
+        function(input, queryValue, arguments)
+    }
+
+fun fieldResolverOf(
+    objectFragment: Fragment,
+    queryFragment: Fragment,
     function: NonselectiveFieldResolverFunction,
 ): FieldResolverDefinition =
     FieldResolverDefinition.of(objectFragment, queryFragment, function)
@@ -324,6 +360,23 @@ fun fieldResolverOf(
 fun selectiveFieldResolverOf(
     objectFragment: Fragment,
     queryFragment: Fragment,
+    function: suspend (
+        EngineObjectData.Sync,
+        EngineObjectData.Sync,
+        Arguments.Resolved,
+        SelectionForest,
+    ) -> ResolverOutputData?,
+): FieldResolverDefinition =
+    FieldResolverDefinition.ofSelective(
+        objectFragment,
+        queryFragment,
+    ) { input, queryValue, arguments, selections, _ ->
+        function(input, queryValue, arguments, selections)
+    }
+
+fun selectiveFieldResolverOf(
+    objectFragment: Fragment,
+    queryFragment: Fragment,
     function: SelectiveFieldResolverFunction,
 ): FieldResolverDefinition =
     FieldResolverDefinition.ofSelective(objectFragment, queryFragment, function)
@@ -331,13 +384,26 @@ fun selectiveFieldResolverOf(
 fun selectionAwareFieldResolverOf(
     objectFragment: Fragment,
     queryFragment: Fragment,
-    function: SelectiveFieldResolverFunction,
+    function: suspend (
+        EngineObjectData.Sync,
+        EngineObjectData.Sync,
+        Arguments.Resolved,
+        SelectionForest,
+    ) -> ResolverOutputData?,
 ): FieldResolverDefinition =
     FieldResolverDefinition.ofSelectionAwareNonselective(
         objectFragment,
         queryFragment,
-        function,
-    )
+    ) { input, queryValue, arguments, selections, _ ->
+        function(input, queryValue, arguments, selections)
+    }
+
+fun selectionAwareFieldResolverOf(
+    objectFragment: Fragment,
+    queryFragment: Fragment,
+    function: SelectiveFieldResolverFunction,
+): FieldResolverDefinition =
+    FieldResolverDefinition.ofSelectionAwareNonselective(objectFragment, queryFragment, function)
 
 fun selectiveFieldResolverOf(
     objectFragment: Fragment,
@@ -350,5 +416,5 @@ fun selectiveFieldResolverOf(
     FieldResolverDefinition.ofSelective(
         objectFragment = objectFragment,
         queryFragment = null,
-        function = { input, _, arguments, selections -> function(input, arguments, selections) },
+        function = { input, _, arguments, selections, _ -> function(input, arguments, selections) },
     )

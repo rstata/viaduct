@@ -29,7 +29,12 @@ import viaduct.engine.api.EngineObjectData
 
 /** A deterministic partial map from resolved object and Query fragments plus arguments to an output value. */
 typealias NonselectiveFieldResolverFunction =
-    suspend (EngineObjectData.Sync, EngineObjectData.Sync, Arguments.Resolved) -> ResolverOutputData?
+    suspend (
+        EngineObjectData.Sync,
+        EngineObjectData.Sync,
+        Arguments.Resolved,
+        ResolutionExecutionContext,
+    ) -> ResolverOutputData?
 
 /**
  * A deterministic partial map from resolved inputs and output demand to an output value.
@@ -44,6 +49,7 @@ typealias SelectiveFieldResolverFunction =
         EngineObjectData.Sync,
         Arguments.Resolved,
         SelectionForest,
+        ResolutionExecutionContext,
     ) -> ResolverOutputData?
 
 /** Computes all tenant-provided variables once for one field-resolver occurrence. */
@@ -221,12 +227,14 @@ class FieldResolver private constructor(
         input: EngineObjectData.Sync,
         arguments: Arguments.Resolved,
         selections: SelectionForest = selectionForestOf(),
+        executionContext: ResolutionExecutionContext,
     ): ResolverOutputData? =
         invoke(
             input = input,
             queryValue = engineObjectDataOf(queryType),
             arguments = arguments,
             selections = selections,
+            executionContext = executionContext,
         )
 
     /** Applies this field resolver to the supplied output demand. */
@@ -236,13 +244,14 @@ class FieldResolver private constructor(
         queryValue: EngineObjectData.Sync,
         arguments: Arguments.Resolved,
         selections: SelectionForest = selectionForestOf(),
+        executionContext: ResolutionExecutionContext,
     ): ResolverOutputData? {
         applicationObserver(
             input,
             arguments,
             selections.takeIf { world.selectiveResolvers },
         )
-        return evaluateRelation(input, queryValue, arguments, selections)
+        return evaluateRelation(input, queryValue, arguments, selections, executionContext)
     }
 
     /**
@@ -256,13 +265,14 @@ class FieldResolver private constructor(
         queryValue: EngineObjectData.Sync,
         arguments: Arguments.Resolved,
         selections: SelectionForest,
+        executionContext: ResolutionExecutionContext,
     ): ResolverOutputData? {
         require(queryValue.schemaType == queryType) {
             "Query value type ${queryValue.schemaType.name} does not match ${queryType.name}"
         }
         val output =
             try {
-                function(input, queryValue, arguments, selections)
+                function(input, queryValue, arguments, selections, executionContext)
             } catch (exception: EngineErrorDataReadException) {
                 exception.errorData
             }
@@ -309,8 +319,8 @@ class FieldResolver private constructor(
                 queryType = queryType,
                 variables = variables,
                 variablesProvider = variablesProvider,
-                function = { input, queryValue, arguments, _ ->
-                    function(input, queryValue, arguments)
+                function = { input, queryValue, arguments, _, executionContext ->
+                    function(input, queryValue, arguments, executionContext)
                 },
                 projectNonselectiveOutput = true,
                 projectionDemand = projectionDemand,

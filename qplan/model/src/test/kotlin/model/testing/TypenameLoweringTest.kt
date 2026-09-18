@@ -14,6 +14,7 @@ import model.requireField
 import model.requireObjectField
 import model.requireQueryTypeDef
 import model.requireType
+import model.registry.ResolutionExecutionContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -160,6 +161,7 @@ class TypenameLoweringTest {
                     resolver(
                         input = schema.objectOf(type.name),
                         arguments = Arguments.Resolved.of(field, emptyMap()),
+                        executionContext = ResolutionExecutionContext.Unsupported,
                     )
                 },
             )

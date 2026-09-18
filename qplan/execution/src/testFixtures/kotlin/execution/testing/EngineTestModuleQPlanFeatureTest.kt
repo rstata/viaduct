@@ -218,6 +218,7 @@ private fun EngineTestModule.qplanRegistryInputs(
                 queryValue: EngineObjectData.Sync,
                 arguments: Arguments.Resolved,
                 selections: EngineSelectionSet?,
+                executorContext: EngineExecutionContext,
             ): EngineOutputData? {
                 val selector =
                     FieldResolverExecutor.Selector(
@@ -227,7 +228,7 @@ private fun EngineTestModule.qplanRegistryInputs(
                         syncQueryValueGetter = { queryValue },
                     )
                 val output =
-                    executor.batchResolve(listOf(selector), context)[selector]
+                    executor.batchResolve(listOf(selector), executorContext)[selector]
                         ?: Result.failure(
                             IllegalStateException(
                                 "Field executor ${coordinate.render()} omitted its selector",
@@ -241,14 +242,20 @@ private fun EngineTestModule.qplanRegistryInputs(
             val isSelective =
                 executor.isSelective || fieldSelectivityProvider.isSelective(coordinate)
             val resolverFunction: SelectiveFieldResolverFunction =
-                { input, queryValue, arguments, selections, _ ->
+                { input, queryValue, arguments, selections, resolutionContext ->
                     val selectionSet =
                         (field.type.baseTypeDef as? QPlanSchema.CompositeTypeDef)?.let {
                             type ->
                             type.takeIf { fullSchema.schema.getType(it.name) != null }
                                 ?.let { selections.toEngineSelectionSet(it, fullSchema, sourceSchema) }
                         }
-                    invokeExecutor(input, queryValue, arguments, selectionSet)
+                    invokeExecutor(
+                        input,
+                        queryValue,
+                        arguments,
+                        selectionSet,
+                        QPlanEngineExecutionContext(context, schema, resolutionContext),
+                    )
                 }
             val resolver =
                 if (isSelective) {
@@ -411,6 +418,7 @@ private fun EngineTestModule.qplanNodeResolvers(
             suspend fun invokeExecutor(
                 id: String,
                 selections: EngineSelectionSet,
+                executorContext: EngineExecutionContext,
             ): EngineOutputData? {
                 if (
                     executor.isSelective &&
@@ -423,7 +431,7 @@ private fun EngineTestModule.qplanNodeResolvers(
                 }
                 val selector = NodeResolverExecutor.Selector(id, selections)
                 val output =
-                    executor.resolve(listOf(selector), context)[selector]
+                    executor.resolve(listOf(selector), executorContext)[selector]
                         ?: Result.failure(
                             IllegalStateException(
                                 "Node executor $typeName omitted its selector",
@@ -457,14 +465,15 @@ private fun EngineTestModule.qplanNodeResolvers(
             }
             type to
                 if (executor.isSelective) {
-                    selectiveNodeResolverOf { id, selections ->
+                    selectiveNodeResolverOf { id, selections, resolutionContext ->
                         invokeExecutor(
                             id,
                             selections.toEngineSelectionSet(type, fullSchema, sourceSchema),
+                            QPlanEngineExecutionContext(context, schema, resolutionContext),
                         )
                     }
                 } else {
-                    nodeResolverOf { id ->
+                    nodeResolverOf { id, resolutionContext ->
                         invokeExecutor(
                             id,
                             context.engineSelectionSetFactory.engineSelectionSet(
@@ -472,6 +481,7 @@ private fun EngineTestModule.qplanNodeResolvers(
                                 "id",
                                 emptyMap(),
                             ),
+                            QPlanEngineExecutionContext(context, schema, resolutionContext),
                         )
                     }
                 }

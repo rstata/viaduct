@@ -1,6 +1,6 @@
 # Viaduct Feature-Test Inventory
 
-This inventory records the current synchronization boundary between qplan and the 32 `core/engine/runtime` feature-test files selected for this porting surface. Thirteen qplan port files exist and 19 source files remain whole-file exclusions.
+This inventory records the current synchronization boundary between qplan and the 32 `core/engine/runtime` feature-test files selected for this porting surface. Thirteen qplan port files exist and 19 source files remain whole-file exclusions or migration candidates.
 
 Migration is atomic by source file. A synchronized port is authoritative through its copied source tests and coded `@Disabled` reasons; this document intentionally does not duplicate that per-test status.
 
@@ -8,9 +8,9 @@ Twelve ports currently match the source test names and counts. The synchronizati
 
 Migrated tests are source-faithful: aside from package/import plumbing, `runFeatureTest` to `runQPlanFeatureTest`, source metadata, and coded `@Disabled` annotations, their fixture code, helpers, behavior, and assertions must remain unchanged. Tests requiring production `KeyTree` or `KeyTreeBuilder` utilities are out of scope and belong in the N/A worklist until that infrastructure is deliberately added.
 
-## Omitted Whole Files
+## Omitted or Unmigrated Whole Files
 
-The following source files are intentionally not copied because every test in each file is outside qplan's resolver-correctness boundary. These are file-level exclusions; migrated files remain authoritative through their individual enabled or coded `@Disabled` tests.
+The following source files are not copied. Most are intentional file-level exclusions outside qplan's resolver-correctness boundary; entries explicitly marked as pending are now migration candidates. Migrated files remain authoritative through their individual enabled or coded `@Disabled` tests.
 
 | Source file | Tests | Reason |
 | --- | ---: | --- |
@@ -30,7 +30,7 @@ The following source files are intentionally not copied because every test in ea
 | `ResolverInstrumentationFeatureTest.kt` | 5 | Resolver instrumentation callbacks |
 | `ShadowFieldExecutionTest.kt` | 10 | Shadow execution and comparison |
 | `StandardResolutionValueTest.kt` | 2 | Production `StandardResolutionValue` wrapper |
-| `SubqueryExecutionTest.kt` | 27 | `ctx.query()` and `ctx.mutation()` subquery execution |
+| `SubqueryExecutionTest.kt` | 27 | Migration pending: Query `ctx.query()` is supported; mutation and production memoization cases remain outside the Query-only model |
 | `SubquerySchemaTest.kt` | 3 | Subquery schema selection |
 | `ViaductFieldResolutionFatalExceptionTest.kt` | 8 | Production instrumentation failure boundaries |
 

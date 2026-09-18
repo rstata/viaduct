@@ -62,6 +62,7 @@ import viaduct.engine.api.mocks.featureTestDefault
 import viaduct.engine.api.mocks.fetchAs
 import viaduct.engine.api.mocks.getAs
 import viaduct.engine.api.select.SelectionsParser
+import viaduct.engine.runtime.execution.query
 import viaduct.graphql.test.assertMatches
 import viaduct.service.api.ExecutionInput
 import viaduct.service.api.Viaduct
@@ -4179,7 +4180,7 @@ class SelectiveNodeResolversExecutionTest {
 
     @Nested
     inner class SubqueryTests {
-        @Disabled("N/A: Production ctx.query subquery execution is outside the qplan adapter boundary")
+        @Disabled("ALT: Resolver26 invokes one closed selective-node producer rather than production refetch")
         @Test
         fun `node resolver can query during refetch`() {
             val nodeCalls = AtomicInteger()
@@ -4204,8 +4205,19 @@ class SelectiveNodeResolversExecutionTest {
                 }
 
                 type("Foo") {
-                    nodeUnbatchedExecutor(selective = true) { _, _, _ ->
-                        TODO("Qplan feature tests do not support ctx.query from node resolvers yet")
+                    nodeUnbatchedExecutor(selective = true) { _, sels, ctx ->
+                        nodeCalls.incrementAndGet()
+                        val querySelections = ctx.engineSelectionSetFactory
+                            .engineSelectionSet("Query", "a", emptyMap())
+                        val a = ctx.query(querySelections).fetchAs<Int>("a")
+                        createEngineObjectData(
+                            objectType,
+                            buildMap {
+                                if (sels!!.containsField("Foo", "y")) {
+                                    put("y", a)
+                                }
+                            },
+                        )
                     }
                 }
             }.runQPlanFeatureTest {
@@ -4214,6 +4226,53 @@ class SelectiveNodeResolversExecutionTest {
             }
 
             assertEquals(2, nodeCalls.get())
+        }
+
+        @Test
+        fun `ALTERNATIVE node resolver can query during refetch`() {
+            val nodeCalls = AtomicInteger()
+
+            MockTenantModuleBootstrapper(
+                """
+                    extend type Query { a: Int, foo: Foo }
+                    type Foo implements Node { id: ID!, x: Int, y: Int }
+                """.trimIndent()
+            ) {
+                fieldWithValue("Query" to "a", 2)
+
+                field("Query" to "foo") {
+                    valueFromContext { it.createNodeReference("foo", objectType("Foo")) }
+                }
+
+                field("Foo" to "x") {
+                    resolver {
+                        objectSelections("y")
+                        fn { _, obj, _, _, _ -> obj.fetchAs<Int>("y") * 3 }
+                    }
+                }
+
+                type("Foo") {
+                    nodeUnbatchedExecutor(selective = true) { _, sels, ctx ->
+                        nodeCalls.incrementAndGet()
+                        val querySelections = ctx.engineSelectionSetFactory
+                            .engineSelectionSet("Query", "a", emptyMap())
+                        val a = ctx.query(querySelections).fetchAs<Int>("a")
+                        createEngineObjectData(
+                            objectType,
+                            buildMap {
+                                if (sels!!.containsField("Foo", "y")) {
+                                    put("y", a)
+                                }
+                            },
+                        )
+                    }
+                }
+            }.runQPlanFeatureTest {
+                runQueryWithTimeout("{ foo { x } }")
+                    .assertJson("{data: {foo: {x: 6}}}")
+            }
+
+            assertEquals(1, nodeCalls.get())
         }
     }
 

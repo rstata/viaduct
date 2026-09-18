@@ -22,7 +22,9 @@ internal class TaskDispatcher(private val requestScope: CoroutineScope) : Shared
     }
 
     override fun dispatchFieldResolver(context: FieldResolverContext) {
-        requestScope.launch { FieldResolverTask.execute(context, this) }.invokeOnCompletion { cause ->
+        requestScope.launch {
+            FieldResolverTask.execute(context, this)
+        }.invokeOnCompletion { cause ->
             if (cause is CancellationException) FieldResolverTask.cancel(context, cause)
         }
     }

@@ -1,5 +1,7 @@
 package model.registry
 
+import kotlinx.coroutines.runBlocking
+
 import model.requireObjectField
 import model.requireField
 import model.Arguments
@@ -18,7 +20,7 @@ import kotlin.test.assertTrue
 
 class ResolverApplicationObserverTest {
     @Test
-    fun `application observer preserves complete and selective boundaries through composition`() {
+    fun `application observer preserves complete and selective boundaries through composition`() = runBlocking {
         val observed = mutableListOf<SelectionForest?>()
         val testWorld =
             TestWorld.fromSDL(

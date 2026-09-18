@@ -273,13 +273,15 @@ internal fun ObjectEngineResult.reapplyResolver(
                 }
             }
         ReappliedResolver(
-            context(operation.world) {
-                resolver.evaluateRelation(
-                    input = input,
-                    queryValue = queryValue,
-                    arguments = resolverArguments,
-                    selections = getCell(key).getValue().get().completedOutputDemand(),
-                )
+            runBlocking {
+                context(operation.world) {
+                    resolver.evaluateRelation(
+                        input = input,
+                        queryValue = queryValue,
+                        arguments = resolverArguments,
+                        selections = getCell(key).getValue().get().completedOutputDemand(),
+                    )
+                }
             },
         )
     }
@@ -423,13 +425,15 @@ private fun RootFieldReferenceInvocationObservation.reapplyReferencedResolver(
             }
         }
     return ReappliedResolver(
-        context(operation.world) {
-            resolver.evaluateRelation(
-                input = input,
-                queryValue = queryValue,
-                arguments = resolverArguments,
-                selections = validationDemand,
-            )
+        runBlocking {
+            context(operation.world) {
+                resolver.evaluateRelation(
+                    input = input,
+                    queryValue = queryValue,
+                    arguments = resolverArguments,
+                    selections = validationDemand,
+                )
+            }
         },
     )
 }

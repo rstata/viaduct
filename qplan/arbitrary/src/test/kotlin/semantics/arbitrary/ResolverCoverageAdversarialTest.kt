@@ -1,5 +1,7 @@
 package semantics.arbitrary
 
+import kotlinx.coroutines.runBlocking
+
 import model.Arguments
 import model.Assumptions
 import viaduct.engine.api.EngineObjectData
@@ -18,7 +20,7 @@ import kotlin.test.assertTrue
 
 class ResolverCoverageAdversarialTest {
     @Test
-    fun `generated schemas include nested output lists`() {
+    fun `generated schemas include nested output lists`() = runBlocking {
         val config =
             Config.default +
                 (ArgumentsEnabled to false) +
@@ -59,7 +61,7 @@ class ResolverCoverageAdversarialTest {
     }
 
     @Test
-    fun `generated field and node resolvers retain distinct singular and list witness fields`() {
+    fun `generated field and node resolvers retain distinct singular and list witness fields`() = runBlocking {
         listOf(false, true).forEachIndexed { index, listOutput ->
             val config =
                 Config.default +

@@ -1,5 +1,7 @@
 package semantics.arbitrary
 
+import kotlinx.coroutines.runBlocking
+
 import model.Arguments
 import model.Assumptions
 import io.kotest.property.Arb
@@ -611,7 +613,7 @@ class GeneratorTest {
     }
 
     @Test
-    fun `count-only application capture does not retain resolution witnesses`() {
+    fun `count-only application capture does not retain resolution witnesses`() = runBlocking {
         val config =
             TEST_CONFIG +
                 (ArgumentsEnabled to false) +
@@ -876,7 +878,7 @@ class GeneratorTest {
     }
 
     @Test
-    fun `complex resolver functions are deterministic for equal inputs and arguments`() {
+    fun `complex resolver functions are deterministic for equal inputs and arguments`() = runBlocking {
         val config =
             Config.default +
                 (ArgumentsEnabled to false) +

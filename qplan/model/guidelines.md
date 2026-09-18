@@ -116,6 +116,8 @@ An equality-free occurrence family is a finite collection of occurrences that su
 
 Every function declared in the model main source set has a mathematical signature, regardless of its visibility or whether it is a member, extension, factory, or implementation helper. Each receiver, context parameter, ordinary parameter, and return value must denote an input or output of the modeled mathematical operation.
 
+Kotlin suspension is an execution capability rather than part of a mathematical signature. A suspending function still denotes a mathematical function of its receivers, context parameters, ordinary parameters, and return value; ignore its suspension points, coroutine context, scheduling, and parallelism unless the model represents those concepts explicitly. A blocking application of that suspending function denotes the same mathematical operation.
+
 Do not add parameters or results solely for programming concerns such as improving an exception message, retaining a source path, labeling a call site, logging, tracing, formatting, debugging, or selecting an implementation strategy. In particular, recursive semantic functions must not thread diagnostic context that does not affect their mathematical result. A partial function may throw when its input is outside its domain; that exception is not a modeled output. Diagnostics may be derived from inputs already present in the mathematical signature, but otherwise use a less specific message or no message.
 
 Keep functions requiring non-mathematical inputs or producing non-mathematical outputs in pre-reasoning infrastructure outside the model main source set.

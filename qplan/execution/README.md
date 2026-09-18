@@ -110,7 +110,7 @@ The adapter rejects or does not yet model:
 - Checker and type-checker executors, including their object- and Query-rooted required selections.
 - Mutations, subscriptions, and custom scalars, which remain outside the current qplan scope.
 
-The test-only adapter uses `runBlocking` to cross the suspend executor SPI. That is acceptable for this synchronous feature-test surface and is not a proposed production scheduling design.
+The test-only adapter preserves the suspend executor SPI through the qplan resolver function. Resolver21-23 and Resolver26 invoke the adapted executor without introducing a blocking boundary.
 
 ## Testing
 

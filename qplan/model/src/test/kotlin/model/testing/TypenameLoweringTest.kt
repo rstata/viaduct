@@ -1,5 +1,7 @@
 package model.testing
 
+import kotlinx.coroutines.runBlocking
+
 import viaduct.graphql.schema.ViaductSchema
 
 import model.Arguments
@@ -137,7 +139,7 @@ class TypenameLoweringTest {
     }
 
     @Test
-    fun `generated typename resolvers are argumentless dependency-free constants`() {
+    fun `generated typename resolvers are argumentless dependency-free constants`() = runBlocking {
         val world = TestWorld.fromSDL(SCHEMA)
         val schema = world.schema
         val registry = world.resolverRegistry

@@ -71,38 +71,32 @@ class ResolverOccurrenceWitnessTest {
         val log = ResolutionOccurrenceApplicationLog()
 
         val result =
-            context(operation) {
-                resolve(
-                    selections = fragment.subselections,
-                    coroutineContext = EmptyCoroutineContext,
-                    applicationObserver = { application ->
-                        log.record(
-                            resolverOccurrenceId = application.resolverOccurrenceId,
-                            occurrencePath = application.occurrencePath,
-                            field =
-                                FieldCoordinate(
-                                    application.field.containingDef.name,
-                                    application.field.name,
-                                ),
-                            arguments = application.arguments,
-                            input = application.input,
-                            suppliedDemand = application.suppliedDemand,
-                        )
-                    },
-                )
-            }
+            operation.resolve(
+                selections = fragment.subselections,
+                coroutineContext = EmptyCoroutineContext,
+                applicationObserver = { application ->
+                    log.record(
+                        resolverOccurrenceId = application.resolverOccurrenceId,
+                        occurrencePath = application.occurrencePath,
+                        field =
+                            FieldCoordinate(
+                                application.field.containingDef.name,
+                                application.field.name,
+                            ),
+                        arguments = application.arguments,
+                        input = application.input,
+                        suppliedDemand = application.suppliedDemand,
+                    )
+                },
+            )
         val witness = log.snapshot()
         val expected =
-            context(operation) {
-                result.registeredResolverOccurrenceApplicationIdentityCounts()
-            }
+            result.registeredResolverOccurrenceApplicationIdentityCounts(operation)
 
         assertEquals(expected, witness.applicationIdentityCounts())
         assertEquals(4, expected.values.sum())
         assertEquals(
-            context(operation) {
-                result.registeredResolverApplicationIdentityCounts()
-            },
+            result.registeredResolverApplicationIdentityCounts(operation),
             witness.applications
                 .groupingBy { application -> application.application.identity }
                 .eachCount(),
@@ -198,31 +192,27 @@ class ResolverOccurrenceWitnessTest {
         val log = ResolutionOccurrenceApplicationLog()
 
         val result: ObjectEngineResult =
-            context(operation) {
-                resolve(
-                    selections = fragment.subselections,
-                    coroutineContext = EmptyCoroutineContext,
-                    applicationObserver = { application ->
-                        log.record(
-                            resolverOccurrenceId = application.resolverOccurrenceId,
-                            occurrencePath = application.occurrencePath,
-                            field =
-                                FieldCoordinate(
-                                    application.field.containingDef.name,
-                                    application.field.name,
-                                ),
-                            arguments = application.arguments,
-                            input = application.input,
-                            suppliedDemand = application.suppliedDemand,
-                        )
-                    },
-                )
-            }
+            operation.resolve(
+                selections = fragment.subselections,
+                coroutineContext = EmptyCoroutineContext,
+                applicationObserver = { application ->
+                    log.record(
+                        resolverOccurrenceId = application.resolverOccurrenceId,
+                        occurrencePath = application.occurrencePath,
+                        field =
+                            FieldCoordinate(
+                                application.field.containingDef.name,
+                                application.field.name,
+                            ),
+                        arguments = application.arguments,
+                        input = application.input,
+                        suppliedDemand = application.suppliedDemand,
+                    )
+                },
+            )
         val witness = log.snapshot()
         val expected =
-            context(operation) {
-                result.registeredResolverOccurrenceApplicationIdentityCounts()
-            }
+            result.registeredResolverOccurrenceApplicationIdentityCounts(operation)
 
         assertEquals(expected, witness.applicationIdentityCounts())
 

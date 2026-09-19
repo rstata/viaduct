@@ -366,131 +366,129 @@ internal suspend fun runResolver26BroadStress(
                 val occurrenceLog = ResolutionOccurrenceApplicationLog()
                 resolutionCalls += 1
                 val result: ObjectEngineResult =
-                    context(operation) {
-                        resolveObserved(fragment.subselections) { application ->
-                            val parentActivations =
-                                application.input.materializedParentFieldActivations(
-                                    application.inputSelections,
-                                )
-                            val parentCoverage =
-                                ParentCoverageAnalyzer(world).analyze(application)
-                            synchronized(parentCoverageLock) {
-                                caseParentFocusedCoverage +=
-                                    parentFocusedCoverageSnapshot(world, parentCoverage)
-                                materializedParentFieldActivations += parentActivations.size
-                                materializedRandomParentFieldActivations +=
-                                    parentActivations.count { activation ->
-                                        activation.field.isGeneratedRandomParentField()
-                                    }
-                                parentActivations.forEach { activation ->
-                                    materializedParentFields += activation.field
-                                    materializedParentFieldDepths[activation.depth] =
-                                        materializedParentFieldDepths.getOrDefault(
-                                            activation.depth,
-                                            0,
-                                    ) + 1
+                    operation.resolveObserved(fragment.subselections) { application ->
+                        val parentActivations =
+                            application.input.materializedParentFieldActivations(
+                                application.inputSelections,
+                            )
+                        val parentCoverage =
+                            ParentCoverageAnalyzer(world).analyze(application)
+                        synchronized(parentCoverageLock) {
+                            caseParentFocusedCoverage +=
+                                parentFocusedCoverageSnapshot(world, parentCoverage)
+                            materializedParentFieldActivations += parentActivations.size
+                            materializedRandomParentFieldActivations +=
+                                parentActivations.count { activation ->
+                                    activation.field.isGeneratedRandomParentField()
                                 }
-                                materializedParentSelectionSets += parentCoverage.size
-                                parentCoverage.forEach { parent ->
-                                    if (parent.argumentVariables.isNotEmpty()) {
-                                        parentSelectionSetsWithArgumentVariables += 1
+                            parentActivations.forEach { activation ->
+                                materializedParentFields += activation.field
+                                materializedParentFieldDepths[activation.depth] =
+                                    materializedParentFieldDepths.getOrDefault(
+                                        activation.depth,
+                                        0,
+                                ) + 1
+                            }
+                            materializedParentSelectionSets += parentCoverage.size
+                            parentCoverage.forEach { parent ->
+                                if (parent.argumentVariables.isNotEmpty()) {
+                                    parentSelectionSetsWithArgumentVariables += 1
+                                }
+                                argumentVariableSelectionsBeneathParent +=
+                                    parent.argumentVariables.size
+                                parent.argumentVariables.forEach { argument ->
+                                    argumentVariableSourceCombinationsBeneathParent.increment(
+                                        argument.variableSources,
+                                    )
+                                }
+                                if (parent.selectedResolvers.isNotEmpty()) {
+                                    parentSelectionSetsWithSelectedResolvers += 1
+                                }
+                                resolverSelectionsBeneathParent +=
+                                    parent.selectedResolvers.size
+                                directResolverSelectionsBeneathParent +=
+                                    parent.selectedResolvers.count { selected ->
+                                        selected.selectionDepthBelowParent == 1
                                     }
-                                    argumentVariableSelectionsBeneathParent +=
-                                        parent.argumentVariables.size
-                                    parent.argumentVariables.forEach { argument ->
-                                        argumentVariableSourceCombinationsBeneathParent.increment(
-                                            argument.variableSources,
-                                        )
-                                    }
-                                    if (parent.selectedResolvers.isNotEmpty()) {
-                                        parentSelectionSetsWithSelectedResolvers += 1
-                                    }
-                                    resolverSelectionsBeneathParent +=
-                                        parent.selectedResolvers.size
-                                    directResolverSelectionsBeneathParent +=
-                                        parent.selectedResolvers.count { selected ->
-                                            selected.selectionDepthBelowParent == 1
+                                val variableSources =
+                                    parent.selectedResolvers
+                                        .flatMap { selected ->
+                                            selected.requiredInputVariableSources
+                                        }.toSet()
+                                if (variableSources.isNotEmpty()) {
+                                    parentSelectionSetVariableSourceCombinations.increment(
+                                        variableSources,
+                                    )
+                                }
+                                parent.selectedResolvers.forEach { selected ->
+                                    if (selected.requiredInputVariableSources.isNotEmpty()) {
+                                        resolverSelectionsWithVariablesBeneathParent += 1
+                                        if (selected.selectionDepthBelowParent == 1) {
+                                            directResolverSelectionsWithVariablesBeneathParent +=
+                                                1
                                         }
-                                    val variableSources =
-                                        parent.selectedResolvers
-                                            .flatMap { selected ->
-                                                selected.requiredInputVariableSources
-                                            }.toSet()
-                                    if (variableSources.isNotEmpty()) {
-                                        parentSelectionSetVariableSourceCombinations.increment(
-                                            variableSources,
-                                        )
+                                        resolverVariableSourceCombinationsBeneathParent
+                                            .increment(
+                                                selected.requiredInputVariableSources,
+                                            )
                                     }
-                                    parent.selectedResolvers.forEach { selected ->
-                                        if (selected.requiredInputVariableSources.isNotEmpty()) {
-                                            resolverSelectionsWithVariablesBeneathParent += 1
-                                            if (selected.selectionDepthBelowParent == 1) {
-                                                directResolverSelectionsWithVariablesBeneathParent +=
-                                                    1
-                                            }
-                                            resolverVariableSourceCombinationsBeneathParent
-                                                .increment(
-                                                    selected.requiredInputVariableSources,
-                                                )
+                                    resolverVariableArgumentSelectionsBeneathParent +=
+                                        selected.variableArgumentSelections.size
+                                    selected.variableArgumentSelections.forEach { argument ->
+                                        resolverVariableArgumentFragmentsBeneathParent.increment(
+                                            argument.fragment,
+                                        )
+                                        resolverVariableArgumentDepthsBeneathParent.increment(
+                                            argument.selectionDepth,
+                                        )
+                                        resolverVariableArgumentSourceCombinationsBeneathParent
+                                            .increment(argument.variableSources)
+                                    }
+                                    if (selected.diagonalParentDepth > 0) {
+                                        diagonalResolverSelectionsBeneathParent += 1
+                                        if (selected.selectionDepthBelowParent == 1) {
+                                            directDiagonalResolverSelectionsBeneathParent += 1
                                         }
-                                        resolverVariableArgumentSelectionsBeneathParent +=
+                                        diagonalParentDepths.increment(
+                                            selected.diagonalParentDepth,
+                                        )
+                                        if (
+                                            selected.requiredInputVariableSources.isNotEmpty()
+                                        ) {
+                                            diagonalResolverSelectionsWithVariables += 1
+                                            diagonalVariableSourceCombinations.increment(
+                                                selected.requiredInputVariableSources,
+                                            )
+                                        }
+                                        diagonalVariableArgumentSelections +=
                                             selected.variableArgumentSelections.size
                                         selected.variableArgumentSelections.forEach { argument ->
-                                            resolverVariableArgumentFragmentsBeneathParent.increment(
-                                                argument.fragment,
+                                            diagonalVariableArgumentSourceCombinations.increment(
+                                                argument.variableSources,
                                             )
-                                            resolverVariableArgumentDepthsBeneathParent.increment(
-                                                argument.selectionDepth,
-                                            )
-                                            resolverVariableArgumentSourceCombinationsBeneathParent
-                                                .increment(argument.variableSources)
                                         }
-                                        if (selected.diagonalParentDepth > 0) {
-                                            diagonalResolverSelectionsBeneathParent += 1
-                                            if (selected.selectionDepthBelowParent == 1) {
-                                                directDiagonalResolverSelectionsBeneathParent += 1
-                                            }
-                                            diagonalParentDepths.increment(
-                                                selected.diagonalParentDepth,
-                                            )
-                                            if (
-                                                selected.requiredInputVariableSources.isNotEmpty()
-                                            ) {
-                                                diagonalResolverSelectionsWithVariables += 1
-                                                diagonalVariableSourceCombinations.increment(
-                                                    selected.requiredInputVariableSources,
-                                                )
-                                            }
-                                            diagonalVariableArgumentSelections +=
-                                                selected.variableArgumentSelections.size
-                                            selected.variableArgumentSelections.forEach { argument ->
-                                                diagonalVariableArgumentSourceCombinations.increment(
-                                                    argument.variableSources,
-                                                )
-                                            }
-                                        }
-                                    }
-                                    if (
-                                        parent.selectedResolvers.any { selected ->
-                                            selected.diagonalParentDepth > 0
-                                        }
-                                    ) {
-                                        parentSelectionSetsWithDiagonalDemand += 1
                                     }
                                 }
+                                if (
+                                    parent.selectedResolvers.any { selected ->
+                                        selected.diagonalParentDepth > 0
+                                    }
+                                ) {
+                                    parentSelectionSetsWithDiagonalDemand += 1
+                                }
                             }
-                            occurrenceLog.record(
-                                resolverOccurrenceId = application.resolverOccurrenceId,
-                                occurrencePath = application.occurrencePath,
-                                field =
-                                    FieldCoordinate(
-                                        application.field.containingDef.name,
-                                        application.field.name,
-                                    ),
-                                arguments = application.arguments,
-                                input = application.input,
-                            )
                         }
+                        occurrenceLog.record(
+                            resolverOccurrenceId = application.resolverOccurrenceId,
+                            occurrencePath = application.occurrencePath,
+                            field =
+                                FieldCoordinate(
+                                    application.field.containingDef.name,
+                                    application.field.name,
+                                ),
+                            arguments = application.arguments,
+                            input = application.input,
+                        )
                     }
                 val witness: ResolutionWitness = testCase.registry.resolutionWitness()
                 val rootFieldReferenceInvocations =
@@ -569,9 +567,7 @@ internal suspend fun runResolver26BroadStress(
                     "Resolver26 occurrence instrumentation missed an application",
                 )
                 val occurrences: List<RegisteredResolverOccurrence> =
-                    context(operation) {
-                        result.registeredResolverOccurrences(operation.world.resolverRegistry)
-                    }
+                    result.registeredResolverOccurrences(operation, operation.world.resolverRegistry)
                 observedSignatures +=
                     resolver26StructuralSignatures(
                         occurrences = occurrences,
@@ -642,9 +638,7 @@ internal suspend fun runResolver26BroadStress(
                 val observedOccurrenceCounts = occurrenceWitness.applicationIdentityCounts()
                 if (config[SometimesPassiveFieldWeight] > 0.0) {
                     val expectedOccurrenceKeyCounts =
-                        context(operation) {
-                            result.registeredResolverOccurrenceApplicationKeyCounts()
-                        }
+                        result.registeredResolverOccurrenceApplicationKeyCounts(operation)
                     val observedOccurrenceKeyCounts = occurrenceWitness.applicationKeyCounts()
                     observedOccurrenceKeyCounts.forEach { (key, count) ->
                         assertTrue(
@@ -656,13 +650,12 @@ internal suspend fun runResolver26BroadStress(
                         )
                     }
                     val expectedObservedIdentities =
-                        context(operation) {
-                            result.registeredResolverOccurrenceApplicationIdentityCountsFor(
-                                occurrenceWitness.applications
-                                    .map { application -> application.resolverOccurrenceId }
-                                    .toSet(),
-                            )
-                        }
+                        result.registeredResolverOccurrenceApplicationIdentityCountsFor(
+                            operation,
+                            occurrenceWitness.applications
+                                .map { application -> application.resolverOccurrenceId }
+                                .toSet(),
+                        )
                     assertEquals(expectedObservedIdentities, observedOccurrenceCounts)
                     var caseSometimesPassiveOccurrences = 0
                     val caseSometimesPassiveParentDemandDepths = mutableListOf<Int>()
@@ -694,26 +687,21 @@ internal suspend fun runResolver26BroadStress(
                         )
                 } else {
                     val expectedOccurrenceCounts =
-                        context(operation) {
-                            result.registeredResolverOccurrenceApplicationIdentityCounts()
-                        }
+                        result.registeredResolverOccurrenceApplicationIdentityCounts(operation)
                     assertEquals(
                         expectedOccurrenceCounts,
                         observedOccurrenceCounts,
                     )
                 }
                 assertTrue(
-                    context(operation) {
-                        result.correctResolution(fragment)
-                    },
+                    result.correctResolution(operation, fragment),
                 )
-                context(operation) {
-                    result.validateFromFieldBindings(
-                        occurrenceWitness.applications
-                            .map { application -> application.resolverOccurrenceId }
-                            .toSet(),
-                    )
-                }
+                result.validateFromFieldBindings(
+                    operation,
+                    occurrenceWitness.applications
+                        .map { application -> application.resolverOccurrenceId }
+                        .toSet(),
+                )
                 parentFocusedReport?.record(schemaIndex, caseParentFocusedCoverage)
                 completedCases += 1
             }

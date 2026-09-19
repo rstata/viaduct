@@ -150,9 +150,7 @@ internal class CurrentProfileBenchmarkSupport(
                     }
                 variableArgumentCounts += queryVariableArgumentCounts.filter { count -> count > 0 }
                 val shape =
-                    context(world) {
-                        result.shape()
-                    }
+                    result.shape(world)
                 OverheadSample(
                     fields = shape.fields,
                     activeFields = shape.activeFields,
@@ -261,22 +259,18 @@ internal class CurrentProfileBenchmarkSupport(
                         )
                     val witness = testCase.registry.resolutionWitness()
                     check(
-                        context(operation) {
-                            result.registeredResolverApplicationIdentityCounts()
-                        } == witness.applicationIdentityCounts(),
+                        result.registeredResolverApplicationIdentityCounts(operation) == witness.applicationIdentityCounts(),
                     )
                     check(
                         context(operation) {
                             result.correctResolution(
                                 fragment.subselections
                                     .merge(world.schema.requireQueryTypeDef())
-                                    .instantiateBindings(),
+                                    .instantiateBindings(operation),
                             )
                         },
                     )
-                    context(operation) {
-                        result.validateFromFieldBindings(appliedResolverOccurrences)
-                    }
+                    result.validateFromFieldBindings(operation, appliedResolverOccurrences)
                     verifiedCases += 1
                 }
             check(run.attemptedCases == FULL_CASE_COUNT)
@@ -307,8 +301,7 @@ internal class CurrentProfileBenchmarkSupport(
         val depth: Long,
     )
 
-    context(world: Assumptions)
-    private fun EngineResult?.shape(depth: Int = 0): ResultShape =
+        private fun EngineResult?.shape(world: Assumptions, depth: Int = 0): ResultShape =
         when (this) {
             null, is ErrorEngineResult ->
                 ResultShape(
@@ -319,7 +312,7 @@ internal class CurrentProfileBenchmarkSupport(
                 )
             is ListEngineResult ->
                 indices
-                    .map { index -> get(index).getValue().get().shape(depth) }
+                    .map { index -> get(index).getValue().get().shape(world, depth) }
                     .fold(
                         ResultShape(
                             fields = 0,
@@ -342,7 +335,7 @@ internal class CurrentProfileBenchmarkSupport(
                                     depth = depth + 1,
                                 )
                             } else {
-                                getCell(key).getValue().get().shape(depth + 1)
+                                getCell(key).getValue().get().shape(world, depth + 1)
                             }
                         child.copy(
                             fields = child.fields + 1,

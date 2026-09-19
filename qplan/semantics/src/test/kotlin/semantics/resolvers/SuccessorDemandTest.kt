@@ -42,7 +42,7 @@ class SuccessorDemandTest {
                 "fragment ignored on Query { organization { company { user { parent { parent { name } } } } } }",
             ).subselections
 
-        val completed = context(SharedOperationContext.create(world)) { selections.successorDemand() }
+        val completed = SharedOperationContext.create(world).let { resolutionOperation -> selections.successorDemand(resolutionOperation) }
         val organizationSelection = completed.merge(query)[schema.key(query, "organization")]
         val organizationDemand = organizationSelection.subselections.merge(organization)
         val companySelection = organizationDemand[schema.key(organization, "company")]
@@ -118,18 +118,14 @@ class SuccessorDemandTest {
             ).subselections
 
         val full =
-            context(SharedOperationContext.create(world)) {
-                selections.successorDemand().merge(schema.requireQueryTypeDef()).instantiateBindings()
-            }[schema.key(schema.requireQueryTypeDef(), "root")]
+            SharedOperationContext.create(world).let { resolutionOperation -> selections.successorDemand(resolutionOperation).merge(schema.requireQueryTypeDef()).instantiateBindings(resolutionOperation) }[schema.key(schema.requireQueryTypeDef(), "root")]
                 .subselections
         val boundaries =
-            context(SharedOperationContext.create(world)) {
-                selections.successorBoundaryDemand().merge(schema.requireQueryTypeDef()).instantiateBindings()
-            }[schema.key(schema.requireQueryTypeDef(), "root")]
+            SharedOperationContext.create(world).let { resolutionOperation -> selections.successorBoundaryDemand(resolutionOperation).merge(schema.requireQueryTypeDef()).instantiateBindings(resolutionOperation) }[schema.key(schema.requireQueryTypeDef(), "root")]
                 .subselections
         val rootType = schema.requireType("Root") as ViaductSchema.Object
-        val fullRoot = context(SharedOperationContext.create(world)) { full.merge(rootType).instantiateBindings() }
-        val boundaryRoot = context(SharedOperationContext.create(world)) { boundaries.merge(rootType).instantiateBindings() }
+        val fullRoot = SharedOperationContext.create(world).let { resolutionOperation -> full.merge(rootType).instantiateBindings(resolutionOperation) }
+        val boundaryRoot = SharedOperationContext.create(world).let { resolutionOperation -> boundaries.merge(rootType).instantiateBindings(resolutionOperation) }
 
         assertEquals(
             setOf("consumer", "source", "box"),
@@ -145,23 +141,19 @@ class SuccessorDemandTest {
         val boundaryBox = boundaryRoot[schema.key(rootType, "box")]
         assertEquals(
             setOf("passive", "computed", "V_A_typename"),
-            context(SharedOperationContext.create(world)) {
-                fullBox.subselections
-                    .merge(boxType)
-                    .instantiateBindings()
-                    .groundKeys()
-                    .fieldNames()
-            },
+            SharedOperationContext.create(world).let { resolutionOperation -> fullBox.subselections
+                .merge(boxType)
+                .instantiateBindings(resolutionOperation)
+                .groundKeys()
+                .fieldNames() },
         )
         assertEquals(
             setOf("computed", "V_A_typename"),
-            context(SharedOperationContext.create(world)) {
-                boundaryBox.subselections
-                    .merge(boxType)
-                    .instantiateBindings()
-                    .groundKeys()
-                    .fieldNames()
-            },
+            SharedOperationContext.create(world).let { resolutionOperation -> boundaryBox.subselections
+                .merge(boxType)
+                .instantiateBindings(resolutionOperation)
+                .groundKeys()
+                .fieldNames() },
         )
     }
 

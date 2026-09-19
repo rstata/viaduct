@@ -67,12 +67,11 @@ interface ListPassiveDeepeningGeneratedResolverContract : ResolverContract {
                         SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
                     val fragment = world.fragmentFrom(query.source)
                     listDeepeningCases +=
-                        context(operation) {
-                            countListPassiveDeepening(
-                                fragment.subselections,
-                                world.schema.requireQueryTypeDef(),
-                            )
-                        }
+                        countListPassiveDeepening(
+                            operation,
+                            fragment.subselections,
+                            world.schema.requireQueryTypeDef(),
+                        )
                     registry.clearResolutionWitness()
                     val result =
                         resolve(
@@ -83,15 +82,11 @@ interface ListPassiveDeepeningGeneratedResolverContract : ResolverContract {
                     val witness = registry.resolutionWitness()
 
                     assertEquals(
-                        context(operation) {
-                            result.registeredResolverApplicationIdentityCounts()
-                        },
+                        result.registeredResolverApplicationIdentityCounts(operation),
                         witness.applicationIdentityCounts(),
                     )
                     assertTrue(
-                        context(operation) {
-                            result.correctResolution(fragment)
-                        },
+                        result.correctResolution(operation, fragment),
                     )
                     verifiedCases += 1
                 }
@@ -103,12 +98,12 @@ interface ListPassiveDeepeningGeneratedResolverContract : ResolverContract {
     }
 }
 
-context(operation: SharedOperationContext<*>)
 private fun countListPassiveDeepening(
+    operation: SharedOperationContext<*>,
     selections: SelectionForest,
     type: ViaductSchema.Object,
 ): Int {
-    val incoming = selections.merge(type).instantiateBindings()
+    val incoming = selections.merge(type).instantiateBindings(operation)
     val incomingByKey = incoming.byGroundKey()
     var count = 0
 
@@ -120,7 +115,7 @@ private fun countListPassiveDeepening(
             .resolver(field)
             .objectFragment
             .merge(type)
-            .instantiateBindings()
+            .instantiateBindings(operation)
             .byGroundKey()
             .forEach { (requiredKey, requiredPassive) ->
                 val passiveField = requiredKey.field
@@ -136,6 +131,7 @@ private fun countListPassiveDeepening(
                     incomingByKey[requiredKey] ?: return@forEach
                 if (
                     hasMissingDemand(
+                        operation,
                         requiredPassive.subselections,
                         selectedPassive.subselections,
                         passiveType.possibleObjectTypes,
@@ -150,23 +146,23 @@ private fun countListPassiveDeepening(
         val childType = key.field.type.baseTypeDef as? ViaductSchema.CompositeTypeDef
             ?: return@forEach
         childType.possibleObjectTypes.forEach { possibleType ->
-            count += countListPassiveDeepening(selection.subselections, possibleType)
+            count += countListPassiveDeepening(operation, selection.subselections, possibleType)
         }
     }
     return count
 }
 
-context(operation: SharedOperationContext<*>)
 private fun hasMissingDemand(
+    operation: SharedOperationContext<*>,
     required: SelectionForest,
     selected: SelectionForest,
     possibleTypes: Set<ViaductSchema.Object>,
 ): Boolean =
     possibleTypes.any { possibleType ->
-        val available = selected.merge(possibleType).instantiateBindings().byGroundKey()
+        val available = selected.merge(possibleType).instantiateBindings(operation).byGroundKey()
         !required
             .merge(possibleType)
-            .instantiateBindings()
+            .instantiateBindings(operation)
             .byGroundKey()
             .all { (requirementKey, requirement) ->
                 val match = available[requirementKey]
@@ -176,6 +172,7 @@ private fun hasMissingDemand(
                     val childType = requirementKey.field.type.baseTypeDef as? ViaductSchema.CompositeTypeDef
                     childType == null ||
                         !hasMissingDemand(
+                            operation,
                             requirement.subselections,
                             match.subselections,
                             childType.possibleObjectTypes,

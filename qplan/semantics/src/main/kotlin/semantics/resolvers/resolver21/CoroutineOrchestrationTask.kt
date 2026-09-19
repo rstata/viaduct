@@ -37,7 +37,7 @@ internal class CoroutineOrchestrationTask private constructor(
             require(operation.supportsParentFields || parentKeys.isEmpty()) {
                 "Resolver21 does not support @parent fields"
             }
-            occurrence.installParentBackedgeFields(parentKeys)
+            occurrence.installParentBackedgeFields(operation, parentKeys)
             CoroutineOrchestrationTask(operation, occurrence, source, closed)
         }
     }

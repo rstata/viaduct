@@ -50,7 +50,5 @@ class ResolverContractTest :
         root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult =
-        context(operation) {
-            resolve(selections)
-        }
+        operation.resolve(selections)
 }

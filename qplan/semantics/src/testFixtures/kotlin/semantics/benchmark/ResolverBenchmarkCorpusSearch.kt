@@ -141,10 +141,8 @@ object ResolverBenchmarkCorpusSearch {
                 mutableListOf<Resolver26ApplicationObservation>(),
             )
         val result =
-            context(SharedOperationContext.create(world)) {
-                resolveObserved(fragment.subselections) { observation ->
-                    applicationObservations += observation
-                }
+            SharedOperationContext.create(world).resolveObserved(fragment.subselections) { observation ->
+                applicationObservations += observation
             }
         val witness = registry.resolutionWitness()
         check(applicationObservations.size == witness.applications.size)

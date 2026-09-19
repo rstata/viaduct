@@ -54,10 +54,8 @@ class InclusionConditionTest {
         )
         val operation = SharedOperationContext.create(world.assumptions)
         val applications = Collections.synchronizedList(mutableListOf<String>())
-        val result = context(operation) {
-            resolveObserved(world.assumptions.fragmentFrom("fragment Test on Query { controller healthy }").subselections) {
-                applications += it.field.name
-            }
+        val result = operation.resolveObserved(world.assumptions.fragmentFrom("fragment Test on Query { controller healthy }").subselections) {
+            applications += it.field.name
         }
 
         for (name in listOf("controller", "outer")) {
@@ -747,10 +745,8 @@ class InclusionConditionTest {
         val applications =
             Collections.synchronizedList(mutableListOf<ViaductSchema.ObjectField>())
         val result =
-            context(operation) {
-                resolveObserved(fragment.subselections) { observation ->
-                    applications += observation.field
-                }
+            operation.resolveObserved(fragment.subselections) { observation ->
+                applications += observation.field
             }
         val correct =
             context(operation) {

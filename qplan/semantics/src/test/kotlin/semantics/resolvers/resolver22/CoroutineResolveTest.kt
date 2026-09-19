@@ -20,6 +20,6 @@ class CoroutineResolveTest : CoroutineResolverContract {
     ): ObjectEngineResult = startCoroutineResolution(
         operation, requestScope, selections, cycleChecker,
         supportsParentFields = true,
-        complete = { demand -> context(operation, operation.world) { demand.successorBoundaryDemand() } },
+        complete = { demand -> demand.successorBoundaryDemand(operation) },
     )
 }

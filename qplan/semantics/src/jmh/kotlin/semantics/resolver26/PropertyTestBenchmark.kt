@@ -45,23 +45,21 @@ open class PropertyTestBenchmark {
     private val support =
         PropertyTestBenchmarkSupport(
             subject = ObservedResolverBenchmarkSubject {
-                    world,
+                    operation,
                     _,
                     selections,
                     applicationObserver,
                 ->
-                context(world) {
-                    resolveObserved(selections) { observation ->
-                        applicationObserver(
-                            ResolverBenchmarkApplicationObservation(
-                                occurrencePath = observation.occurrencePath,
-                                resolverOccurrenceId = observation.resolverOccurrenceId,
-                                variableArgumentCount = observation.variableArgumentCount,
-                                variableSourceOccurrenceIds =
-                                    observation.variableResolverOccurrenceIds,
-                            ),
-                        )
-                    }
+                operation.resolveObserved(selections) { observation ->
+                    applicationObserver(
+                        ResolverBenchmarkApplicationObservation(
+                            occurrencePath = observation.occurrencePath,
+                            resolverOccurrenceId = observation.resolverOccurrenceId,
+                            variableArgumentCount = observation.variableArgumentCount,
+                            variableSourceOccurrenceIds =
+                                observation.variableResolverOccurrenceIds,
+                        ),
+                    )
                 }
             },
         )

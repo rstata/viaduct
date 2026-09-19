@@ -59,8 +59,8 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
 
     return keys.all { key ->
         if (!getCell(key).getValue().isCompleted) return@all true
-        if (!key.isContextuallyGrounded()) return@all false
-        val arguments = key.groundedArguments()
+        if (!key.isContextuallyGrounded(operation)) return@all false
+        val arguments = key.groundedArguments(operation)
         val value = getCell(key).getValue().get()
         val fieldName = key.field.name
         val argumentsContainError = arguments.argumentsContainErrorValue()
@@ -94,24 +94,21 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
                                     operation.variableBindings.isBound(variable.instanceId!!)
                                 }
                             ) {
-                                context(operation.world) {
-                                    conformsToSelectionsAt(
-                                        selections = instantiatedSelections,
-                                        path = path,
-                                    )
-                                }
+                                conformsToSelectionsAt(
+                                    selections = instantiatedSelections,
+                                    path = path,
+                                )
                             } else {
                                 val instantiatedFragment =
                                     resolver.objectFragmentAt(
+                                        operation,
                                         resolverApplicationCache.root,
                                         coordinate,
                                     )
-                                context(operation.world) {
-                                    conformsToSelectionsAt(
-                                        instantiatedFragment,
-                                        path,
-                                    )
-                                }
+                                conformsToSelectionsAt(
+                                    instantiatedFragment,
+                                    path,
+                                )
                             }
                         }
             }

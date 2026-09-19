@@ -117,9 +117,9 @@ internal class DepthFirstFieldResolverTask private constructor(
         publicationRoot: ObjectEngineResult,
         publicationPath: List<PathComponent>,
         invocationDemand: SelectionForest,
-    ): ResolverOutputData? = context(publication.operation) {
+    ): ResolverOutputData? {
         val operation = publication.operation
-        val invocation = reference.prepareInvocation()
+        val invocation = reference.prepareInvocation(operation)
         val queryValue =
             resolveQueryFragment(
                 queryFragment = invocation.fragments.queryFragment,
@@ -148,7 +148,7 @@ internal class DepthFirstFieldResolverTask private constructor(
                 suppliedDemand = invocationDemand,
             ),
         )
-        output
+        return output
     }
 
     /**

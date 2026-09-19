@@ -75,14 +75,12 @@ private fun ViaductSchema.Object.closeResolverDemand(
 ): ObjectSelectionForest {
     val parentInputDemand =
         if (includeParentInputDemand) {
-            context(operation.world) {
-                selections.inputParentDemand()
-            }
+            selections.inputParentDemand(operation.world)
         } else {
             selectionForestOf()
         }
     val applicableSelections =
-        (selections + parentInputDemand).applicableGroundSelections(this)
+        (selections + parentInputDemand).applicableGroundSelections(operation, this)
     val unexpandedResolverKeys =
         applicableSelections.groundKeys().filter { key ->
             key !in expanded &&
@@ -93,7 +91,7 @@ private fun ViaductSchema.Object.closeResolverDemand(
 
     if (unexpandedResolverKeys.isEmpty()) return applicableSelections
 
-    unexpandedResolverKeys.bindFromArguments(root, path)
+    unexpandedResolverKeys.bindFromArguments(operation, root, path)
     val resolverDemand =
         unexpandedResolverKeys.flatMapToSelectionForest { key ->
             operation.world.resolverRegistry

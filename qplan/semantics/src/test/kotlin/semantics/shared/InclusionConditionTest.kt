@@ -30,7 +30,7 @@ class InclusionConditionTest {
                 ),
             )
 
-        assertTrue(context(operation) { condition.fetchIncluded() })
+        assertTrue(condition.fetchIncluded(operation))
     }
 
     @Test
@@ -68,7 +68,7 @@ class InclusionConditionTest {
 
         val failure =
             assertFailsWith<IllegalStateException> {
-                runBlocking { context(operation) { condition.fetchIncluded() } }
+                runBlocking { condition.fetchIncluded(operation) }
             }
 
         assertTrue(failure.message.orEmpty().contains(expectedMessage))

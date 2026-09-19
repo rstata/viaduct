@@ -10,21 +10,19 @@ import semantics.shared.SharedOperationContext
  * Results are non-selective and may contain more OER nodes than are strictly necessary to resolve
  * the query.
  */
-context(operation: SharedOperationContext<*>)
-fun resolve(selections: SelectionForest): ObjectEngineResult =
+fun SharedOperationContext<*>.resolve(selections: SelectionForest): ObjectEngineResult =
     resolve(selections, onTaskStarted = {})
 
-context(operation: SharedOperationContext<*>)
-internal fun resolve(
+internal fun SharedOperationContext<*>.resolve(
     selections: SelectionForest,
     onTaskStarted: (DepthFirstTask) -> Unit,
 ): ObjectEngineResult {
-    require(!operation.world.selectiveResolvers) {
+    require(!world.selectiveResolvers) {
         "Resolver06 requires non-selective resolvers"
     }
-    val source = operation.world.resolverRegistry.createRootQueryInput()
+    val source = world.resolverRegistry.createRootQueryInput()
     return DepthFirstReactor(
-        operation = operation,
+        operation = this@resolve,
         complete = { completedSelections -> completedSelections },
         source = source,
         selections = selections,

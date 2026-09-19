@@ -5,30 +5,27 @@ import model.ObjectEngineResult
 import model.usedVariables
 
 /** Whether every variable in this key has an occurrence identity and a completed binding. */
-context(operation: SharedOperationContext<*>)
-fun ObjectEngineResult.ObjectKey.isContextuallyGrounded(): Boolean =
+fun ObjectEngineResult.ObjectKey.isContextuallyGrounded(operation: SharedOperationContext<*>): Boolean =
     arguments.usedVariables().all { variable ->
         variable.isInstantiated &&
             operation.variableBindings.isBound(requireNotNull(variable.instanceId))
     }
 
 /** Grounds this key's arguments without changing the symbolic key retained by its OER cell. */
-context(operation: SharedOperationContext<*>)
-fun ObjectEngineResult.ObjectKey.groundedArguments(): Arguments.Ground {
-    require(isContextuallyGrounded()) {
+fun ObjectEngineResult.ObjectKey.groundedArguments(operation: SharedOperationContext<*>): Arguments.Ground {
+    require(isContextuallyGrounded(operation)) {
         "Object key is not contextually grounded"
     }
-    return arguments.instantiateBindings(field)
+    return arguments.instantiateBindings(operation, field)
 }
 
 /** Awaits every variable carried by this key before grounding its arguments. */
-context(operation: SharedOperationContext<*>)
-suspend fun ObjectEngineResult.ObjectKey.fetchGroundedArguments(): Arguments.Ground {
+suspend fun ObjectEngineResult.ObjectKey.fetchGroundedArguments(operation: SharedOperationContext<*>): Arguments.Ground {
     arguments.usedVariables().forEach { variable ->
         require(variable.isInstantiated) {
             "Variable template $variable must be instantiated before its binding can be fetched"
         }
         operation.variableBindings.fetchBinding(requireNotNull(variable.instanceId))
     }
-    return groundedArguments()
+    return groundedArguments(operation)
 }

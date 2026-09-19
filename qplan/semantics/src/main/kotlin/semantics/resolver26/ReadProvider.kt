@@ -23,15 +23,15 @@ import model.toEngineSimpleData
 import viaduct.graphql.schema.ViaductSchema
 
 // Traverses a provider path through OER promises and returns its terminal input-compatible value.
-context(operation: OperationContext)
 internal suspend fun ObjectEngineResult.readProvider(
+    operation: OperationContext,
     definition: InstantiatedFieldPathDefinition,
     reader: List<PathComponent>,
-): VariableBinding = readProvider(definition.path, reader)
+): VariableBinding = readProvider(operation, definition.path, reader)
 
 // Reads and completes provider bindings; the owning field-task root handles cancellation cleanup.
-context(operation: OperationContext)
 internal suspend fun ObjectEngineResult.completeProviderBindings(
+    operation: OperationContext,
     providerReads: List<VariableProviderReadOccurrence>,
 ) {
     coroutineScope {
@@ -40,8 +40,9 @@ internal suspend fun ObjectEngineResult.completeProviderBindings(
             launch {
                 val binding =
                     try {
-                        if (!providerRead.inclusionCondition.fetchIncluded()) return@launch
+                        if (!providerRead.inclusionCondition.fetchIncluded(operation)) return@launch
                         readProvider(
+                            operation = operation,
                             definition = providerRead.definition,
                             reader = providerRead.readerPath,
                         )
@@ -55,8 +56,8 @@ internal suspend fun ObjectEngineResult.completeProviderBindings(
     }
 }
 
-context(operation: OperationContext)
 private suspend fun ObjectEngineResult.readProvider(
+    operation: OperationContext,
     path: List<ObjectEngineResult.Key>,
     reader: List<PathComponent>,
 ): VariableBinding {
@@ -70,7 +71,7 @@ private suspend fun ObjectEngineResult.readProvider(
                 subselections = selectionForestOf(),
             ).objectKey(current.type)
         val objectKey = specializedKey
-        objectKey.fetchGroundedArguments()
+        objectKey.fetchGroundedArguments(operation)
         val cell = current.reserveCell(objectKey)
         operation.cycleChecker.cycleCheck(reader, cell)
         val value = cell.reserveValue().await()

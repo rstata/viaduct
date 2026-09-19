@@ -20,14 +20,12 @@ import semantics.shared.instantiateBindings
 import semantics.shared.SharedOperationContext
 
 /** Extends this demand with every encountered successor resolver's transitive input demand. */
-context(operation: SharedOperationContext<*>)
-fun SelectionForest.successorDemand(): SelectionForest =
-    successorDemandWithoutParentLifting().liftParentDemand()
+fun SelectionForest.successorDemand(operation: SharedOperationContext<*>): SelectionForest =
+    successorDemandWithoutParentLifting(operation).liftParentDemand(operation)
 
-context(operation: SharedOperationContext<*>)
-private fun SelectionForest.successorDemandWithoutParentLifting(): SelectionForest =
+private fun SelectionForest.successorDemandWithoutParentLifting(operation: SharedOperationContext<*>): SelectionForest =
     flatMap { selection ->
-        val nestedDemand = selection.subselections.successorDemand()
+        val nestedDemand = selection.subselections.successorDemand(operation)
         val rootedSelection =
             Selection.of(
                 key = selection.key,
@@ -43,6 +41,7 @@ private fun SelectionForest.successorDemandWithoutParentLifting(): SelectionFore
                         field = specializedKey.field,
                         arguments =
                             specializedKey.arguments.instantiateBindings(
+                                operation,
                                 specializedKey.field,
                             ),
                     )
@@ -53,29 +52,27 @@ private fun SelectionForest.successorDemandWithoutParentLifting(): SelectionFore
                     operation.world.resolverRegistry
                         .resolver(key.field)
                         .objectFragmentWithFromArguments(arguments)
-                        .successorDemand()
+                        .successorDemand(operation)
                 }
             }
         selectionForestOf(rootedSelection) + resolverInputDemand
     }
 
 /** Extends this demand with the paths needed to find every successor resolver boundary. */
-context(operation: SharedOperationContext<*>)
-fun SelectionForest.successorBoundaryDemand(): SelectionForest =
-    successorBoundaryDemandWithoutParentLifting().liftParentDemand()
+fun SelectionForest.successorBoundaryDemand(operation: SharedOperationContext<*>): SelectionForest =
+    successorBoundaryDemandWithoutParentLifting(operation).liftParentDemand(operation)
 
-context(operation: SharedOperationContext<*>)
-private fun SelectionForest.successorBoundaryDemandWithoutParentLifting(): SelectionForest =
+private fun SelectionForest.successorBoundaryDemandWithoutParentLifting(operation: SharedOperationContext<*>): SelectionForest =
     flatMap { selection ->
         val requested =
             Selection.of(
                 key = selection.key,
                 possibleTypes = selection.possibleTypes,
-                subselections = selection.subselections.successorBoundaryDemand(),
+                subselections = selection.subselections.successorBoundaryDemand(operation),
                 inclusionCondition = selection.inclusionCondition,
             )
 
-        selectionForestOf(requested) + selection.successorInputBoundaries()
+        selectionForestOf(requested) + selection.successorInputBoundaries(operation)
     }
 
 /**
@@ -85,10 +82,9 @@ private fun SelectionForest.successorBoundaryDemandWithoutParentLifting(): Selec
  * recursive level. Parent selections remain in place for materialization; their subselections are
  * additionally demanded at the ancestor that owns the referenced OER.
  */
-context(operation: SharedOperationContext<*>)
-internal fun SelectionForest.liftParentDemand(): SelectionForest =
+internal fun SelectionForest.liftParentDemand(operation: SharedOperationContext<*>): SelectionForest =
     flatMap { selection ->
-        val nestedDemand = selection.subselections.liftParentDemand()
+        val nestedDemand = selection.subselections.liftParentDemand(operation)
         val requested =
             Selection.of(
                 key = selection.key,
@@ -119,8 +115,7 @@ internal fun SelectionForest.liftParentDemand(): SelectionForest =
         selectionForestOf(requested) + lifted.guardedBy(selection.inclusionCondition)
     }
 
-context(operation: SharedOperationContext<*>)
-private fun Selection.successorInputBoundaries(): SelectionForest =
+private fun Selection.successorInputBoundaries(operation: SharedOperationContext<*>): SelectionForest =
     possibleTypes.flatMapToSelectionForest { possibleType ->
         val specializedKey = objectKey(possibleType)
         val key =
@@ -128,6 +123,7 @@ private fun Selection.successorInputBoundaries(): SelectionForest =
                 field = specializedKey.field,
                 arguments =
                     specializedKey.arguments.instantiateBindings(
+                        operation,
                         specializedKey.field,
                     ),
             )
@@ -138,15 +134,14 @@ private fun Selection.successorInputBoundaries(): SelectionForest =
             operation.world.resolverRegistry
                 .resolver(key.field)
                 .objectFragmentWithFromArguments(arguments)
-                .boundarySkeleton()
-                .successorBoundaryDemand()
+                .boundarySkeleton(operation)
+                .successorBoundaryDemand(operation)
         }
     }
 
-context(operation: SharedOperationContext<*>)
-private fun SelectionForest.boundarySkeleton(): SelectionForest =
+private fun SelectionForest.boundarySkeleton(operation: SharedOperationContext<*>): SelectionForest =
     flatMap { selection ->
-        val nested = selection.subselections.boundarySkeleton()
+        val nested = selection.subselections.boundarySkeleton(operation)
         val isResolverBoundary =
             selection.possibleTypes.any { possibleType ->
                 val field = possibleType.requireField(selection.key.field.name)

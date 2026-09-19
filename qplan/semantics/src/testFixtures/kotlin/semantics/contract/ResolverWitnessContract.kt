@@ -78,9 +78,7 @@ interface ResolverWitnessContract : ResolverContract {
                 val result = resolution.result
                 val witness = registry.resolutionWitness()
                 val expectedApplications =
-                    context(resolution.operation) {
-                        result.registeredResolverApplicationIdentityCounts()
-                    }
+                    result.registeredResolverApplicationIdentityCounts(resolution.operation)
                 assertEquals(expectedApplications, witness.applicationIdentityCounts())
                 assertTrue(
                     witness.applications.all { application ->
@@ -98,16 +96,14 @@ interface ResolverWitnessContract : ResolverContract {
                         unrelatedApplications.map { application -> application.key.field },
                 )
                 assertTrue(
-                    context(resolution.operation) {
-                        result.correctResolution(fragment)
-                    },
+                    result.correctResolution(resolution.operation, fragment),
                     context(resolution.operation) {
                         "rooted=${context(world) { result.rootedAndWellTyped() }}, " +
                             "selections=" +
                             "${result.conformsToSelections(fragment.subselections)}, " +
                             "closed=${result.isClosedUnderResolverDemand()}, " +
                             "resolvers=${result.conformsToResolvers()}, " +
-                            "unclosed=${result.unclosedRegisteredResolverOccurrences().map { cell ->
+                            "unclosed=${result.unclosedRegisteredResolverOccurrences(resolution.operation).map { cell ->
                                 cell.applicationKey to cell.occurrencePath
                             }}"
                     },

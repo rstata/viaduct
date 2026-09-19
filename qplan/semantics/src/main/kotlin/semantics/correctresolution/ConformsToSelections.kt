@@ -50,8 +50,8 @@ private fun ObjectEngineResult.objectConformsToSelections(
     path: List<PathComponent>,
 ): Boolean =
     selections.merge(type).byKey().values.all { selection ->
-        if (!selection.inclusionCondition.isIncluded()) return@all true
-        val key = findStoredKey(selection.key)
+        if (!selection.inclusionCondition.isIncluded(operation)) return@all true
+        val key = findStoredKey(operation, selection.key)
         key != null &&
             getCell(key)
                 .getValue()

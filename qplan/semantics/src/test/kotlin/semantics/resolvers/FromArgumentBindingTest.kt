@@ -47,8 +47,8 @@ class FromArgumentBindingTest {
         val key = ObjectEngineResult.GroundKey.of(field, mapOf("value" to 1))
         val root = ObjectEngineResult.of(world.schema.requireQueryTypeDef(), values = emptyMap())
 
-        context(operation) {
-            listOf(key).bindFromArguments(root, emptyList())
+        run {
+            listOf(key).bindFromArguments(operation, root, emptyList())
             val variable =
                 Arguments.Variable
                     .of(field, "value")
@@ -63,7 +63,7 @@ class FromArgumentBindingTest {
                 runBlocking { operation.variableBindings.fetchBinding(variableId) },
             )
             assertFailsWith<IllegalStateException> {
-                listOf(key).bindFromArguments(root, emptyList())
+                listOf(key).bindFromArguments(operation, root, emptyList())
             }
         }
     }

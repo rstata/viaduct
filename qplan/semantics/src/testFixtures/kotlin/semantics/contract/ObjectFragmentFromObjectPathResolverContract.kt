@@ -50,15 +50,13 @@ interface ObjectFragmentFromObjectPathResolverContract :
         val resolution = resolveAndValidateObserved(world, "query { result }")
         val resolved = resolution.result
         val boundVariable =
-            context(world) {
-                resolver
-                    .fieldPathDefinitions(resolved, listOf(resultKey))
-                    .filter { definition ->
-                        definition.providerFragment == ProviderFragment.OBJECT
-                    }
-                    .single()
-                    .variable
-            }
+            resolver
+                .fieldPathDefinitions(resolved, listOf(resultKey))
+                .filter { definition ->
+                    definition.providerFragment == ProviderFragment.OBJECT
+                }
+                .single()
+                .variable
 
         assertEquals(14, resolved.getCell(resultKey).get())
         assertEquals(
@@ -310,15 +308,13 @@ interface ObjectFragmentFromObjectPathResolverContract :
             val resolution = resolveAndValidateObserved(world, "query { result }")
             val resolved = resolution.result
             val boundVariable =
-                context(world) {
-                    resolver
-                        .fieldPathDefinitions(resolved, listOf(resultKey))
-                        .filter { definition ->
-                            definition.providerFragment == ProviderFragment.OBJECT
-                        }
-                        .single()
-                        .variable
-                }
+                resolver
+                    .fieldPathDefinitions(resolved, listOf(resultKey))
+                    .filter { definition ->
+                        definition.providerFragment == ProviderFragment.OBJECT
+                    }
+                    .single()
+                    .variable
 
             val resultValue = resolved.getCell(resultKey).get()
             if (isError) {

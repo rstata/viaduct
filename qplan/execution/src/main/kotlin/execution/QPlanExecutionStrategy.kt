@@ -72,9 +72,7 @@ class QPlanExecutionStrategy(
 
         val root =
             try {
-                context(SharedOperationContext.create(world)) {
-                    startResolve(selections, requestScope)
-                }
+                SharedOperationContext.create(world).startResolve(selections, requestScope)
             } catch (throwable: Exception) {
                 executionContext.graphQLContext.delete(lifetimeKey)
                 requestJob.cancel(requestCancellation("QPlan request failed to start", throwable))

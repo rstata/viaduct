@@ -74,7 +74,7 @@ class CorrectResolutionTest {
                     }
                     """.trimIndent(),
                 ).subselections
-        val result = context(operation) { resolve(selections) }
+        val result = operation.resolve(selections)
         val querySelections = selections.merge(world.schema.requireQueryTypeDef())
 
         assertTrue(context(operation) { result.correctResolution(querySelections) })

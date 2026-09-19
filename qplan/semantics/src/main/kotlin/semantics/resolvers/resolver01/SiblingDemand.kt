@@ -25,6 +25,6 @@ fun ObjectEngineResult.GroundKey.demandsFromSibling(
     return siblingKey in
         operation.world.resolverRegistry
             .resolver(field)
-            .objectFragmentAt(root, path)
+            .objectFragmentAt(operation, root, path)
             .groundKeys()
 }

@@ -77,18 +77,14 @@ interface ResolverSelectiveDemandWitnessContract : ResolverContract {
 
         assertEquals(
             setOf("base", "computed"),
-            context(resolution.operation) {
-                requireNotNull(producerDemand)
-                    .merge(itemType)
-                    .instantiateBindings()
-                    .groundKeys()
-                    .mapTo(linkedSetOf()) { key -> key.field.name }
-            },
+            requireNotNull(producerDemand)
+                .merge(itemType)
+                .instantiateBindings(resolution.operation)
+                .groundKeys()
+                .mapTo(linkedSetOf()) { key -> key.field.name },
         )
         assertTrue(
-            context(resolution.operation) {
-                result.correctResolution(fragment)
-            },
+            result.correctResolution(resolution.operation, fragment),
         )
     }
 }

@@ -69,9 +69,7 @@ class ResolverGeneratedTest :
         root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult =
-        context(operation) {
-            resolve(selections)
-        }
+        operation.resolve(selections)
 
     override fun observeResolution(
         world: Assumptions,
@@ -86,10 +84,8 @@ class ResolverGeneratedTest :
         val appliedResolverOccurrences =
             ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
         val result =
-            context(operation) {
-                resolveObserved(selections) { application ->
-                    appliedResolverOccurrences += application.resolverOccurrenceId
-                }
+            operation.resolveObserved(selections) { application ->
+                appliedResolverOccurrences += application.resolverOccurrenceId
             }
         return Resolver26ResolutionObservation(
             result = result,

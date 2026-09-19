@@ -61,11 +61,9 @@ internal class CorrectResolutionBenchmarkSupport(
                             selections = fragment.subselections,
                         )
                     val selections: ObjectSelectionForest =
-                        context(operation) {
-                            fragment.subselections
-                                .merge(world.schema.requireQueryTypeDef())
-                                .instantiateBindings()
-                        }
+                        fragment.subselections
+                            .merge(world.schema.requireQueryTypeDef())
+                            .instantiateBindings(operation)
                     check(context(operation) { result.correctResolution(selections) }) {
                         "Prepared correct-resolution benchmark input is not a correct resolution"
                     }

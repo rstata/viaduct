@@ -27,8 +27,7 @@ internal data class PreparedRootFieldReferenceInvocation(
  * The maintained pre-Resolver26 algorithms support only `FromArgument` variables. Reference
  * targets inherit that boundary instead of acquiring Resolver26's runtime binding protocols.
  */
-context(operation: SharedOperationContext<*>)
-internal fun RootFieldReferenceData.prepareInvocation(): PreparedRootFieldReferenceInvocation {
+internal fun RootFieldReferenceData.prepareInvocation(operation: SharedOperationContext<*>): PreparedRootFieldReferenceInvocation {
     require(targetField in operation.world.resolverRegistry) {
         "Root-field-reference target has no registered resolver: " +
             "${targetField.containingDef.name}/${targetField.name}"
@@ -51,7 +50,7 @@ internal fun RootFieldReferenceData.prepareInvocation(): PreparedRootFieldRefere
         "Root-field-reference target ${targetField.containingDef.name}/${targetField.name} " +
             "uses a variable source unsupported before Resolver26"
     }
-    setOf(key).bindFromArguments(root, prefixKeys)
+    setOf(key).bindFromArguments(operation, root, prefixKeys)
     return PreparedRootFieldReferenceInvocation(
         root = root,
         path = invocationPath,

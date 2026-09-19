@@ -10,15 +10,14 @@ import semantics.shared.SharedOperationContext
  * Resolves [selections] with selective resolver applications. Whether the results contain only the
  * necessary OER nodes has not been proved.
  */
-context(operation: SharedOperationContext<*>)
-fun resolve(selections: SelectionForest): ObjectEngineResult {
-    require(operation.world.selectiveResolvers) {
+fun SharedOperationContext<*>.resolve(selections: SelectionForest): ObjectEngineResult {
+    require(world.selectiveResolvers) {
         "Resolver03 requires selective resolvers"
     }
     return DepthFirstResolve(
-        operation = operation,
+        operation = this@resolve,
         complete = { completedSelections ->
-            completedSelections.successorDemand()
+            completedSelections.successorDemand(this@resolve)
         },
     ).resolve(selections)
 }

@@ -104,87 +104,86 @@ internal class FieldResolutionLogic(
     /** [queryProducer] is present for ordinary fields; references launch one for each invocation. */
     suspend fun publishResult(queryProducer: Deferred<EngineObjectOrErrorData>?) {
         val publication = fieldResolverTask.publication
-        context(publication.operation, publication.operation.world) {
-            val sourceOccurrence = publication.sourceOccurrence
-            val selection = sourceOccurrence.selection
-            val constructionDemand = sourceOccurrence.publicationConstructionDemand
-            val invocationDemand: SelectionForest =
-                when (sourceOccurrence) {
-                    is PassiveValueOccurrence -> sourceOccurrence.invocationDemand
-                    else -> constructionDemand.successorDemand()
-                }
-
-            val activated = activatePublication()
-            if (!activated) return
-
-            var fieldValue: ResolverOutputData? =
-                when (sourceOccurrence) {
-                    is FieldResolverOccurrence ->
-                        runFieldResolver(
-                            fieldResolverOccurrence = sourceOccurrence,
-                            selection = selection,
-                            invocationDemand = invocationDemand,
-                            queryProducer = requireNotNull(queryProducer),
-                        )
-                    is RootFieldReferenceOccurrence -> sourceOccurrence.reference
-                    is PassiveValueOccurrence -> sourceOccurrence.value
-                }
-
-            var authoritativeNodeIdentity: NodeReferenceIdentity? = null
-            while (fieldValue is RootFieldReferenceData) {
-                val reference = fieldValue
-                authoritativeNodeIdentity =
-                    authoritativeNodeIdentity ?: reference.nodeReferenceIdentityOrNull()
-                require(
-                    reference.conformsToResolverOutputSchemaType(
-                        sourceOccurrence.publicationExpectedType,
-                    ),
-                ) {
-                    "Root-field-reference target ${reference.type.name} does not conform to " +
-                        "the consumer publication type"
-                }
-                val invocation =
-                    createRootFieldResolverOccurrence(
-                        reference = reference,
-                        constructionDemand = constructionDemand,
-                    )
-                fieldValue =
-                    invokeRootFieldResolver(
-                        fieldResolverOccurrence = invocation,
-                        arguments = reference.arguments,
-                        invocationDemand = invocationDemand,
-                    )
-                publication.operation.resolverObserver.onRootFieldReferenceInvocation(
-                    RootFieldReferenceInvocationObservation(
-                        publicationRoot = publication.oerOccurrence.root,
-                        publicationPath = sourceOccurrence.publicationPath,
-                        reference = reference,
-                        invocationRoot = invocation.invocationRoot,
-                        invocationPath = invocation.invocationPath,
-                        invocationKey = invocation.selection.key,
-                        suppliedDemand = invocationDemand,
-                    ),
-                )
+        val sourceOccurrence = publication.sourceOccurrence
+        val selection = sourceOccurrence.selection
+        val constructionDemand = sourceOccurrence.publicationConstructionDemand
+        val invocationDemand: SelectionForest =
+            when (sourceOccurrence) {
+                is PassiveValueOccurrence -> sourceOccurrence.invocationDemand
+                else -> constructionDemand.successorDemand(publication.operation.world)
             }
 
-            fieldValue =
-                fieldValue.withAuthoritativeNodeId(
-                    identity = authoritativeNodeIdentity,
-                    demand = invocationDemand,
-                )
+        val activated = activatePublication()
+        if (!activated) return
 
-            val passiveValue: EngineResult? =
-                fieldValue.resolvePassiveValues(
-                    root = publication.oerOccurrence.root,
-                    expectedType = sourceOccurrence.publicationExpectedType,
-                    path = sourceOccurrence.publicationPath,
-                    invocationDemand = invocationDemand,
+        var fieldValue: ResolverOutputData? =
+            when (sourceOccurrence) {
+                is FieldResolverOccurrence ->
+                    runFieldResolver(
+                        fieldResolverOccurrence = sourceOccurrence,
+                        selection = selection,
+                        invocationDemand = invocationDemand,
+                        queryProducer = requireNotNull(queryProducer),
+                    )
+                is RootFieldReferenceOccurrence -> sourceOccurrence.reference
+                is PassiveValueOccurrence -> sourceOccurrence.value
+            }
+
+        var authoritativeNodeIdentity: NodeReferenceIdentity? = null
+        while (fieldValue is RootFieldReferenceData) {
+            val reference = fieldValue
+            authoritativeNodeIdentity =
+                authoritativeNodeIdentity ?: reference.nodeReferenceIdentityOrNull()
+            require(
+                reference.conformsToResolverOutputSchemaType(
+                    sourceOccurrence.publicationExpectedType,
+                ),
+            ) {
+                "Root-field-reference target ${reference.type.name} does not conform to " +
+                    "the consumer publication type"
+            }
+            val invocation =
+                createRootFieldResolverOccurrence(
+                    reference = reference,
                     constructionDemand = constructionDemand,
-                    parent = publication.oerOccurrence,
                 )
-
-            publication.publicationCell.getValue().complete(passiveValue)
+            fieldValue =
+                invokeRootFieldResolver(
+                    fieldResolverOccurrence = invocation,
+                    arguments = reference.arguments,
+                    invocationDemand = invocationDemand,
+                )
+            publication.operation.resolverObserver.onRootFieldReferenceInvocation(
+                RootFieldReferenceInvocationObservation(
+                    publicationRoot = publication.oerOccurrence.root,
+                    publicationPath = sourceOccurrence.publicationPath,
+                    reference = reference,
+                    invocationRoot = invocation.invocationRoot,
+                    invocationPath = invocation.invocationPath,
+                    invocationKey = invocation.selection.key,
+                    suppliedDemand = invocationDemand,
+                ),
+            )
         }
+
+        fieldValue =
+            fieldValue.withAuthoritativeNodeId(
+                identity = authoritativeNodeIdentity,
+                demand = invocationDemand,
+            )
+
+        val passiveValue: EngineResult? =
+            fieldValue.resolvePassiveValues(
+                operation = publication.operation,
+                root = publication.oerOccurrence.root,
+                expectedType = sourceOccurrence.publicationExpectedType,
+                path = sourceOccurrence.publicationPath,
+                invocationDemand = invocationDemand,
+                constructionDemand = constructionDemand,
+                parent = publication.oerOccurrence,
+            )
+
+        publication.publicationCell.getValue().complete(passiveValue)
     }
 
     private suspend fun activatePublication(): Boolean {
@@ -212,9 +211,7 @@ internal class FieldResolutionLogic(
                     !publication.operation.variableBindings.isBound(variableId)
                 ) {
                     val groundedArguments =
-                        context(publication.operation) {
-                            sourceOccurrence.selection.key.fetchGroundedArguments()
-                    }
+                        sourceOccurrence.selection.key.fetchGroundedArguments(publication.operation)
                     completeFromArgumentBindings(fieldResolverOccurrence, groundedArguments)
                 }
                 when (
@@ -241,9 +238,7 @@ internal class FieldResolutionLogic(
     ): ResolverOutputData? {
         val publication = fieldResolverTask.publication
         val groundedArguments =
-            context(publication.operation) {
-                selection.key.fetchGroundedArguments()
-            }
+            selection.key.fetchGroundedArguments(publication.operation)
         completeFromArgumentBindings(fieldResolverOccurrence, groundedArguments)
         if (groundedArguments.argumentsContainErrorValue()) {
             completeVariablesProviderBindingsWithError(fieldResolverOccurrence)

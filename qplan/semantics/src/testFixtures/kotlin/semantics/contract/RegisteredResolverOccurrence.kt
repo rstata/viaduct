@@ -28,13 +28,14 @@ data class RegisteredResolverOccurrence(
         get() = applicationKey.field
 }
 
-context(operation: SharedOperationContext<*>)
 fun EngineResult?.registeredResolverOccurrences(
+    operation: SharedOperationContext<*>,
     registry: ResolverRegistry,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
 ): List<RegisteredResolverOccurrence> {
     val occurrences = mutableListOf<RegisteredResolverOccurrence>()
     visitRegisteredResolverOccurrences(
+        operation = operation,
         registry = registry,
         bounds = bounds,
         canonicalOrder = true,
@@ -43,13 +44,14 @@ fun EngineResult?.registeredResolverOccurrences(
     return occurrences
 }
 
-context(operation: SharedOperationContext<*>)
 fun EngineResult?.forEachRegisteredResolverOccurrence(
+    operation: SharedOperationContext<*>,
     registry: ResolverRegistry,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
     visitOccurrence: (RegisteredResolverOccurrence) -> Unit,
 ) {
     visitRegisteredResolverOccurrences(
+        operation,
         registry,
         bounds,
         canonicalOrder = false,
@@ -58,14 +60,15 @@ fun EngineResult?.forEachRegisteredResolverOccurrence(
     )
 }
 
-context(operation: SharedOperationContext<*>)
 internal fun EngineResult?.forEachRegisteredResolverOccurrenceAt(
+    operation: SharedOperationContext<*>,
     registry: ResolverRegistry,
     initialPath: List<PathComponent>,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
     visitOccurrence: (RegisteredResolverOccurrence) -> Unit,
 ) {
     visitRegisteredResolverOccurrences(
+        operation,
         registry,
         bounds,
         canonicalOrder = false,
@@ -74,8 +77,8 @@ internal fun EngineResult?.forEachRegisteredResolverOccurrenceAt(
     )
 }
 
-context(operation: SharedOperationContext<*>)
 private fun EngineResult?.visitRegisteredResolverOccurrences(
+    operation: SharedOperationContext<*>,
     registry: ResolverRegistry,
     bounds: ResolutionWitnessBounds,
     canonicalOrder: Boolean,
@@ -106,10 +109,10 @@ private fun EngineResult?.visitRegisteredResolverOccurrences(
                     val cell = value.getCell(key)
                     if (!runBlocking { cell.fetchActivated() }) return@forEach
                     val fieldPath = path + key
-                    require(key.isContextuallyGrounded()) {
+                    require(key.isContextuallyGrounded(operation)) {
                         "Resolver occurrence key is not contextually grounded: $key"
                     }
-                    val arguments = key.groundedArguments() as? Arguments.Resolved
+                    val arguments = key.groundedArguments(operation) as? Arguments.Resolved
                     if (key.field in registry && arguments != null) {
                         visitOccurrence(
                             RegisteredResolverOccurrence(
@@ -148,13 +151,13 @@ private fun EngineResult?.visitRegisteredResolverOccurrences(
     visit(this, initialPath)
 }
 
-context(operation: SharedOperationContext<*>)
 fun EngineResult?.registeredResolverOccurrenceCounts(
+    operation: SharedOperationContext<*>,
     registry: ResolverRegistry,
     bounds: ResolutionWitnessBounds = ResolutionWitnessBounds(),
 ): Map<ResolverApplicationKey, Int> {
     val counts = linkedMapOf<ResolverApplicationKey, Int>()
-    forEachRegisteredResolverOccurrence(registry, bounds) { occurrence ->
+    forEachRegisteredResolverOccurrence(operation, registry, bounds) { occurrence ->
         counts[occurrence.applicationKey] =
             counts.getOrDefault(occurrence.applicationKey, 0) + 1
     }

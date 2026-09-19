@@ -16,8 +16,8 @@ import semantics.shared.SharedPassiveValueResolutionLogic
 import viaduct.engine.api.EngineObjectData
 import viaduct.graphql.schema.ViaductSchema
 
-context(operation: OperationContext)
 internal fun ResolverOutputData?.resolvePassiveValues(
+    operation: OperationContext,
     root: ObjectEngineResult,
     expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
     path: List<PathComponent>,

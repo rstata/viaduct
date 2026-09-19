@@ -56,7 +56,7 @@ object GeneratedCaseAssertions {
         GeneratedCaseAssertion { observation ->
             observation.executions.forEach { execution ->
                 context(execution.operation) {
-                    val correct = execution.result.correctResolution(execution.fragment)
+                    val correct = execution.result.correctResolution(execution.operation, execution.fragment)
                     if (!correct) {
                         fun diagnostic(
                             name: String,
@@ -85,7 +85,7 @@ object GeneratedCaseAssertions {
                                 execution.result.isClosedUnderResolverDemand()
                             },
                             diagnostic("unclosedResolverOccurrences") {
-                                execution.result.unclosedRegisteredResolverOccurrences()
+                                execution.result.unclosedRegisteredResolverOccurrences(execution.operation)
                             },
                             diagnostic("conformsToResolvers") {
                                 execution.result.conformsToResolvers()
@@ -111,9 +111,7 @@ object GeneratedCaseAssertions {
     val exactOrdinaryApplicationCounts =
         GeneratedCaseAssertion { observation ->
             val expected =
-                context(observation.ordinary.operation) {
-                    observation.ordinary.result.registeredResolverApplicationIdentityCounts()
-                }
+                observation.ordinary.result.registeredResolverApplicationIdentityCounts(observation.ordinary.operation)
             assertEquals(
                 expected,
                 observation.ordinaryApplications
@@ -125,14 +123,13 @@ object GeneratedCaseAssertions {
     val fromFieldBindings =
         GeneratedCaseAssertion { observation ->
             observation.executions.forEach { execution ->
-                context(execution.operation) {
-                    execution.result.validateFromFieldBindings(
-                        requireNotNull(execution.subject.appliedResolverOccurrences) {
-                            "From-field binding validation requires exact application " +
-                                "occurrences"
-                        },
-                    )
-                }
+                execution.result.validateFromFieldBindings(
+                    execution.operation,
+                    requireNotNull(execution.subject.appliedResolverOccurrences) {
+                        "From-field binding validation requires exact application " +
+                            "occurrences"
+                    },
+                )
             }
         }
 

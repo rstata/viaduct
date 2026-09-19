@@ -55,9 +55,7 @@ class QueryFragmentBindingTerminationTest {
         val requestJob = Job()
         val fixture = Fixture(exit, reference)
         try {
-            val root = context(fixture.operation) {
-                startResolve(fixture.selections, CoroutineScope(dispatcher + requestJob))
-            }
+            val root = fixture.operation.startResolve(fixture.selections, CoroutineScope(dispatcher + requestJob))
             dispatcher.runUntilIdle()
 
             val query = requireNotNull(fixture.queryResult)

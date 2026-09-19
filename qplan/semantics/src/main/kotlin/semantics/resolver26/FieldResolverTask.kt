@@ -218,7 +218,7 @@ internal class FieldResolverTask private constructor(
         selections: MaterializeSelectionForest,
     ): EngineObjectData.Sync {
         val childOperation = publication.operation.forChildScope(fieldTaskScope)
-        val result = startResolve(selections.constructionSelections(), childOperation)
+        val result = childOperation.startResolve(selections.constructionSelections())
         return context(childOperation, childOperation.cycleChecker) {
             result.materialize(
                 selections = selections,
@@ -233,12 +233,11 @@ internal class FieldResolverTask private constructor(
             publication.sourceOccurrence as? FieldResolverOccurrence
                 ?: return null
         if (publication.variableProviderReads.isNotEmpty()) {
-            context(publication.operation) {
-                fieldTaskScope.launch {
-                    publication.oerOccurrence.target.completeProviderBindings(
-                        publication.variableProviderReads,
-                    )
-                }
+            fieldTaskScope.launch {
+                publication.oerOccurrence.target.completeProviderBindings(
+                    publication.operation,
+                    publication.variableProviderReads,
+                )
             }
         }
         return launchQueryFragmentProducer(fieldResolverOccurrence)
@@ -329,18 +328,17 @@ private suspend fun ResolverFragment.resolveQueryFragment(
         )
     operation.resolverObserver.onQueryFragmentResult(resolverOccurrenceId, queryResult)
     operation.dispatcher.dispatchOrchestrator(orchestration)
-    context(operation) {
-        queryResult.completeProviderBindings(
-            providerReads =
-                pathVariableDefinitions.map { definition ->
-                    VariableProviderReadOccurrence(
-                        definition = definition,
-                        readerPath = coordinate,
-                        inclusionCondition = inclusionCondition,
-                    )
-                },
-        )
-    }
+    queryResult.completeProviderBindings(
+        operation = operation,
+        providerReads =
+            pathVariableDefinitions.map { definition ->
+                VariableProviderReadOccurrence(
+                    definition = definition,
+                    readerPath = coordinate,
+                    inclusionCondition = inclusionCondition,
+                )
+            },
+    )
     return context(operation, operation.cycleChecker) {
         queryResult.materializeResolverInput(
             selections = symbolicSelections,

@@ -181,7 +181,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                 resolved.correctResolution(
                     selections
                         .merge(world.schema.requireQueryTypeDef())
-                        .instantiateBindings(),
+                        .instantiateBindings(resolution.operation),
                 )
             },
         )

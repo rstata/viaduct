@@ -100,34 +100,32 @@ internal class FieldResolutionLogic(
         invocationDemand: SelectionForest,
     ): ResolverOutputData? {
         val publication = fieldResolverTask.publication
-        return context(publication.operation) {
-            val invocation = reference.prepareInvocation()
-            val queryProducer = fieldResolverTask.launchQueryFragmentProducer(invocation.fragments.queryFragment, invocation.path)
-            val queryValue = when (val value = queryProducer.await()) {
-                is EngineObjectOrErrorData.Success -> value.value
-                is EngineObjectOrErrorData.Error -> return@context value.error
-            }
-            val output = context(publication.operation.world) {
-                invocation.resolver(
-                    input = invocation.emptyObjectInput(),
-                    queryValue = queryValue,
-                    arguments = reference.arguments,
-                    selections = invocationDemand,
-                    executionContext = ResolutionExecutionContext.Unsupported,
-                )
-            }
-            publication.operation.resolverObserver.onRootFieldReferenceInvocation(
-                RootFieldReferenceInvocationObservation(
-                    publicationRoot = publication.oerOccurrence.root,
-                    publicationPath = publication.publicationPath,
-                    reference = reference,
-                    invocationRoot = invocation.root,
-                    invocationPath = invocation.path,
-                    invocationKey = invocation.key,
-                    suppliedDemand = invocationDemand,
-                ),
-            )
-            output
+        val invocation = reference.prepareInvocation(publication.operation)
+        val queryProducer = fieldResolverTask.launchQueryFragmentProducer(invocation.fragments.queryFragment, invocation.path)
+        val queryValue = when (val value = queryProducer.await()) {
+            is EngineObjectOrErrorData.Success -> value.value
+            is EngineObjectOrErrorData.Error -> return value.error
         }
+        val output = context(publication.operation.world) {
+            invocation.resolver(
+                input = invocation.emptyObjectInput(),
+                queryValue = queryValue,
+                arguments = reference.arguments,
+                selections = invocationDemand,
+                executionContext = ResolutionExecutionContext.Unsupported,
+            )
+        }
+        publication.operation.resolverObserver.onRootFieldReferenceInvocation(
+            RootFieldReferenceInvocationObservation(
+                publicationRoot = publication.oerOccurrence.root,
+                publicationPath = publication.publicationPath,
+                reference = reference,
+                invocationRoot = invocation.root,
+                invocationPath = invocation.path,
+                invocationKey = invocation.key,
+                suppliedDemand = invocationDemand,
+            ),
+        )
+        return output
     }
 }

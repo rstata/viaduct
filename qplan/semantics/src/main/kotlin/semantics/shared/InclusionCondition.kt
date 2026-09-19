@@ -4,8 +4,7 @@ import model.InclusionCondition
 import model.VariableBinding
 
 /** Awaits the operation-local variable bindings needed to decide this condition. */
-context(operation: SharedOperationContext<*>)
-internal suspend fun InclusionCondition.fetchIncluded(): Boolean =
+internal suspend fun InclusionCondition.fetchIncluded(operation: SharedOperationContext<*>): Boolean =
     include { variable ->
         when (
             val binding =
@@ -21,8 +20,7 @@ internal suspend fun InclusionCondition.fetchIncluded(): Boolean =
     }
 
 /** Evaluates this condition from bindings that must already be complete. */
-context(operation: SharedOperationContext<*>)
-internal fun InclusionCondition.isIncluded(): Boolean =
+internal fun InclusionCondition.isIncluded(operation: SharedOperationContext<*>): Boolean =
     includeWith { variable ->
         when (
             val binding =

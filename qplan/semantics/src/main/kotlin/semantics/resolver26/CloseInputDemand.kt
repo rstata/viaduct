@@ -29,13 +29,13 @@ import semantics.shared.OEROccurrence
 // the object's demand. A previously expanded key can gain a late disjunct through another resolver,
 // so each new satisfiable alternative must propagate independently into that key's prerequisites.
 // Returns the merged demand together with the resolver and binding metadata used by later phases.
-context(world: Assumptions)
 internal fun EngineObjectData.Sync.closeInputDemand(
+    world: Assumptions,
     occurrence: OEROccurrence,
     initialDemand: SelectionForest,
 ): ClosedInputDemandContext {
     var accumulatedDemand: SelectionForest =
-        initialDemand + initialDemand.inputParentDemand()
+        initialDemand + initialDemand.inputParentDemand(world)
     val expansionAccumulators:
         MutableMap<ObjectEngineResult.ObjectKey, ResolverExpansionAccumulator> =
         linkedMapOf()
@@ -47,7 +47,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
             mergedDemand
                 .byKey()
                 .filter { (objectKey, _) ->
-                    requiresStandardResolution(objectKey)
+                    requiresStandardResolution(world, objectKey)
                 }
         var propagatedNewAlternative = false
 
@@ -55,6 +55,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
             val expansion =
                 expansionAccumulators[objectKey]
                     ?: createResolverExpansion(
+                        world = world,
                         occurrence = occurrence,
                         objectKey = objectKey,
                     ).also { created ->
@@ -81,7 +82,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                     objectFragment.constructionSelections.guardedBy(alternative)
                 accumulatedDemand +=
                     guardedObjectFragment +
-                        guardedObjectFragment.inputParentDemand() +
+                        guardedObjectFragment.inputParentDemand(world) +
                         objectFragment.constructionSelections.providerDemand(
                             definitions = objectFragment.pathVariableDefinitions,
                             inclusionCondition = alternative,
@@ -101,7 +102,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                         selection = mergedDemand.byKey().getValue(objectKey),
                     )
                 }
-            val referenceOccurrences = discoverRootFieldReferences(occurrence, mergedDemand)
+            val referenceOccurrences = discoverRootFieldReferences(world, occurrence, mergedDemand)
             check(fieldResolverOccurrences.keys.intersect(referenceOccurrences.keys).isEmpty()) {
                 "Resolver26 classified one field as both an ordinary resolver and a root reference"
             }
@@ -141,8 +142,8 @@ internal fun EngineObjectData.Sync.closeInputDemand(
     error("Resolver26 demand closure terminated unexpectedly")
 }
 
-context(world: Assumptions)
 private fun EngineObjectData.Sync.discoverRootFieldReferences(
+    world: Assumptions,
     occurrence: OEROccurrence,
     demand: ObjectSelectionForest,
 ): Map<ObjectEngineResult.ObjectKey, RootFieldReferenceOccurrence> =
@@ -178,8 +179,8 @@ private fun EngineObjectData.Sync.discoverRootFieldReferences(
         }
     }
 
-context(world: Assumptions)
 private fun createResolverExpansion(
+    world: Assumptions,
     occurrence: OEROccurrence,
     objectKey: ObjectEngineResult.ObjectKey,
 ): ResolverExpansionAccumulator {
@@ -215,9 +216,9 @@ private fun createResolverExpansion(
     )
 }
 
-context(world: Assumptions)
 // Returns true if the field is not present yet has a standard resolver, which means it needs standard resolution
 private fun EngineObjectData.Sync.requiresStandardResolution(
+    world: Assumptions,
     objectKey: ObjectEngineResult.ObjectKey,
 ): Boolean {
     if (objectKey.field !in world.resolverRegistry) return false

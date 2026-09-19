@@ -49,11 +49,9 @@ internal class OrchestrationTask private constructor(
             initialDemand: SelectionForest,
         ): OrchestrationTask =
             OrchestrationTask(operation, occurrence, source).apply {
-                closed = context(operation.world) { source.closeInputDemand(occurrence, initialDemand) }
-                context(operation) {
-                    declareBindings()
-                    occurrence.installParentBackedgeFields(closed.demand.byKey().keys.filterIsInstance<ObjectEngineResult.ParentKey>())
-                }
+                closed = source.closeInputDemand(operation.world, occurrence, initialDemand)
+                declareBindings()
+                occurrence.installParentBackedgeFields(operation, closed.demand.byKey().keys.filterIsInstance<ObjectEngineResult.ParentKey>())
                 operation.bindingsState.markBindingsDeclared(occurrence.target)
             }
     }

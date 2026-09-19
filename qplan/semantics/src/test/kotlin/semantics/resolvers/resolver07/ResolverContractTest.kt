@@ -54,9 +54,7 @@ class ResolverContractTest :
         root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult =
-        context(operation) {
-            resolve(selections)
-        }
+        operation.resolve(selections)
 
     override fun resolveAndObserveTasks(
         operation: SharedOperationContext<*>,
@@ -64,12 +62,10 @@ class ResolverContractTest :
         selections: SelectionForest,
         taskObserver: (ResolverTaskObservation) -> Unit,
     ): ObjectEngineResult =
-        context(operation) {
-            resolve(
-                selections = selections,
-                onTaskStarted = { task ->
-                    taskObserver(task.toContractObservation())
-                },
-            )
-        }
+        operation.resolve(
+            selections = selections,
+            onTaskStarted = { task ->
+                taskObserver(task.toContractObservation())
+            },
+        )
 }

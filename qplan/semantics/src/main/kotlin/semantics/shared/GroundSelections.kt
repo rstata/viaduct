@@ -12,24 +12,22 @@ import model.merge
 import viaduct.graphql.schema.ViaductSchema
 
 /** Grounds top-level keys and coalesces selections whose keys become equal. */
-context(operation: SharedOperationContext<*>)
-fun ObjectSelectionForest.instantiateBindings(): ObjectSelectionForest =
+fun ObjectSelectionForest.instantiateBindings(operation: SharedOperationContext<*>): ObjectSelectionForest =
     groundSelections { selection ->
-        selection.key.arguments.instantiateBindings(selection.key.field)
+        selection.key.arguments.instantiateBindings(operation, selection.key.field)
     }
 
 /** Awaits top-level key bindings and coalesces selections whose keys become equal. */
-context(operation: SharedOperationContext<*>)
-suspend fun ObjectSelectionForest.fetchBindings(): ObjectSelectionForest =
+suspend fun ObjectSelectionForest.fetchBindings(operation: SharedOperationContext<*>): ObjectSelectionForest =
     groundSelections { selection ->
-        selection.key.arguments.fetchBindings(selection.key.field)
+        selection.key.arguments.fetchBindings(operation, selection.key.field)
     }
 
 /** Specializes this demand to [type] and grounds its top-level keys. */
-context(operation: SharedOperationContext<*>)
 fun SelectionForest.applicableGroundSelections(
+    operation: SharedOperationContext<*>,
     type: ViaductSchema.Object,
-): ObjectSelectionForest = merge(type).instantiateBindings()
+): ObjectSelectionForest = merge(type).instantiateBindings(operation)
 
 private inline fun ObjectSelectionForest.groundSelections(
     groundArguments: (ObjectSelection) -> Arguments.Ground,

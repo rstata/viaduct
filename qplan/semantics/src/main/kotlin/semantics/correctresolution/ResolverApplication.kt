@@ -218,7 +218,7 @@ internal fun ObjectEngineResult.reapplyResolver(
     path: List<PathComponent>,
 ): ReappliedResolver? =
     resolverApplicationCache.getOrPut(this, key) {
-        val arguments = key.groundedArguments() as? Arguments.Resolved ?: return@getOrPut null
+        val arguments = key.groundedArguments(operation) as? Arguments.Resolved ?: return@getOrPut null
         val resolver = operation.world.resolverRegistry.resolver(key.field)
         val coordinate = path + key
         val fragments =
@@ -372,8 +372,8 @@ context(
 private fun RootFieldReferenceInvocationObservation.reapplyReferencedResolver(
     validationDemand: SelectionForest,
 ): ReappliedResolver? {
-    if (!invocationKey.isContextuallyGrounded()) return null
-    val arguments = invocationKey.groundedArguments() as? Arguments.Resolved ?: return null
+    if (!invocationKey.isContextuallyGrounded(operation)) return null
+    val arguments = invocationKey.groundedArguments(operation) as? Arguments.Resolved ?: return null
     val resolver = operation.world.resolverRegistry.resolver(invocationKey.field)
     val fragments = resolver.instantiateFragmentsAt(invocationRoot, invocationPath)
     if (!fragments.objectFragment.materializeSelections.isEmpty()) return null

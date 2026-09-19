@@ -18,19 +18,22 @@ internal class CoroutineResolve(
 ) {
     suspend fun resolve(source: EngineObjectData.Sync, selections: SelectionForest): ObjectEngineResult =
         coroutineScope {
-            context(CoroutineOperationContext(operation, this, complete, supportsParentFields, cycleChecker)) {
-                startResolve(source, selections)
-            }
+            CoroutineOperationContext(operation, this, complete, supportsParentFields, cycleChecker).startResolve(
+                source = source,
+                selections = selections,
+            )
         }
 }
 
 /** Prepares and dispatches a fresh Query root; its fields remain owned by the request scope. */
-context(operation: CoroutineOperationContext)
-internal fun startResolve(source: EngineObjectData.Sync, selections: SelectionForest): ObjectEngineResult {
+internal fun CoroutineOperationContext.startResolve(
+    source: EngineObjectData.Sync,
+    selections: SelectionForest,
+): ObjectEngineResult {
     val result = ObjectEngineResult.of(source.schemaType, mutable = true)
-    operation.dispatcher.dispatchOrchestrator(
+    dispatcher.dispatchOrchestrator(
         CoroutineOrchestrationTask.create(
-            operation, OEROccurrence(result, emptyList(), result), source, selections,
+            this@startResolve, OEROccurrence(result, emptyList(), result), source, selections,
         ),
     )
     return result

@@ -7,20 +7,21 @@ import model.Fragment
 import model.merge
 import semantics.shared.SharedOperationContext
 
-context(operation: SharedOperationContext<*>)
 internal fun ObjectEngineResult.correctResolution(
+    operation: SharedOperationContext<*>,
     fragment: Fragment,
 ): Boolean =
     fragment.nominalType == operation.world.schema.requireQueryTypeDef() &&
-        correctResolution(
-            fragment.subselections
-                .merge(operation.world.schema.requireQueryTypeDef()),
-        )
+        context(operation) {
+            correctResolution(
+                fragment.subselections
+                    .merge(operation.world.schema.requireQueryTypeDef()),
+            )
+        }
 
-context(world: Assumptions)
-internal fun ObjectEngineResult.rootedAndWellTyped(fragment: Fragment): Boolean =
-    fragment.nominalType == world.schema.requireQueryTypeDef() && this.rootedAndWellTyped()
+internal fun ObjectEngineResult.rootedAndWellTyped(world: Assumptions, fragment: Fragment): Boolean =
+    fragment.nominalType == world.schema.requireQueryTypeDef() &&
+        context(world) { this.rootedAndWellTyped() }
 
-context(operation: SharedOperationContext<*>)
-internal fun ObjectEngineResult.conformsToFragment(fragment: Fragment): Boolean =
-    conformsToSelections(fragment.subselections)
+internal fun ObjectEngineResult.conformsToFragment(operation: SharedOperationContext<*>, fragment: Fragment): Boolean =
+    context(operation) { conformsToSelections(fragment.subselections) }

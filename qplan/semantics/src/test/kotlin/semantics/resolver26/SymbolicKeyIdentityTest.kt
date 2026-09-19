@@ -112,9 +112,7 @@ class SymbolicKeyIdentityTest {
             )
 
         val resolved =
-            context(operation) {
-                resolve(fragment.subselections)
-            }
+            operation.resolve(fragment.subselections)
         val items = assertIs<ListEngineResult>(resolved.getCell(itemsKey).getValue().get())
         val childKeys =
             items.indices.map { index ->
@@ -138,9 +136,7 @@ class SymbolicKeyIdentityTest {
                 },
         )
         assertTrue(
-            context(operation) {
-                resolved.correctResolution(fragment)
-            },
+            resolved.correctResolution(operation, fragment),
         )
     }
 
@@ -243,9 +239,7 @@ class SymbolicKeyIdentityTest {
             )
 
         val resolved =
-            context(operation) {
-                resolve(fragment.subselections)
-            }
+            operation.resolve(fragment.subselections)
         val frankKeys =
             resolved.keys.filter { objectKey -> objectKey.field.name == "frank" }
         val literalKeys =
@@ -259,13 +253,13 @@ class SymbolicKeyIdentityTest {
         assertEquals(1, literalKeys.size)
         assertEquals(2, symbolicKeys.size)
         symbolicKeys.forEach { objectKey ->
-            assertTrue(context(operation) { objectKey.isContextuallyGrounded() })
+            assertTrue(objectKey.isContextuallyGrounded(operation))
             assertEquals(
                 Arguments.Resolved.of(
                     world.schema.requireObjectField("Query", "frank"),
                     mapOf("arg" to "hi"),
                 ),
-                context(operation) { objectKey.groundedArguments() },
+                objectKey.groundedArguments(operation),
             )
         }
         assertEquals(
@@ -282,9 +276,7 @@ class SymbolicKeyIdentityTest {
             frankDemandFields.groupingBy { fields -> fields }.eachCount(),
         )
         assertTrue(
-            context(operation) {
-                resolved.correctResolution(fragment)
-            },
+            resolved.correctResolution(operation, fragment),
         )
     }
 
@@ -392,9 +384,7 @@ class SymbolicKeyIdentityTest {
             )
 
         val resolved =
-            context(operation) {
-                resolve(fragment.subselections)
-            }
+            operation.resolve(fragment.subselections)
         val frankKeys =
             resolved.keys.filter { objectKey -> objectKey.field.name == "frank" }
 
@@ -403,13 +393,13 @@ class SymbolicKeyIdentityTest {
         assertEquals(2, frankKeys.size)
         frankKeys.forEach { objectKey ->
             assertFalse(objectKey is ObjectEngineResult.GroundKey)
-            assertTrue(context(operation) { objectKey.isContextuallyGrounded() })
+            assertTrue(objectKey.isContextuallyGrounded(operation))
             assertEquals(
                 Arguments.Resolved.of(
                     world.schema.requireObjectField("Query", "frank"),
                     mapOf("arg" to "hi"),
                 ),
-                context(operation) { objectKey.groundedArguments() },
+                objectKey.groundedArguments(operation),
             )
         }
         assertEquals(
@@ -441,9 +431,7 @@ class SymbolicKeyIdentityTest {
             frankDemandFields.toSet(),
         )
         assertTrue(
-            context(operation) {
-                resolved.correctResolution(fragment)
-            },
+            resolved.correctResolution(operation, fragment),
         )
     }
 }

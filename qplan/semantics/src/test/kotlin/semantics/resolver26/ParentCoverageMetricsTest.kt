@@ -61,14 +61,12 @@ class ParentCoverageMetricsTest {
             )
         val coverage = mutableListOf<ParentSelectionSetCoverage>()
 
-        context(operation) {
-            resolveObserved(
-                world.operationSelectionsFrom(
-                    "query { grand { parentNode { child { result } } } }",
-                ),
-            ) { application ->
-                coverage += ParentCoverageAnalyzer(world).analyze(application)
-            }
+        operation.resolveObserved(
+            world.operationSelectionsFrom(
+                "query { grand { parentNode { child { result } } } }",
+            ),
+        ) { application ->
+            coverage += ParentCoverageAnalyzer(world).analyze(application)
         }
 
         val childParent =

@@ -54,10 +54,8 @@ open class CorrectResolutionBenchmark {
 
     private val support =
         CorrectResolutionBenchmarkSupport(
-            subject = ResolverBenchmarkSubject { world, _, selections ->
-                context(world) {
-                    resolve(selections)
-                }
+            subject = ResolverBenchmarkSubject { operation, _, selections ->
+                operation.resolve(selections)
             },
         )
 

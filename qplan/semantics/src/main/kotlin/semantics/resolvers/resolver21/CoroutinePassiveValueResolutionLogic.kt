@@ -24,7 +24,7 @@ internal class CoroutinePassiveValueResolutionLogic(operation: CoroutineOperatio
         CoroutineOrchestrationTask.create(operation, occurrence, source, constructionDemand)
 
     override fun collect(selections: SelectionForest, type: ViaductSchema.Object): ObjectSelectionForest =
-        context(operation) { selections.applicableGroundSelections(type) }
+        selections.applicableGroundSelections(operation, type)
 
     override fun resolveListReference(
         reference: RootFieldReferenceData,

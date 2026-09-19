@@ -12,18 +12,17 @@ import semantics.shared.SharedOperationContext
  * Resolves [selections] through structured coroutines with non-selective resolver applications.
  * Results may contain more OER nodes than are strictly necessary to resolve the query.
  */
-context(operation: SharedOperationContext<*>)
-fun resolve(selections: SelectionForest): ObjectEngineResult {
-    require(!operation.world.selectiveResolvers) {
+fun SharedOperationContext<*>.resolve(selections: SelectionForest): ObjectEngineResult {
+    require(!world.selectiveResolvers) {
         "Resolver22 requires non-selective resolvers"
     }
-    val source = operation.world.resolverRegistry.createRootQueryInput()
+    val source = world.resolverRegistry.createRootQueryInput()
     val resolver =
         CoroutineResolve(
-            operation = operation,
+            operation = this@resolve,
             supportsParentFields = true,
             complete = { completedSelections ->
-                completedSelections.successorBoundaryDemand()
+                completedSelections.successorBoundaryDemand(this@resolve)
             },
         )
     return runBlocking {

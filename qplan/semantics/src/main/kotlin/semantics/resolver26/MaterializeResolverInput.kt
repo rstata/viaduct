@@ -75,7 +75,7 @@ private suspend fun MaterializeSelectionForest.fetchIncluded(): MaterializeSelec
     val selections = mutableListOf<model.MaterializeSelection>()
     forEach(selections::add)
     for (selection in selections) {
-        if (selection.inclusionCondition.fetchIncluded()) {
+        if (selection.inclusionCondition.fetchIncluded(operation)) {
             included += materializeSelectionForestOf(selection)
         }
     }
@@ -86,7 +86,7 @@ private suspend fun MaterializeSelectionForest.fetchIncluded(): MaterializeSelec
 context(operation: SharedOperationContext<*>)
 private suspend fun ObjectMaterializeSelection.materializedObjectKey(
 ): ObjectEngineResult.ObjectKey {
-    key.fetchGroundedArguments()
+    key.fetchGroundedArguments(operation)
     return key
 }
 

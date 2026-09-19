@@ -30,8 +30,8 @@ import semantics.shared.ResolverObservations
  * An applied occurrence must have exactly all of its declared bindings and a passive occurrence
  * must have none.
  */
-context(operation: SharedOperationContext<*>)
 fun ObjectEngineResult.validateFromFieldBindings(
+    operation: SharedOperationContext<*>,
     appliedResolverOccurrences: Set<ResolverOccurrenceId>,
 ) {
     fun validateOccurrence(
@@ -81,7 +81,7 @@ fun ObjectEngineResult.validateFromFieldBindings(
                             .queryFragmentResults(occurrenceId)
                             .single()
                 }
-            val expected = providerRoot.readCompletedProvider(path = definition.path)
+            val expected = providerRoot.readCompletedProvider(operation = operation, path = definition.path)
             assertEquals(
                 expected,
                 operation.variableBindings.getBinding(
@@ -91,8 +91,8 @@ fun ObjectEngineResult.validateFromFieldBindings(
         }
     }
 
-    requestQueryRoots().forEach { root ->
-        root.forEachRegisteredResolverOccurrence(operation.world.resolverRegistry) { cell ->
+    requestQueryRoots(operation).forEach { root ->
+        root.forEachRegisteredResolverOccurrence(operation, operation.world.resolverRegistry) { cell ->
             validateOccurrence(root, cell.field, cell.occurrencePath, cell.containingObject)
         }
     }
@@ -112,8 +112,7 @@ internal fun FieldResolver.fieldPathDefinitions(
 ): List<InstantiatedFieldPathDefinition> =
     instantiatedFieldPathVariableDefinitions(ResolverOccurrenceId.at(root, path))
 
-context(operation: SharedOperationContext<*>)
-private fun ObjectEngineResult.requestQueryRoots(): List<ObjectEngineResult> =
+private fun ObjectEngineResult.requestQueryRoots(operation: SharedOperationContext<*>): List<ObjectEngineResult> =
     buildList {
         add(this@requestQueryRoots)
         addAll(
@@ -124,8 +123,8 @@ private fun ObjectEngineResult.requestQueryRoots(): List<ObjectEngineResult> =
         )
     }
 
-context(operation: SharedOperationContext<*>)
 private fun ObjectEngineResult.readCompletedProvider(
+    operation: SharedOperationContext<*>,
     path: List<ObjectEngineResult.Key>,
 ): VariableBinding {
     var current = this
@@ -137,7 +136,7 @@ private fun ObjectEngineResult.readCompletedProvider(
                 subselections = selectionForestOf(),
             ).objectKey(current.type)
         val key =
-            current.findStoredKey(specialized)
+            current.findStoredKey(operation, specialized)
                 ?: error("Completed provider key is absent from result: $specialized")
         val value = current.getCell(key).get()
         if (value == null) return VariableBinding.of(null)

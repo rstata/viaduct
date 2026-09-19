@@ -29,7 +29,7 @@ class InclusionCombinationTest {
                     world = world,
                     resolverObserver = RecordingResolverObserver(),
                 )
-            val result = context(operation) { resolve(query.subselections) }
+            val result = operation.resolve(query.subselections)
             val oracle = T3Oracle(vector)
             val message = vector.toString()
 
@@ -75,7 +75,7 @@ class InclusionCombinationTest {
                     world = world,
                     resolverObserver = RecordingResolverObserver(),
                 )
-            val result = context(operation) { resolve(query.subselections) }
+            val result = operation.resolve(query.subselections)
             val oracle = T2Oracle(vector)
             val message = vector.toString()
             repeat(CHAIN_DEPTH) { depth ->
@@ -150,7 +150,7 @@ class InclusionCombinationTest {
                     world = world,
                     resolverObserver = RecordingResolverObserver(),
                 )
-            val result = context(operation) { resolve(query.subselections) }
+            val result = operation.resolve(query.subselections)
             val oracle = T1Oracle(vector)
             val message = vector.toString()
             witnessedDirectOnlyWithExcludedT2T3Aliases =

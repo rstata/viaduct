@@ -274,19 +274,18 @@ class PassiveValueResolutionLogicTest {
                         resolverObserver =
                             baseOperation.resolverObserver.withResolver26Applications {},
                     )
-                context(operation) {
-                    value.resolvePassiveValues(
-                        root =
-                            ObjectEngineResult.of(
-                                world.schema.requireQueryTypeDef(),
-                                values = emptyMap(),
-                            ),
-                        expectedType = expectedType,
-                        path = path,
-                        invocationDemand = invocationDemand,
-                        constructionDemand = constructionDemand,
-                    )
-                }
+                value.resolvePassiveValues(
+                    operation = operation,
+                    root =
+                        ObjectEngineResult.of(
+                            world.schema.requireQueryTypeDef(),
+                            values = emptyMap(),
+                        ),
+                    expectedType = expectedType,
+                    path = path,
+                    invocationDemand = invocationDemand,
+                    constructionDemand = constructionDemand,
+                )
             }
         }
 }

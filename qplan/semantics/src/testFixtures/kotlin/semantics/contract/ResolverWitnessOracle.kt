@@ -33,8 +33,7 @@ import semantics.shared.RootFieldReferenceInvocationObservation
  * occurrences necessarily use invocation observations for their fresh roots and paths, but only
  * after source-ownership replay justifies each observed hop from the completed results under test.
  */
-context(operation: SharedOperationContext<*>)
-fun EngineResult?.registeredResolverApplicationIdentityCounts():
+fun EngineResult?.registeredResolverApplicationIdentityCounts(operation: SharedOperationContext<*>):
     Map<ResolverApplicationIdentity, Int> {
     val counts = linkedMapOf<ResolverApplicationIdentity, Int>()
     context(operation, CycleCheckState.createNOP()) {
@@ -45,6 +44,7 @@ fun EngineResult?.registeredResolverApplicationIdentityCounts():
             val resolver = operation.world.resolverRegistry.resolver(cell.field)
             val fragment =
                 resolver.objectFragmentSatisfiedBy(
+                    operation = operation,
                     root = root,
                     result = cell.containingObject,
                     path = cell.occurrencePath,
@@ -63,13 +63,13 @@ fun EngineResult?.registeredResolverApplicationIdentityCounts():
                 )
             counts.increment(identity)
         }
-        requestQueryRoots().forEach { root ->
-            root.forEachRegisteredResolverOccurrence(operation.world.resolverRegistry) { cell -> record(root, cell) }
+        requestQueryRoots(operation).forEach { root ->
+            root.forEachRegisteredResolverOccurrence(operation, operation.world.resolverRegistry) { cell -> record(root, cell) }
         }
-        rootFieldReferenceOccurrences().forEach { occurrence ->
+        rootFieldReferenceOccurrences(operation).forEach { occurrence ->
             counts.increment(
                 ResolverApplicationIdentity(
-                    key = occurrence.applicationKey(),
+                    key = occurrence.applicationKey(operation),
                     inputFingerprint =
                         engineObjectDataOf(occurrence.invocationKey.field.containingDef)
                             .resolutionFingerprint(),
@@ -81,12 +81,11 @@ fun EngineResult?.registeredResolverApplicationIdentityCounts():
 }
 
 /** Expected deterministic applications qualified by their exact request-local Query root and path. */
-context(operation: SharedOperationContext<*>)
-fun EngineResult?.registeredResolverOccurrenceApplicationIdentityCounts(): Map<
+fun EngineResult?.registeredResolverOccurrenceApplicationIdentityCounts(operation: SharedOperationContext<*>): Map<
     ResolverOccurrenceApplicationIdentity,
     Int,
 > =
-    reconstructResolverOccurrenceApplicationIdentityCounts(null)
+    reconstructResolverOccurrenceApplicationIdentityCounts(operation, null)
 
 /**
  * Expected exact identities for the requested occurrences only.
@@ -94,14 +93,14 @@ fun EngineResult?.registeredResolverOccurrenceApplicationIdentityCounts(): Map<
  * This supports sometimes-passive validation: a skipped standard resolver can retain unbound
  * object-fragment variables, while every actually observed application has complete bindings.
  */
-context(operation: SharedOperationContext<*>)
 fun EngineResult?.registeredResolverOccurrenceApplicationIdentityCountsFor(
+    operation: SharedOperationContext<*>,
     includedOccurrences: Set<ResolverOccurrenceId>,
 ): Map<ResolverOccurrenceApplicationIdentity, Int> =
-    reconstructResolverOccurrenceApplicationIdentityCounts(includedOccurrences)
+    reconstructResolverOccurrenceApplicationIdentityCounts(operation, includedOccurrences)
 
-context(operation: SharedOperationContext<*>)
 private fun EngineResult?.reconstructResolverOccurrenceApplicationIdentityCounts(
+    operation: SharedOperationContext<*>,
     includedOccurrences: Set<ResolverOccurrenceId>?,
 ): Map<ResolverOccurrenceApplicationIdentity, Int> {
     val counts = linkedMapOf<ResolverOccurrenceApplicationIdentity, Int>()
@@ -115,6 +114,7 @@ private fun EngineResult?.reconstructResolverOccurrenceApplicationIdentityCounts
             val resolver = operation.world.resolverRegistry.resolver(cell.field)
             val fragment =
                 resolver.objectFragmentSatisfiedBy(
+                    operation = operation,
                     root = root,
                     result = cell.containingObject,
                     path = cell.occurrencePath,
@@ -137,12 +137,12 @@ private fun EngineResult?.reconstructResolverOccurrenceApplicationIdentityCounts
                 )
             counts.increment(identity)
         }
-        requestQueryRoots().forEach { root ->
-            root.forEachRegisteredResolverOccurrence(operation.world.resolverRegistry) { cell ->
+        requestQueryRoots(operation).forEach { root ->
+            root.forEachRegisteredResolverOccurrence(operation, operation.world.resolverRegistry) { cell ->
                 record(root, cell)
             }
         }
-        rootFieldReferenceOccurrences().forEach { occurrence ->
+        rootFieldReferenceOccurrences(operation).forEach { occurrence ->
             val resolverOccurrenceId =
                 ResolverOccurrenceId.at(occurrence.invocationRoot, occurrence.invocationPath)
             if (includedOccurrences == null || resolverOccurrenceId in includedOccurrences) {
@@ -151,7 +151,7 @@ private fun EngineResult?.reconstructResolverOccurrenceApplicationIdentityCounts
                         resolverOccurrenceId = resolverOccurrenceId,
                         applicationIdentity =
                             ResolverApplicationIdentity(
-                                key = occurrence.applicationKey(),
+                                key = occurrence.applicationKey(operation),
                                 inputFingerprint =
                                     engineObjectDataOf(occurrence.invocationKey.field.containingDef)
                                         .resolutionFingerprint(),
@@ -165,12 +165,11 @@ private fun EngineResult?.reconstructResolverOccurrenceApplicationIdentityCounts
 }
 
 /** Expected registered resolver occurrences without requiring their inputs to be materializable. */
-context(operation: SharedOperationContext<*>)
-fun EngineResult?.registeredResolverOccurrenceApplicationKeyCounts():
+fun EngineResult?.registeredResolverOccurrenceApplicationKeyCounts(operation: SharedOperationContext<*>):
     Map<ResolverOccurrenceApplicationKey, Int> {
     val counts = linkedMapOf<ResolverOccurrenceApplicationKey, Int>()
-    requestQueryRoots().forEach { root ->
-        root.forEachRegisteredResolverOccurrence(operation.world.resolverRegistry) { cell ->
+    requestQueryRoots(operation).forEach { root ->
+        root.forEachRegisteredResolverOccurrence(operation, operation.world.resolverRegistry) { cell ->
             counts.increment(
                 ResolverOccurrenceApplicationKey(
                     resolverOccurrenceId = ResolverOccurrenceId.at(root, cell.occurrencePath),
@@ -179,7 +178,7 @@ fun EngineResult?.registeredResolverOccurrenceApplicationKeyCounts():
             )
         }
     }
-    rootFieldReferenceOccurrences().forEach { occurrence ->
+    rootFieldReferenceOccurrences(operation).forEach { occurrence ->
         counts.increment(
             ResolverOccurrenceApplicationKey(
                 resolverOccurrenceId =
@@ -187,15 +186,14 @@ fun EngineResult?.registeredResolverOccurrenceApplicationKeyCounts():
                         occurrence.invocationRoot,
                         occurrence.invocationPath,
                     ),
-                applicationKey = occurrence.applicationKey(),
+                applicationKey = occurrence.applicationKey(operation),
             ),
         )
     }
     return counts
 }
 
-context(operation: SharedOperationContext<*>)
-private fun EngineResult?.requestQueryRoots(): List<ObjectEngineResult> {
+private fun EngineResult?.requestQueryRoots(operation: SharedOperationContext<*>): List<ObjectEngineResult> {
     val primaryRoot = this as? ObjectEngineResult ?: return emptyList()
     return buildList {
         add(primaryRoot)
@@ -208,25 +206,24 @@ private fun EngineResult?.requestQueryRoots(): List<ObjectEngineResult> {
     }
 }
 
-context(operation: SharedOperationContext<*>)
-private fun EngineResult?.rootFieldReferenceOccurrences(): List<
+private fun EngineResult?.rootFieldReferenceOccurrences(operation: SharedOperationContext<*>): List<
     RootFieldReferenceInvocationObservation,
 > =
-    (this as? ObjectEngineResult)?.ownedRootFieldReferenceInvocations().orEmpty()
+    context(operation) {
+        (this as? ObjectEngineResult)?.ownedRootFieldReferenceInvocations().orEmpty()
+    }
 
-context(operation: SharedOperationContext<*>)
-private fun RootFieldReferenceInvocationObservation.applicationKey(): ResolverApplicationKey =
+private fun RootFieldReferenceInvocationObservation.applicationKey(operation: SharedOperationContext<*>): ResolverApplicationKey =
     ResolverApplicationKey(
         field =
             FieldCoordinate(
                 invocationKey.field.containingDef.name,
                 invocationKey.field.name,
             ),
-        arguments = invocationKey.groundedArguments() as Arguments.Resolved,
+        arguments = invocationKey.groundedArguments(operation) as Arguments.Resolved,
     )
 
-context(operation: SharedOperationContext<*>)
-fun EngineResult?.unclosedRegisteredResolverOccurrences(): List<RegisteredResolverOccurrence> =
+fun EngineResult?.unclosedRegisteredResolverOccurrences(operation: SharedOperationContext<*>): List<RegisteredResolverOccurrence> =
     buildList {
         fun recordIfUnclosed(
             root: ObjectEngineResult,
@@ -235,6 +232,7 @@ fun EngineResult?.unclosedRegisteredResolverOccurrences(): List<RegisteredResolv
             val resolver = operation.world.resolverRegistry.resolver(cell.field)
             if (
                 resolver.objectFragmentSatisfiedBy(
+                    operation = operation,
                     root = root,
                     result = cell.containingObject,
                     path = cell.occurrencePath,
@@ -243,8 +241,8 @@ fun EngineResult?.unclosedRegisteredResolverOccurrences(): List<RegisteredResolv
                 add(cell)
             }
         }
-        requestQueryRoots().forEach { root ->
-            root.forEachRegisteredResolverOccurrence(operation.world.resolverRegistry) { cell ->
+        requestQueryRoots(operation).forEach { root ->
+            root.forEachRegisteredResolverOccurrence(operation, operation.world.resolverRegistry) { cell ->
                 recordIfUnclosed(root, cell)
             }
         }
@@ -255,8 +253,8 @@ private fun <T> MutableMap<T, Int>.increment(key: T) {
     this[key] = getOrDefault(key, 0) + 1
 }
 
-context(operation: SharedOperationContext<*>)
 private fun FieldResolver.objectFragmentSatisfiedBy(
+    operation: SharedOperationContext<*>,
     root: ObjectEngineResult,
     result: ObjectEngineResult,
     path: List<PathComponent>,
@@ -267,10 +265,12 @@ private fun FieldResolver.objectFragmentSatisfiedBy(
         constructionSelections.usedVariables().all { variable ->
             operation.variableBindings.isBound(variable.instanceId!!)
         } &&
-            result.conformsToSelectionsAt(
-                selections = constructionSelections,
-                path = path.dropLast(1),
-            )
+            context(operation) {
+                result.conformsToSelectionsAt(
+                    selections = constructionSelections,
+                    path = path.dropLast(1),
+                )
+            }
     }
 }
 

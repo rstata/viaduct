@@ -58,26 +58,18 @@ object PropertyTestBenchmarkCorpusWriter {
                     val appliedResolverOccurrences =
                         ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
                     val result: ObjectEngineResult =
-                        context(operation) {
-                            resolveObserved(fragment.subselections) { application ->
-                                appliedResolverOccurrences += application.resolverOccurrenceId
-                            }
+                        operation.resolveObserved(fragment.subselections) { application ->
+                            appliedResolverOccurrences += application.resolverOccurrenceId
                         }
                     val witness: ResolutionWitness = testCase.registry.resolutionWitness()
                     check(witness.applications.size == EXPECTED_RESOLVER_APPLICATIONS)
                     check(
-                        context(operation) {
-                            result.registeredResolverApplicationIdentityCounts()
-                        } == witness.applicationIdentityCounts(),
+                        result.registeredResolverApplicationIdentityCounts(operation) == witness.applicationIdentityCounts(),
                     )
                     check(
-                        context(operation) {
-                            result.correctResolution(fragment)
-                        },
+                        result.correctResolution(operation, fragment),
                     )
-                    context(operation) {
-                        result.validateFromFieldBindings(appliedResolverOccurrences)
-                    }
+                    result.validateFromFieldBindings(operation, appliedResolverOccurrences)
 
                     Files.createDirectories(outputDirectory)
                     Files.writeString(

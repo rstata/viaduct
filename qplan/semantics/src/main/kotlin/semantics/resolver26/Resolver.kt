@@ -18,16 +18,14 @@ import semantics.shared.SharedOperationContext
  * expressions identify their owning resolver occurrences, so equal uses of one variable instance
  * coalesce while variables owned by different resolver occurrences remain distinct.
  */
-context(operation: SharedOperationContext<*>)
-fun resolve(selections: SelectionForest): ObjectEngineResult =
+fun SharedOperationContext<*>.resolve(selections: SelectionForest): ObjectEngineResult =
     resolve(
         selections = selections,
         coroutineContext = resolver26CoroutineContext(),
     )
 
 /** Includes validation instrumentation. */
-context(operation: SharedOperationContext<*>)
-internal fun resolveObserved(
+internal fun SharedOperationContext<*>.resolveObserved(
     selections: SelectionForest,
     applicationObserver: Resolver26ApplicationObserver,
 ): ObjectEngineResult =
@@ -37,8 +35,7 @@ internal fun resolveObserved(
         applicationObserver = applicationObserver,
     )
 
-context(operation: SharedOperationContext<*>)
-internal fun resolve(
+internal fun SharedOperationContext<*>.resolve(
     selections: SelectionForest,
     coroutineContext: CoroutineContext,
     applicationObserver: Resolver26ApplicationObserver = {},
@@ -61,8 +58,7 @@ internal fun resolve(
  * The returned root has its complete selected key set installed and frozen, but its cell promises
  * may still be pending. All remaining work is owned by [requestScope].
  */
-context(operation: SharedOperationContext<*>)
-fun startResolve(
+fun SharedOperationContext<*>.startResolve(
     selections: SelectionForest,
     requestScope: CoroutineScope,
 ): ObjectEngineResult =
@@ -72,33 +68,31 @@ fun startResolve(
         applicationObserver = {},
     )
 
-context(operation: SharedOperationContext<*>)
-private fun startResolve(
+private fun SharedOperationContext<*>.startResolve(
     selections: SelectionForest,
     requestScope: CoroutineScope,
     applicationObserver: Resolver26ApplicationObserver,
 ): ObjectEngineResult {
-    require(operation.world.selectiveResolvers) {
+    require(world.selectiveResolvers) {
         "Resolver26 requires selective resolvers"
     }
     val resolver26Operation =
         OperationContext.create(
-            base = operation,
+            base = this@startResolve,
             requestScope = requestScope,
             resolverObserver =
-                operation.resolverObserver.withResolver26Applications(
+                resolverObserver.withResolver26Applications(
                     applicationObserver,
                 ),
         )
-    return startResolve(selections, resolver26Operation)
+    return resolver26Operation.startResolve(selections)
 }
 
 /** Starts another independently rooted Query execution in an existing logical operation. */
-internal fun startResolve(
+internal fun OperationContext.startResolve(
     selections: SelectionForest,
-    operation: OperationContext,
 ): ObjectEngineResult {
-    val source = operation.world.resolverRegistry.createRootQueryInput()
+    val source = world.resolverRegistry.createRootQueryInput()
     val result: ObjectEngineResult =
         ObjectEngineResult.of(
             type = source.schemaType,
@@ -106,7 +100,7 @@ internal fun startResolve(
         )
     val orchestration =
         OrchestrationTask.create(
-            operation = operation,
+            operation = this@startResolve,
             occurrence =
                 OEROccurrence(
                     root = result,
@@ -116,6 +110,6 @@ internal fun startResolve(
             source = source,
             initialDemand = selections,
         )
-    operation.dispatcher.dispatchOrchestrator(orchestration)
+    dispatcher.dispatchOrchestrator(orchestration)
     return result
 }

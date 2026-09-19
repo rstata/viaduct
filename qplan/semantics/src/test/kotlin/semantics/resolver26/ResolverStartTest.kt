@@ -104,9 +104,7 @@ class ResolverStartTest {
 
             try {
                 val root =
-                    context(SharedOperationContext.create(world.assumptions)) {
-                        startResolve(selections, requestScope)
-                    }
+                    SharedOperationContext.create(world.assumptions).startResolve(selections, requestScope)
                 withTimeout(5_000) { nestedStarted.await() }
                 withTimeout(5_000) {
                     outerJob.await().cancelAndJoin()
@@ -133,9 +131,7 @@ class ResolverStartTest {
 
             try {
                 val root =
-                    context(SharedOperationContext.create(world.assumptions)) {
-                        startResolve(selections, requestScope)
-                    }
+                    SharedOperationContext.create(world.assumptions).startResolve(selections, requestScope)
                 val fast = root.cell("fast")
                 val slow = root.cell("slow")
 
@@ -164,9 +160,7 @@ class ResolverStartTest {
             val requestScope = CoroutineScope(resolver26CoroutineContext() + requestJob)
 
             val root =
-                context(SharedOperationContext.create(world.assumptions)) {
-                    startResolve(selections, requestScope)
-                }
+                SharedOperationContext.create(world.assumptions).startResolve(selections, requestScope)
             withTimeout(5_000) { providerStarted.await() }
 
             requestJob.cancelAndJoin()
@@ -207,9 +201,7 @@ class ResolverStartTest {
 
             try {
                 val root =
-                    context(SharedOperationContext.create(world.assumptions)) {
-                        startResolve(selections, requestScope)
-                    }
+                    SharedOperationContext.create(world.assumptions).startResolve(selections, requestScope)
                 val slow = root.cell("slow")
 
                 withTimeout(5_000) { providerStarted.await() }
@@ -263,9 +255,7 @@ class ResolverStartTest {
 
             try {
                 val root =
-                    context(SharedOperationContext.create(world.assumptions)) {
-                        startResolve(selections, requestScope)
-                    }
+                    SharedOperationContext.create(world.assumptions).startResolve(selections, requestScope)
 
                 withTimeout(5_000) { providerStarted.await() }
                 val slowError =
@@ -309,9 +299,7 @@ class ResolverStartTest {
 
             try {
                 val root =
-                    context(SharedOperationContext.create(world.assumptions)) {
-                        startResolve(selections, requestScope)
-                    }
+                    SharedOperationContext.create(world.assumptions).startResolve(selections, requestScope)
                 val error =
                     assertIs<ErrorEngineResult>(
                         withTimeout(5_000) { root.cell("slow").getValue().await() },
@@ -367,9 +355,7 @@ class ResolverStartTest {
 
                 try {
                     val root =
-                        context(SharedOperationContext.create(world.assumptions)) {
-                            startResolve(selections, requestScope)
-                        }
+                        SharedOperationContext.create(world.assumptions).startResolve(selections, requestScope)
                     val fastError =
                         assertIs<ErrorEngineResult>(
                             withTimeout(5_000) { root.cell("fast").getValue().await() },
@@ -422,12 +408,10 @@ class ResolverStartTest {
 
                 try {
                     val root =
-                        context(SharedOperationContext.create(world.assumptions)) {
-                            startResolve(
-                                world.assumptions.operationSelectionsFrom("query { fast }"),
-                                requestScope,
-                            )
-                        }
+                        SharedOperationContext.create(world.assumptions).startResolve(
+                            world.assumptions.operationSelectionsFrom("query { fast }"),
+                            requestScope,
+                        )
                     requestJob.cancel(CancellationException("cancelled before dispatch"))
                     releaseBlocker.countDown()
 

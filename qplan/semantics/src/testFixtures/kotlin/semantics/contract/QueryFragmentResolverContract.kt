@@ -173,10 +173,10 @@ interface QueryFragmentResolverContract : ResolverContract {
             } else {
                     assertFalse(actualKey is ObjectEngineResult.GroundKey)
                     assertEquals(expectedKey.field, actualKey.field)
-                    assertTrue(context(resolution.operation) { actualKey.isContextuallyGrounded() })
+                    assertTrue(actualKey.isContextuallyGrounded(resolution.operation))
                     assertEquals(
                         expectedKey.arguments,
-                        context(resolution.operation) { actualKey.groundedArguments() },
+                        actualKey.groundedArguments(resolution.operation),
                     )
             }
         }

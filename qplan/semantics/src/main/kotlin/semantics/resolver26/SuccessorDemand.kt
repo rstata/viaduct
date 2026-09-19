@@ -16,17 +16,15 @@ import model.requireField
 import model.selectionForestOf
 
 // Returns ground output demand, crossing open resolver boundaries without binding their arguments.
-context(world: Assumptions)
-internal fun SelectionForest.successorDemand(): SelectionForest =
-    liftParentDemand()
-        .successorDemandWithMemo(mutableMapOf())
-        .liftParentDemand()
+internal fun SelectionForest.successorDemand(world: Assumptions): SelectionForest =
+    liftParentDemand(world)
+        .successorDemandWithMemo(world, mutableMapOf())
+        .liftParentDemand(world)
 
 // Conservatively transposes parent-selected demand to each containing producer occurrence.
-context(world: Assumptions)
-private fun SelectionForest.liftParentDemand(): SelectionForest =
+private fun SelectionForest.liftParentDemand(world: Assumptions): SelectionForest =
     flatMap { selection ->
-        val nested = selection.subselections.liftParentDemand()
+        val nested = selection.subselections.liftParentDemand(world)
         val requested =
             Selection.of(
                 key = selection.key,
@@ -36,13 +34,13 @@ private fun SelectionForest.liftParentDemand(): SelectionForest =
             )
         val lifted =
             selection
-                .liftedParentDemand(nested)
+                .liftedParentDemand(world, nested)
                 .guardedBy(selection.inclusionCondition)
         selectionForestOf(requested) + lifted
     }
 
-context(world: Assumptions)
 private fun Selection.liftedParentDemand(
+    world: Assumptions,
     nestedDemand: SelectionForest,
 ): SelectionForest =
     possibleTypes.flatMapToSelectionForest { possibleType ->
@@ -64,8 +62,8 @@ private fun Selection.liftedParentDemand(
     }
 
 // Retains requested ground boundaries and adds each resolver-bearing boundary's fixed passive demand.
-context(world: Assumptions)
 private fun SelectionForest.successorDemandWithMemo(
+    world: Assumptions,
     passiveDemandByResolverField: MutableMap<ViaductSchema.ObjectField, SelectionForest>,
 ): SelectionForest =
     flatMap { selection ->
@@ -91,6 +89,7 @@ private fun SelectionForest.successorDemandWithMemo(
                             inclusionCondition = selection.inclusionCondition,
                             subselections =
                                 selection.subselections.successorDemandWithMemo(
+                                    world,
                                     passiveDemandByResolverField,
                                 ),
                         ),
@@ -103,6 +102,7 @@ private fun SelectionForest.successorDemandWithMemo(
 
                     objectKey.field in world.resolverRegistry ->
                         objectKey.field.fixedPassivePredecessorDemand(
+                            world,
                             passiveDemandByResolverField,
                         )
 
@@ -113,20 +113,20 @@ private fun SelectionForest.successorDemandWithMemo(
     }
 
 // Memoizes passive demand reachable from one resolver OF before another resolver boundary.
-context(world: Assumptions)
 private fun ViaductSchema.ObjectField.fixedPassivePredecessorDemand(
+    world: Assumptions,
     passiveDemandByResolverField: MutableMap<ViaductSchema.ObjectField, SelectionForest>,
 ): SelectionForest =
     passiveDemandByResolverField[this]
         ?: world.resolverRegistry
             .resolver(this)
             .objectFragment
-            .passivePredecessorDemand(passiveDemandByResolverField)
+            .passivePredecessorDemand(world, passiveDemandByResolverField)
             .also { demand -> passiveDemandByResolverField[this] = demand }
 
 // Retains fields that may be passive based on presence and expands their standard passive demand.
-context(world: Assumptions)
 private fun SelectionForest.passivePredecessorDemand(
+    world: Assumptions,
     passiveDemandByResolverField: MutableMap<ViaductSchema.ObjectField, SelectionForest>,
 ): SelectionForest =
     flatMap { selection ->
@@ -142,6 +142,7 @@ private fun SelectionForest.passivePredecessorDemand(
                                 inclusionCondition = selection.inclusionCondition,
                                 subselections =
                                     selection.subselections.successorDemandWithMemo(
+                                        world,
                                         passiveDemandByResolverField,
                                     ),
                             ),
@@ -151,6 +152,7 @@ private fun SelectionForest.passivePredecessorDemand(
                     }
                 potentiallyPassiveSelection +
                     objectKey.field.fixedPassivePredecessorDemand(
+                        world,
                         passiveDemandByResolverField,
                     )
             } else {
@@ -164,6 +166,7 @@ private fun SelectionForest.passivePredecessorDemand(
                         inclusionCondition = selection.inclusionCondition,
                         subselections =
                             selection.subselections.passivePredecessorDemand(
+                                world,
                                 passiveDemandByResolverField,
                             ),
                     ),

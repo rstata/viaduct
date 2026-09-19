@@ -3,8 +3,8 @@ package semantics.shared
 import model.ObjectEngineResult
 
 /** Installs structural backedges without reopening resolution of the containing object. */
-context(operation: SharedOperationContext<*>)
 internal fun OEROccurrence.installParentBackedgeFields(
+    operation: SharedOperationContext<*>,
     keys: Collection<ObjectEngineResult.ParentKey>,
 ) {
     if (keys.isEmpty()) return

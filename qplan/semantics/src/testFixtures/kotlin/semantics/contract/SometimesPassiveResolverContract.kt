@@ -261,9 +261,7 @@ interface SometimesPassiveObjectPathResolverContract : ResolverContract {
             assertIs<ObjectEngineResult>(
                 resolved.getCell(world.schema.contractKey("Query", "item")).get(),
             )
-        context(resolution.operation) {
-            resolved.validateFromFieldBindings(emptySet())
-        }
+        resolved.validateFromFieldBindings(resolution.operation, emptySet())
 
         assertEquals(11, item.getCell(world.schema.contractKey("Item", "computed")).get())
         assertEquals(emptyList(), standardApplications)

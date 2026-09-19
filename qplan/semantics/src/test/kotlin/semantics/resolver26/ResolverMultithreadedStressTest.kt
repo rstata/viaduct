@@ -203,24 +203,18 @@ private suspend fun runResolver26MultithreadedStress(
             val appliedResolverOccurrences =
                 ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
             val result: ObjectEngineResult =
-                context(operation) {
-                    resolve(
-                        selections = fragment.subselections,
-                        coroutineContext = dispatcher,
-                        applicationObserver = { application ->
-                            appliedResolverOccurrences += application.resolverOccurrenceId
-                        },
-                    )
-                }
+                operation.resolve(
+                    selections = fragment.subselections,
+                    coroutineContext = dispatcher,
+                    applicationObserver = { application ->
+                        appliedResolverOccurrences += application.resolverOccurrenceId
+                    },
+                )
             // Resolution has quiesced; all post-resolution oracle work remains serial here.
             assertTrue(
-                context(operation) {
-                    result.correctResolution(fragment)
-                },
+                result.correctResolution(operation, fragment),
             )
-            context(operation) {
-                result.validateFromFieldBindings(appliedResolverOccurrences)
-            }
+            result.validateFromFieldBindings(operation, appliedResolverOccurrences)
             completedCases += 1
         }
 

@@ -17,8 +17,8 @@ import semantics.shared.SharedOperationContext
  * of one resolver field define distinct variable instances. Every occurrence must be declared and
  * completed exactly once.
  */
-context(operation: SharedOperationContext<*>)
 internal fun Iterable<ObjectEngineResult.GroundKey>.bindFromArguments(
+    operation: SharedOperationContext<*>,
     root: ObjectEngineResult,
     path: List<PathComponent>,
 ) {

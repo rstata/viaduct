@@ -6,8 +6,8 @@ import model.groundWithBindings
 import viaduct.graphql.schema.ViaductSchema
 
 /** Grounds this argument tuple using the bindings currently completed in [operation]. */
-context(operation: SharedOperationContext<*>)
 internal fun Arguments.instantiateBindings(
+    operation: SharedOperationContext<*>,
     expectedField: ViaductSchema.Field,
 ): Arguments.Ground =
     groundWithBindings(expectedField) { variable ->
@@ -15,8 +15,8 @@ internal fun Arguments.instantiateBindings(
     }
 
 /** Grounds this argument tuple, suspending for incomplete bindings in [operation]. */
-context(operation: SharedOperationContext<*>)
 suspend fun Arguments.fetchBindings(
+    operation: SharedOperationContext<*>,
     expectedField: ViaductSchema.Field,
 ): Arguments.Ground =
     fetchGroundWithBindings(expectedField) { variable ->

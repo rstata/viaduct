@@ -304,21 +304,16 @@ class ResolutionWitnessTest {
                 computedTwoKey to 1,
                 baseKey to 3,
             ),
-            context(SharedOperationContext.create(world.assumptions)) {
-                result.registeredResolverOccurrenceCounts(world.resolverRegistry)
-            },
+            SharedOperationContext.create(world.assumptions).let { resolutionOperation -> result.registeredResolverOccurrenceCounts(resolutionOperation, world.resolverRegistry) },
         )
         val cells =
-            context(SharedOperationContext.create(world.assumptions)) {
-                result.registeredResolverOccurrences(world.resolverRegistry)
-            }
+            SharedOperationContext.create(world.assumptions).let { resolutionOperation -> result.registeredResolverOccurrences(resolutionOperation, world.resolverRegistry) }
         val streamedCells = mutableListOf<RegisteredResolverOccurrence>()
-        context(SharedOperationContext.create(world.assumptions)) {
-            result.forEachRegisteredResolverOccurrence(
-                registry = world.resolverRegistry,
-                visitOccurrence = streamedCells::add,
-            )
-        }
+        SharedOperationContext.create(world.assumptions).let { resolutionOperation -> result.forEachRegisteredResolverOccurrence(
+            operation = resolutionOperation,
+            registry = world.resolverRegistry,
+            visitOccurrence = streamedCells::add,
+        ) }
         assertEquals(
             cells.groupingBy { cell -> cell }.eachCount(),
             streamedCells.groupingBy { cell -> cell }.eachCount(),
@@ -394,31 +389,28 @@ class ResolutionWitnessTest {
             ResolutionWitnessBounds(maxFingerprintCharacters = 1)
 
         assertFailsWith<ResolutionWitnessBoundExceededException> {
-            context(SharedOperationContext.create(world.assumptions)) {
-                result.registeredResolverOccurrences(
-                    registry = world.resolverRegistry,
-                    bounds = fingerprintBounds,
-                )
-            }
-        }
-        val streamedCells = mutableListOf<RegisteredResolverOccurrence>()
-        context(SharedOperationContext.create(world.assumptions)) {
-            result.forEachRegisteredResolverOccurrence(
+            SharedOperationContext.create(world.assumptions).let { resolutionOperation -> result.registeredResolverOccurrences(
+                operation = resolutionOperation,
                 registry = world.resolverRegistry,
                 bounds = fingerprintBounds,
-                visitOccurrence = streamedCells::add,
-            )
+            ) }
         }
+        val streamedCells = mutableListOf<RegisteredResolverOccurrence>()
+        SharedOperationContext.create(world.assumptions).let { resolutionOperation -> result.forEachRegisteredResolverOccurrence(
+            operation = resolutionOperation,
+            registry = world.resolverRegistry,
+            bounds = fingerprintBounds,
+            visitOccurrence = streamedCells::add,
+        ) }
         assertEquals(2, streamedCells.size)
 
         assertFailsWith<ResolutionWitnessBoundExceededException> {
-            context(SharedOperationContext.create(world.assumptions)) {
-                result.forEachRegisteredResolverOccurrence(
-                    registry = world.resolverRegistry,
-                    bounds = ResolutionWitnessBounds(maxResultNodes = 1),
-                    visitOccurrence = {},
-                )
-            }
+            SharedOperationContext.create(world.assumptions).let { resolutionOperation -> result.forEachRegisteredResolverOccurrence(
+                operation = resolutionOperation,
+                registry = world.resolverRegistry,
+                bounds = ResolutionWitnessBounds(maxResultNodes = 1),
+                visitOccurrence = {},
+            ) }
         }
     }
 
@@ -447,9 +439,7 @@ class ResolutionWitnessTest {
             mapOf(computedKey to 2),
             result
                 .let {
-                    context(SharedOperationContext.create(world.assumptions)) {
-                        it.registeredResolverOccurrenceCounts(world.resolverRegistry)
-                    }
+                    SharedOperationContext.create(world.assumptions).let { resolutionOperation -> it.registeredResolverOccurrenceCounts(resolutionOperation, world.resolverRegistry) }
                 }
                 .filterKeys { key -> key == computedKey },
         )

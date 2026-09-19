@@ -49,7 +49,7 @@ private suspend fun ObjectEngineResult.materializeSelectedObjectValue(
         linkedMapOf<String, Pair<ViaductSchema.ObjectField, EngineOutputData?>>()
     selections.fetchIncluded().collect(type).byResponseKey().forEach { (responseKey, selection) ->
         val candidateKey = selection.materializedSymbolicKey()
-        val storedKey = findStoredKey(candidateKey) ?: candidateKey
+        val storedKey = findStoredKey(operation, candidateKey) ?: candidateKey
         val cell = getCell(storedKey)
         val promise = cell.getValue()
         cycleChecker.cycleCheck(reader, cell)
@@ -79,7 +79,7 @@ private suspend fun MaterializeSelectionForest.fetchIncluded(): MaterializeSelec
     val selections = mutableListOf<model.MaterializeSelection>()
     forEach(selections::add)
     for (selection in selections) {
-        if (selection.inclusionCondition.fetchIncluded()) {
+        if (selection.inclusionCondition.fetchIncluded(operation)) {
             included += materializeSelectionForestOf(selection)
         }
     }
@@ -89,7 +89,7 @@ private suspend fun MaterializeSelectionForest.fetchIncluded(): MaterializeSelec
 context(operation: SharedOperationContext<*>)
 private suspend fun ObjectMaterializeSelection.materializedSymbolicKey(
 ): ObjectEngineResult.ObjectKey {
-    key.fetchGroundedArguments()
+    key.fetchGroundedArguments(operation)
     return key
 }
 

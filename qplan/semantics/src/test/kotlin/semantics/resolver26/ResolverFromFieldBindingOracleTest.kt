@@ -20,9 +20,7 @@ class ResolverFromFieldBindingOracleTest {
         fixture.bind(fixture.definitions.first())
 
         assertFailsWith<AssertionError> {
-            context(fixture.operation) {
-                fixture.result.validateFromFieldBindings(setOf(fixture.occurrenceId))
-            }
+            fixture.result.validateFromFieldBindings(fixture.operation, setOf(fixture.occurrenceId))
         }
     }
 
@@ -31,9 +29,7 @@ class ResolverFromFieldBindingOracleTest {
         val fixture = bindingFixture()
 
         assertFailsWith<AssertionError> {
-            context(fixture.operation) {
-                fixture.result.validateFromFieldBindings(setOf(fixture.occurrenceId))
-            }
+            fixture.result.validateFromFieldBindings(fixture.operation, setOf(fixture.occurrenceId))
         }
     }
 
@@ -41,9 +37,7 @@ class ResolverFromFieldBindingOracleTest {
     fun `a passive occurrence requires no object-path bindings`() {
         val fixture = bindingFixture()
 
-        context(fixture.operation) {
-            fixture.result.validateFromFieldBindings(emptySet())
-        }
+        fixture.result.validateFromFieldBindings(fixture.operation, emptySet())
     }
 
     @Test
@@ -52,9 +46,7 @@ class ResolverFromFieldBindingOracleTest {
         fixture.bind(fixture.definitions.first())
 
         assertFailsWith<AssertionError> {
-            context(fixture.operation) {
-                fixture.result.validateFromFieldBindings(emptySet())
-            }
+            fixture.result.validateFromFieldBindings(fixture.operation, emptySet())
         }
     }
 
@@ -78,9 +70,7 @@ class ResolverFromFieldBindingOracleTest {
         )
 
         assertFailsWith<AssertionError> {
-            context(operation) {
-                primaryResult.validateFromFieldBindings(setOf(queryFixture.occurrenceId))
-            }
+            primaryResult.validateFromFieldBindings(operation, setOf(queryFixture.occurrenceId))
         }
     }
 

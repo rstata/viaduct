@@ -123,9 +123,7 @@ internal class PropertyTestBenchmarkSupport(
                 }
                 profilePhase(profilePhases, "application identity oracle") {
                     check(
-                        context(operation) {
-                            result.registeredResolverApplicationIdentityCounts()
-                        } == witness.applicationIdentityCounts(),
+                        result.registeredResolverApplicationIdentityCounts(operation) == witness.applicationIdentityCounts(),
                     )
                 }
                 profilePhase(profilePhases, "correctResolution") {
@@ -134,15 +132,13 @@ internal class PropertyTestBenchmarkSupport(
                             result.correctResolution(
                                 fragment.subselections
                                     .merge(world.schema.requireQueryTypeDef())
-                                    .instantiateBindings(),
+                                    .instantiateBindings(operation),
                             )
                         },
                     )
                 }
                 profilePhase(profilePhases, "from-field binding oracle") {
-                    context(operation) {
-                        result.validateFromFieldBindings(appliedResolverOccurrences)
-                    }
+                    result.validateFromFieldBindings(operation, appliedResolverOccurrences)
                 }
                 blackhole.consume(result)
             }

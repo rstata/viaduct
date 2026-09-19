@@ -153,11 +153,10 @@ interface SometimesPassiveGeneratedResolverContract : GeneratedCaseAssertionPoli
                             assertions = assertions,
                         )
                     val occurrenceCounts =
-                        context(observation.ordinary.operation) {
-                            observation.ordinary.result.registeredResolverOccurrenceCounts(
-                                observation.ordinary.world.resolverRegistry,
-                            )
-                        }
+                        observation.ordinary.result.registeredResolverOccurrenceCounts(
+                            observation.ordinary.operation,
+                            observation.ordinary.world.resolverRegistry,
+                        )
                     val applicationCounts =
                         observation.ordinaryApplications
                             .groupingBy(ResolverApplicationRecord::key)

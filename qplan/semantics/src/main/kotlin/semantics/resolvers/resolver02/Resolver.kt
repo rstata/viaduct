@@ -10,15 +10,14 @@ import semantics.shared.SharedOperationContext
  * Resolves [selections] with non-selective resolver applications. Results may contain more OER
  * nodes than are strictly necessary to resolve the query.
  */
-context(operation: SharedOperationContext<*>)
-fun resolve(selections: SelectionForest): ObjectEngineResult {
-    require(!operation.world.selectiveResolvers) {
+fun SharedOperationContext<*>.resolve(selections: SelectionForest): ObjectEngineResult {
+    require(!world.selectiveResolvers) {
         "Resolver02 requires non-selective resolvers"
     }
     return DepthFirstResolve(
-        operation = operation,
+        operation = this@resolve,
         complete = { completedSelections ->
-            completedSelections.successorBoundaryDemand()
+            completedSelections.successorBoundaryDemand(this@resolve)
         },
     ).resolve(selections)
 }

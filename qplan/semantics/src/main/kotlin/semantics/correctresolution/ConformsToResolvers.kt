@@ -71,9 +71,9 @@ private fun ObjectEngineResult.objectConformsToResolvers(
 ): Boolean =
     keys.all { key ->
         if (!getCell(key).getValue().isCompleted) return@all true
-        if (!key.isContextuallyGrounded()) return@all false
+        if (!key.isContextuallyGrounded(operation)) return@all false
         val value = getCell(key).getValue().get()
-        val arguments = key.groundedArguments()
+        val arguments = key.groundedArguments(operation)
         val fieldName = key.field.name
         source.requireArgumentlessField(key)
         when {
@@ -159,7 +159,7 @@ internal fun FieldResolver.fragmentsSatisfiedBy(
     val objectFragment = fragments.objectFragment
     val arguments =
         (path.lastOrNull() as? ObjectEngineResult.ObjectKey)
-            ?.groundedArguments() as? Arguments.Resolved
+            ?.groundedArguments(operation) as? Arguments.Resolved
             ?: return null
     return fragments.takeIf {
         val constructionSelections = objectFragment.constructionSelections
@@ -170,12 +170,10 @@ internal fun FieldResolver.fragmentsSatisfiedBy(
             constructionSelections.usedVariables().all { variable ->
                 operation.variableBindings.isBound(variable.instanceId!!)
             } &&
-            context(operation.world) {
-                result.conformsToSelectionsAt(
-                    selections = constructionSelections,
-                    path = path.dropLast(1),
-                )
-            }
+            result.conformsToSelectionsAt(
+                selections = constructionSelections,
+                path = path.dropLast(1),
+            )
     }
 }
 

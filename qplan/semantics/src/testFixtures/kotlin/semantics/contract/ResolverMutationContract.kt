@@ -65,11 +65,10 @@ interface ResolverMutationContract : ResolverContract {
                         )
                     val ordinary = ordinaryResolution.result
                     assertTrue(
-                        context(ordinaryResolution.operation) {
-                            ordinary.correctResolution(
-                                ordinaryFragment,
-                            )
-                        },
+                        ordinary.correctResolution(
+                            ordinaryResolution.operation,
+                            ordinaryFragment,
+                        ),
                     )
 
                     ResolverProgramMutation.entries
@@ -102,10 +101,8 @@ interface ResolverMutationContract : ResolverContract {
                                         when (mutation) {
                                             ResolverProgramMutation.DUPLICATE_APPLICATION ->
                                                 witness.applicationIdentityCounts() !=
-                                                    context(resolution.operation) {
-                                                        result
-                                                            .registeredResolverApplicationIdentityCounts()
-                                                    }
+                                                    result
+                                                        .registeredResolverApplicationIdentityCounts(resolution.operation)
                                             else -> !result.sameCompletedResultAs(ordinary)
                                         }
                                     },

@@ -9,15 +9,14 @@ import semantics.shared.SharedOperationContext
 /**
  * Resolves [selections] with structured coroutines when resolver object fragments are empty.
  */
-context(operation: SharedOperationContext<*>)
-fun resolve(selections: SelectionForest): ObjectEngineResult {
-    require(!operation.world.selectiveResolvers) {
+fun SharedOperationContext<*>.resolve(selections: SelectionForest): ObjectEngineResult {
+    require(!world.selectiveResolvers) {
         "Resolver21 requires non-selective resolvers"
     }
-    val source = operation.world.resolverRegistry.createRootQueryInput()
+    val source = world.resolverRegistry.createRootQueryInput()
     val resolver =
         CoroutineResolve(
-            operation = operation,
+            operation = this@resolve,
             complete = { completedSelections -> completedSelections },
         )
     return runBlocking {

@@ -182,13 +182,11 @@ interface DeepResolverStressContract : ResolverContract {
                     if (sometimesPassiveCoverageRequired) {
                         // Source-owned registry fields have result occurrences but no application.
                         val resultOccurrenceCounts =
-                            context(operation) {
-                                result
-                                    .registeredResolverOccurrenceApplicationKeyCounts()
-                                    .entries
-                                    .groupingBy { entry -> entry.key.applicationKey }
-                                    .fold(0) { count, entry -> count + entry.value }
-                            }
+                            result
+                                .registeredResolverOccurrenceApplicationKeyCounts(operation)
+                                .entries
+                                .groupingBy { entry -> entry.key.applicationKey }
+                                .fold(0) { count, entry -> count + entry.value }
                         witness.applicationCounts().forEach { (key, count) ->
                             assertTrue(
                                 count <= resultOccurrenceCounts.getOrDefault(key, 0),
@@ -200,16 +198,12 @@ interface DeepResolverStressContract : ResolverContract {
                             resultOccurrenceCounts.values.sum() - witness.applications.size
                     } else {
                         assertEquals(
-                            context(operation) {
-                                result.registeredResolverApplicationIdentityCounts()
-                            },
+                            result.registeredResolverApplicationIdentityCounts(operation),
                             witness.applicationIdentityCounts(),
                         )
                     }
                     assertTrue(
-                        context(operation) {
-                            result.correctResolution(fragment)
-                        },
+                        result.correctResolution(operation, fragment),
                     )
                     resolverApplications += witness.applications.size
                     var activatedFromArgument = false

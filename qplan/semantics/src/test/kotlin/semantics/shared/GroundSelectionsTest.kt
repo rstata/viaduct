@@ -32,9 +32,7 @@ class GroundSelectionsTest {
             )
 
         assertFailsWith<IllegalStateException> {
-            context(fixture.operation) {
-                selectionForestOf(symbolic).merge(fixture.query).instantiateBindings()
-            }
+            selectionForestOf(symbolic).merge(fixture.query).instantiateBindings(fixture.operation)
         }
     }
 
@@ -46,9 +44,7 @@ class GroundSelectionsTest {
         val symbolic = fixture.searchSelection(mapOf("values" to listOf(variable)))
 
         assertFailsWith<IllegalStateException> {
-            context(fixture.operation) {
-                selectionForestOf(symbolic).merge(fixture.query).instantiateBindings()
-            }
+            selectionForestOf(symbolic).merge(fixture.query).instantiateBindings(fixture.operation)
         }
     }
 
@@ -66,9 +62,7 @@ class GroundSelectionsTest {
         fixture.operation.variableBindings.completeBinding(variableId, 1)
 
         val merged =
-            context(fixture.operation) {
-                selectionForestOf(symbolic, concrete).merge(fixture.query).instantiateBindings()
-            }
+            selectionForestOf(symbolic, concrete).merge(fixture.query).instantiateBindings(fixture.operation)
 
         assertEquals(1, merged.size)
         assertEquals(concrete.objectKey(fixture.query), merged.single().key)
@@ -95,10 +89,8 @@ class GroundSelectionsTest {
         fixture.operation.variableBindings.completeBinding(variableId, binding)
 
         val once =
-            context(fixture.operation) {
-                selectionForestOf(symbolic).merge(fixture.query).instantiateBindings()
-            }
-        val twice = context(fixture.operation) { once.instantiateBindings() }
+            selectionForestOf(symbolic).merge(fixture.query).instantiateBindings(fixture.operation)
+        val twice = once.instantiateBindings(fixture.operation)
 
         assertEquals(once.single().key, twice.single().key)
     }

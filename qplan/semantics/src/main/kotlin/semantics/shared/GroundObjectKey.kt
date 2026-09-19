@@ -9,7 +9,7 @@ context(operation: SharedOperationContext<*>)
 fun ObjectEngineResult.ObjectKey.isContextuallyGrounded(): Boolean =
     arguments.usedVariables().all { variable ->
         variable.isInstantiated &&
-            operation.variableBindingsState.isBound(requireNotNull(variable.instanceId))
+            operation.variableBindings.isBound(requireNotNull(variable.instanceId))
     }
 
 /** Grounds this key's arguments without changing the symbolic key retained by its OER cell. */
@@ -28,7 +28,7 @@ suspend fun ObjectEngineResult.ObjectKey.fetchGroundedArguments(): Arguments.Gro
         require(variable.isInstantiated) {
             "Variable template $variable must be instantiated before its binding can be fetched"
         }
-        operation.variableBindingsState.fetchBinding(requireNotNull(variable.instanceId))
+        operation.variableBindings.fetchBinding(requireNotNull(variable.instanceId))
     }
     return groundedArguments()
 }

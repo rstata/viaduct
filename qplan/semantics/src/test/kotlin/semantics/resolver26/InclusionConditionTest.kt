@@ -52,7 +52,7 @@ class InclusionConditionTest {
             }
             """.trimIndent(),
         )
-        val operation = SharedOperationContext(world.assumptions)
+        val operation = SharedOperationContext.create(world.assumptions)
         val applications = Collections.synchronizedList(mutableListOf<String>())
         val result = context(operation) {
             resolveObserved(world.assumptions.fragmentFrom("fragment Test on Query { controller healthy }").subselections) {
@@ -740,7 +740,7 @@ class InclusionConditionTest {
     private fun TestWorld.resolve(query: String): Resolution {
         val fragment = assumptions.fragmentFrom(query.replace("query", "fragment Query on Query"))
         val operation =
-            SharedOperationContext(
+            SharedOperationContext.create(
                 world = assumptions,
                 resolverObserver = RecordingResolverObserver(),
             )

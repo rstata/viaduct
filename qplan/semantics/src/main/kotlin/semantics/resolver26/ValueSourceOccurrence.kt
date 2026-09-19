@@ -14,8 +14,11 @@ import model.registry.ResolverFragments
 import model.registry.VariableInstanceDefinition
 import viaduct.graphql.schema.ViaductSchema
 
-/** One installed field-resolution task's source occurrence. */
-internal sealed interface ResolverOccurrenceContext {
+/**
+ * One source of a value: a resolver invocation, reference, or conditioned passive value.
+ * Reference-hop invocations contribute values without owning separate destination cells.
+ */
+internal sealed interface ValueSourceOccurrence {
     val selection: ObjectSelection
 
     val publicationPath: List<PathComponent>
@@ -27,8 +30,8 @@ internal sealed interface ResolverOccurrenceContext {
         get() = selection.subselections
 }
 
-/** Stable closure output needed to invoke one resolver occurrence. */
-internal data class FieldResolverOccurrenceContext(
+/** One resolver invocation, with its identity, instantiated inputs, and variable definitions. */
+internal data class FieldResolverOccurrence(
     override val selection: ObjectSelection,
     val invocationRoot: ObjectEngineResult,
     val invocationPath: List<PathComponent>,
@@ -37,7 +40,7 @@ internal data class FieldResolverOccurrenceContext(
     val inputMaterializeSelections: MaterializeSelectionForest,
     val variableDefinitions: List<VariableInstanceDefinition>,
     val fragments: ResolverFragments,
-) : ResolverOccurrenceContext {
+) : ValueSourceOccurrence {
     override val publicationPath: List<PathComponent>
         get() = invocationPath
 }
@@ -49,7 +52,7 @@ internal data class RootFieldReferenceOccurrence(
     override val publicationPath: List<PathComponent>,
     override val publicationExpectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef> =
         selection.key.field.outputType,
-) : ResolverOccurrenceContext
+) : ValueSourceOccurrence
 
 /** A conditioned passive value whose embedded references must not launch before activation. */
 internal data class PassiveValueOccurrence(
@@ -58,4 +61,4 @@ internal data class PassiveValueOccurrence(
     val invocationDemand: SelectionForest,
     override val publicationConstructionDemand: SelectionForest,
     override val publicationPath: List<PathComponent>,
-) : ResolverOccurrenceContext
+) : ValueSourceOccurrence

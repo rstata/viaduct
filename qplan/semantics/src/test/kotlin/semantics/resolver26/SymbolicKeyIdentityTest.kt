@@ -95,7 +95,7 @@ class SymbolicKeyIdentityTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
+        val operation = SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
         val resultKey =
             ObjectEngineResult.GroundKey.of(
                 world.schema.requireObjectField("Query", "result"),
@@ -228,7 +228,7 @@ class SymbolicKeyIdentityTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
+        val operation = SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
         val resultKey =
             ObjectEngineResult.GroundKey.of(
                 world.schema.requireObjectField("Query", "result"),
@@ -370,7 +370,7 @@ class SymbolicKeyIdentityTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
+        val operation = SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
         val leftKey =
             ObjectEngineResult.GroundKey.of(
                 world.schema.requireObjectField("Query", "left"),

@@ -7,90 +7,65 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import model.EngineErrorData
 import model.EngineObjectOrErrorData
-import model.EngineResultCell
 import model.ObjectEngineResult
-import model.ObjectSelection
 import model.ObjectSelectionForest
 import model.PathComponent
 import model.RootFieldReferenceData
-import model.SelectionForest
 import model.engineObjectDataOf
-import model.outputType
 import model.outputValue
 import model.registry.ResolverFragment
 import model.requireQueryTypeDef
-import semantics.shared.OEROccurrenceContext
-import semantics.shared.SharedFieldResolverContext
-import semantics.shared.SharedFieldResolverTask
+import semantics.resolvers.GroundedFieldPublicationOccurrence
 import semantics.shared.materialize
-import viaduct.graphql.schema.ViaductSchema
-
-/** Prepared publication handed to the request dispatcher before its coroutine exists. */
-internal class CoroutineFieldResolverContext(
-    override val operationContext: CoroutineOperationContext,
-    override val oerOccurrenceContext: OEROccurrenceContext,
-    override val selection: ObjectSelection,
-    override val publicationCell: EngineResultCell,
-    val reference: RootFieldReferenceData? = null,
-    val invocationDemand: SelectionForest? = null,
-    override val publicationPath: List<PathComponent> = oerOccurrenceContext.coordinate(selection.key),
-    override val publicationExpectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef> = selection.key.field.outputType,
-) : SharedFieldResolverContext {
-    override val publicationConstructionDemand get() = selection.subselections
-}
 
 /** Owns field-local helper coroutines and delegates invocation and publication to resolution logic. */
 internal class CoroutineFieldResolverTask private constructor(
-    val context: CoroutineFieldResolverContext,
-    val fieldTaskScope: CoroutineScope,
-) : SharedFieldResolverTask {
-    override val operationContext get() = context.operationContext
-    override val oerOccurrenceContext get() = context.oerOccurrenceContext
+    publication: GroundedFieldPublicationOccurrence<CoroutineOperationContext>,
+    fieldTaskScope: CoroutineScope,
+) : semantics.resolver26.CoroutineFieldResolverTask<GroundedFieldPublicationOccurrence<CoroutineOperationContext>>(publication, fieldTaskScope) {
+    private val resolutionLogic = FieldResolutionLogic(this)
 
     companion object {
         /** Installs all local promises before dispatching any producer, including source references. */
         fun launchAll(orchestrationTask: CoroutineOrchestrationTask, closed: ObjectSelectionForest) {
             val operation = orchestrationTask.operation
             val occurrence = orchestrationTask.occurrence
-            val contexts = closed.byGroundKey().filterKeys { !occurrence.target.isCellSet(it) }.map { (key, selection) ->
+            val publications = closed.byGroundKey().filterKeys { !occurrence.target.isCellSet(it) }.map { (key, selection) ->
                 val reference = if (orchestrationTask.source.isPresent(key.field.name)) {
                     orchestrationTask.source.outputValue(key.field.name) as RootFieldReferenceData
                 } else null
                 prepare(
-                    CoroutineFieldResolverContext(operation, occurrence, selection, occurrence.target.reserveCell(key), reference),
+                    GroundedFieldPublicationOccurrence(operation, occurrence, selection, occurrence.target.reserveCell(key), reference),
                 )
             }
-            contexts.forEach(operation.dispatcher::dispatchFieldResolver)
+            publications.forEach(operation.dispatcher::dispatchFieldResolver)
         }
 
         /** List references use the same publication protocol at their exact list-element path. */
-        fun launchForListElement(context: CoroutineFieldResolverContext) {
-            context.operationContext.dispatcher.dispatchFieldResolver(prepare(context))
+        fun launchForListElement(publication: GroundedFieldPublicationOccurrence<CoroutineOperationContext>) {
+            publication.operation.dispatcher.dispatchFieldResolver(prepare(publication))
         }
 
-        private fun prepare(context: CoroutineFieldResolverContext): CoroutineFieldResolverContext = context.apply {
+        private fun prepare(publication: GroundedFieldPublicationOccurrence<CoroutineOperationContext>): GroundedFieldPublicationOccurrence<CoroutineOperationContext> = publication.apply {
             publicationCell.createValuePromise()
             // List cells are activated when the shared traversal allocates their list.
             if (publicationPath.last() is ObjectEngineResult.ObjectKey) {
                 check(publicationCell.setActivated(true)) { "Cell activation was decided twice" }
             }
-            operationContext.cycleChecker.registerWriter(publicationCell, publicationPath)
+            operation.cycleChecker.registerWriter(publicationCell, publicationPath)
         }
 
-        internal suspend fun execute(context: CoroutineFieldResolverContext, scope: CoroutineScope) {
-            CoroutineFieldResolverTask(context, scope).run()
+        internal suspend fun execute(publication: GroundedFieldPublicationOccurrence<CoroutineOperationContext>, scope: CoroutineScope) {
+            CoroutineFieldResolverTask(publication, scope).run()
         }
     }
 
-    /** Publishes field failures as values while preserving coroutine cancellation and JVM Errors. */
-    suspend fun run() {
-        val resolutionLogic = FieldResolutionLogic(this, context.publicationCell)
-        try {
-            resolutionLogic.publishResult()
-        } catch (cause: Exception) {
-            currentCoroutineContext().ensureActive()
-            resolutionLogic.publishFieldError(cause)
-        }
+    override suspend fun resolveAndPublish() {
+        resolutionLogic.publishResult()
+    }
+
+    override fun publishFieldError(cause: Exception) {
+        resolutionLogic.publishFieldError(cause)
     }
 
     /**
@@ -103,14 +78,14 @@ internal class CoroutineFieldResolverTask private constructor(
         coordinate: List<PathComponent>,
     ): Deferred<EngineObjectOrErrorData> = fieldTaskScope.async {
         try {
-            val queryValue = context(operationContext, operationContext.world, operationContext.cycleChecker) {
+            val queryValue = context(publication.operation, publication.operation.cycleChecker) {
                 if (queryFragment.constructionSelections.isEmpty()) {
-                    engineObjectDataOf(operationContext.schema.requireQueryTypeDef())
+                    engineObjectDataOf(publication.operation.world.schema.requireQueryTypeDef())
                 } else {
                     val queryResult = startResolve(
-                        operationContext.resolverRegistry.createRootQueryInput(), queryFragment.constructionSelections,
+                        publication.operation.world.resolverRegistry.createRootQueryInput(), queryFragment.constructionSelections,
                     )
-                    operationContext.resolverObserver.onQueryFragmentResult(queryFragment.resolverOccurrenceId, queryResult)
+                    publication.operation.resolverObserver.onQueryFragmentResult(queryFragment.resolverOccurrenceId, queryResult)
                     queryResult.materialize(queryFragment.materializeSelections, coordinate)
                 }
             }

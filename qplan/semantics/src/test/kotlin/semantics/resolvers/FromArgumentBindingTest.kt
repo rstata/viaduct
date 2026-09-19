@@ -42,7 +42,7 @@ class FromArgumentBindingTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = SharedOperationContext(world)
+        val operation = SharedOperationContext.create(world)
         val field = world.schema.requireObjectField("Query", "echo")
         val key = ObjectEngineResult.GroundKey.of(field, mapOf("value" to 1))
         val root = ObjectEngineResult.of(world.schema.requireQueryTypeDef(), values = emptyMap())
@@ -56,11 +56,11 @@ class FromArgumentBindingTest {
             val variableId = requireNotNull(variable.instanceId)
             assertEquals(
                 VariableBinding.of(1),
-                operation.variableBindingsState.getBinding(variableId),
+                operation.variableBindings.getBinding(variableId),
             )
             assertEquals(
                 VariableBinding.of(1),
-                runBlocking { operation.variableBindingsState.fetchBinding(variableId) },
+                runBlocking { operation.variableBindings.fetchBinding(variableId) },
             )
             assertFailsWith<IllegalStateException> {
                 listOf(key).bindFromArguments(root, emptyList())

@@ -62,12 +62,12 @@ class ResolverFromFieldBindingOracleTest {
     fun `object-path bindings in a query-fragment root are validated`() {
         val testWorld = bindingWorld()
         val world = testWorld.assumptions
-        val operation = SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
+        val operation = SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
         val primaryResult = world.engineResultOf("Query")
         val queryResult = completedBindingResult(world)
         val queryFixture = bindingFixture(operation, queryResult)
         queryFixture.definitions.forEach { definition ->
-            operation.variableBindingsState.bindVariable(
+            operation.variableBindings.bindVariable(
                 requireNotNull(definition.variable.instanceId),
                 -1,
             )
@@ -100,7 +100,7 @@ private data class BindingFixture(
                 "second" -> 13
                 else -> error("Unexpected provider field $providerField")
             }
-        operation.variableBindingsState.bindVariable(
+        operation.variableBindings.bindVariable(
             requireNotNull(definition.variable.instanceId),
             value,
         )
@@ -110,7 +110,7 @@ private data class BindingFixture(
 private fun bindingFixture(): BindingFixture {
     val world = bindingWorld().assumptions
     return bindingFixture(
-        SharedOperationContext(world, resolverObserver = RecordingResolverObserver()),
+        SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver()),
         completedBindingResult(world),
     )
 }

@@ -5,7 +5,7 @@ import model.ObjectEngineResult
 import model.SelectionForest
 import model.schemaType
 import semantics.shared.CycleCheckState
-import semantics.shared.OEROccurrenceContext
+import semantics.shared.OEROccurrence
 import semantics.shared.SharedOperationContext
 import viaduct.engine.api.EngineObjectData
 
@@ -30,7 +30,7 @@ internal fun startResolve(source: EngineObjectData.Sync, selections: SelectionFo
     val result = ObjectEngineResult.of(source.schemaType, mutable = true)
     operation.dispatcher.dispatchOrchestrator(
         CoroutineOrchestrationTask.create(
-            operation, OEROccurrenceContext(result, emptyList(), result), source, selections,
+            operation, OEROccurrence(result, emptyList(), result), source, selections,
         ),
     )
     return result

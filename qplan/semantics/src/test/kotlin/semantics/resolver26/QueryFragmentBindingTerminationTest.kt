@@ -99,7 +99,7 @@ class QueryFragmentBindingTerminationTest {
             fixture.independentGate.complete(Unit)
             dispatcher.runUntilIdle()
             val pendingBindings = listOf("provided", "queryValue").filterNot {
-                fixture.operation.variableBindingsState.isBound(fixture.variableId(it))
+                fixture.operation.variableBindings.isBound(fixture.variableId(it))
             }
             assertFalse(
                 requestJob.children.any(),
@@ -118,9 +118,9 @@ class QueryFragmentBindingTerminationTest {
                 for (name in listOf("provided", "queryValue")) {
                     val variableId = fixture.variableId(name)
                     if (exit == Exit.CANCEL) {
-                        assertFailsWith<CancellationException> { fixture.operation.variableBindingsState.getBinding(variableId) }
+                        assertFailsWith<CancellationException> { fixture.operation.variableBindings.getBinding(variableId) }
                     } else {
-                        assertSame(VariableBinding.Error, fixture.operation.variableBindingsState.getBinding(variableId))
+                        assertSame(VariableBinding.Error, fixture.operation.variableBindings.getBinding(variableId))
                     }
                 }
                 if (exit == Exit.ARGUMENT_ERROR) assertFalse(fixture.consumerProviderInvoked)
@@ -244,7 +244,7 @@ class QueryFragmentBindingTerminationTest {
             },
         ).assumptions
 
-        val operation = SharedOperationContext(world, resolverObserver = object : SharedResolverObserver {
+        val operation = SharedOperationContext.create(world, resolverObserver = object : SharedResolverObserver {
             override fun onQueryFragmentResult(resolverOccurrenceId: ResolverOccurrenceId, result: ObjectEngineResult) {
                 check(queryResult == null) { "Only the consumer has a Query fragment" }
                 queryResult = result

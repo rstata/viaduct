@@ -10,7 +10,7 @@ import semantics.shared.SharedOperationContext
  */
 context(operation: SharedOperationContext<*>)
 fun resolve(selections: SelectionForest): ObjectEngineResult {
-    require(!operation.selectiveResolvers) {
+    require(!operation.world.selectiveResolvers) {
         "Resolver01 requires non-selective resolvers"
     }
     return DepthFirstResolve(

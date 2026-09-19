@@ -29,11 +29,11 @@ internal data class PreparedRootFieldReferenceInvocation(
  */
 context(operation: SharedOperationContext<*>)
 internal fun RootFieldReferenceData.prepareInvocation(): PreparedRootFieldReferenceInvocation {
-    require(targetField in operation.resolverRegistry) {
+    require(targetField in operation.world.resolverRegistry) {
         "Root-field-reference target has no registered resolver: " +
             "${targetField.containingDef.name}/${targetField.name}"
     }
-    val root = ObjectEngineResult.of(operation.schema.requireQueryTypeDef())
+    val root = ObjectEngineResult.of(operation.world.schema.requireQueryTypeDef())
     val prefixKeys =
         path.dropLast(1).map { field ->
             ObjectEngineResult.GroundKey.of(field, emptyMap())
@@ -41,7 +41,7 @@ internal fun RootFieldReferenceData.prepareInvocation(): PreparedRootFieldRefere
     val key = ObjectEngineResult.GroundKey.of(targetField, arguments)
     val invocationPath: List<PathComponent> = prefixKeys + key
     val resolverOccurrenceId = ResolverOccurrenceId.at(root, invocationPath)
-    val resolver = operation.resolverRegistry.resolver(targetField)
+    val resolver = operation.world.resolverRegistry.resolver(targetField)
     val fragments = resolver.instantiateFragments(resolverOccurrenceId)
     require(fragments.objectFragment.materializeSelections.isEmpty()) {
         "Root-field-reference target ${targetField.containingDef.name}/${targetField.name} " +

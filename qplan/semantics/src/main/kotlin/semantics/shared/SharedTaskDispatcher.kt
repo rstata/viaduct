@@ -1,46 +1,47 @@
 package semantics.shared
 
 import model.EngineResultCell
-import model.ObjectSelection
 import model.ObjectSelectionForest
-import model.PathComponent
-import model.SelectionForest
 import viaduct.engine.api.EngineObjectData
-import viaduct.graphql.schema.ViaductSchema
 
 /**
  * Prepared orchestration task for one object. Its factory closes demand and establishes the
  * state needed by descendants before returning; passive resolution uses [closedDemand] before
- * handing the task to [SharedTaskDispatcher.dispatchOrchestrator].
+ * handing the task to [SharedTaskDispatcher.dispatchOrchestrator]. The task supplies its owning
+ * context through [operation]; it is not itself an operation context.
  */
-interface SharedOrchestrationTask {
-    val occurrence: OEROccurrenceContext
+interface SharedOrchestrationTask<out O : SharedOperationContext<*>> {
+    /** The owning operation, retaining its resolver-specific type. */
+    val operation: O
+    val occurrence: OEROccurrence
     /** Source-owned passive values; Query roots supply an empty object. */
     val source: EngineObjectData.Sync
     val closedDemand: ObjectSelectionForest
 }
 
-/** Stable occurrence and publication inputs for a field-resolution task. */
-interface SharedFieldResolverContext {
+/**
+ * One field or list-element publication, with its operation, containing object, and destination cell.
+ * Also supplies the owning operation contract, implemented by delegation to [operation].
+ */
+interface SharedFieldPublicationOccurrence<
+    out O : SharedOperationContext<D>,
+    out D : SharedTaskDispatcher<Nothing, Nothing>,
+> : SharedOperationContext<D> {
     /** The owning operation; implementations may specialize its type for their resolver. */
-    val operationContext: SharedOperationContext<*>
-    val oerOccurrenceContext: OEROccurrenceContext
-    val selection: ObjectSelection
+    val operation: O
+    val oerOccurrence: OEROccurrence
     val publicationCell: EngineResultCell
-    val publicationPath: List<PathComponent>
-    val publicationExpectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>
-    val publicationConstructionDemand: SelectionForest
 }
 
 /**
  * Schedules the two resolver task kinds. Implementations own coroutine launch, queue ordering, or
  * recursive execution; task contexts retain the inputs needed by the corresponding task bodies.
- * [O] and [F] preserve the concrete task types accepted by each implementation.
+ * [O] preserves the concrete orchestration-task type and [F] the field-publication occurrence type.
  */
-interface SharedTaskDispatcher<in O : SharedOrchestrationTask, in F : SharedFieldResolverContext> {
+interface SharedTaskDispatcher<in O : SharedOrchestrationTask<*>, in F : SharedFieldPublicationOccurrence<*, *>> {
     /** Dispatches prepared object work after its passive fields have been resolved. */
     fun dispatchOrchestrator(task: O)
 
     /** Dispatches field work according to this resolver's dependency-ordering policy. */
-    fun dispatchFieldResolver(context: F)
+    fun dispatchFieldResolver(publication: F)
 }

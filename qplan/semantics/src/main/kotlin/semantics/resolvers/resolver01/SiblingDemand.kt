@@ -19,11 +19,11 @@ fun ObjectEngineResult.GroundKey.demandsFromSibling(
     require(sibling.containingDef == objectType) {
         "Sibling demand is defined only for fields on the same concrete object type"
     }
-    require(operation.schema.requireField(objectType.name, sibling.name) == sibling) {
+    require(operation.world.schema.requireField(objectType.name, sibling.name) == sibling) {
         "${objectType.name}/${sibling.name} is not canonical in this world"
     }
     return siblingKey in
-        operation.resolverRegistry
+        operation.world.resolverRegistry
             .resolver(field)
             .objectFragmentAt(root, path)
             .groundKeys()

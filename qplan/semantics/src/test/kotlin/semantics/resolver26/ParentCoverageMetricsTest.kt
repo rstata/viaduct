@@ -55,7 +55,7 @@ class ParentCoverageMetricsTest {
             )
         val world = testWorld.assumptions
         val operation =
-            SharedOperationContext(
+            SharedOperationContext.create(
                 world = world,
                 resolverObserver = RecordingResolverObserver(),
             )

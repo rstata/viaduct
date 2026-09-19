@@ -12,8 +12,8 @@ internal fun dependencyOrder(
     path: List<PathComponent>,
     keys: Set<ObjectEngineResult.GroundKey>,
     ordered: List<ObjectEngineResult.GroundKey> = emptyList(),
-): List<ObjectEngineResult.GroundKey> = context(operation.world) {
-    if (keys.isEmpty()) return@context ordered
+): List<ObjectEngineResult.GroundKey> {
+    if (keys.isEmpty()) return ordered
 
     val ready =
         keys.filter { key ->
@@ -22,7 +22,7 @@ internal fun dependencyOrder(
     require(ready.isNotEmpty()) {
         "Resolver dependencies on ${keys.first().field.containingDef.name} contain a cycle"
     }
-    dependencyOrder(
+    return dependencyOrder(
         root = root,
         path = path,
         keys = keys - ready,
@@ -37,16 +37,16 @@ private fun dependenciesOf(
     path: List<PathComponent>,
     consumer: ObjectEngineResult.GroundKey,
     unresolved: Set<ObjectEngineResult.GroundKey>,
-): Set<ObjectEngineResult.GroundKey> = context(operation.world) {
+): Set<ObjectEngineResult.GroundKey> {
     if (consumer.arguments.argumentsContainErrorValue()) {
-        return@context emptySet()
+        return emptySet()
     }
-    require(consumer.field in operation.resolverRegistry) {
+    require(consumer.field in operation.world.resolverRegistry) {
         "Demanded field ${consumer.field.containingDef.name}/${consumer.field.name} is absent from its source " +
             "and has no registered resolver"
     }
 
-    unresolved
+    return unresolved
         .filter { sibling ->
             sibling != consumer &&
                 consumer.demandsFromSibling(sibling, root, path + consumer)

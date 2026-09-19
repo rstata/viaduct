@@ -18,10 +18,10 @@ class InclusionConditionTest {
 
     @Test
     fun `condition evaluation short circuits without awaiting later alternatives`() = runBlocking {
-        val operation = SharedOperationContext(world)
+        val operation = SharedOperationContext.create(world)
         val first = variable("first")
         val second = variable("second")
-        operation.variableBindingsState.bindVariable(requireNotNull(first.instanceId), true)
+        operation.variableBindings.bindVariable(requireNotNull(first.instanceId), true)
         val condition =
             InclusionCondition.anyOf(
                 listOf(
@@ -61,9 +61,9 @@ class InclusionConditionTest {
         binding: VariableBinding,
         expectedMessage: String,
     ) {
-        val operation = SharedOperationContext(world)
+        val operation = SharedOperationContext.create(world)
         val variable = variable("condition")
-        operation.variableBindingsState.bindVariable(requireNotNull(variable.instanceId), binding)
+        operation.variableBindings.bindVariable(requireNotNull(variable.instanceId), binding)
         val condition = InclusionCondition.requires(mapOf(variable to true))
 
         val failure =

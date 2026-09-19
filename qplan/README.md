@@ -4,6 +4,8 @@
 
 Every maintained qplan resolver now uses the aligned engine carrier model, including qplan's validating `EngineObjectData.Sync` implementation. Resolver26 is the primary algorithm and eventual implementation blueprint. [`handoff.md`](./handoff.md) records the current state and scope boundaries.
 
+Maintaining Resolver01–23 helps preserve Resolver26's architectural integrity. Expressing related algorithms through different execution structures forces us to examine how Resolver26 decomposes and encapsulates its concerns. Shared contracts can deliberately enforce those architectural relationships even when no caller currently consumes them polymorphically; [`resolver-versions.md`](./resolver-versions.md) explains this role alongside the semantic comparison grid.
+
 Qplan models resolver object fragments and independently resolved Query-rooted fragments. It also models source-sensitive ownership for argumentless fields: a field with a standard resolver is dynamically passive when an ancestor resolver output supplies it and otherwise remains active. Support for these capabilities varies by resolver version; [`resolver-versions.md`](./resolver-versions.md) and [`semantics/testing-contracts.md`](./semantics/testing-contracts.md) contain the maintained capability matrix.
 
 The longer-term `viaduct.engine.runtime.execution2` goal is query execution only. Its stated boundary excludes mutations, subscriptions, custom scalars, resolver query fragments and `fromQueryField` variables, EOD aliases, and asynchronous EOD variants. Qplan's current query-fragment model is intentionally broader than that prospective integration boundary. The future goal supplies context for qplan but is not an instruction to design or implement `execution2`.

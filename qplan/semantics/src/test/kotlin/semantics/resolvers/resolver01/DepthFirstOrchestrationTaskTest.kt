@@ -5,7 +5,7 @@ import model.fragmentFrom
 import model.requireType
 import model.testing.TestWorld
 import org.junit.jupiter.api.Test
-import semantics.shared.OEROccurrenceContext
+import semantics.shared.OEROccurrence
 import semantics.shared.SharedOperationContext
 import viaduct.graphql.schema.ViaductSchema
 import kotlin.test.assertFailsWith
@@ -34,8 +34,8 @@ class DepthFirstOrchestrationTaskTest {
 
         assertFailsWith<IllegalArgumentException> {
             DepthFirstOrchestrationTask.create(
-                operation = DepthFirstOperationContext(SharedOperationContext(world), { it }, DepthFirstTaskDispatcher()),
-                occurrence = OEROccurrenceContext(target, emptyList(), target),
+                operation = DepthFirstOperationContext(SharedOperationContext.create(world), { it }, DepthFirstTaskDispatcher()),
+                occurrence = OEROccurrence(target, emptyList(), target),
                 source = source,
                 constructionDemand =
                     world

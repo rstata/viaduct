@@ -37,7 +37,7 @@ internal fun ObjectEngineResult.correctResolution(
     selections: ObjectSelectionForest,
     rootFieldReferenceWitness: RootFieldReferenceWitness,
 ): Boolean {
-    require(selections.type == operation.schema.requireQueryTypeDef()) {
+    require(selections.type == operation.world.schema.requireQueryTypeDef()) {
         "Correct-resolution selections must be rooted at Query"
     }
     val resolverApplicationCache = resolverApplicationCache(this, rootFieldReferenceWitness)

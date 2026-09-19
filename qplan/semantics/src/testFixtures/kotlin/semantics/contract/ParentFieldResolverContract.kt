@@ -608,7 +608,7 @@ interface UnsupportedParentFieldResolverContract : ResolverContract {
         val failure =
             unsupportedParentFailure {
                 resolve(
-                    SharedOperationContext(world),
+                    SharedOperationContext.create(world),
                     world.resolverRegistry.createRootQueryInput(),
                     world.operationSelectionsFrom("query { root { child { parent { __typename } } } }"),
                 )

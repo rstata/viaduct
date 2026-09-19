@@ -98,7 +98,7 @@ private fun ObjectEngineResult.objectConformsToResolvers(
                         producerField = key.field,
                     )
 
-            key.field in operation.resolverRegistry ->
+            key.field in operation.world.resolverRegistry ->
                 reapplyResolver(key, path)
                     ?.let { application ->
                         value.engineResultConformsToResolverValue(
@@ -129,8 +129,8 @@ private fun ObjectEngineResult.errorArgumentQueryFragmentConforms(
     key: ObjectEngineResult.ObjectKey,
     path: List<PathComponent>,
 ): Boolean {
-    if (key.field !in operation.resolverRegistry) return true
-    val resolver = operation.resolverRegistry.resolver(key.field)
+    if (key.field !in operation.world.resolverRegistry) return true
+    val resolver = operation.world.resolverRegistry.resolver(key.field)
     val queryFragment =
         resolver.instantiateFragmentsAt(resolverApplicationCache.root, path).queryFragment
     if (queryFragment.constructionSelections.isEmpty()) return true
@@ -142,7 +142,7 @@ private fun ObjectEngineResult.errorArgumentQueryFragmentConforms(
     if (key is ObjectEngineResult.GroundKey) return queryResults.isEmpty()
     val queryResult = queryResults.singleOrNull() ?: return false
     val querySelections =
-        queryFragment.constructionSelections.merge(operation.schema.requireQueryTypeDef())
+        queryFragment.constructionSelections.merge(operation.world.schema.requireQueryTypeDef())
     return queryResult.correctResolution(
         querySelections,
         resolverApplicationCache.rootFieldReferenceWitness,
@@ -168,7 +168,7 @@ internal fun FieldResolver.fragmentsSatisfiedBy(
             arguments = arguments,
         ) &&
             constructionSelections.usedVariables().all { variable ->
-                operation.variableBindingsState.isBound(variable.instanceId!!)
+                operation.variableBindings.isBound(variable.instanceId!!)
             } &&
             context(operation.world) {
                 result.conformsToSelectionsAt(
@@ -194,8 +194,8 @@ private fun FieldResolver.fromArgumentBindingsAgree(
             val definition = variableDefinition.definition
             if (definition !is VariableDefinition.FromArgument) return@all true
             val instanceId = requireNotNull(variableDefinition.variable.instanceId)
-            operation.variableBindingsState.isBound(instanceId) &&
-                operation.variableBindingsState.getBinding(instanceId) ==
+            operation.variableBindings.isBound(instanceId) &&
+                operation.variableBindings.getBinding(instanceId) ==
                 VariableBinding.of(definition.read(arguments))
         }
 }

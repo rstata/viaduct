@@ -1,4 +1,4 @@
-package semantics.resolvers.resolver01
+package semantics.resolvers.resolver21
 
 import model.EngineResultCell
 import model.ObjectSelection
@@ -6,22 +6,22 @@ import model.ObjectSelectionForest
 import model.PathComponent
 import model.RootFieldReferenceData
 import model.SelectionForest
-import semantics.shared.OEROccurrenceContext
-import semantics.shared.SharedResolvePassiveValues
+import semantics.resolvers.GroundedFieldPublicationOccurrence
+import semantics.shared.OEROccurrence
+import semantics.shared.SharedPassiveValueResolutionLogic
 import semantics.shared.applicableGroundSelections
 import viaduct.engine.api.EngineObjectData
 import viaduct.graphql.schema.ViaductSchema
 
-/** Grounded selection collection and reference dispatch for the shared passive traversal. */
-internal class DepthFirstPassiveValues(
-    private val depthFirstOperation: DepthFirstOperationContext,
-) : SharedResolvePassiveValues<DepthFirstOrchestrationTask>(depthFirstOperation) {
+/** Grounded selection collection and field-task dispatch around the common passive traversal. */
+internal class CoroutinePassiveValueResolutionLogic(operation: CoroutineOperationContext) :
+    SharedPassiveValueResolutionLogic<CoroutineOrchestrationTask, CoroutineOperationContext>(operation) {
     override fun createOrchestrationTask(
-        occurrence: OEROccurrenceContext,
+        occurrence: OEROccurrence,
         source: EngineObjectData.Sync,
         constructionDemand: SelectionForest,
-    ): DepthFirstOrchestrationTask =
-        DepthFirstOrchestrationTask.create(depthFirstOperation, occurrence, source, constructionDemand)
+    ): CoroutineOrchestrationTask =
+        CoroutineOrchestrationTask.create(operation, occurrence, source, constructionDemand)
 
     override fun collect(selections: SelectionForest, type: ViaductSchema.Object): ObjectSelectionForest =
         context(operation) { selections.applicableGroundSelections(type) }
@@ -33,11 +33,11 @@ internal class DepthFirstPassiveValues(
         expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
         selection: ObjectSelection,
         invocationDemand: SelectionForest,
-        parent: OEROccurrenceContext,
+        parent: OEROccurrence,
     ) {
-        depthFirstOperation.dispatcher.dispatchFieldResolver(
-            DepthFirstFieldResolverTask(
-                depthFirstOperation, parent, selection, cell, reference, invocationDemand, path, expectedType,
+        CoroutineFieldResolverTask.launchForListElement(
+            GroundedFieldPublicationOccurrence(
+                operation, parent, selection, cell, reference, invocationDemand, path, expectedType,
             ),
         )
     }

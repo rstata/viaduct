@@ -4,11 +4,9 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import model.Arguments
-import model.Assumptions
 import model.EngineErrorData
 import model.EngineObjectOrErrorData
 import model.EngineResult
-import model.EngineResultCell
 import model.ErrorEngineResult
 import model.NodeReferenceIdentity
 import model.ObjectEngineResult
@@ -39,52 +37,46 @@ import viaduct.engine.api.EngineObjectData
 /** Invokes and publishes one already-installed field resolver or root-field reference. */
 internal class FieldResolutionLogic(
     private val fieldResolverTask: FieldResolverTask,
-    private val publicationCell: EngineResultCell,
 ) {
-    private val operationContext: OperationContext
-        get() = fieldResolverTask.operationContext
-    private val oerOccurrenceContext get() = fieldResolverTask.oerOccurrenceContext
-    private val resolverOccurrenceContext get() = fieldResolverTask.resolverOccurrenceContext
-    private val fieldResolverOccurrenceContext get() = fieldResolverTask.fieldResolverOccurrenceContext
-    private val world: Assumptions = operationContext.world
-
     /** Owns the bindings that must receive errors if the current invocation fails. */
-    private var currentInvocation = fieldResolverOccurrenceContext
+    private var currentInvocation =
+        fieldResolverTask.publication.sourceOccurrence as? FieldResolverOccurrence
 
     fun validate() {
-        val occurrenceContext = resolverOccurrenceContext
-        val selection = occurrenceContext.selection
-        require(selection.key.field.containingDef == oerOccurrenceContext.target.type) {
+        val publication = fieldResolverTask.publication
+        val sourceOccurrence = publication.sourceOccurrence
+        val selection = sourceOccurrence.selection
+        require(selection.key.field.containingDef == publication.oerOccurrence.target.type) {
             "Resolver selection does not belong to its target occurrence"
         }
 
         val objectFieldPublication =
-            occurrenceContext.publicationPath.lastOrNull() is ObjectEngineResult.ObjectKey
+            sourceOccurrence.publicationPath.lastOrNull() is ObjectEngineResult.ObjectKey
         if (objectFieldPublication) {
-            require(oerOccurrenceContext.target.getCell(selection.key) === publicationCell) {
+            require(publication.oerOccurrence.target.getCell(selection.key) === publication.publicationCell) {
                 "Resolver cell does not belong to its target occurrence and selection"
             }
         }
 
-        when (occurrenceContext) {
-            is FieldResolverOccurrenceContext -> {
-                val resolver = occurrenceContext.resolver
-                val resolverOccurrenceId = occurrenceContext.resolverOccurrenceId
+        when (sourceOccurrence) {
+            is FieldResolverOccurrence -> {
+                val resolver = sourceOccurrence.resolver
+                val resolverOccurrenceId = sourceOccurrence.resolverOccurrenceId
                 require(resolver.field == selection.key.field) {
                     "Resolver field ${resolver.field.name} does not match ${selection.key.field.name}"
                 }
                 require(
                     resolverOccurrenceId ==
                         ResolverOccurrenceId.at(
-                            oerOccurrenceContext.root,
-                            oerOccurrenceContext.coordinate(selection.key),
+                            publication.oerOccurrence.root,
+                            publication.oerOccurrence.coordinate(selection.key),
                         ),
                 ) {
                     "Resolver occurrence ID does not match its target occurrence and selection"
                 }
             }
             is RootFieldReferenceOccurrence -> {
-                require(occurrenceContext.reference.targetField in world.resolverRegistry) {
+                require(sourceOccurrence.reference.targetField in publication.operation.world.resolverRegistry) {
                     "Root-field-reference target has no resolver"
                 }
             }
@@ -93,47 +85,49 @@ internal class FieldResolutionLogic(
     }
 
     fun publishFieldError(cause: Exception) {
+        val publication = fieldResolverTask.publication
         currentInvocation?.variableDefinitions?.forEach { definition ->
             if (
                 definition.definition == VariableDefinition.FromProvider ||
                 definition.definition is VariableDefinition.FromArgument
             ) {
-                operationContext.variableBindingsState.completeBinding(
+                publication.operation.variableBindings.completeBinding(
                     requireNotNull(definition.variable.instanceId),
                     VariableBinding.Error,
                 )
             }
         }
-        publicationCell.setActivated(true)
-        publicationCell.getValue().complete(ErrorEngineResult.of(EngineErrorData.of(cause)))
+        publication.publicationCell.setActivated(true)
+        publication.publicationCell.getValue().complete(ErrorEngineResult.of(EngineErrorData.of(cause)))
     }
 
     /** [queryProducer] is present for ordinary fields; references launch one for each invocation. */
     suspend fun publishResult(queryProducer: Deferred<EngineObjectOrErrorData>?) {
-        context(operationContext, world, operationContext.cycleChecker) {
-            val occurrenceContext = resolverOccurrenceContext
-            val selection = occurrenceContext.selection
-            val constructionDemand = occurrenceContext.publicationConstructionDemand
+        val publication = fieldResolverTask.publication
+        context(publication.operation, publication.operation.world) {
+            val sourceOccurrence = publication.sourceOccurrence
+            val selection = sourceOccurrence.selection
+            val constructionDemand = sourceOccurrence.publicationConstructionDemand
             val invocationDemand: SelectionForest =
-                when (occurrenceContext) {
-                    is PassiveValueOccurrence -> occurrenceContext.invocationDemand
+                when (sourceOccurrence) {
+                    is PassiveValueOccurrence -> sourceOccurrence.invocationDemand
                     else -> constructionDemand.successorDemand()
                 }
 
-            val activated = activateResolverOccurrence()
+            val activated = activatePublication()
             if (!activated) return
 
             var fieldValue: ResolverOutputData? =
-                when (occurrenceContext) {
-                    is FieldResolverOccurrenceContext ->
+                when (sourceOccurrence) {
+                    is FieldResolverOccurrence ->
                         runFieldResolver(
-                            fieldResolverContext = occurrenceContext,
+                            fieldResolverOccurrence = sourceOccurrence,
                             selection = selection,
                             invocationDemand = invocationDemand,
                             queryProducer = requireNotNull(queryProducer),
                         )
-                    is RootFieldReferenceOccurrence -> occurrenceContext.reference
-                    is PassiveValueOccurrence -> occurrenceContext.value
+                    is RootFieldReferenceOccurrence -> sourceOccurrence.reference
+                    is PassiveValueOccurrence -> sourceOccurrence.value
                 }
 
             var authoritativeNodeIdentity: NodeReferenceIdentity? = null
@@ -143,7 +137,7 @@ internal class FieldResolutionLogic(
                     authoritativeNodeIdentity ?: reference.nodeReferenceIdentityOrNull()
                 require(
                     reference.conformsToResolverOutputSchemaType(
-                        occurrenceContext.publicationExpectedType,
+                        sourceOccurrence.publicationExpectedType,
                     ),
                 ) {
                     "Root-field-reference target ${reference.type.name} does not conform to " +
@@ -156,14 +150,14 @@ internal class FieldResolutionLogic(
                     )
                 fieldValue =
                     invokeRootFieldResolver(
-                        fieldResolverContext = invocation,
+                        fieldResolverOccurrence = invocation,
                         arguments = reference.arguments,
                         invocationDemand = invocationDemand,
                     )
-                operationContext.resolverObserver.onRootFieldReferenceInvocation(
+                publication.operation.resolverObserver.onRootFieldReferenceInvocation(
                     RootFieldReferenceInvocationObservation(
-                        publicationRoot = oerOccurrenceContext.root,
-                        publicationPath = occurrenceContext.publicationPath,
+                        publicationRoot = publication.oerOccurrence.root,
+                        publicationPath = sourceOccurrence.publicationPath,
                         reference = reference,
                         invocationRoot = invocation.invocationRoot,
                         invocationPath = invocation.invocationPath,
@@ -181,27 +175,28 @@ internal class FieldResolutionLogic(
 
             val passiveValue: EngineResult? =
                 fieldValue.resolvePassiveValues(
-                    root = oerOccurrenceContext.root,
-                    expectedType = occurrenceContext.publicationExpectedType,
-                    path = occurrenceContext.publicationPath,
+                    root = publication.oerOccurrence.root,
+                    expectedType = sourceOccurrence.publicationExpectedType,
+                    path = sourceOccurrence.publicationPath,
                     invocationDemand = invocationDemand,
                     constructionDemand = constructionDemand,
-                    parent = oerOccurrenceContext,
+                    parent = publication.oerOccurrence,
                 )
 
-            publicationCell.getValue().complete(passiveValue)
+            publication.publicationCell.getValue().complete(passiveValue)
         }
     }
 
-    private suspend fun activateResolverOccurrence(): Boolean {
-        val context = resolverOccurrenceContext
+    private suspend fun activatePublication(): Boolean {
+        val publication = fieldResolverTask.publication
+        val sourceOccurrence = publication.sourceOccurrence
         val publicationCellNeedsActivation =
-            context.publicationPath.lastOrNull() is ObjectEngineResult.ObjectKey
+            sourceOccurrence.publicationPath.lastOrNull() is ObjectEngineResult.ObjectKey
         if (!publicationCellNeedsActivation) return true
 
-        val fieldResolverContext = fieldResolverOccurrenceContext
+        val fieldResolverOccurrence = (publication.sourceOccurrence as? FieldResolverOccurrence)
         val fromArgumentVariableIds =
-            fieldResolverContext
+            fieldResolverOccurrence
                 ?.variableDefinitions
                 ?.filter { definition ->
                     definition.definition is VariableDefinition.FromArgument
@@ -209,22 +204,22 @@ internal class FieldResolutionLogic(
                     requireNotNull(definition.variable.instanceId)
                 }.orEmpty()
         val activated =
-            context.selection.inclusionCondition.include { variable ->
+            sourceOccurrence.selection.inclusionCondition.include { variable ->
                 val variableId = requireNotNull(variable.instanceId)
                 if (
-                    fieldResolverContext != null &&
+                    fieldResolverOccurrence != null &&
                     variableId in fromArgumentVariableIds &&
-                    !operationContext.variableBindingsState.isBound(variableId)
+                    !publication.operation.variableBindings.isBound(variableId)
                 ) {
                     val groundedArguments =
-                        context(operationContext) {
-                            context.selection.key.fetchGroundedArguments()
+                        context(publication.operation) {
+                            sourceOccurrence.selection.key.fetchGroundedArguments()
                     }
-                    completeFromArgumentBindings(fieldResolverContext, groundedArguments)
+                    completeFromArgumentBindings(fieldResolverOccurrence, groundedArguments)
                 }
                 when (
                     val binding =
-                        operationContext.variableBindingsState.fetchBinding(variableId)
+                        publication.operation.variableBindings.fetchBinding(variableId)
                 ) {
                     VariableBinding.Error -> error("Inclusion-condition variable failed")
                     is VariableBinding.Input ->
@@ -232,43 +227,43 @@ internal class FieldResolutionLogic(
                             ?: error("Inclusion-condition variable must contain a Boolean")
                 }
             }
-        check(publicationCell.setActivated(activated)) {
+        check(publication.publicationCell.setActivated(activated)) {
             "Resolver26 field-task cell activation was already decided"
         }
         return activated
     }
 
-    context(world: Assumptions)
     private suspend fun runFieldResolver(
-        fieldResolverContext: FieldResolverOccurrenceContext,
+        fieldResolverOccurrence: FieldResolverOccurrence,
         selection: ObjectSelection,
         invocationDemand: SelectionForest,
         queryProducer: Deferred<EngineObjectOrErrorData>,
     ): ResolverOutputData? {
+        val publication = fieldResolverTask.publication
         val groundedArguments =
-            context(operationContext) {
+            context(publication.operation) {
                 selection.key.fetchGroundedArguments()
             }
-        completeFromArgumentBindings(fieldResolverContext, groundedArguments)
+        completeFromArgumentBindings(fieldResolverOccurrence, groundedArguments)
         if (groundedArguments.argumentsContainErrorValue()) {
-            completeVariablesProviderBindingsWithError(fieldResolverContext)
+            completeVariablesProviderBindingsWithError(fieldResolverOccurrence)
             return EngineErrorData.of()
         }
 
         val resolverArguments = groundedArguments as Arguments.Resolved
         val providerError =
             completeVariablesProviderBindings(
-                fieldResolverContext = fieldResolverContext,
+                fieldResolverOccurrence = fieldResolverOccurrence,
                 arguments = resolverArguments,
             )
         if (providerError != null) return providerError
 
         val input: EngineObjectData.Sync =
-            context(operationContext, operationContext.cycleChecker) {
-                oerOccurrenceContext.target.materializeResolverInput(
-                    selections = fieldResolverContext.inputMaterializeSelections,
-                    reader = fieldResolverContext.publicationPath,
-                    resultPath = oerOccurrenceContext.path,
+            context(publication.operation, publication.operation.cycleChecker) {
+                publication.oerOccurrence.target.materializeResolverInput(
+                    selections = fieldResolverOccurrence.inputMaterializeSelections,
+                    reader = fieldResolverOccurrence.publicationPath,
+                    resultPath = publication.oerOccurrence.path,
                 )
             }
         val queryValue =
@@ -284,35 +279,37 @@ internal class FieldResolutionLogic(
                     variable.instanceId?.resolverOccurrenceId
                 }
 
-        operationContext.resolverObserver.onResolverApplication(
+        publication.operation.resolverObserver.onResolverApplication(
             Resolver26ApplicationObservation(
-                occurrencePath = fieldResolverContext.publicationPath,
+                occurrencePath = fieldResolverOccurrence.publicationPath,
                 field = selection.key.field,
                 input = input,
-                inputSelections = fieldResolverContext.inputMaterializeSelections,
+                inputSelections = fieldResolverOccurrence.inputMaterializeSelections,
                 arguments = resolverArguments,
                 suppliedDemand = invocationDemand,
-                resolverOccurrenceId = fieldResolverContext.resolverOccurrenceId,
+                resolverOccurrenceId = fieldResolverOccurrence.resolverOccurrenceId,
                 variableArgumentCount = variableArgumentCount,
                 variableResolverOccurrenceIds = variableResolverOccurrenceIds,
             ),
         )
 
-        return fieldResolverContext.resolver(
-            input = input,
-            queryValue = queryValue,
-            arguments = resolverArguments,
-            selections = invocationDemand,
-            executionContext = fieldResolverTask,
-        )
+        return context(publication.operation.world) {
+            fieldResolverOccurrence.resolver(
+                input = input,
+                queryValue = queryValue,
+                arguments = resolverArguments,
+                selections = invocationDemand,
+                executionContext = fieldResolverTask,
+            )
+        }
     }
 
-    context(world: Assumptions)
     private fun createRootFieldResolverOccurrence(
         reference: RootFieldReferenceData,
         constructionDemand: SelectionForest,
-    ): FieldResolverOccurrenceContext {
-        val queryRoot = ObjectEngineResult.of(operationContext.schema.requireQueryTypeDef())
+    ): FieldResolverOccurrence {
+        val publication = fieldResolverTask.publication
+        val queryRoot = ObjectEngineResult.of(publication.operation.world.schema.requireQueryTypeDef())
         val prefixKeys =
             reference.path.dropLast(1).map { prefixField ->
                 ObjectEngineResult.GroundKey.of(prefixField, emptyMap())
@@ -321,7 +318,7 @@ internal class FieldResolutionLogic(
             ObjectEngineResult.GroundKey.of(reference.targetField, reference.arguments)
         val invocationPath: List<PathComponent> = prefixKeys + targetKey
         val resolverOccurrenceId = ResolverOccurrenceId.at(queryRoot, invocationPath)
-        val resolver = world.resolverRegistry.resolver(reference.targetField)
+        val resolver = publication.operation.world.resolverRegistry.resolver(reference.targetField)
         val fragments = resolver.instantiateFragments(resolverOccurrenceId)
         require(fragments.objectFragment.materializeSelections.isEmpty()) {
             "Root-field-reference target ${reference.targetField.containingDef.name}/" +
@@ -336,8 +333,8 @@ internal class FieldResolutionLogic(
             "Root-field-reference target ${reference.targetField.containingDef.name}/" +
                 "${reference.targetField.name} must not declare FromObjectField variables"
         }
-        val fieldResolverContext =
-            FieldResolverOccurrenceContext(
+        val fieldResolverOccurrence =
+            FieldResolverOccurrence(
                 selection =
                     selectionForestOf(
                         Selection.of(
@@ -355,21 +352,22 @@ internal class FieldResolutionLogic(
                     resolver.instantiatedVariableDefinitions(resolverOccurrenceId),
                 fragments = fragments,
             )
-        declareRootFieldInvocationBindings(fieldResolverContext, reference.arguments)
-        return fieldResolverContext
+        declareRootFieldInvocationBindings(fieldResolverOccurrence, reference.arguments)
+        return fieldResolverOccurrence
     }
 
     private fun declareRootFieldInvocationBindings(
-        fieldResolverContext: FieldResolverOccurrenceContext,
+        fieldResolverOccurrence: FieldResolverOccurrence,
         arguments: Arguments.Resolved,
     ) {
-        fieldResolverContext.variableDefinitions.forEach { variableDefinition ->
+        val publication = fieldResolverTask.publication
+        fieldResolverOccurrence.variableDefinitions.forEach { variableDefinition ->
             val variableId = requireNotNull(variableDefinition.variable.instanceId)
             when (val definition = variableDefinition.definition) {
                 VariableDefinition.FromProvider ->
-                    operationContext.variableBindingsState.declareBinding(variableId)
+                    publication.operation.variableBindings.declareBinding(variableId)
                 is VariableDefinition.FromArgument ->
-                    operationContext.variableBindingsState.bindVariable(
+                    publication.operation.variableBindings.bindVariable(
                         variableId,
                         bindingFor(arguments, definition),
                     )
@@ -377,59 +375,62 @@ internal class FieldResolutionLogic(
                     require(definition.providerFragment == ProviderFragment.QUERY) {
                         "Root-field-reference targets cannot use object-field variables"
                     }
-                    operationContext.variableBindingsState.declareBinding(variableId)
+                    publication.operation.variableBindings.declareBinding(variableId)
                 }
             }
         }
     }
 
-    context(world: Assumptions, cycleChecker: semantics.shared.CycleCheckState)
     private suspend fun invokeRootFieldResolver(
-        fieldResolverContext: FieldResolverOccurrenceContext,
+        fieldResolverOccurrence: FieldResolverOccurrence,
         arguments: Arguments.Resolved,
         invocationDemand: SelectionForest,
     ): ResolverOutputData? {
-        currentInvocation = fieldResolverContext
-        val queryProducer = fieldResolverTask.launchQueryFragmentProducer(fieldResolverContext)
-        completeVariablesProviderBindings(fieldResolverContext, arguments)?.let { return it }
-        val input = engineObjectDataOf(fieldResolverContext.resolver.field.containingDef)
+        val publication = fieldResolverTask.publication
+        currentInvocation = fieldResolverOccurrence
+        val queryProducer = fieldResolverTask.launchQueryFragmentProducer(fieldResolverOccurrence)
+        completeVariablesProviderBindings(fieldResolverOccurrence, arguments)?.let { return it }
+        val input = engineObjectDataOf(fieldResolverOccurrence.resolver.field.containingDef)
         val queryValue =
             when (val value = queryProducer.await()) {
                 is EngineObjectOrErrorData.Success -> value.value
                 is EngineObjectOrErrorData.Error -> return value.error
             }
-        operationContext.resolverObserver.onResolverApplication(
+        publication.operation.resolverObserver.onResolverApplication(
             Resolver26ApplicationObservation(
-                occurrencePath = fieldResolverContext.invocationPath,
-                field = fieldResolverContext.selection.key.field,
+                occurrencePath = fieldResolverOccurrence.invocationPath,
+                field = fieldResolverOccurrence.selection.key.field,
                 input = input,
-                inputSelections = fieldResolverContext.inputMaterializeSelections,
+                inputSelections = fieldResolverOccurrence.inputMaterializeSelections,
                 arguments = arguments,
                 suppliedDemand = invocationDemand,
-                resolverOccurrenceId = fieldResolverContext.resolverOccurrenceId,
+                resolverOccurrenceId = fieldResolverOccurrence.resolverOccurrenceId,
                 variableArgumentCount = 0,
                 variableResolverOccurrenceIds = emptySet(),
             ),
         )
-        return fieldResolverContext.resolver(
-            input,
-            queryValue,
-            arguments,
-            invocationDemand,
-            fieldResolverTask,
-        )
+        return context(publication.operation.world) {
+            fieldResolverOccurrence.resolver(
+                input,
+                queryValue,
+                arguments,
+                invocationDemand,
+                fieldResolverTask,
+            )
+        }
     }
 
     // Calls the tenant provider once for this occurrence and publishes its complete binding set.
     // A provider failure becomes the owning field's error while also unblocking fragment work.
     private suspend fun completeVariablesProviderBindings(
-        fieldResolverContext: FieldResolverOccurrenceContext,
+        fieldResolverOccurrence: FieldResolverOccurrence,
         arguments: Arguments.Resolved,
     ): EngineErrorData? {
-        val resolver = fieldResolverContext.resolver
+        val publication = fieldResolverTask.publication
+        val resolver = fieldResolverOccurrence.resolver
         val provider = resolver.variablesProvider ?: return null
         val providerDefinitions =
-            fieldResolverContext.variableDefinitions.filter { definition ->
+            fieldResolverOccurrence.variableDefinitions.filter { definition ->
                 definition.definition == VariableDefinition.FromProvider
             }
         val expectedNames =
@@ -441,13 +442,13 @@ internal class FieldResolutionLogic(
                 provider(arguments)
             } catch (exception: Exception) {
                 currentCoroutineContext().ensureActive()
-                completeVariablesProviderBindingsWithError(fieldResolverContext)
+                completeVariablesProviderBindingsWithError(fieldResolverOccurrence)
                 return EngineErrorData.of(exception)
             }
         if (values.keys != expectedNames) {
             val extra = values.keys - expectedNames
             val missing = expectedNames - values.keys
-            completeVariablesProviderBindingsWithError(fieldResolverContext)
+            completeVariablesProviderBindingsWithError(fieldResolverOccurrence)
             error(
                 buildString {
                     append("VariablesProvider returned invalid variables.")
@@ -457,7 +458,7 @@ internal class FieldResolutionLogic(
             )
         }
         providerDefinitions.forEach { definition ->
-            operationContext.variableBindingsState.completeBinding(
+            publication.operation.variableBindings.completeBinding(
                 requireNotNull(definition.variable.instanceId),
                 values.getValue(definition.variable.variableName),
             )
@@ -466,11 +467,12 @@ internal class FieldResolutionLogic(
     }
 
     private fun completeVariablesProviderBindingsWithError(
-        fieldResolverContext: FieldResolverOccurrenceContext,
+        fieldResolverOccurrence: FieldResolverOccurrence,
     ) {
-        fieldResolverContext.variableDefinitions.forEach { definition ->
+        val publication = fieldResolverTask.publication
+        fieldResolverOccurrence.variableDefinitions.forEach { definition ->
             if (definition.definition != VariableDefinition.FromProvider) return@forEach
-            operationContext.variableBindingsState.completeBinding(
+            publication.operation.variableBindings.completeBinding(
                 requireNotNull(definition.variable.instanceId),
                 VariableBinding.Error,
             )
@@ -480,18 +482,19 @@ internal class FieldResolutionLogic(
     // Fills FromArgument bindings that were declared while their owning resolver key was symbolic.
     // Bindings for already-ground owners received their values during binding declaration.
     private fun completeFromArgumentBindings(
-        fieldResolverContext: FieldResolverOccurrenceContext,
+        fieldResolverOccurrence: FieldResolverOccurrence,
         groundedArguments: Arguments.Ground,
     ) {
-        if (fieldResolverContext.selection.key is ObjectEngineResult.GroundKey) return
-        fieldResolverContext.variableDefinitions.forEach { variableDefinition ->
+        val publication = fieldResolverTask.publication
+        if (fieldResolverOccurrence.selection.key is ObjectEngineResult.GroundKey) return
+        fieldResolverOccurrence.variableDefinitions.forEach { variableDefinition ->
             if (variableDefinition.definition !is VariableDefinition.FromArgument) {
                 return@forEach
             }
             val definition = variableDefinition.definition as VariableDefinition.FromArgument
             val variableId = requireNotNull(variableDefinition.variable.instanceId)
-            if (operationContext.variableBindingsState.isBound(variableId)) return@forEach
-            operationContext.variableBindingsState.completeBinding(
+            if (publication.operation.variableBindings.isBound(variableId)) return@forEach
+            publication.operation.variableBindings.completeBinding(
                 variableId,
                 bindingFor(groundedArguments, definition),
             )

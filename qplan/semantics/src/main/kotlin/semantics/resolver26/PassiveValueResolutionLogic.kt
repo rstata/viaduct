@@ -11,8 +11,8 @@ import model.ResolverOutputData
 import model.RootFieldReferenceData
 import model.SelectionForest
 import model.merge
-import semantics.shared.OEROccurrenceContext
-import semantics.shared.SharedResolvePassiveValues
+import semantics.shared.OEROccurrence
+import semantics.shared.SharedPassiveValueResolutionLogic
 import viaduct.engine.api.EngineObjectData
 import viaduct.graphql.schema.ViaductSchema
 
@@ -23,22 +23,22 @@ internal fun ResolverOutputData?.resolvePassiveValues(
     path: List<PathComponent>,
     invocationDemand: SelectionForest,
     constructionDemand: SelectionForest,
-    parent: OEROccurrenceContext? = null,
+    parent: OEROccurrence? = null,
 ): EngineResult? =
-    ResolvePassiveValues(operation).resolvePassiveValues(
+    PassiveValueResolutionLogic(operation).resolvePassiveValues(
         this, root, expectedType, path, constructionDemand, invocationDemand, parent,
     )
 
 /** Only symbolic demand and task dispatch are specific to Resolver26. */
-private class ResolvePassiveValues(
-    private val resolverOperation: OperationContext,
-) : SharedResolvePassiveValues<OrchestrationTask>(resolverOperation) {
+private class PassiveValueResolutionLogic(
+    operation: OperationContext,
+) : SharedPassiveValueResolutionLogic<OrchestrationTask, OperationContext>(operation) {
     override fun createOrchestrationTask(
-        occurrence: OEROccurrenceContext,
+        occurrence: OEROccurrence,
         source: EngineObjectData.Sync,
         constructionDemand: SelectionForest,
     ): OrchestrationTask =
-        OrchestrationTask.create(resolverOperation, occurrence, source, constructionDemand)
+        OrchestrationTask.create(operation, occurrence, source, constructionDemand)
 
     override fun collect(selections: SelectionForest, type: ViaductSchema.Object): ObjectSelectionForest =
         selections.merge(type)
@@ -50,14 +50,14 @@ private class ResolvePassiveValues(
         expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
         selection: ObjectSelection,
         invocationDemand: SelectionForest,
-        parent: OEROccurrenceContext,
+        parent: OEROccurrence,
     ) {
         cell.createValuePromise()
-        resolverOperation.cycleChecker.registerWriter(cell, path)
+        operation.cycleChecker.registerWriter(cell, path)
         FieldResolverTask.launchForListElement(
-            operationContext = resolverOperation,
-            oerOccurrenceContext = parent,
-            resolverOccurrenceContext = RootFieldReferenceOccurrence(
+            operation = operation,
+            oerOccurrence = parent,
+            sourceOccurrence = RootFieldReferenceOccurrence(
                 selection = selection,
                 reference = reference,
                 publicationPath = path,
@@ -68,7 +68,7 @@ private class ResolvePassiveValues(
     }
 
     override fun deferReferenceList(
-        occurrence: OEROccurrenceContext,
+        occurrence: OEROccurrence,
         selection: ObjectSelection,
         value: ResolverOutputData?,
         invocationDemand: SelectionForest,
@@ -77,9 +77,9 @@ private class ResolvePassiveValues(
         if (selection.inclusionCondition === InclusionCondition.Always) return false
         if (selection.inclusionCondition !== InclusionCondition.Never) {
             FieldResolverTask.installAndLaunch(
-                operationContext = resolverOperation,
-                oerOccurrenceContext = occurrence,
-                resolverOccurrenceContext = PassiveValueOccurrence(
+                operation = operation,
+                oerOccurrence = occurrence,
+                sourceOccurrence = PassiveValueOccurrence(
                     selection = selection,
                     value = value,
                     invocationDemand = invocationDemand,

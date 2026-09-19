@@ -47,10 +47,10 @@ private fun SelectionForest.successorDemandWithoutParentLifting(): SelectionFore
                             ),
                     )
                 val arguments = key.arguments
-                if (arguments !is Arguments.Resolved || key.field !in operation.resolverRegistry) {
+                if (arguments !is Arguments.Resolved || key.field !in operation.world.resolverRegistry) {
                     selectionForestOf()
                 } else {
-                    operation.resolverRegistry
+                    operation.world.resolverRegistry
                         .resolver(key.field)
                         .objectFragmentWithFromArguments(arguments)
                         .successorDemand()
@@ -132,10 +132,10 @@ private fun Selection.successorInputBoundaries(): SelectionForest =
                     ),
             )
         val arguments = key.arguments
-        if (arguments !is Arguments.Resolved || key.field !in operation.resolverRegistry) {
+        if (arguments !is Arguments.Resolved || key.field !in operation.world.resolverRegistry) {
             selectionForestOf()
         } else {
-            operation.resolverRegistry
+            operation.world.resolverRegistry
                 .resolver(key.field)
                 .objectFragmentWithFromArguments(arguments)
                 .boundarySkeleton()
@@ -150,7 +150,7 @@ private fun SelectionForest.boundarySkeleton(): SelectionForest =
         val isResolverBoundary =
             selection.possibleTypes.any { possibleType ->
                 val field = possibleType.requireField(selection.key.field.name)
-                field in operation.resolverRegistry
+                field in operation.world.resolverRegistry
             }
 
         if (isResolverBoundary || !nested.isEmpty()) {

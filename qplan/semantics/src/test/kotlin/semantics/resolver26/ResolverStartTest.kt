@@ -28,6 +28,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotSame
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -57,24 +58,27 @@ class ResolverStartTest {
                             outer to
                                 fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _, executionContext ->
                                     val task = assertIs<FieldResolverTask>(executionContext)
-                                    val childOperation =
-                                        task.operationContext.forChildScope(task.fieldTaskScope)
-                                    assertSame(task.operationContext.world, childOperation.world)
+                                    val publication = task.publication
+                                    val operation: OperationContext = publication
+                                    assertSame(task.publication.operation.dispatcher, operation.dispatcher)
+                                    val childOperation = operation.forChildScope(task.fieldTaskScope)
+                                    assertNotSame(operation.dispatcher, childOperation.dispatcher)
+                                    assertSame(task.publication.operation.world, childOperation.world)
                                     assertSame(
-                                        task.operationContext.variableBindingsState,
-                                        childOperation.variableBindingsState,
+                                        task.publication.operation.variableBindings,
+                                        childOperation.variableBindings,
                                     )
                                     assertSame(
-                                        task.operationContext.resolverObserver,
+                                        task.publication.operation.resolverObserver,
                                         childOperation.resolverObserver,
                                     )
                                     assertSame(
-                                        task.operationContext.cycleChecker,
+                                        task.publication.operation.cycleChecker,
                                         childOperation.cycleChecker,
                                     )
                                     assertSame(
-                                        task.operationContext.bindingDeclarationsState,
-                                        childOperation.bindingDeclarationsState,
+                                        task.publication.operation.bindingsState,
+                                        childOperation.bindingsState,
                                     )
                                     outerJob.complete(currentCoroutineContext().job)
                                     executionContext
@@ -100,7 +104,7 @@ class ResolverStartTest {
 
             try {
                 val root =
-                    context(SharedOperationContext(world.assumptions)) {
+                    context(SharedOperationContext.create(world.assumptions)) {
                         startResolve(selections, requestScope)
                     }
                 withTimeout(5_000) { nestedStarted.await() }
@@ -129,7 +133,7 @@ class ResolverStartTest {
 
             try {
                 val root =
-                    context(SharedOperationContext(world.assumptions)) {
+                    context(SharedOperationContext.create(world.assumptions)) {
                         startResolve(selections, requestScope)
                     }
                 val fast = root.cell("fast")
@@ -160,7 +164,7 @@ class ResolverStartTest {
             val requestScope = CoroutineScope(resolver26CoroutineContext() + requestJob)
 
             val root =
-                context(SharedOperationContext(world.assumptions)) {
+                context(SharedOperationContext.create(world.assumptions)) {
                     startResolve(selections, requestScope)
                 }
             withTimeout(5_000) { providerStarted.await() }
@@ -203,7 +207,7 @@ class ResolverStartTest {
 
             try {
                 val root =
-                    context(SharedOperationContext(world.assumptions)) {
+                    context(SharedOperationContext.create(world.assumptions)) {
                         startResolve(selections, requestScope)
                     }
                 val slow = root.cell("slow")
@@ -259,7 +263,7 @@ class ResolverStartTest {
 
             try {
                 val root =
-                    context(SharedOperationContext(world.assumptions)) {
+                    context(SharedOperationContext.create(world.assumptions)) {
                         startResolve(selections, requestScope)
                     }
 
@@ -305,7 +309,7 @@ class ResolverStartTest {
 
             try {
                 val root =
-                    context(SharedOperationContext(world.assumptions)) {
+                    context(SharedOperationContext.create(world.assumptions)) {
                         startResolve(selections, requestScope)
                     }
                 val error =
@@ -363,7 +367,7 @@ class ResolverStartTest {
 
                 try {
                     val root =
-                        context(SharedOperationContext(world.assumptions)) {
+                        context(SharedOperationContext.create(world.assumptions)) {
                             startResolve(selections, requestScope)
                         }
                     val fastError =
@@ -418,7 +422,7 @@ class ResolverStartTest {
 
                 try {
                     val root =
-                        context(SharedOperationContext(world.assumptions)) {
+                        context(SharedOperationContext.create(world.assumptions)) {
                             startResolve(
                                 world.assumptions.operationSelectionsFrom("query { fast }"),
                                 requestScope,

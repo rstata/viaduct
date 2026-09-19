@@ -1,8 +1,6 @@
 package semantics.resolver26
 
-import java.util.concurrent.atomic.AtomicBoolean
 import model.Arguments
-import model.Assumptions
 import model.InclusionCondition
 import model.ObjectEngineResult
 import model.ObjectSelectionForest
@@ -11,9 +9,7 @@ import model.VariableBinding
 import model.registry.VariableDefinition
 import model.requireQueryTypeDef
 import model.schemaType
-import semantics.shared.OEROccurrenceContext
-import semantics.shared.SharedOrchestrationTask
-import semantics.shared.SharedOperationContext
+import semantics.shared.OEROccurrence
 import semantics.shared.installParentBackedgeFields
 import viaduct.engine.api.EngineObjectData
 
@@ -24,17 +20,16 @@ import viaduct.engine.api.EngineObjectData
  * for future asynchronous orchestration. The current orchestration body does not suspend.
  */
 internal class OrchestrationTask private constructor(
-    internal val operation: OperationContext,
-    override val occurrence: OEROccurrenceContext,
-    override val source: EngineObjectData.Sync,
-) : SharedOrchestrationTask {
-    internal val world: Assumptions = operation.world
-    private lateinit var closed: CloseInputDemandResult
+    operation: OperationContext,
+    occurrence: OEROccurrence,
+    source: EngineObjectData.Sync,
+) : CoroutineOrchestrationTask<OperationContext>(operation, occurrence, source) {
+    private lateinit var closed: ClosedInputDemandContext
+    private var bindingDeclarationStarted = false
     override val closedDemand: ObjectSelectionForest get() = closed.demand
-    private val launched = AtomicBoolean(false)
 
     init {
-        require(occurrence.root.type == operation.schema.requireQueryTypeDef()) {
+        require(occurrence.root.type == operation.world.schema.requireQueryTypeDef()) {
             "Resolver26 occurrence root must have Query type"
         }
         require(occurrence.path.isEmpty() == (occurrence.root === occurrence.target)) {
@@ -49,47 +44,37 @@ internal class OrchestrationTask private constructor(
         /** Creates a fully prepared task without dispatching its active work. */
         fun create(
             operation: OperationContext,
-            occurrence: OEROccurrenceContext,
+            occurrence: OEROccurrence,
             source: EngineObjectData.Sync,
             initialDemand: SelectionForest,
         ): OrchestrationTask =
             OrchestrationTask(operation, occurrence, source).apply {
-                closed = context(world) { source.closeInputDemand(occurrence, initialDemand) }
+                closed = context(operation.world) { source.closeInputDemand(occurrence, initialDemand) }
                 context(operation) {
-                    declareBindings(closed)
+                    declareBindings()
                     occurrence.installParentBackedgeFields(closed.demand.byKey().keys.filterIsInstance<ObjectEngineResult.ParentKey>())
                 }
-                operation.bindingDeclarationsState.markBindingsDeclared(occurrence.target)
+                operation.bindingsState.markBindingsDeclared(occurrence.target)
             }
     }
 
-    internal val hasActiveWork: Boolean
-        get() = closed.fieldResolverOccurrenceContexts.isNotEmpty() ||
+    override val hasActiveWork: Boolean
+        get() = closed.fieldResolverOccurrences.isNotEmpty() ||
             closed.rootFieldReferenceOccurrences.isNotEmpty() ||
-            closed.objectProviderReadsByResolverOccurrence.values.any { it.isNotEmpty() }
+            closed.variableProviderReadsByResolverOccurrence.values.any { it.isNotEmpty() }
 
-    /** Checks the one-shot dispatch boundary before entering the request-root coroutine. */
-    internal fun checkDispatch() {
-        require(launched.compareAndSet(false, true)) {
-            "Resolver26 orchestration task at ${occurrence.path} was dispatched twice"
-        }
-        validatePassiveFields(closed)
-    }
-
-    /** Installs field tasks and seals this object's field set. */
-    internal fun run() {
+    override fun installFieldTasks() {
         FieldResolverTask.launchAll(this, closed)
-        occurrence.target.freeze()
     }
 
     // Checks that passive values selected by closed demand were installed before task dispatch.
-    private fun validatePassiveFields(closed: CloseInputDemandResult) {
+    override fun validateDispatch() {
         closed.demand.byKey().forEach { (objectKey, selection) ->
             if (selection.inclusionCondition === InclusionCondition.Never) {
                 return@forEach
             }
             if (
-                objectKey !in closed.fieldResolverOccurrenceContexts &&
+                objectKey !in closed.fieldResolverOccurrences &&
                 objectKey !in closed.rootFieldReferenceOccurrences
             ) {
                 check(
@@ -102,51 +87,49 @@ internal class OrchestrationTask private constructor(
             }
         }
     }
-}
 
-// Adds every binding introduced by the closed demand to the world's binding domain.
-// Grounded argument bindings receive values immediately; open and provider bindings remain pending.
-context(operation: SharedOperationContext<*>)
-private fun declareBindings(closed: CloseInputDemandResult) {
-    check(!closed.bindingDeclarationStarted) {
-        "Resolver26 closed demand attempted to declare its bindings twice"
-    }
-    closed.bindingDeclarationStarted = true
-    closed.fieldResolverOccurrenceContexts.values
-        .forEach { fieldResolverOccurrenceContext ->
-        val ownerKey = fieldResolverOccurrenceContext.selection.key
-        fieldResolverOccurrenceContext.variableDefinitions.forEach { variableDefinition ->
-            val variableId = requireNotNull(variableDefinition.variable.instanceId)
-            when (val definition = variableDefinition.definition) {
-                VariableDefinition.FromProvider ->
-                    operation.variableBindingsState.declareBinding(variableId)
+    // Adds every binding introduced by the closed demand to the operation's binding domain.
+    // Grounded argument bindings receive values immediately; open and provider bindings remain pending.
+    private fun declareBindings() {
+        check(!bindingDeclarationStarted) {
+            "Resolver26 orchestration task attempted to declare its bindings twice"
+        }
+        bindingDeclarationStarted = true
+        closed.fieldResolverOccurrences.values.forEach { fieldResolverOccurrence ->
+            val ownerKey = fieldResolverOccurrence.selection.key
+            fieldResolverOccurrence.variableDefinitions.forEach { variableDefinition ->
+                val variableId = requireNotNull(variableDefinition.variable.instanceId)
+                when (val definition = variableDefinition.definition) {
+                    VariableDefinition.FromProvider ->
+                        operation.variableBindings.declareBinding(variableId)
 
-                is VariableDefinition.FromArgument ->
-                    if (ownerKey is ObjectEngineResult.GroundKey) {
-                        operation.variableBindingsState.bindVariable(
-                            variableId,
-                            bindingFor(ownerKey.arguments, definition),
-                        )
-                    } else {
-                        operation.variableBindingsState.declareBinding(variableId)
-                    }
+                    is VariableDefinition.FromArgument ->
+                        if (ownerKey is ObjectEngineResult.GroundKey) {
+                            operation.variableBindings.bindVariable(
+                                variableId,
+                                bindingFor(ownerKey.arguments, definition),
+                            )
+                        } else {
+                            operation.variableBindings.declareBinding(variableId)
+                        }
 
-                is VariableDefinition.FromField -> Unit
+                    is VariableDefinition.FromField -> Unit
+                }
             }
         }
-    }
-    closed.objectProviderReadsByResolverOccurrence.values.flatten().forEach { read ->
-        operation.variableBindingsState.declareBinding(
-            requireNotNull(read.definition.variable.instanceId),
-        )
-    }
-    closed.fieldResolverOccurrenceContexts.values
-        .flatMap { context -> context.fragments.queryFragment.pathVariableDefinitions }
-        .forEach { definition ->
-            operation.variableBindingsState.declareBinding(
-                requireNotNull(definition.variable.instanceId),
+        closed.variableProviderReadsByResolverOccurrence.values.flatten().forEach { providerRead ->
+            operation.variableBindings.declareBinding(
+                requireNotNull(providerRead.definition.variable.instanceId),
             )
         }
+        closed.fieldResolverOccurrences.values
+            .flatMap { fieldResolverOccurrence -> fieldResolverOccurrence.fragments.queryFragment.pathVariableDefinitions }
+            .forEach { definition ->
+                operation.variableBindings.declareBinding(
+                    requireNotNull(definition.variable.instanceId),
+                )
+            }
+    }
 }
 
 // Reads one FromArgument definition from grounded arguments while preserving argument errors.

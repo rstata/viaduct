@@ -3,37 +3,43 @@ package semantics.shared
 import model.Assumptions
 
 /**
- * Structurally immutable bundle of stable references for one semantics operation.
- * [D] preserves the dispatcher's task types; semantic operations that do not dispatch use `SharedOperationContext<*>`.
+ * Structurally immutable configuration and state references for one semantic operation.
+ * More specific contexts implement this contract by delegating to their owning operation.
+ * [D] preserves the dispatcher type. Nothing terminates the recursive task/context bounds.
  */
-open class SharedOperationContext<out D : SharedTaskDispatcher<*, *>> protected constructor(
-    val world: Assumptions,
-    val variableBindingsState: VariableBindingsState = VariableBindingsState(),
-    open val resolverObserver: SharedResolverObserver = SharedResolverObserver.createNOP(),
-) {
-    /**
-     * Execution implementations supply their concrete dispatcher. Standalone semantic operations
-     * need no dispatcher and fail if one is requested.
-     */
-    internal open val dispatcher: D
-        get() = error("This operation does not dispatch resolver tasks")
+interface SharedOperationContext<out D : SharedTaskDispatcher<Nothing, Nothing>> {
+    val world: Assumptions
+    val variableBindings: VariableBindingsState
+    val resolverObserver: SharedResolverObserver
+    val dispatcher: D
 
     companion object {
-        /** Creates a standalone semantics context without requiring a dispatcher type at the call site. */
-        operator fun invoke(
+        /** Creates a standalone semantic operation without task-dispatch capability. */
+        @JvmStatic
+        fun create(
             world: Assumptions,
-            variableBindingsState: VariableBindingsState = VariableBindingsState(),
+            variableBindings: VariableBindingsState = VariableBindingsState(),
             resolverObserver: SharedResolverObserver = SharedResolverObserver.createNOP(),
-        ): SharedOperationContext<*> =
-            SharedOperationContext<Nothing>(world, variableBindingsState, resolverObserver)
+        ): SharedOperationContext<Nothing> = object : SharedOperationContext<Nothing> {
+            override val world = world
+            override val variableBindings = variableBindings
+            override val resolverObserver = resolverObserver
+            override val dispatcher: Nothing
+                get() = error("This operation does not dispatch resolver tasks")
+        }
+
+        /** Creates an operation with a concretely typed dispatcher and stable shared state references. */
+        @JvmStatic
+        fun <D : SharedTaskDispatcher<Nothing, Nothing>> create(
+            world: Assumptions,
+            dispatcher: D,
+            variableBindings: VariableBindingsState = VariableBindingsState(),
+            resolverObserver: SharedResolverObserver = SharedResolverObserver.createNOP(),
+        ): SharedOperationContext<D> = object : SharedOperationContext<D> {
+            override val world = world
+            override val variableBindings = variableBindings
+            override val resolverObserver = resolverObserver
+            override val dispatcher = dispatcher
+        }
     }
-
-    val schema
-        get() = world.schema
-
-    val resolverRegistry
-        get() = world.resolverRegistry
-
-    val selectiveResolvers
-        get() = world.selectiveResolvers
 }

@@ -11,10 +11,10 @@ context(operation: SharedOperationContext<*>)
 internal fun ObjectEngineResult.correctResolution(
     fragment: Fragment,
 ): Boolean =
-    fragment.nominalType == operation.schema.requireQueryTypeDef() &&
+    fragment.nominalType == operation.world.schema.requireQueryTypeDef() &&
         correctResolution(
             fragment.subselections
-                .merge(operation.schema.requireQueryTypeDef()),
+                .merge(operation.world.schema.requireQueryTypeDef()),
         )
 
 context(world: Assumptions)

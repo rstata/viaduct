@@ -62,8 +62,8 @@ class GroundSelectionsTest {
         val symbolic = fixture.searchSelection(mapOf("values" to listOf(variable)))
         val concrete = fixture.searchSelection(mapOf("values" to listOf(1)))
         val variableId = requireNotNull(variable.instanceId)
-        fixture.operation.variableBindingsState.declareBinding(variableId)
-        fixture.operation.variableBindingsState.completeBinding(variableId, 1)
+        fixture.operation.variableBindings.declareBinding(variableId)
+        fixture.operation.variableBindings.completeBinding(variableId, 1)
 
         val merged =
             context(fixture.operation) {
@@ -91,8 +91,8 @@ class GroundSelectionsTest {
                 arguments = mapOf("values" to listOf(variable, variable)),
             )
         val variableId = requireNotNull(variable.instanceId)
-        fixture.operation.variableBindingsState.declareBinding(variableId)
-        fixture.operation.variableBindingsState.completeBinding(variableId, binding)
+        fixture.operation.variableBindings.declareBinding(variableId)
+        fixture.operation.variableBindings.completeBinding(variableId, binding)
 
         val once =
             context(fixture.operation) {
@@ -105,7 +105,7 @@ class GroundSelectionsTest {
 
     private class Fixture {
         val world = TestWorld.fromSDL(SCHEMA).assumptions
-        val operation = SharedOperationContext(world)
+        val operation = SharedOperationContext.create(world)
         val schema = world.schema
         val query = schema.requireQueryTypeDef()
 

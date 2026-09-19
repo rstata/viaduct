@@ -98,7 +98,7 @@ internal class PropertyTestBenchmarkSupport(
                     preparationEvent?.finish()
                 }
                 val operation =
-                    SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
+                    SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
                 corpus.registry.clearResolutionWitness()
                 val appliedResolverOccurrences =
                     ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()

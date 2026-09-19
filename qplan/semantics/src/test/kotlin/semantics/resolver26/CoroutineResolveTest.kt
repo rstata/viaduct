@@ -6,7 +6,7 @@ import model.SelectionForest
 import model.schemaType
 import semantics.contract.CoroutineResolverContract
 import semantics.shared.CycleCheckState
-import semantics.shared.OEROccurrenceContext
+import semantics.shared.OEROccurrence
 import semantics.shared.SharedOperationContext
 
 class CoroutineResolveTest : CoroutineResolverContract {
@@ -16,13 +16,13 @@ class CoroutineResolveTest : CoroutineResolverContract {
         selections: SelectionForest,
         cycleChecker: CycleCheckState,
     ): ObjectEngineResult {
-        val resolverOperation = OperationContext(
+        val resolverOperation = OperationContext.create(
             operation, requestScope, operation.resolverObserver.withResolver26Applications {}, cycleChecker,
         )
-        val source = operation.resolverRegistry.createRootQueryInput()
+        val source = operation.world.resolverRegistry.createRootQueryInput()
         val root = ObjectEngineResult.of(source.schemaType, mutable = true)
         resolverOperation.dispatcher.dispatchOrchestrator(
-            OrchestrationTask.create(resolverOperation, OEROccurrenceContext(root, emptyList(), root), source, selections),
+            OrchestrationTask.create(resolverOperation, OEROccurrence(root, emptyList(), root), source, selections),
         )
         return root
     }

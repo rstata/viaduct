@@ -23,10 +23,10 @@ internal fun Iterable<ObjectEngineResult.GroundKey>.bindFromArguments(
     path: List<PathComponent>,
 ) {
     forEach { key ->
-        if (key.field !in operation.resolverRegistry) return@forEach
+        if (key.field !in operation.world.resolverRegistry) return@forEach
         val arguments = key.arguments as? Arguments.Resolved ?: return@forEach
 
-        operation.resolverRegistry
+        operation.world.resolverRegistry
             .resolver(key.field)
             .variables
             .forEach { (variable, definition) ->
@@ -37,8 +37,8 @@ internal fun Iterable<ObjectEngineResult.GroundKey>.bindFromArguments(
                         )
                     val variableId = requireNotNull(instantiated.instanceId)
                     val value = definition.read(arguments)
-                    operation.variableBindingsState.declareBinding(variableId)
-                    check(operation.variableBindingsState.completeBinding(variableId, value)) {
+                    operation.variableBindings.declareBinding(variableId)
+                    check(operation.variableBindings.completeBinding(variableId, value)) {
                         "Resolver variable binding was completed twice"
                     }
                 }

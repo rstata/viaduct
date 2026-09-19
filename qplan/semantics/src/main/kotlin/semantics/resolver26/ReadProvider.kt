@@ -32,24 +32,24 @@ internal suspend fun ObjectEngineResult.readProvider(
 // Reads and completes provider bindings; the owning field-task root handles cancellation cleanup.
 context(operation: OperationContext)
 internal suspend fun ObjectEngineResult.completeProviderBindings(
-    reads: List<ProviderDefinitionRead>,
+    providerReads: List<VariableProviderReadOccurrence>,
 ) {
     coroutineScope {
-        reads.forEach { read ->
-            val variableId = requireNotNull(read.definition.variable.instanceId)
+        providerReads.forEach { providerRead ->
+            val variableId = requireNotNull(providerRead.definition.variable.instanceId)
             launch {
                 val binding =
                     try {
-                        if (!read.inclusionCondition.fetchIncluded()) return@launch
+                        if (!providerRead.inclusionCondition.fetchIncluded()) return@launch
                         readProvider(
-                            definition = read.definition,
-                            reader = read.readerPath,
+                            definition = providerRead.definition,
+                            reader = providerRead.readerPath,
                         )
                     } catch (exception: Exception) {
                         currentCoroutineContext().ensureActive()
                         VariableBinding.Error
                     }
-                operation.variableBindingsState.completeBinding(variableId, binding)
+                operation.variableBindings.completeBinding(variableId, binding)
             }
         }
     }
@@ -62,7 +62,7 @@ private suspend fun ObjectEngineResult.readProvider(
 ): VariableBinding {
     var current = this
     path.forEachIndexed { index, openKey ->
-        operation.bindingDeclarationsState.awaitBindingsDeclared(current)
+        operation.bindingsState.awaitBindingsDeclared(current)
         val specializedKey =
             Selection.of(
                 key = openKey,

@@ -4,28 +4,43 @@ import kotlinx.coroutines.CoroutineScope
 import semantics.shared.CycleCheckState
 import semantics.shared.SharedOperationContext
 
-/** Request-local state and observation boundary specific to Resolver26. */
-internal class OperationContext(
-    base: SharedOperationContext<*>,
-    requestScope: CoroutineScope,
-    override val resolverObserver: ResolverObserver,
-    val cycleChecker: CycleCheckState = CycleCheckState.create(),
-    val bindingDeclarationsState: BindingDeclarationsState = BindingDeclarationsState(),
-) : SharedOperationContext<TaskDispatcher>(
-        world = base.world,
-        variableBindingsState = base.variableBindingsState,
-        resolverObserver = resolverObserver,
-    ) {
-    /** Owns dispatch of the two permitted request-root task kinds. */
-    override val dispatcher = TaskDispatcher(requestScope)
+/**
+ * One Resolver26 execution scope: scheduling, observation, cycle checking, and binding readiness.
+ * Child execution scopes share the logical operation's configuration and mutable state references.
+ */
+internal interface OperationContext : SharedOperationContext<CoroutineTaskDispatcher<OrchestrationTask, FieldPublicationOccurrence>> {
+    override val resolverObserver: ResolverObserver
+    val cycleChecker: CycleCheckState
+    val bindingsState: BindingDeclarationsState
 
     /** Derives nested execution under its calling field task while retaining operation state. */
     fun forChildScope(requestScope: CoroutineScope): OperationContext =
-        OperationContext(
-            base = this,
-            requestScope = requestScope,
-            resolverObserver = resolverObserver,
-            cycleChecker = cycleChecker,
-            bindingDeclarationsState = bindingDeclarationsState,
-        )
+        create(this, requestScope, resolverObserver, cycleChecker, bindingsState)
+
+    companion object {
+        fun create(
+            base: SharedOperationContext<*>,
+            requestScope: CoroutineScope,
+            resolverObserver: ResolverObserver,
+            cycleChecker: CycleCheckState = CycleCheckState.create(),
+            bindingsState: BindingDeclarationsState = BindingDeclarationsState(),
+        ): OperationContext {
+            val operationDelegate = SharedOperationContext.create(
+                world = base.world,
+                variableBindings = base.variableBindings,
+                resolverObserver = resolverObserver,
+                dispatcher = CoroutineTaskDispatcher<OrchestrationTask, FieldPublicationOccurrence>(
+                    requestScope = requestScope,
+                    runFieldResolver = FieldResolverTask::execute,
+                    cancelFieldResolver = FieldResolverTask::cancel,
+                ),
+            )
+            return object : OperationContext,
+                SharedOperationContext<CoroutineTaskDispatcher<OrchestrationTask, FieldPublicationOccurrence>> by operationDelegate {
+                override val resolverObserver = resolverObserver
+                override val cycleChecker = cycleChecker
+                override val bindingsState = bindingsState
+            }
+        }
+    }
 }

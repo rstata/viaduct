@@ -18,11 +18,15 @@ class RequestScopeOwnershipTest {
                 paths.filter { path -> path.fileName.toString().endsWith(".kt") }.toList()
             }
 
-        val rawRequestScopeLaunch = Regex("""requestScope\s*\.\s*launch\s*\(""")
+        val semanticsDirectory = sourceDirectory.parent
+        val allSources = Files.walk(semanticsDirectory).use { paths ->
+            paths.filter { path -> path.fileName.toString().endsWith(".kt") }.toList()
+        }
+        val rawRequestScopeLaunch = Regex("""requestScope\s*\.\s*(?:launch|async)\s*(?:\(|\{)""")
         assertEquals(
-            listOf("TaskDispatcher.kt"),
-            sources.filter { source -> rawRequestScopeLaunch.containsMatchIn(source.readText()) }
-                .map(Path::name)
+            listOf("resolver26/CoroutineTaskDispatcher.kt"),
+            allSources.filter { source -> rawRequestScopeLaunch.containsMatchIn(source.readText()) }
+                .map { semanticsDirectory.relativize(it).toString() }
                 .sorted(),
         )
 

@@ -63,7 +63,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
         assertEquals(14, resolved.getCell(resultKey).get())
         assertEquals(
             VariableBinding.of(7),
-            resolution.operation.variableBindingsState.getBinding(
+            resolution.operation.variableBindings.getBinding(
                 requireNotNull(boundVariable.instanceId),
             ),
         )
@@ -332,7 +332,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
                 } else {
                     VariableBinding.of(provided)
                 },
-                resolution.operation.variableBindingsState.getBinding(
+                resolution.operation.variableBindings.getBinding(
                     requireNotNull(boundVariable.instanceId),
                 ),
             )

@@ -4,6 +4,10 @@
 
 Every maintained resolver uses the aligned Engine API carrier boundary. The versions form a comparison grid that separates semantic capability from execution structure; they are not eleven production candidates. Resolver26 is the primary algorithm, while earlier versions make its essential ideas easier to isolate and verify.
 
+Resolver26 is the intended end product, and maintaining Resolver01–23 is part of preserving its architectural integrity. Implementing the same concerns in simpler algorithms and different execution structures forces deliberate choices about decomposition, encapsulation, ownership, and the relationships among contexts, occurrences, and tasks. Aligning their structure provides an ongoing check on Resolver26's design as its capabilities grow.
+
+Shared contracts can therefore be valuable solely for enforcing architectural consistency. `SharedFieldResolverTask<P>` intentionally requires every field-task implementation to retain a concretely typed publication occurrence, even though no caller currently consumes that interface polymorphically. The importance of the field-task role justifies preserving this common shape. Evaluate such contracts by the architectural concern they make explicit as well as by shared runtime consumers; absence of a polymorphic caller alone is not a reason to remove them.
+
 ## Comparison Grid
 
 | Semantic stage | Recursive construction | Explicit depth-first tasks | Structured coroutines | Capability |
@@ -39,7 +43,7 @@ Resolver06-08 also intentionally do not support `@parent`; making their task que
 
 ### Structured Suspension: Resolver21-23
 
-Resolver21-23 use the same task roles and phase boundaries as Resolver26: a prepared `CoroutineOrchestrationTask`, a `CoroutineFieldResolverContext` passed to the dispatcher, a running `CoroutineFieldResolverTask` owning helper coroutines, and `FieldResolutionLogic` for invocation and publication. Orchestration and field tasks run on the request root; Query-fragment producers run under their owning field task. Resolver23 is the grounded coroutine baseline and initial landing zone for access checks before transferring them to Resolver26.
+Resolver21-23 use the same task roles and phase boundaries as Resolver26: a prepared `CoroutineOrchestrationTask`, a `GroundedFieldPublicationOccurrence<CoroutineOperationContext>` passed to the dispatcher, a running `CoroutineFieldResolverTask` owning helper coroutines, and `FieldResolutionLogic` for invocation and publication. Orchestration and field tasks run on the request root; Query-fragment producers run under their owning field task. Both coroutine families use `resolver26.CoroutineTaskDispatcher` and extend `resolver26.CoroutineOrchestrationTask` and `resolver26.CoroutineFieldResolverTask`, sharing scheduling, the orchestration dispatch/install/freeze lifecycle, and the field-error boundary. Their concrete tasks retain specialized demand preparation, field installation, and resolution logic. Resolver23 is the grounded coroutine baseline and initial landing zone for access checks before transferring them to Resolver26.
 
 Resolver22/23 support `@parent`. Their structured suspension and exact promises allow demand to cross to an ancestor and return through an already-started descendant without forcing a depth-first re-entry protocol into local dependency ordering. Resolver21 retains its empty-fragment capability boundary and does not claim parent support.
 

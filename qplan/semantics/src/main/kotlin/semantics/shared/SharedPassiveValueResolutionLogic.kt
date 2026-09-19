@@ -30,10 +30,13 @@ import viaduct.graphql.schema.ViaductSchema
  * occurrence. This traversal owns result shape, occurrence identity, source coverage, and
  * propagation of construction versus invocation demand. Its factory hook prepares each object
  * before passive descent; the operation dispatcher schedules its active work afterward.
- * [O] connects the factory's result to the task type accepted by [operation]'s dispatcher.
+ * [T] connects the factory's result to the dispatcher's task type; [O] retains the concrete operation type.
  */
-internal abstract class SharedResolvePassiveValues<O : SharedOrchestrationTask>(
-    protected val operation: SharedOperationContext<SharedTaskDispatcher<O, *>>,
+internal abstract class SharedPassiveValueResolutionLogic<
+    T : SharedOrchestrationTask<*>,
+    O : SharedOperationContext<SharedTaskDispatcher<T, *>>,
+>(
+    protected val operation: O,
 ) {
     /**
      * Ensures demand is closed and active resolution occurs for OERs on the fringe. Resolver26's
@@ -42,10 +45,10 @@ internal abstract class SharedResolvePassiveValues<O : SharedOrchestrationTask>(
      * for passive descent; creating it does not dispatch active work.
      */
     protected abstract fun createOrchestrationTask(
-        occurrence: OEROccurrenceContext,
+        occurrence: OEROccurrence,
         source: EngineObjectData.Sync,
         constructionDemand: SelectionForest,
-    ): O
+    ): T
 
     /**
      * Collects selections for [type]. Resolver26 merges while retaining unresolved arguments;
@@ -70,7 +73,7 @@ internal abstract class SharedResolvePassiveValues<O : SharedOrchestrationTask>(
         expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
         selection: ObjectSelection,
         invocationDemand: SelectionForest,
-        parent: OEROccurrenceContext,
+        parent: OEROccurrence,
     )
 
     /**
@@ -81,7 +84,7 @@ internal abstract class SharedResolvePassiveValues<O : SharedOrchestrationTask>(
      * @return true when the hook has scheduled or omitted the list; false to resolve it passively now.
      */
     protected open fun deferReferenceList(
-        occurrence: OEROccurrenceContext,
+        occurrence: OEROccurrence,
         selection: ObjectSelection,
         value: ResolverOutputData?,
         invocationDemand: SelectionForest,
@@ -104,7 +107,7 @@ internal abstract class SharedResolvePassiveValues<O : SharedOrchestrationTask>(
         path: List<PathComponent>,
         constructionDemand: SelectionForest,
         invocationDemand: SelectionForest,
-        parent: OEROccurrenceContext? = null,
+        parent: OEROccurrence? = null,
     ): EngineResult? {
         require(value.conformsToResolverOutputSchemaType(expectedType)) {
             "Resolver output does not conform to $expectedType"
@@ -118,7 +121,7 @@ internal abstract class SharedResolvePassiveValues<O : SharedOrchestrationTask>(
                 val target = ObjectEngineResult.of(type = value.schemaType, mutable = true)
                 resolvePassiveObjectValues(
                     source = value,
-                    occurrence = OEROccurrenceContext(root, path, target, parent),
+                    occurrence = OEROccurrence(root, path, target, parent),
                     constructionDemand = constructionDemand,
                     invocationDemand = invocationDemand,
                 )
@@ -174,7 +177,7 @@ internal abstract class SharedResolvePassiveValues<O : SharedOrchestrationTask>(
      */
     fun resolvePassiveObjectValues(
         source: EngineObjectData.Sync,
-        occurrence: OEROccurrenceContext,
+        occurrence: OEROccurrence,
         constructionDemand: SelectionForest,
         invocationDemand: SelectionForest = constructionDemand,
     ) {
@@ -194,7 +197,7 @@ internal abstract class SharedResolvePassiveValues<O : SharedOrchestrationTask>(
      */
     private fun materializePassiveFields(
         source: EngineObjectData.Sync,
-        occurrence: OEROccurrenceContext,
+        occurrence: OEROccurrence,
         closedDemand: ObjectSelectionForest,
         invocationDemand: SelectionForest,
     ) {
@@ -202,7 +205,7 @@ internal abstract class SharedResolvePassiveValues<O : SharedOrchestrationTask>(
         val invocationByKey = collect(invocationDemand, type).byKey()
         val passiveByKey = collect(invocationDemand + closedDemand, type).byKey()
         val closedByKey = closedDemand.byKey()
-        if (operation.selectiveResolvers) {
+        if (operation.world.selectiveResolvers) {
             val selectedNames = invocationByKey.keys.mapTo(linkedSetOf()) { it.field.name }
             val unselectedFields =
                 source.getSelections()

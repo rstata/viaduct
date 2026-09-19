@@ -8,7 +8,7 @@ import kotlinx.coroutines.withTimeout
 import model.ObjectEngineResult
 import model.SelectionForest
 import model.schemaType
-import semantics.shared.OEROccurrenceContext
+import semantics.shared.OEROccurrence
 import semantics.shared.SharedOperationContext
 
 /**
@@ -78,11 +78,11 @@ private fun startResolve(
     requestScope: CoroutineScope,
     applicationObserver: Resolver26ApplicationObserver,
 ): ObjectEngineResult {
-    require(operation.selectiveResolvers) {
+    require(operation.world.selectiveResolvers) {
         "Resolver26 requires selective resolvers"
     }
     val resolver26Operation =
-        OperationContext(
+        OperationContext.create(
             base = operation,
             requestScope = requestScope,
             resolverObserver =
@@ -98,7 +98,7 @@ internal fun startResolve(
     selections: SelectionForest,
     operation: OperationContext,
 ): ObjectEngineResult {
-    val source = operation.resolverRegistry.createRootQueryInput()
+    val source = operation.world.resolverRegistry.createRootQueryInput()
     val result: ObjectEngineResult =
         ObjectEngineResult.of(
             type = source.schemaType,
@@ -108,7 +108,7 @@ internal fun startResolve(
         OrchestrationTask.create(
             operation = operation,
             occurrence =
-                OEROccurrenceContext(
+                OEROccurrence(
                     root = result,
                     path = emptyList(),
                     target = result,

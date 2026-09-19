@@ -141,7 +141,7 @@ object ResolverBenchmarkCorpusSearch {
                 mutableListOf<Resolver26ApplicationObservation>(),
             )
         val result =
-            context(SharedOperationContext(world)) {
+            context(SharedOperationContext.create(world)) {
                 resolveObserved(fragment.subselections) { observation ->
                     applicationObservations += observation
                 }

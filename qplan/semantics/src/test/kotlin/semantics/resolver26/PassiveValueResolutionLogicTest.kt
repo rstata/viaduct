@@ -28,7 +28,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 
-class ResolvePassiveValuesTest {
+class PassiveValueResolutionLogicTest {
     @Test
     fun `passive-only object trees freeze synchronously as they are created`() {
         val world =
@@ -266,9 +266,9 @@ class ResolvePassiveValuesTest {
     ): EngineResult? =
         runBlocking(resolver26CoroutineContext()) {
             coroutineScope {
-                val baseOperation = SharedOperationContext(world)
+                val baseOperation = SharedOperationContext.create(world)
                 val operation =
-                    OperationContext(
+                    OperationContext.create(
                         base = baseOperation,
                         requestScope = this,
                         resolverObserver =

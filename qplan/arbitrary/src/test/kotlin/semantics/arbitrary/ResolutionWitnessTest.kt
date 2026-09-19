@@ -304,16 +304,16 @@ class ResolutionWitnessTest {
                 computedTwoKey to 1,
                 baseKey to 3,
             ),
-            context(SharedOperationContext(world.assumptions)) {
+            context(SharedOperationContext.create(world.assumptions)) {
                 result.registeredResolverOccurrenceCounts(world.resolverRegistry)
             },
         )
         val cells =
-            context(SharedOperationContext(world.assumptions)) {
+            context(SharedOperationContext.create(world.assumptions)) {
                 result.registeredResolverOccurrences(world.resolverRegistry)
             }
         val streamedCells = mutableListOf<RegisteredResolverOccurrence>()
-        context(SharedOperationContext(world.assumptions)) {
+        context(SharedOperationContext.create(world.assumptions)) {
             result.forEachRegisteredResolverOccurrence(
                 registry = world.resolverRegistry,
                 visitOccurrence = streamedCells::add,
@@ -394,7 +394,7 @@ class ResolutionWitnessTest {
             ResolutionWitnessBounds(maxFingerprintCharacters = 1)
 
         assertFailsWith<ResolutionWitnessBoundExceededException> {
-            context(SharedOperationContext(world.assumptions)) {
+            context(SharedOperationContext.create(world.assumptions)) {
                 result.registeredResolverOccurrences(
                     registry = world.resolverRegistry,
                     bounds = fingerprintBounds,
@@ -402,7 +402,7 @@ class ResolutionWitnessTest {
             }
         }
         val streamedCells = mutableListOf<RegisteredResolverOccurrence>()
-        context(SharedOperationContext(world.assumptions)) {
+        context(SharedOperationContext.create(world.assumptions)) {
             result.forEachRegisteredResolverOccurrence(
                 registry = world.resolverRegistry,
                 bounds = fingerprintBounds,
@@ -412,7 +412,7 @@ class ResolutionWitnessTest {
         assertEquals(2, streamedCells.size)
 
         assertFailsWith<ResolutionWitnessBoundExceededException> {
-            context(SharedOperationContext(world.assumptions)) {
+            context(SharedOperationContext.create(world.assumptions)) {
                 result.forEachRegisteredResolverOccurrence(
                     registry = world.resolverRegistry,
                     bounds = ResolutionWitnessBounds(maxResultNodes = 1),
@@ -447,7 +447,7 @@ class ResolutionWitnessTest {
             mapOf(computedKey to 2),
             result
                 .let {
-                    context(SharedOperationContext(world.assumptions)) {
+                    context(SharedOperationContext.create(world.assumptions)) {
                         it.registeredResolverOccurrenceCounts(world.resolverRegistry)
                     }
                 }

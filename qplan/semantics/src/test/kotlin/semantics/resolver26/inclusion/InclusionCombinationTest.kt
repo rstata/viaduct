@@ -25,7 +25,7 @@ class InclusionCombinationTest {
             val world = fixture.world.assumptions
             val query = fixture.world.fullChainQuery("t3")
             val operation =
-                SharedOperationContext(
+                SharedOperationContext.create(
                     world = world,
                     resolverObserver = RecordingResolverObserver(),
                 )
@@ -71,7 +71,7 @@ class InclusionCombinationTest {
         T2CombinationVector.all.forEach { vector ->
             fixture.start(vector)
             val operation =
-                SharedOperationContext(
+                SharedOperationContext.create(
                     world = world,
                     resolverObserver = RecordingResolverObserver(),
                 )
@@ -146,7 +146,7 @@ class InclusionCombinationTest {
         T1CombinationVector.all.forEach { vector ->
             fixture.start(vector)
             val operation =
-                SharedOperationContext(
+                SharedOperationContext.create(
                     world = world,
                     resolverObserver = RecordingResolverObserver(),
                 )

@@ -15,8 +15,9 @@ import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
-import semantics.shared.OEROccurrenceContext
+import semantics.shared.OEROccurrence
 
 class OrchestrationTaskTest {
     @Test
@@ -29,8 +30,8 @@ class OrchestrationTaskTest {
                 }
             """.trimIndent(),
         ).assumptions
-        val base = SharedOperationContext(world)
-        val operation = OperationContext(
+        val base = SharedOperationContext.create(world)
+        val operation = OperationContext.create(
             base = base,
             requestScope = this,
             resolverObserver = base.resolverObserver.withResolver26Applications {},
@@ -38,7 +39,7 @@ class OrchestrationTaskTest {
         val root = ObjectEngineResult.of(world.schema.requireQueryTypeDef(), mutable = true)
         val task = OrchestrationTask.create(
             operation,
-            OEROccurrenceContext(root, emptyList(), root),
+            OEROccurrence(root, emptyList(), root),
             world.resolverRegistry.createRootQueryInput(),
             world.operationSelectionsFrom("{ second }"),
         )
@@ -46,7 +47,8 @@ class OrchestrationTaskTest {
         assertTrue(root.keys.isEmpty())
         assertFalse(coroutineContext[kotlinx.coroutines.Job]!!.children.any())
 
-        operation.dispatcher.dispatchOrchestrator(task)
+        assertSame(operation, task.operation)
+        task.operation.dispatcher.dispatchOrchestrator(task)
         val key = ObjectEngineResult.GroundKey.of(world.schema.requireObjectField("Query", "second"), emptyMap())
         assertEquals(7, root.getCell(key).getValue().await())
         assertFailsWith<IllegalArgumentException> { operation.dispatcher.dispatchOrchestrator(task) }
@@ -69,9 +71,9 @@ class OrchestrationTaskTest {
                             }
                             """.trimIndent(),
                         ).assumptions
-                val baseOperation = SharedOperationContext(world)
+                val baseOperation = SharedOperationContext.create(world)
                 val operation =
-                    OperationContext(
+                    OperationContext.create(
                         base = baseOperation,
                         requestScope = this,
                         resolverObserver =
@@ -92,7 +94,7 @@ class OrchestrationTaskTest {
                     OrchestrationTask.create(
                         operation = operation,
                         occurrence =
-                            OEROccurrenceContext(
+                            OEROccurrence(
                                 root = root,
                                 path =
                                     listOf(

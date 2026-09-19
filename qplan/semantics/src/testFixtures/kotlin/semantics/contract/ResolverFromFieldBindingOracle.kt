@@ -40,7 +40,7 @@ fun ObjectEngineResult.validateFromFieldBindings(
         path: List<PathComponent>,
         containingObject: ObjectEngineResult?,
     ) {
-        val resolver = operation.resolverRegistry.resolver(field)
+        val resolver = operation.world.resolverRegistry.resolver(field)
         val definitions = resolver.fieldPathDefinitions(root = root, path = path)
         if (definitions.isEmpty()) return
 
@@ -52,7 +52,7 @@ fun ObjectEngineResult.validateFromFieldBindings(
         val actualBindingIds =
             requiredBindingIds.filterTo(
                 linkedSetOf(),
-                operation.variableBindingsState::isBound,
+                operation.variableBindings::isBound,
             )
         when (appliedResolverOccurrences.contains(occurrenceId)) {
             true ->
@@ -84,7 +84,7 @@ fun ObjectEngineResult.validateFromFieldBindings(
             val expected = providerRoot.readCompletedProvider(path = definition.path)
             assertEquals(
                 expected,
-                operation.variableBindingsState.getBinding(
+                operation.variableBindings.getBinding(
                     requireNotNull(definition.variable.instanceId),
                 ),
             )
@@ -92,7 +92,7 @@ fun ObjectEngineResult.validateFromFieldBindings(
     }
 
     requestQueryRoots().forEach { root ->
-        root.forEachRegisteredResolverOccurrence(operation.resolverRegistry) { cell ->
+        root.forEachRegisteredResolverOccurrence(operation.world.resolverRegistry) { cell ->
             validateOccurrence(root, cell.field, cell.occurrencePath, cell.containingObject)
         }
     }

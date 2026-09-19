@@ -219,7 +219,7 @@ internal fun ObjectEngineResult.reapplyResolver(
 ): ReappliedResolver? =
     resolverApplicationCache.getOrPut(this, key) {
         val arguments = key.groundedArguments() as? Arguments.Resolved ?: return@getOrPut null
-        val resolver = operation.resolverRegistry.resolver(key.field)
+        val resolver = operation.world.resolverRegistry.resolver(key.field)
         val coordinate = path + key
         val fragments =
             resolver.fragmentsSatisfiedBy(
@@ -246,7 +246,7 @@ internal fun ObjectEngineResult.reapplyResolver(
         val queryFragment = fragments.queryFragment
         val queryValue =
             if (queryFragment.constructionSelections.isEmpty()) {
-                engineObjectDataOf(operation.schema.requireQueryTypeDef())
+                engineObjectDataOf(operation.world.schema.requireQueryTypeDef())
             } else {
                 val queryResult =
                     (operation.resolverObserver as? ResolverObservations)
@@ -255,7 +255,7 @@ internal fun ObjectEngineResult.reapplyResolver(
                         ?: return@getOrPut null
                 val querySelections =
                     queryFragment.constructionSelections
-                        .merge(operation.schema.requireQueryTypeDef())
+                        .merge(operation.world.schema.requireQueryTypeDef())
                 if (
                     !queryResult.correctResolution(
                         querySelections,
@@ -359,7 +359,7 @@ private fun RootFieldReferenceInvocationObservation.matches(
         }
     return reference == expectedReference &&
         invocationRoot !== expectedPublicationRoot &&
-        invocationRoot.type == operation.schema.requireQueryTypeDef() &&
+        invocationRoot.type == operation.world.schema.requireQueryTypeDef() &&
         invocationRoot.keys.isEmpty() &&
         invocationPath == expectedInvocationPath &&
         invocationKey == expectedInvocationPath.last()
@@ -374,7 +374,7 @@ private fun RootFieldReferenceInvocationObservation.reapplyReferencedResolver(
 ): ReappliedResolver? {
     if (!invocationKey.isContextuallyGrounded()) return null
     val arguments = invocationKey.groundedArguments() as? Arguments.Resolved ?: return null
-    val resolver = operation.resolverRegistry.resolver(invocationKey.field)
+    val resolver = operation.world.resolverRegistry.resolver(invocationKey.field)
     val fragments = resolver.instantiateFragmentsAt(invocationRoot, invocationPath)
     if (!fragments.objectFragment.materializeSelections.isEmpty()) return null
     val input = engineObjectDataOf(invocationKey.field.containingDef)
@@ -389,9 +389,9 @@ private fun RootFieldReferenceInvocationObservation.reapplyReferencedResolver(
         resolver.instantiatedVariableDefinitions(resolverOccurrenceId).any { definition ->
             val instanceId = requireNotNull(definition.variable.instanceId)
             val source = definition.definition
-            !operation.variableBindingsState.isBound(instanceId) ||
+            !operation.variableBindings.isBound(instanceId) ||
                 (source is model.registry.VariableDefinition.FromArgument &&
-                    operation.variableBindingsState.getBinding(instanceId) !=
+                    operation.variableBindings.getBinding(instanceId) !=
                     VariableBinding.of(source.read(arguments)))
         }
     ) {
@@ -400,7 +400,7 @@ private fun RootFieldReferenceInvocationObservation.reapplyReferencedResolver(
     val queryFragment = fragments.queryFragment
     val queryValue =
         if (queryFragment.constructionSelections.isEmpty()) {
-            engineObjectDataOf(operation.schema.requireQueryTypeDef())
+            engineObjectDataOf(operation.world.schema.requireQueryTypeDef())
         } else {
             val queryResult =
                 (operation.resolverObserver as? ResolverObservations)
@@ -408,7 +408,7 @@ private fun RootFieldReferenceInvocationObservation.reapplyReferencedResolver(
                     ?.singleOrNull()
                     ?: return null
             val querySelections =
-                queryFragment.constructionSelections.merge(operation.schema.requireQueryTypeDef())
+                queryFragment.constructionSelections.merge(operation.world.schema.requireQueryTypeDef())
             if (
                 !queryResult.correctResolution(
                     querySelections,

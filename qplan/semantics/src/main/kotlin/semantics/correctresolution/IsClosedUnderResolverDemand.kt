@@ -55,7 +55,7 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
     structuralParent: ObjectEngineResult?,
     producerField: ViaductSchema.ObjectField?,
 ): Boolean {
-    val registry = operation.resolverRegistry
+    val registry = operation.world.resolverRegistry
 
     return keys.all { key ->
         if (!getCell(key).getValue().isCompleted) return@all true
@@ -91,7 +91,7 @@ private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
                                     .constructionSelections
                             if (
                                 instantiatedSelections.usedVariables().all { variable ->
-                                    operation.variableBindingsState.isBound(variable.instanceId!!)
+                                    operation.variableBindings.isBound(variable.instanceId!!)
                                 }
                             ) {
                                 context(operation.world) {

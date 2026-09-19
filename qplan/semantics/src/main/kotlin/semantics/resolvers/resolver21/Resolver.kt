@@ -11,10 +11,10 @@ import semantics.shared.SharedOperationContext
  */
 context(operation: SharedOperationContext<*>)
 fun resolve(selections: SelectionForest): ObjectEngineResult {
-    require(!operation.selectiveResolvers) {
+    require(!operation.world.selectiveResolvers) {
         "Resolver21 requires non-selective resolvers"
     }
-    val source = operation.resolverRegistry.createRootQueryInput()
+    val source = operation.world.resolverRegistry.createRootQueryInput()
     val resolver =
         CoroutineResolve(
             operation = operation,

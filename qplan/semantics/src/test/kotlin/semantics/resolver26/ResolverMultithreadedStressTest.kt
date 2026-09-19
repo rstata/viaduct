@@ -199,7 +199,7 @@ private suspend fun runResolver26MultithreadedStress(
                 testWorld.newAssumptions(selectiveResolvers = true)
             val fragment: Fragment = world.fragmentFrom(testCase.query.source)
             val operation =
-                SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
+                SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
             val appliedResolverOccurrences =
                 ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
             val result: ObjectEngineResult =

@@ -4,11 +4,11 @@ import model.ObjectEngineResult
 import model.PathComponent
 
 /** Stable identity and location of one object-result occurrence. */
-class OEROccurrenceContext(
+class OEROccurrence(
     val root: ObjectEngineResult,
     path: List<PathComponent>,
     val target: ObjectEngineResult,
-    val parent: OEROccurrenceContext? = null,
+    val parent: OEROccurrence? = null,
 ) {
     val path: List<PathComponent> = path.toList()
 

@@ -1,7 +1,8 @@
 package semantics.resolvers.resolver06
 
 import semantics.shared.SharedOperationContext
-import semantics.shared.OEROccurrenceContext
+import semantics.shared.OEROccurrence
+import semantics.resolvers.GroundedFieldPublicationOccurrence
 import semantics.resolvers.resolver01.DepthFirstFieldResolverTask
 import semantics.resolvers.resolver01.DepthFirstOperationContext
 import semantics.resolvers.resolver01.DepthFirstOrchestrationTask
@@ -32,17 +33,28 @@ class DepthFirstReactorTest {
         val sourceType = source.schemaType
         val selection = selections.merge(sourceType).byGroundKey().values.single()
         val target = ObjectEngineResult.of(sourceType, emptyMap(), mutable = true)
-        val operation = DepthFirstOperationContext(SharedOperationContext(world), { it }, DepthFirstTaskDispatcher())
-        val occurrence = OEROccurrenceContext(target, emptyList(), target)
+        val operation = DepthFirstOperationContext(SharedOperationContext.create(world), { it }, DepthFirstTaskDispatcher())
+        val occurrence = OEROccurrence(target, emptyList(), target)
         val firstResolver =
-            DepthFirstFieldResolverTask(operation, occurrence, selection, target.reserveCell(selection.key))
+            DepthFirstFieldResolverTask.create(
+                GroundedFieldPublicationOccurrence(operation, occurrence, selection, target.reserveCell(selection.key)),
+            )
         val secondResolver =
-            DepthFirstFieldResolverTask(
-                operation, occurrence, selection,
-                ObjectEngineResult.of(sourceType, mutable = true).reserveCell(selection.key),
+            DepthFirstFieldResolverTask.create(
+                GroundedFieldPublicationOccurrence(
+                    operation, occurrence, selection,
+                    ObjectEngineResult.of(sourceType, mutable = true).reserveCell(selection.key),
+                ),
             )
         val orchestrator =
             DepthFirstOrchestrationTask.create(operation, occurrence, source, selections)
+        assertSame(operation, orchestrator.operation)
+        val publication = firstResolver.publication
+        assertSame(operation, publication.operation)
+        assertSame(operation.world, publication.world)
+        assertSame(operation.variableBindings, publication.variableBindings)
+        assertSame(operation.resolverObserver, publication.resolverObserver)
+        assertSame(operation.dispatcher, publication.dispatcher)
         val tasks = PriorityQueue(depthFirstTaskComparator)
 
         tasks += ScheduledTask(orchestrator, sequence = 0)
@@ -67,7 +79,7 @@ class DepthFirstReactorTest {
                 .subselections
         val reactor =
             DepthFirstReactor(
-                operation = SharedOperationContext(world),
+                operation = SharedOperationContext.create(world),
                 complete = { demand -> demand },
                 source = world.resolverRegistry.createRootQueryInput(),
                 selections = selections,

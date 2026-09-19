@@ -23,7 +23,7 @@ import model.satisfiableAlternatives
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.shared.inputParentDemand
 import viaduct.engine.api.EngineObjectData
-import semantics.shared.OEROccurrenceContext
+import semantics.shared.OEROccurrence
 
 // Expands resolver object fragments until no new resolver keys or activation alternatives enter
 // the object's demand. A previously expanded key can gain a late disjunct through another resolver,
@@ -31,9 +31,9 @@ import semantics.shared.OEROccurrenceContext
 // Returns the merged demand together with the resolver and binding metadata used by later phases.
 context(world: Assumptions)
 internal fun EngineObjectData.Sync.closeInputDemand(
-    occurrence: OEROccurrenceContext,
+    occurrence: OEROccurrence,
     initialDemand: SelectionForest,
-): CloseInputDemandResult {
+): ClosedInputDemandContext {
     var accumulatedDemand: SelectionForest =
         initialDemand + initialDemand.inputParentDemand()
     val expansionAccumulators:
@@ -95,25 +95,25 @@ internal fun EngineObjectData.Sync.closeInputDemand(
             ) {
                 "Resolver26 closed demand and resolver expansions are misaligned"
             }
-            val resolverContexts =
+            val fieldResolverOccurrences =
                 expansionAccumulators.mapValues { (objectKey, accumulator) ->
-                    accumulator.toFieldResolverOccurrenceContext(
+                    accumulator.toFieldResolverOccurrence(
                         selection = mergedDemand.byKey().getValue(objectKey),
                     )
                 }
             val referenceOccurrences = discoverRootFieldReferences(occurrence, mergedDemand)
-            check(resolverContexts.keys.intersect(referenceOccurrences.keys).isEmpty()) {
+            check(fieldResolverOccurrences.keys.intersect(referenceOccurrences.keys).isEmpty()) {
                 "Resolver26 classified one field as both an ordinary resolver and a root reference"
             }
-            return CloseInputDemandResult(
+            return ClosedInputDemandContext(
                 demand = mergedDemand,
-                fieldResolverOccurrenceContexts = resolverContexts,
+                fieldResolverOccurrences = fieldResolverOccurrences,
                 rootFieldReferenceOccurrences = referenceOccurrences,
-                objectProviderReadsByResolverOccurrence =
+                variableProviderReadsByResolverOccurrence =
                     expansionAccumulators.map { (objectKey, expansion) ->
                         val resolverOccurrenceId =
-                            resolverContexts.getValue(objectKey).resolverOccurrenceId
-                        val reads =
+                            fieldResolverOccurrences.getValue(objectKey).resolverOccurrenceId
+                        val providerReads =
                             if (
                                 objectKey is ObjectEngineResult.GroundKey &&
                                 objectKey.arguments.argumentsContainErrorValue()
@@ -122,7 +122,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                             } else {
                                 expansion.fragments.objectFragment.pathVariableDefinitions.map {
                                         definition ->
-                                    ProviderDefinitionRead(
+                                    VariableProviderReadOccurrence(
                                         definition = definition,
                                         readerPath = occurrence.coordinate(objectKey),
                                         inclusionCondition =
@@ -133,7 +133,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                                     )
                                 }
                             }
-                        resolverOccurrenceId to reads
+                        resolverOccurrenceId to providerReads
                     }.toMap(),
             )
         }
@@ -143,7 +143,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
 
 context(world: Assumptions)
 private fun EngineObjectData.Sync.discoverRootFieldReferences(
-    occurrence: OEROccurrenceContext,
+    occurrence: OEROccurrence,
     demand: ObjectSelectionForest,
 ): Map<ObjectEngineResult.ObjectKey, RootFieldReferenceOccurrence> =
     buildMap {
@@ -180,7 +180,7 @@ private fun EngineObjectData.Sync.discoverRootFieldReferences(
 
 context(world: Assumptions)
 private fun createResolverExpansion(
-    occurrence: OEROccurrenceContext,
+    occurrence: OEROccurrence,
     objectKey: ObjectEngineResult.ObjectKey,
 ): ResolverExpansionAccumulator {
     val resolver: FieldResolver = world.resolverRegistry.resolver(objectKey.field)
@@ -241,10 +241,10 @@ private data class ResolverExpansionAccumulator(
 ) {
     val propagatedAlternatives: MutableSet<InclusionCondition> = linkedSetOf()
 
-    fun toFieldResolverOccurrenceContext(
+    fun toFieldResolverOccurrence(
         selection: ObjectSelection,
-    ): FieldResolverOccurrenceContext =
-        FieldResolverOccurrenceContext(
+    ): FieldResolverOccurrence =
+        FieldResolverOccurrence(
             selection = selection,
             invocationRoot = invocationRoot,
             invocationPath = invocationPath,
@@ -256,19 +256,29 @@ private data class ResolverExpansionAccumulator(
         )
 }
 
-internal class CloseInputDemandResult(
+/**
+ * Immutable inputs established by demand closure for one object orchestration.
+ * Retained across binding declaration, dispatch validation, and field installation; bundles
+ * closed demand, value-source occurrences, and the variable-provider reads they require.
+ */
+internal class ClosedInputDemandContext(
     val demand: ObjectSelectionForest,
-    val fieldResolverOccurrenceContexts:
-        Map<ObjectEngineResult.ObjectKey, FieldResolverOccurrenceContext>,
+    val fieldResolverOccurrences:
+        Map<ObjectEngineResult.ObjectKey, FieldResolverOccurrence>,
     val rootFieldReferenceOccurrences:
         Map<ObjectEngineResult.ObjectKey, RootFieldReferenceOccurrence>,
-    val objectProviderReadsByResolverOccurrence:
-        Map<ResolverOccurrenceId, List<ProviderDefinitionRead>>,
-) {
-    var bindingDeclarationStarted: Boolean = false
-}
+    /** Object-fragment reads; Query-fragment reads are prepared by their owning field task. */
+    val variableProviderReadsByResolverOccurrence:
+        Map<ResolverOccurrenceId, List<VariableProviderReadOccurrence>>,
+)
 
-internal data class ProviderDefinitionRead(
+/**
+ * One planned provider-path read that produces an instantiated variable binding.
+ * The definition identifies the provider path and destination variable; the condition controls
+ * execution, and the reader path identifies the consumer for cycle checking. The containing
+ * object or Query result supplies the root from which the provider path is read.
+ */
+internal data class VariableProviderReadOccurrence(
     val definition: InstantiatedFieldPathDefinition,
     val readerPath: List<PathComponent>,
     val inclusionCondition: InclusionCondition,

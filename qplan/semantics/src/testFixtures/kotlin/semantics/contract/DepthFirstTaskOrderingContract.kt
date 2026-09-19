@@ -98,7 +98,7 @@ interface DepthFirstTaskOrderingContract : ResolverContract {
         val taskTrace = mutableListOf<ResolverTaskObservation>()
 
         resolveAndObserveTasks(
-            operation = SharedOperationContext(world),
+            operation = SharedOperationContext.create(world),
             root = world.objectOf("Query"),
             selections = selections,
             taskObserver = taskTrace::add,

@@ -19,7 +19,7 @@ internal fun DepthFirstTask.toContractObservation(): ResolverTaskObservation =
 
         is DepthFirstFieldResolverTask -> {
             ResolverTaskObservation.SlotResolver(
-                fieldName = selection.groundKey().field.name,
+                fieldName = publication.selection.groundKey().field.name,
                 path = path.toContractObservationPath(),
             )
         }

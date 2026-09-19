@@ -361,7 +361,7 @@ internal suspend fun runResolver26BroadStress(
                 val fragment: Fragment = world.fragmentFrom(testCase.query.source)
                 val recordingObserver = RecordingResolverObserver()
                 val operation =
-                    SharedOperationContext(world, resolverObserver = recordingObserver)
+                    SharedOperationContext.create(world, resolverObserver = recordingObserver)
                 testCase.registry.clearResolutionWitness()
                 val occurrenceLog = ResolutionOccurrenceApplicationLog()
                 resolutionCalls += 1
@@ -570,7 +570,7 @@ internal suspend fun runResolver26BroadStress(
                 )
                 val occurrences: List<RegisteredResolverOccurrence> =
                     context(operation) {
-                        result.registeredResolverOccurrences(operation.resolverRegistry)
+                        result.registeredResolverOccurrences(operation.world.resolverRegistry)
                     }
                 observedSignatures +=
                     resolver26StructuralSignatures(

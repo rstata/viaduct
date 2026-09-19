@@ -109,7 +109,7 @@ interface CoroutineResolverContract {
         val selections =
             world.fragmentFrom("fragment ignored on Query { first second }").subselections
 
-        resolve(SharedOperationContext(world), selections, cycleChecker)
+        resolve(SharedOperationContext.create(world), selections, cycleChecker)
 
         assertEquals(expectedKeys, registeredKeys)
         assertEquals(2, producerStarts)
@@ -178,7 +178,7 @@ interface CoroutineResolverContract {
                 .fragmentFrom("fragment ignored on Query { child { first second } }")
                 .subselections
 
-        val result = resolve(SharedOperationContext(world), selections, cycleChecker)
+        val result = resolve(SharedOperationContext.create(world), selections, cycleChecker)
 
         assertEquals(expectedChildKeys, childRegistrations)
         val child = assertIs<ObjectEngineResult>(result.getCell(childKey).getValue().get())
@@ -234,7 +234,7 @@ interface CoroutineResolverContract {
         val selections =
             world.fragmentFrom("fragment ignored on Query { first }").subselections
 
-        val result = resolve(SharedOperationContext(world), selections)
+        val result = resolve(SharedOperationContext.create(world), selections)
         val error = assertIs<ErrorEngineResult>(result.getCell(second.groundKey()).get())
         val failure = assertIs<ResolverReadCycleException>(error.errorData.cause)
 
@@ -270,7 +270,7 @@ interface CoroutineResolverContract {
         val selections =
             world.fragmentFrom("fragment ignored on Query { waiting }").subselections
 
-        val result = resolve(SharedOperationContext(world), selections)
+        val result = resolve(SharedOperationContext.create(world), selections)
         for (fieldName in listOf("failed", "waiting")) {
             val error = assertIs<ErrorEngineResult>(result.getCell(world.schema.groundKey("Query", fieldName)).get())
             assertSame(failure, error.errorData.cause)
@@ -282,7 +282,7 @@ interface CoroutineResolverContract {
     fun `field and reference exceptions leave unrelated fields running`() {
         for (failure in listOf(IllegalStateException("resolver failed"), CancellationException("local cancellation"))) {
             val world = fieldFailureWorld(selectiveResolvers, failure).assumptions
-            val result = resolve(SharedOperationContext(world), world.operationSelectionsFrom("{ failed reference items healthy }"))
+            val result = resolve(SharedOperationContext.create(world), world.operationSelectionsFrom("{ failed reference items healthy }"))
             for (name in listOf("failed", "reference")) {
                 assertSame(failure, assertIs<ErrorEngineResult>(result.getCell(world.schema.groundKey("Query", name)).get()).errorData.cause)
             }
@@ -313,7 +313,7 @@ interface CoroutineResolverContract {
                 coroutineContext + requestJob + CoroutineExceptionHandler { _, cause -> observed.complete(cause) },
             )
             try {
-                startResolution(SharedOperationContext(world), requestScope, world.operationSelectionsFrom("{ consumer }"), cycleChecker)
+                startResolution(SharedOperationContext.create(world), requestScope, world.operationSelectionsFrom("{ consumer }"), cycleChecker)
                 assertSame(failure, withTimeout(5_000) { observed.await() })
                 assertTrue(requestJob.isCancelled)
                 assertFalse(consumerInvoked)
@@ -333,7 +333,7 @@ interface CoroutineResolverContract {
             coroutineContext + requestJob + CoroutineExceptionHandler { _, cause -> observed.complete(cause) },
         )
         try {
-            startResolution(SharedOperationContext(world), requestScope, world.operationSelectionsFrom("{ failed }"), CycleCheckState.create())
+            startResolution(SharedOperationContext.create(world), requestScope, world.operationSelectionsFrom("{ failed }"), CycleCheckState.create())
             assertSame(failure, withTimeout(5_000) { observed.await() })
             assertFalse(requestJob.isActive)
         } finally {
@@ -351,7 +351,7 @@ interface CoroutineResolverContract {
                     throw failure
             }
             val result = resolve(
-                SharedOperationContext(world, resolverObserver = observer),
+                SharedOperationContext.create(world, resolverObserver = observer),
                 world.operationSelectionsFrom("{ consumer reference healthy }"),
             )
             for (name in listOf("consumer", "reference")) {
@@ -381,7 +381,7 @@ interface CoroutineResolverContract {
             }
             try {
                 val result = startResolution(
-                    SharedOperationContext(world, resolverObserver = observer), requestScope,
+                    SharedOperationContext.create(world, resolverObserver = observer), requestScope,
                     world.operationSelectionsFrom("{ consumer }"), CycleCheckState.create(),
                 )
                 if (cancelBeforeEntry) requestJob.cancel(cancellation)
@@ -433,7 +433,7 @@ interface CoroutineResolverContract {
         val selections =
             world.fragmentFrom("fragment ignored on Query { items { value } }").subselections
 
-        val result = resolve(SharedOperationContext(world), selections)
+        val result = resolve(SharedOperationContext.create(world), selections)
 
         assertCompletedAndWriteOnce(result)
         assertTrue(result.sameCompletedResultAs(result))

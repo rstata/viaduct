@@ -32,7 +32,7 @@ import model.testing.fieldResolverOf
 import viaduct.engine.api.EngineObjectData
 import viaduct.graphql.schema.ViaductSchema
 
-class SharedResolvePassiveValuesTest {
+class SharedPassiveValueResolutionLogicTest {
     @Test
     fun `leaves demanded active typename unresolved and retains exact resolver objects`() {
         val testWorld =
@@ -108,7 +108,7 @@ class SharedResolvePassiveValuesTest {
 
         val resolved =
             runBlocking {
-                context(SharedOperationContext(world)) {
+                context(SharedOperationContext.create(world)) {
                     value.recordPassiveResolution(
                         expectedType = world.schema.requireObjectField("Query", "user").outputType,
                         path = emptyList(),
@@ -193,7 +193,7 @@ class SharedResolvePassiveValuesTest {
 
         val resolved =
             runBlocking {
-                context(SharedOperationContext(world)) {
+                context(SharedOperationContext.create(world)) {
                     value.recordPassiveResolution(
                         expectedType = world.schema.requireObjectField("Query", "user").outputType,
                         path = emptyList(),
@@ -241,7 +241,7 @@ class SharedResolvePassiveValuesTest {
 
         assertFailsWith<IllegalArgumentException> {
             runBlocking {
-                context(SharedOperationContext(world)) {
+                context(SharedOperationContext.create(world)) {
                     value.recordPassiveResolution(
                         expectedType = world.schema.requireObjectField("Query", "user").outputType,
                         path = emptyList(),
@@ -290,7 +290,7 @@ class SharedResolvePassiveValuesTest {
 
         val resolved =
             runBlocking {
-                context(SharedOperationContext(world)) {
+                context(SharedOperationContext.create(world)) {
                     value.recordPassiveResolution(
                         expectedType = world.schema.requireObjectField("Query", "item").outputType,
                         path = emptyList(),
@@ -331,7 +331,7 @@ class SharedResolvePassiveValuesTest {
 
         val resolved =
             runBlocking {
-                context(SharedOperationContext(world)) {
+                context(SharedOperationContext.create(world)) {
                     value.recordPassiveResolution(
                         expectedType = world.schema.requireObjectField("Query", "item").outputType,
                         path = emptyList(),
@@ -376,7 +376,7 @@ class SharedResolvePassiveValuesTest {
 
         val resolved =
             runBlocking {
-                context(SharedOperationContext(world)) {
+                context(SharedOperationContext.create(world)) {
                     value.recordPassiveResolution(
                         expectedType = world.schema.requireObjectField("Query", "user").outputType,
                         path = emptyList(),
@@ -425,7 +425,7 @@ class SharedResolvePassiveValuesTest {
 
         assertFailsWith<IllegalArgumentException> {
             runBlocking {
-                context(SharedOperationContext(world)) {
+                context(SharedOperationContext.create(world)) {
                     value.recordPassiveResolution(
                         expectedType = world.schema.requireObjectField("Query", "item").outputType,
                         path = emptyList(),
@@ -510,7 +510,7 @@ class SharedResolvePassiveValuesTest {
             )
         val passiveValuesResult =
             runBlocking {
-                context(SharedOperationContext(world)) {
+                context(SharedOperationContext.create(world)) {
                     output.recordPassiveResolution(
                         expectedType = itemsField.outputType,
                         path = rootPath,
@@ -557,29 +557,34 @@ private fun ResolverOutputData?.recordPassiveResolution(
     invocationDemand: SelectionForest = constructionDemand,
 ): RecordedPassiveResolution {
     val pending = mutableListOf<RecordedObject>()
-    val taskOperation = object : SharedOperationContext<SharedTaskDispatcher<SharedOrchestrationTask, SharedFieldResolverContext>>(
-        operation.world, operation.variableBindingsState, operation.resolverObserver,
-    ) {
-        override val dispatcher = object : SharedTaskDispatcher<SharedOrchestrationTask, SharedFieldResolverContext> {
-            override fun dispatchOrchestrator(task: SharedOrchestrationTask) {
+    val taskOperation = SharedOperationContext.create(
+        world = operation.world,
+        variableBindings = operation.variableBindings,
+        resolverObserver = operation.resolverObserver,
+        dispatcher = object : SharedTaskDispatcher<SharedOrchestrationTask<*>, SharedFieldPublicationOccurrence<*, *>> {
+            override fun dispatchOrchestrator(task: SharedOrchestrationTask<*>) {
                 if (task.closedDemand.groundKeys().any { it !in task.occurrence.target.keys }) {
                     pending += RecordedObject(task.occurrence.path, task.occurrence.target, task.closedDemand)
                 }
             }
 
-            override fun dispatchFieldResolver(context: SharedFieldResolverContext) =
+            override fun dispatchFieldResolver(publication: SharedFieldPublicationOccurrence<*, *>) =
                 error("Executable references are covered by the resolver contracts")
-        }
-    }
-    val resolution = object : SharedResolvePassiveValues<SharedOrchestrationTask>(taskOperation) {
+        },
+    )
+    val resolution = object : SharedPassiveValueResolutionLogic<
+        SharedOrchestrationTask<*>,
+        SharedOperationContext<SharedTaskDispatcher<SharedOrchestrationTask<*>, *>>,
+    >(taskOperation) {
         override fun collect(selections: SelectionForest, type: ViaductSchema.Object): ObjectSelectionForest =
             selections.applicableGroundSelections(type)
 
         override fun createOrchestrationTask(
-            occurrence: OEROccurrenceContext,
+            occurrence: OEROccurrence,
             source: EngineObjectData.Sync,
             constructionDemand: SelectionForest,
-        ): SharedOrchestrationTask = object : SharedOrchestrationTask {
+        ): SharedOrchestrationTask<*> = object : SharedOrchestrationTask<SharedOperationContext<*>> {
+            override val operation = taskOperation
             override val occurrence = occurrence
             override val source = source
             override val closedDemand = collect(constructionDemand, occurrence.target.type)
@@ -592,13 +597,13 @@ private fun ResolverOutputData?.recordPassiveResolution(
             expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
             selection: ObjectSelection,
             invocationDemand: SelectionForest,
-            parent: OEROccurrenceContext,
+            parent: OEROccurrence,
         ) = error("Executable references are covered by the resolver contracts")
     }
-    val root = ObjectEngineResult.of(operation.schema.requireQueryTypeDef(), mutable = true)
+    val root = ObjectEngineResult.of(operation.world.schema.requireQueryTypeDef(), mutable = true)
     val result = resolution.resolvePassiveValues(
         this, root, expectedType, path, constructionDemand, invocationDemand,
-        OEROccurrenceContext(root, emptyList(), root),
+        OEROccurrence(root, emptyList(), root),
     )
     return RecordedPassiveResolution(result, pending)
 }

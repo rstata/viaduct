@@ -1,17 +1,18 @@
 package semantics.resolvers.resolver01
 
+import semantics.resolvers.GroundedFieldPublicationOccurrence
 import semantics.shared.SharedTaskDispatcher
 
 /** Defers object orchestration and executes fields immediately in their caller's dependency order. */
-internal class DepthFirstTaskDispatcher : SharedTaskDispatcher<DepthFirstOrchestrationTask, DepthFirstFieldResolverTask> {
+internal class DepthFirstTaskDispatcher : SharedTaskDispatcher<DepthFirstOrchestrationTask, GroundedFieldPublicationOccurrence<DepthFirstOperationContext>> {
     private var pending = mutableListOf<DepthFirstOrchestrationTask>()
 
     override fun dispatchOrchestrator(task: DepthFirstOrchestrationTask) {
         pending += task
     }
 
-    override fun dispatchFieldResolver(context: DepthFirstFieldResolverTask) {
-        context.run()
+    override fun dispatchFieldResolver(publication: GroundedFieldPublicationOccurrence<DepthFirstOperationContext>) {
+        DepthFirstFieldResolverTask.create(publication).run()
     }
 
     /**

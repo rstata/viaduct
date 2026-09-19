@@ -4,11 +4,12 @@ import java.util.PriorityQueue
 import model.ObjectEngineResult
 import model.SelectionForest
 import model.schemaType
+import semantics.resolvers.GroundedFieldPublicationOccurrence
 import semantics.resolvers.resolver01.DepthFirstFieldResolverTask
 import semantics.resolvers.resolver01.DepthFirstOperationContext
 import semantics.resolvers.resolver01.DepthFirstOrchestrationTask
 import semantics.resolvers.resolver01.DepthFirstTask
-import semantics.shared.OEROccurrenceContext
+import semantics.shared.OEROccurrence
 import semantics.shared.SharedOperationContext
 import semantics.shared.SharedTaskDispatcher
 import viaduct.engine.api.EngineObjectData
@@ -20,13 +21,13 @@ internal class DepthFirstReactor(
     private val source: EngineObjectData.Sync,
     private val selections: SelectionForest,
     private val onTaskStarted: (DepthFirstTask) -> Unit = {},
-) : SharedTaskDispatcher<DepthFirstOrchestrationTask, DepthFirstFieldResolverTask> {
+) : SharedTaskDispatcher<DepthFirstOrchestrationTask, GroundedFieldPublicationOccurrence<DepthFirstOperationContext>> {
     private val operation = DepthFirstOperationContext(operation, complete, this)
     private val tasks = PriorityQueue(depthFirstTaskComparator)
     private val launched = mutableSetOf<DepthFirstTask>()
     private val finished = mutableSetOf<DepthFirstTask>()
-    private val orchestrated = mutableSetOf<OEROccurrenceContext>()
-    private val children = mutableMapOf<OEROccurrenceContext, MutableList<DepthFirstOrchestrationTask>>()
+    private val orchestrated = mutableSetOf<OEROccurrence>()
+    private val children = mutableMapOf<OEROccurrence, MutableList<DepthFirstOrchestrationTask>>()
     private var nextSequence = 0L
     private var started = false
 
@@ -36,7 +37,7 @@ internal class DepthFirstReactor(
         started = true
         val result = ObjectEngineResult.of(source.schemaType, mutable = true)
         operation.passiveValues.resolvePassiveObjectValues(
-            source, OEROccurrenceContext(result, emptyList(), result), selections,
+            source, OEROccurrence(result, emptyList(), result), selections,
         )
         while (tasks.isNotEmpty()) {
             val task = tasks.remove().task
@@ -76,9 +77,11 @@ internal class DepthFirstReactor(
         }
     }
 
-    override fun dispatchFieldResolver(context: DepthFirstFieldResolverTask) {
-        check(launched.add(context)) { "Field resolver dispatched twice: ${context.publicationPath}" }
-        enqueue(context)
+    override fun dispatchFieldResolver(publication: GroundedFieldPublicationOccurrence<DepthFirstOperationContext>) {
+        // Preparation claims the cell, rejecting duplicate publication before queueing.
+        val task = DepthFirstFieldResolverTask.create(publication)
+        launched += task
+        enqueue(task)
     }
 
     private fun enqueue(task: DepthFirstTask) {

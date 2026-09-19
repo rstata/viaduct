@@ -64,7 +64,7 @@ interface ListPassiveDeepeningGeneratedResolverContract : ResolverContract {
                 batch.queries.forEach { query ->
                     val world = testWorld.newAssumptions(selectiveResolvers)
                     val operation =
-                        SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
+                        SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
                     val fragment = world.fragmentFrom(query.source)
                     listDeepeningCases +=
                         context(operation) {
@@ -114,9 +114,9 @@ private fun countListPassiveDeepening(
 
     incoming.byGroundKey().forEach { (selectedKey, _) ->
         val field = selectedKey.field
-        if (field !in operation.resolverRegistry) return@forEach
+        if (field !in operation.world.resolverRegistry) return@forEach
 
-        operation.resolverRegistry
+        operation.world.resolverRegistry
             .resolver(field)
             .objectFragment
             .merge(type)
@@ -127,7 +127,7 @@ private fun countListPassiveDeepening(
                 val passiveType = passiveField.type.baseTypeDef as? ViaductSchema.CompositeTypeDef
                     ?: return@forEach
                 if (
-                    passiveField in operation.resolverRegistry ||
+                    passiveField in operation.world.resolverRegistry ||
                     !passiveField.type.isList
                 ) {
                     return@forEach

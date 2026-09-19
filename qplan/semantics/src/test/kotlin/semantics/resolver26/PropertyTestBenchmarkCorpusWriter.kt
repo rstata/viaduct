@@ -53,7 +53,7 @@ object PropertyTestBenchmarkCorpusWriter {
                         testWorld.newAssumptions(selectiveResolvers = true)
                     val fragment: Fragment = world.fragmentFrom(testCase.query.source)
                     val operation =
-                        SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
+                        SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
                     testCase.registry.clearResolutionWitness()
                     val appliedResolverOccurrences =
                         ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()

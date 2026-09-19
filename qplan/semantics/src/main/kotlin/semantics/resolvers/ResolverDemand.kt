@@ -87,7 +87,7 @@ private fun ViaductSchema.Object.closeResolverDemand(
         applicableSelections.groundKeys().filter { key ->
             key !in expanded &&
                 !key.arguments.argumentsContainErrorValue() &&
-                key.field in operation.resolverRegistry &&
+                key.field in operation.world.resolverRegistry &&
                 expandResolver(key)
         }.toSet()
 
@@ -96,7 +96,7 @@ private fun ViaductSchema.Object.closeResolverDemand(
     unexpandedResolverKeys.bindFromArguments(root, path)
     val resolverDemand =
         unexpandedResolverKeys.flatMapToSelectionForest { key ->
-            operation.resolverRegistry
+            operation.world.resolverRegistry
                 .resolver(key.field)
                 .instantiateFragmentsAt(root, path + key)
                 .objectFragment

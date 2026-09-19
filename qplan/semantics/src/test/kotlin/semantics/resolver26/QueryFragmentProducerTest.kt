@@ -35,7 +35,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
-import semantics.shared.OEROccurrenceContext
+import semantics.shared.OEROccurrence
 
 class QueryFragmentProducerTest {
     @Test
@@ -61,7 +61,7 @@ class QueryFragmentProducerTest {
                 assertSame(
                     VariableBinding.Error,
                     withTimeout(5_000) {
-                        resolution.operation.variableBindingsState.fetchBinding(resolution.variableId())
+                        resolution.operation.variableBindings.fetchBinding(resolution.variableId())
                     },
                 )
                 val fieldValue =
@@ -108,13 +108,13 @@ class QueryFragmentProducerTest {
                     // The Query producer can finish cancellation before its owning field task.
                     dispatcher.runNext()
                     if (!cancelBeforeFieldEntry) {
-                        assertFalse(resolution.operation.variableBindingsState.isBound(resolution.variableId()))
+                        assertFalse(resolution.operation.variableBindings.isBound(resolution.variableId()))
                     }
                     dispatcher.runUntilIdle()
                     requestJob.join()
 
                     kotlin.test.assertFailsWith<CancellationException> {
-                        resolution.operation.variableBindingsState.getBinding(resolution.variableId())
+                        resolution.operation.variableBindings.getBinding(resolution.variableId())
                     }
                     assertFalse(producerStarted.get())
                 } finally {
@@ -149,7 +149,7 @@ class QueryFragmentProducerTest {
             for (name in listOf("provided", "local")) {
                 val variableId = resolution.variableId(queryOccurrences.single(), name)
                 kotlin.test.assertFailsWith<CancellationException> {
-                    resolution.operation.variableBindingsState.getBinding(variableId)
+                    resolution.operation.variableBindings.getBinding(variableId)
                 }
             }
         } finally {
@@ -222,14 +222,14 @@ class QueryFragmentProducerTest {
         val selections = world.assumptions.operationSelectionsFrom(
             if (useReference) "query { reference }" else "query { consumer }",
         )
-        val baseOperation = SharedOperationContext(world.assumptions, resolverObserver = observer)
+        val baseOperation = SharedOperationContext.create(world.assumptions, resolverObserver = observer)
         val operation =
-            OperationContext(
+            OperationContext.create(
                 base = baseOperation,
                 requestScope = requestScope,
                 resolverObserver = observer.withResolver26Applications {},
             )
-        val source = operation.resolverRegistry.createRootQueryInput()
+        val source = operation.world.resolverRegistry.createRootQueryInput()
         val root =
             ObjectEngineResult.of(
                 type = source.schemaType,
@@ -240,7 +240,7 @@ class QueryFragmentProducerTest {
             OrchestrationTask.create(
                 operation = operation,
                 occurrence =
-                    OEROccurrenceContext(
+                    OEROccurrence(
                         root = root,
                         path = emptyList(),
                         target = root,
@@ -261,7 +261,7 @@ class QueryFragmentProducerTest {
             occurrence: ResolverOccurrenceId = ResolverOccurrenceId.at(root, listOf(key)),
             name: String = "provided",
         ): VariableInstanceId = VariableInstanceId.of(
-            occurrence, operation.schema.requireObjectField("Query", "consumer"), name,
+            occurrence, operation.world.schema.requireObjectField("Query", "consumer"), name,
         )
     }
 

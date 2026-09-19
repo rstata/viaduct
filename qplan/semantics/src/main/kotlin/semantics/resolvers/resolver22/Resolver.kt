@@ -14,18 +14,16 @@ import semantics.shared.SharedOperationContext
  */
 context(operation: SharedOperationContext<*>)
 fun resolve(selections: SelectionForest): ObjectEngineResult {
-    require(!operation.selectiveResolvers) {
+    require(!operation.world.selectiveResolvers) {
         "Resolver22 requires non-selective resolvers"
     }
-    val source = operation.resolverRegistry.createRootQueryInput()
+    val source = operation.world.resolverRegistry.createRootQueryInput()
     val resolver =
         CoroutineResolve(
             operation = operation,
             supportsParentFields = true,
             complete = { completedSelections ->
-                context(operation.world) {
-                    completedSelections.successorBoundaryDemand()
-                }
+                completedSelections.successorBoundaryDemand()
             },
         )
     return runBlocking {

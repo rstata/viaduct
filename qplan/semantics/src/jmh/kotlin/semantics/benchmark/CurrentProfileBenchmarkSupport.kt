@@ -96,7 +96,7 @@ internal class CurrentProfileBenchmarkSupport(
                 val selections = parsedQueries[index % parsedQueries.size]
                 val world = testWorld.newAssumptions(selectiveResolvers = true)
                 PreparedResolution(
-                    operation = SharedOperationContext(world),
+                    operation = SharedOperationContext.create(world),
                     root = world.objectOf("Query"),
                     selections = selections,
                 )
@@ -125,7 +125,7 @@ internal class CurrentProfileBenchmarkSupport(
         val samples =
             querySources.map { source ->
                 val world = testWorld.newAssumptions(selectiveResolvers = true)
-                val operation = SharedOperationContext(world)
+                val operation = SharedOperationContext.create(world)
                 val selections = world.fragmentFrom(source).subselections
                 corpus.registry.clearResolutionWitness()
                 val applicationObservations =
@@ -245,7 +245,7 @@ internal class CurrentProfileBenchmarkSupport(
                     check(testCase.query.selectionDepth >= 4)
                     val world = testWorld.newAssumptions(selectiveResolvers = true)
                     val operation =
-                        SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
+                        SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
                     val fragment = world.fragmentFrom(testCase.query.source)
                     testCase.registry.clearResolutionWitness()
                     val appliedResolverOccurrences =

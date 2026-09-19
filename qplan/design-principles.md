@@ -90,6 +90,8 @@ Cross-task readiness travels through named promises or value-bearing deferreds, 
 
 ## Use Earlier Resolvers To Remove Accidental Complexity
 
+Resolver26 is the intended end product. Maintaining Resolver01–23 helps preserve its architectural integrity by making the decomposition and encapsulation of concerns work across simpler algorithms and different execution structures. Their shared relationships are deliberate constraints on Resolver26's design. A shared interface may enforce an important architectural role without a current polymorphic consumer; `SharedFieldResolverTask` intentionally preserves the field-task/publication relationship for this purpose. Judge such an abstraction by its stated architectural role as well as its runtime consumers, and do not remove it solely because current callers use concrete implementations.
+
 Resolver03 is the compact semantic reference for demand closure, selective projection, exact-key publication, and completed-result correctness.
 
 Resolver08 holds that semantic capability roughly constant while replacing recursive continuation with explicit depth-first work. Comparing Resolver26 with Resolver03 and Resolver08 helps distinguish essential demand semantics from scheduling machinery.

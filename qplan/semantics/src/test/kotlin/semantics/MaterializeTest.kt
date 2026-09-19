@@ -67,7 +67,7 @@ class MaterializeTest {
             val promise = cell.createValuePromise()
             val materialized =
                 async(start = CoroutineStart.UNDISPATCHED) {
-                    context(SharedOperationContext(world), cycleChecker) {
+                    context(SharedOperationContext.create(world), cycleChecker) {
                         result.materialize(
                             selections = selections,
                             reader = emptyList(),
@@ -102,7 +102,7 @@ class MaterializeTest {
 
         assertFailsWith<NoSuchElementException> {
             runBlocking {
-                context(SharedOperationContext(world), cycleChecker) {
+                context(SharedOperationContext.create(world), cycleChecker) {
                     result.materialize(
                         selections = selections,
                         reader = emptyList(),
@@ -155,7 +155,7 @@ class MaterializeTest {
         val failure =
             assertFailsWith<ResolverReadCycleException> {
                 runBlocking {
-                    context(SharedOperationContext(world), cycleChecker) {
+                    context(SharedOperationContext.create(world), cycleChecker) {
                         result.materialize(
                             selections = selections,
                             reader = reader,
@@ -241,7 +241,7 @@ class MaterializeTest {
                     .materializeSelections
 
             val materialized =
-                context(SharedOperationContext(world), cycleChecker) {
+                context(SharedOperationContext.create(world), cycleChecker) {
                     parentResult.materialize(selections, emptyList())
                 }
 
@@ -302,7 +302,7 @@ class MaterializeTest {
                 )
 
             val materialized =
-                context(SharedOperationContext(world), cycleChecker) {
+                context(SharedOperationContext.create(world), cycleChecker) {
                     result.materialize(selections, emptyList())
                 }
 

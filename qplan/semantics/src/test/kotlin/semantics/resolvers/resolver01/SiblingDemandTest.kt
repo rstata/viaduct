@@ -29,7 +29,7 @@ class SiblingDemandTest {
         val schema = world.schema
 
         assertTrue(
-            context(SharedOperationContext(world)) {
+            context(SharedOperationContext.create(world)) {
                 schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
                     schema.key(schema.requireQueryTypeDef(), "sibling", mapOf("input" to 1)),
                     schema.testRoot(),
@@ -37,7 +37,7 @@ class SiblingDemandTest {
             },
         )
         assertFalse(
-            context(SharedOperationContext(world)) {
+            context(SharedOperationContext.create(world)) {
                 schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
                     schema.key(schema.requireQueryTypeDef(), "other"),
                     schema.testRoot(),
@@ -45,7 +45,7 @@ class SiblingDemandTest {
             },
         )
         assertFalse(
-            context(SharedOperationContext(world)) {
+            context(SharedOperationContext.create(world)) {
                 schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
                     schema.key(schema.requireQueryTypeDef(), "sibling", mapOf("input" to 2)),
                     schema.testRoot(),
@@ -60,7 +60,7 @@ class SiblingDemandTest {
         val schema = world.schema
 
         assertFalse(
-            context(SharedOperationContext(world)) {
+            context(SharedOperationContext.create(world)) {
                 schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
                     schema.key(schema.requireQueryTypeDef(), "other"),
                     schema.testRoot(),
@@ -75,7 +75,7 @@ class SiblingDemandTest {
         val schema = world.schema
 
         assertFailsWith<IllegalArgumentException> {
-            context(SharedOperationContext(world)) {
+            context(SharedOperationContext.create(world)) {
                 schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
                     schema.key(
                         schema.requireType("Payload") as ViaductSchema.Object,

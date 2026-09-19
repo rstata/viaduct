@@ -9,7 +9,7 @@ internal suspend fun InclusionCondition.fetchIncluded(): Boolean =
     include { variable ->
         when (
             val binding =
-                operation.variableBindingsState.fetchBinding(
+                operation.variableBindings.fetchBinding(
                     requireNotNull(variable.instanceId),
                 )
         ) {
@@ -26,7 +26,7 @@ internal fun InclusionCondition.isIncluded(): Boolean =
     includeWith { variable ->
         when (
             val binding =
-                operation.variableBindingsState.getBinding(
+                operation.variableBindings.getBinding(
                     requireNotNull(variable.instanceId),
                 )
         ) {

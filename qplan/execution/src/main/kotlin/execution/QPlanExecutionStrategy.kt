@@ -72,7 +72,7 @@ class QPlanExecutionStrategy(
 
         val root =
             try {
-                context(SharedOperationContext(world)) {
+                context(SharedOperationContext.create(world)) {
                     startResolve(selections, requestScope)
                 }
             } catch (throwable: Exception) {

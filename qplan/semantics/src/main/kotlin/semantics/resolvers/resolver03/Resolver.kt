@@ -12,15 +12,13 @@ import semantics.shared.SharedOperationContext
  */
 context(operation: SharedOperationContext<*>)
 fun resolve(selections: SelectionForest): ObjectEngineResult {
-    require(operation.selectiveResolvers) {
+    require(operation.world.selectiveResolvers) {
         "Resolver03 requires selective resolvers"
     }
     return DepthFirstResolve(
         operation = operation,
         complete = { completedSelections ->
-            context(operation.world) {
-                completedSelections.successorDemand()
-            }
+            completedSelections.successorDemand()
         },
     ).resolve(selections)
 }

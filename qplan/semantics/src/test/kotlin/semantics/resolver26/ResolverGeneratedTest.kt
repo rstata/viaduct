@@ -79,7 +79,7 @@ class ResolverGeneratedTest :
         selections: SelectionForest,
     ): ResolverResolutionObservation {
         val operation =
-            SharedOperationContext(
+            SharedOperationContext.create(
                 world = world,
                 resolverObserver = RecordingResolverObserver(),
             )

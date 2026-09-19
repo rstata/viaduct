@@ -42,7 +42,7 @@ interface ResolverContract {
         root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ResolverResolutionObservation =
-        SharedOperationContext(
+        SharedOperationContext.create(
             world = world,
             resolverObserver = RecordingResolverObserver(),
         ).let { operation ->

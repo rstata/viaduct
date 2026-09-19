@@ -67,7 +67,7 @@ interface VariablesProviderResolverContract : ResolverContract {
             definitions.forEach { definition ->
                 assertEquals(
                     VariableBinding.of(expected.getValue(definition.variable.variableName)),
-                    resolution.operation.variableBindingsState.getBinding(
+                    resolution.operation.variableBindings.getBinding(
                         requireNotNull(definition.variable.instanceId),
                     ),
                 )

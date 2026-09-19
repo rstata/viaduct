@@ -28,5 +28,5 @@ internal fun startCoroutineResolution(
 ): ObjectEngineResult = context(
     CoroutineOperationContext(operation, requestScope, complete, supportsParentFields, cycleChecker),
 ) {
-    startResolve(operation.resolverRegistry.createRootQueryInput(), selections)
+    startResolve(operation.world.resolverRegistry.createRootQueryInput(), selections)
 }

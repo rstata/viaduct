@@ -84,7 +84,7 @@ interface ObjectFragmentFromArgumentResolverContract :
             variableInstances.forEach { boundVariable ->
                 assertEquals(
                     VariableBinding.of(expectedValue),
-                    resolution.operation.variableBindingsState.getBinding(
+                    resolution.operation.variableBindings.getBinding(
                         requireNotNull(boundVariable.instanceId),
                     ),
                 )

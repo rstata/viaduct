@@ -23,7 +23,7 @@ class IsClosedUnderResolverDemandTest {
                 "name" resolvesTo "Ada"
             }
 
-        assertTrue(context(SharedOperationContext(world)) { result.isClosedUnderResolverDemand() })
+        assertTrue(context(SharedOperationContext.create(world)) { result.isClosedUnderResolverDemand() })
     }
 
     @Test
@@ -81,7 +81,7 @@ class IsClosedUnderResolverDemandTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = SharedOperationContext(world)
+        val operation = SharedOperationContext.create(world)
         val resultField = world.schema.requireObjectField("Parent", "result")
         val resultKey = ObjectEngineResult.GroundKey.of(resultField, mapOf("seed" to 7))
         val result =
@@ -96,8 +96,8 @@ class IsClosedUnderResolverDemandTest {
         val instantiated =
             variable.instantiate(ResolverOccurrenceId.at(result, listOf(resultKey)))
         val variableId = requireNotNull(instantiated.instanceId)
-        operation.variableBindingsState.declareBinding(variableId)
-        operation.variableBindingsState.completeBinding(variableId, 7)
+        operation.variableBindings.declareBinding(variableId)
+        operation.variableBindings.completeBinding(variableId, 7)
 
         assertTrue(context(operation) { result.isClosedUnderResolverDemand() })
     }

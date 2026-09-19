@@ -3,11 +3,9 @@ package semantics.resolvers.resolver01
 import kotlinx.coroutines.runBlocking
 import model.Arguments
 import model.EngineErrorData
-import model.EngineResultCell
 import model.ErrorEngineResult
 import model.NodeReferenceIdentity
 import model.ObjectEngineResult
-import model.ObjectSelection
 import model.PathComponent
 import model.ResolverOutputData
 import model.RootFieldReferenceData
@@ -16,107 +14,101 @@ import model.engineObjectDataOf
 import model.groundKey
 import model.invariants.conformsToResolverOutputSchemaType
 import model.nodeReferenceIdentityOrNull
-import model.outputType
 import model.registry.ResolverFragment
 import model.registry.ResolutionExecutionContext
 import model.requireQueryTypeDef
+import semantics.resolvers.GroundedFieldPublicationOccurrence
 import semantics.resolvers.emptyObjectInput
 import semantics.resolvers.prepareInvocation
 import semantics.shared.CycleCheckState
-import semantics.shared.SharedFieldResolverContext
 import semantics.shared.SharedFieldResolverTask
-import semantics.shared.OEROccurrenceContext
 import semantics.shared.RootFieldReferenceInvocationObservation
 import semantics.shared.materialize
 import semantics.shared.withAuthoritativeNodeId
 import viaduct.engine.api.EngineObjectData
-import viaduct.graphql.schema.ViaductSchema
 
 /**
- * Invokes and publishes one field for Resolver01-03 and Resolver06-08. Unlike a coroutine task,
- * it needs no launch-time scope, so the task itself also supplies its dispatch context.
+ * Invokes and publishes one field for Resolver01-03 and Resolver06-08, retaining the grounded
+ * publication context supplied to its dispatcher.
  */
-internal class DepthFirstFieldResolverTask(
-    override val operationContext: DepthFirstOperationContext,
-    override val oerOccurrenceContext: OEROccurrenceContext,
-    override val selection: ObjectSelection,
-    override val publicationCell: EngineResultCell,
-    private val reference: RootFieldReferenceData? = null,
-    private val invocationDemand: SelectionForest? = null,
-    override val publicationPath: List<PathComponent> = oerOccurrenceContext.coordinate(selection.key),
-    override val publicationExpectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef> = selection.key.field.outputType,
-) : SharedFieldResolverTask, SharedFieldResolverContext, DepthFirstTask {
-    override val publicationConstructionDemand get() = selection.subselections
+internal class DepthFirstFieldResolverTask private constructor(
+    override val publication: GroundedFieldPublicationOccurrence<DepthFirstOperationContext>,
+) : SharedFieldResolverTask<GroundedFieldPublicationOccurrence<DepthFirstOperationContext>>, DepthFirstTask {
     // List-element references sit deeper than the field whose output contains them.
-    override val path get() = publicationPath.dropLast(1)
-    private val operation get() = operationContext
-    private val world get() = operation.world
+    override val path get() = publication.publicationPath.dropLast(1)
 
-    init {
-        require(selection.key.field.containingDef == oerOccurrenceContext.target.type) {
-            "Resolver selection does not belong to its target object"
+    companion object {
+        /** Claims the publication synchronously before either execution or reactor enqueue. */
+        fun create(publication: GroundedFieldPublicationOccurrence<DepthFirstOperationContext>): DepthFirstFieldResolverTask {
+            require(publication.selection.key.field.containingDef == publication.oerOccurrence.target.type) {
+                "Resolver selection does not belong to its target object"
+            }
+            // The reactor may freeze the OER before this task runs.
+            publication.publicationCell.createValuePromise()
+            publication.publicationCell.setActivated(true)
+            return DepthFirstFieldResolverTask(publication)
         }
-        // Claim before dispatch: the reactor may freeze the OER before this task runs.
-        publicationCell.createValuePromise()
-        publicationCell.setActivated(true)
     }
 
     /** Invokes one field, follows reference tails, and publishes its passively resolved output. */
-    fun run(): Unit = context(operation, world) {
-        val occurrence = oerOccurrenceContext
-        val key = selection.groundKey()
-        val invocationDemand = this.invocationDemand ?: operation.complete(publicationConstructionDemand)
-        var value: ResolverOutputData? = reference ?: when (val arguments = key.arguments) {
-            Arguments.Error -> {
-                check(publicationCell.getValue().complete(ErrorEngineResult.of(EngineErrorData.of()))) {
-                    "Cell value was completed twice"
+    fun run(): Unit = with(publication) {
+        context(operation) {
+            val key = selection.groundKey()
+            val invocationDemand = this.invocationDemand ?: operation.complete(selection.subselections)
+            var value: ResolverOutputData? = reference ?: when (val arguments = key.arguments) {
+                Arguments.Error -> {
+                    check(publicationCell.getValue().complete(ErrorEngineResult.of(EngineErrorData.of()))) {
+                        "Cell value was completed twice"
+                    }
+                    return@context
                 }
-                return@context
-            }
-            is Arguments.Resolved -> {
-                val resolver = world.resolverRegistry.resolver(key.field)
-                val fragments = resolver.instantiateFragmentsAt(occurrence.root, publicationPath)
-                val input = runBlocking {
-                    // Sibling dependency order and depth-first dispatch make this input ready.
-                    context(operation, CycleCheckState.createNOP()) {
-                        occurrence.target.materialize(
-                            selections = fragments.objectFragment.materializeSelections,
-                            reader = publicationPath,
-                        )
+                is Arguments.Resolved -> {
+                    val resolver = operation.world.resolverRegistry.resolver(key.field)
+                    val fragments = resolver.instantiateFragmentsAt(oerOccurrence.root, publicationPath)
+                    val input = runBlocking {
+                        // Sibling dependency order and depth-first dispatch make this input ready.
+                        context(operation, CycleCheckState.createNOP()) {
+                            oerOccurrence.target.materialize(
+                                selections = fragments.objectFragment.materializeSelections,
+                                reader = publicationPath,
+                            )
+                        }
+                    }
+                    runBlocking {
+                        context(operation.world) {
+                            resolver(
+                                input = input,
+                                queryValue = resolveQueryFragment(fragments.queryFragment, publicationPath),
+                                arguments = arguments,
+                                selections = invocationDemand,
+                                executionContext = ResolutionExecutionContext.Unsupported,
+                            )
+                        }
                     }
                 }
-                runBlocking {
-                    resolver(
-                        input = input,
-                        queryValue = resolveQueryFragment(fragments.queryFragment, publicationPath),
-                        arguments = arguments,
-                        selections = invocationDemand,
-                        executionContext = ResolutionExecutionContext.Unsupported,
-                    )
+            }
+            var nodeIdentity: NodeReferenceIdentity? = null
+            while (value is RootFieldReferenceData) {
+                val reference = value
+                require(reference.conformsToResolverOutputSchemaType(publicationExpectedType)) {
+                    "Root-field reference does not conform to ${publicationExpectedType}"
                 }
+                nodeIdentity = nodeIdentity ?: reference.nodeReferenceIdentityOrNull()
+                value = resolveRootFieldReference(
+                    reference, oerOccurrence.root, publicationPath, invocationDemand,
+                )
             }
-        }
-        var nodeIdentity: NodeReferenceIdentity? = null
-        while (value is RootFieldReferenceData) {
-            val reference = value
-            require(reference.conformsToResolverOutputSchemaType(publicationExpectedType)) {
-                "Root-field reference does not conform to ${publicationExpectedType}"
-            }
-            nodeIdentity = nodeIdentity ?: reference.nodeReferenceIdentityOrNull()
-            value = resolveRootFieldReference(
-                reference, occurrence.root, publicationPath, invocationDemand,
+            val result = operation.passiveValues.resolvePassiveValues(
+                value = value.withAuthoritativeNodeId(nodeIdentity, invocationDemand),
+                root = oerOccurrence.root,
+                expectedType = publicationExpectedType,
+                path = publicationPath,
+                constructionDemand = selection.subselections,
+                invocationDemand = invocationDemand,
+                parent = oerOccurrence,
             )
+            check(publicationCell.getValue().complete(result)) { "Cell value was completed twice" }
         }
-        val result = operation.passiveValues.resolvePassiveValues(
-            value = value.withAuthoritativeNodeId(nodeIdentity, invocationDemand),
-            root = occurrence.root,
-            expectedType = publicationExpectedType,
-            path = publicationPath,
-            constructionDemand = publicationConstructionDemand,
-            invocationDemand = invocationDemand,
-            parent = occurrence,
-        )
-        check(publicationCell.getValue().complete(result)) { "Cell value was completed twice" }
     }
 
     /** Invokes one independently rooted reference target using this resolver's Query-fragment policy. */
@@ -125,7 +117,8 @@ internal class DepthFirstFieldResolverTask(
         publicationRoot: ObjectEngineResult,
         publicationPath: List<PathComponent>,
         invocationDemand: SelectionForest,
-    ): ResolverOutputData? = context(operation, world) {
+    ): ResolverOutputData? = context(publication.operation) {
+        val operation = publication.operation
         val invocation = reference.prepareInvocation()
         val queryValue =
             resolveQueryFragment(
@@ -134,13 +127,15 @@ internal class DepthFirstFieldResolverTask(
             )
         val output =
             runBlocking {
-                invocation.resolver(
-                    input = invocation.emptyObjectInput(),
-                    queryValue = queryValue,
-                    arguments = reference.arguments,
-                    selections = invocationDemand,
-                    executionContext = ResolutionExecutionContext.Unsupported,
-                )
+                context(operation.world) {
+                    invocation.resolver(
+                        input = invocation.emptyObjectInput(),
+                        queryValue = queryValue,
+                        arguments = reference.arguments,
+                        selections = invocationDemand,
+                        executionContext = ResolutionExecutionContext.Unsupported,
+                    )
+                }
             }
         operation.resolverObserver.onRootFieldReferenceInvocation(
             RootFieldReferenceInvocationObservation(
@@ -163,14 +158,15 @@ internal class DepthFirstFieldResolverTask(
     private fun resolveQueryFragment(
         queryFragment: ResolverFragment,
         coordinate: List<PathComponent>,
-    ): EngineObjectData.Sync = context(operation, world) {
+    ): EngineObjectData.Sync {
+        val operation = publication.operation
         if (queryFragment.constructionSelections.isEmpty()) {
-            return@context engineObjectDataOf(world.schema.requireQueryTypeDef())
+            return engineObjectDataOf(operation.world.schema.requireQueryTypeDef())
         }
         val queryResult = DepthFirstResolve(operation, operation.complete)
             .resolve(queryFragment.constructionSelections)
         operation.resolverObserver.onQueryFragmentResult(queryFragment.resolverOccurrenceId, queryResult)
-        runBlocking {
+        return runBlocking {
             context(operation, CycleCheckState.createNOP()) {
                 queryResult.materialize(queryFragment.materializeSelections, coordinate)
             }

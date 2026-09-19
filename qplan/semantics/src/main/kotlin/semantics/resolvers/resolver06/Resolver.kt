@@ -19,10 +19,10 @@ internal fun resolve(
     selections: SelectionForest,
     onTaskStarted: (DepthFirstTask) -> Unit,
 ): ObjectEngineResult {
-    require(!operation.selectiveResolvers) {
+    require(!operation.world.selectiveResolvers) {
         "Resolver06 requires non-selective resolvers"
     }
-    val source = operation.resolverRegistry.createRootQueryInput()
+    val source = operation.world.resolverRegistry.createRootQueryInput()
     return DepthFirstReactor(
         operation = operation,
         complete = { completedSelections -> completedSelections },

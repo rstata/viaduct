@@ -63,7 +63,7 @@ class ResolverOccurrenceWitnessTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
+        val operation = SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
         val fragment =
             world.fragmentFrom(
                 "fragment QueryResult on Query { first second }",
@@ -190,7 +190,7 @@ class ResolverOccurrenceWitnessTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = SharedOperationContext(world, resolverObserver = RecordingResolverObserver())
+        val operation = SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
         val fragment =
             world.fragmentFrom(
                 "fragment QueryResult on Query { items { computed } }",

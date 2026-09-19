@@ -51,7 +51,7 @@ private object ContractPostTestState {
                 context(validation.operation) {
                     validation.result.correctResolution(
                         validation.selections
-                            .merge(validation.operation.schema.requireQueryTypeDef()),
+                            .merge(validation.operation.world.schema.requireQueryTypeDef()),
                     )
                 },
                 context(validation.operation) {

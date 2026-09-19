@@ -8,7 +8,8 @@ import model.SelectionForest
 import model.outputValue
 import model.schemaType
 import semantics.resolvers.closeResolverDemand
-import semantics.shared.OEROccurrenceContext
+import semantics.resolvers.GroundedFieldPublicationOccurrence
+import semantics.shared.OEROccurrence
 import semantics.shared.SharedOrchestrationTask
 import viaduct.engine.api.EngineObjectData
 
@@ -20,18 +21,18 @@ internal sealed interface DepthFirstTask {
 
 /** Prepared grounded demand and active-field dispatch for Resolver01-03 and Resolver06-08. */
 internal class DepthFirstOrchestrationTask private constructor(
-    private val operation: DepthFirstOperationContext,
-    override val occurrence: OEROccurrenceContext,
+    override val operation: DepthFirstOperationContext,
+    override val occurrence: OEROccurrence,
     override val source: EngineObjectData.Sync,
     override val closedDemand: ObjectSelectionForest,
-) : SharedOrchestrationTask, DepthFirstTask {
+) : SharedOrchestrationTask<DepthFirstOperationContext>, DepthFirstTask {
     override val path get() = occurrence.path
 
     /**
      * Dispatches source references first, then standard fields in sibling dependency order.
      * Recursive execution finishes each field's fringe here; a reactor leaves that to its queue.
      */
-    fun run(resolveFringe: () -> Unit = {}): Unit = context(operation, operation.world) {
+    fun run(resolveFringe: () -> Unit = {}): Unit = context(operation) {
         val target = occurrence.target
         val unresolved = closedDemand.byGroundKey().filterKeys { !target.isCellSet(it) }
         val references = unresolved.keys.mapNotNull { key ->
@@ -42,7 +43,7 @@ internal class DepthFirstOrchestrationTask private constructor(
         }.toMap()
         fun dispatch(key: ObjectEngineResult.GroundKey, reference: RootFieldReferenceData? = null) {
             operation.dispatcher.dispatchFieldResolver(
-                DepthFirstFieldResolverTask(
+                GroundedFieldPublicationOccurrence(
                     operation, occurrence, unresolved.getValue(key), target.reserveCell(key), reference,
                 ),
             )
@@ -61,7 +62,7 @@ internal class DepthFirstOrchestrationTask private constructor(
          */
         fun create(
             operation: DepthFirstOperationContext,
-            occurrence: OEROccurrenceContext,
+            occurrence: OEROccurrence,
             source: EngineObjectData.Sync,
             constructionDemand: SelectionForest,
         ): DepthFirstOrchestrationTask = context(operation) {

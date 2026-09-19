@@ -4,7 +4,7 @@ import model.ObjectEngineResult
 
 /** Installs structural backedges without reopening resolution of the containing object. */
 context(operation: SharedOperationContext<*>)
-internal fun OEROccurrenceContext.installParentBackedgeFields(
+internal fun OEROccurrence.installParentBackedgeFields(
     keys: Collection<ObjectEngineResult.ParentKey>,
 ) {
     if (keys.isEmpty()) return

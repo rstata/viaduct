@@ -310,6 +310,6 @@ query {
 Child.marker -> Root.ancestorValue -> GreatGrandchild.result
 ```
 
-This order crosses occurrence boundaries in both directions. A `dependencyOrder` computed for sibling keys on one OER cannot express it, and a traversal that reserves an occurrence's work before recursively deepening it cannot safely re-enter that still-open occurrence. Supporting the case requires occurrence-aware suspension or orchestration across parent and child edges, not merely a different local sibling order.
+This order crosses occurrence boundaries in both directions. An order computed by `SiblingDependencyLogic` for sibling keys on one OER cannot express it, and a traversal that reserves an occurrence's work before recursively deepening it cannot safely re-enter that still-open occurrence. Supporting the case requires occurrence-aware suspension or orchestration across parent and child edges, not merely a different local sibling order.
 
 Resolver01-03 and Resolver06-08 intentionally retain their simple recursive and explicit-task depth-first structures, so they reject `@parent` demand. Resolver22/23 use structured suspension with exact promises, and Resolver26 performs parent-aware input-demand and successor-demand fixed-point computations, so those resolvers support this world. A more elaborate graph-aware depth-first engine could be built, but adding its re-entry machinery to these reference algorithms would defeat their purpose as small stepping stones toward correctness proofs.

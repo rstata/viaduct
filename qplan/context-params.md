@@ -1,6 +1,6 @@
 # Context Parameters, `Assumptions`, And `SharedOperationContext`
 
-Pure model operations use Kotlin context parameters for the one immutable `Assumptions` value of a reasoning world. Migrated semantics APIs receive their operation or world explicitly through ordinary parameters or a natural extension receiver; their `SharedOperationContext` still describes one resolution or correctness operation. Materialization, correctness judgments, and the pending demand-closure/sibling-dependency extraction retain context parameters during the staged migration.
+Pure model operations use Kotlin context parameters for the one immutable `Assumptions` value of a reasoning world. Migrated semantics APIs receive their operation or world explicitly through ordinary parameters or a natural extension receiver; their `SharedOperationContext` still describes one resolution or correctness operation. Materialization and correctness judgments retain context parameters during the staged migration. Demand closure and sibling dependencies now use focused logic implementations retaining their operation and object occurrence.
 
 ## Model Context
 

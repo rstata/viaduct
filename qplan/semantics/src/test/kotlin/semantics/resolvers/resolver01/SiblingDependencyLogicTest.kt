@@ -2,6 +2,7 @@ package semantics.resolvers.resolver01
 
 import viaduct.graphql.schema.ViaductSchema
 
+import model.Assumptions
 import model.requireQueryTypeDef
 import model.requireObjectField
 import model.requireField
@@ -16,41 +17,38 @@ import model.selectionForestOf
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.testRoot
+import semantics.shared.OEROccurrence
 import semantics.shared.SharedOperationContext
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class SiblingDemandTest {
+class SiblingDependencyLogicTest {
     @Test
     fun `field demands an applicable top-level sibling selected by its object fragment`() {
         val world = testWorld().assumptions
         val schema = world.schema
+        val logic = siblingDependencies(world)
+        val consumer = schema.key(schema.requireQueryTypeDef(), "consumer")
 
         assertTrue(
-            context(SharedOperationContext.create(world)) {
-                schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
-                    schema.key(schema.requireQueryTypeDef(), "sibling", mapOf("input" to 1)),
-                    schema.testRoot(),
-                )
-            },
+            logic.demandsFromSibling(
+                consumer,
+                schema.key(schema.requireQueryTypeDef(), "sibling", mapOf("input" to 1)),
+            ),
         )
         assertFalse(
-            context(SharedOperationContext.create(world)) {
-                schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
-                    schema.key(schema.requireQueryTypeDef(), "other"),
-                    schema.testRoot(),
-                )
-            },
+            logic.demandsFromSibling(
+                consumer,
+                schema.key(schema.requireQueryTypeDef(), "other"),
+            ),
         )
         assertFalse(
-            context(SharedOperationContext.create(world)) {
-                schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
-                    schema.key(schema.requireQueryTypeDef(), "sibling", mapOf("input" to 2)),
-                    schema.testRoot(),
-                )
-            },
+            logic.demandsFromSibling(
+                consumer,
+                schema.key(schema.requireQueryTypeDef(), "sibling", mapOf("input" to 2)),
+            ),
         )
     }
 
@@ -60,12 +58,10 @@ class SiblingDemandTest {
         val schema = world.schema
 
         assertFalse(
-            context(SharedOperationContext.create(world)) {
-                schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
-                    schema.key(schema.requireQueryTypeDef(), "other"),
-                    schema.testRoot(),
-                )
-            },
+            siblingDependencies(world).demandsFromSibling(
+                schema.key(schema.requireQueryTypeDef(), "consumer"),
+                schema.key(schema.requireQueryTypeDef(), "other"),
+            ),
         )
     }
 
@@ -75,16 +71,22 @@ class SiblingDemandTest {
         val schema = world.schema
 
         assertFailsWith<IllegalArgumentException> {
-            context(SharedOperationContext.create(world)) {
-                schema.key(schema.requireQueryTypeDef(), "consumer").demandsFromSibling(
-                    schema.key(
-                        schema.requireType("Payload") as ViaductSchema.Object,
-                        "nested",
-                    ),
-                    schema.testRoot(),
-                )
-            }
+            siblingDependencies(world).demandsFromSibling(
+                schema.key(schema.requireQueryTypeDef(), "consumer"),
+                schema.key(
+                    schema.requireType("Payload") as ViaductSchema.Object,
+                    "nested",
+                ),
+            )
         }
+    }
+
+    private fun siblingDependencies(world: Assumptions): SiblingDependencyLogic {
+        val root = world.schema.testRoot()
+        return SiblingDependencyLogic(
+            SharedOperationContext.create(world),
+            OEROccurrence(root, emptyList(), root),
+        )
     }
 
     private fun testWorld(

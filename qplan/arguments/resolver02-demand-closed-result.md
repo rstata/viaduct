@@ -20,7 +20,7 @@ The ordering lemma is needed to show that Resolver02 can construct the claimed r
 
 ## Lemma 1: Transitive Resolver Demand Is Included
 
-Let `closedSelections = closeResolverDemand(path, selections)` for one concrete object occurrence. The result contains every applicable occurrence from the incoming selections. For every ground key in `closedSelections` whose arguments contain no error and whose field has a registered resolver, it also contains every applicable selection obtained by instantiating the resolver's fixed object fragment at `path + key`, binding its `FromArgument` variables, and specializing it to the concrete object type. The same property holds transitively for resolver keys introduced by those selections.
+Let `closedSelections = ResolverDemandClosureLogic(operation, oerOccurrence, source).close(selections)` for one concrete object occurrence. The result contains every applicable occurrence from the incoming selections. For every ground key in `closedSelections` whose arguments contain no error and whose field has a registered resolver, it also contains every applicable selection obtained by instantiating the resolver's fixed object fragment at `path + key`, binding its `FromArgument` variables, and specializing it to the concrete object type. The same property holds transitively for resolver keys introduced by those selections.
 
 The termination measure is the finite set of reachable resolver keys that have not yet been expanded. Each closure step chooses currently present unexpanded resolver keys, adds their object fragments, and records those keys as expanded. A key is expanded at most once. Resolver fragments and the reachable exact-key universe are finite, so the unexpanded set strictly decreases until no expansion remains.
 
@@ -32,11 +32,11 @@ Concrete-type filtering and specialization through `SelectionForest.merge(type)`
 
 Before a key is resolved, every sibling subtree required by its instantiated and grounded object fragment is present in the resolved prefix OER.
 
-Proceed by induction over the prefix of the ordering returned by `dependencyOrder`. A key is ready only when `dependenciesOf(path, key, unresolved)` finds no required sibling in the unresolved suffix. Lemma 1 guarantees that every applicable required sibling belongs to the complete closed key set. A required sibling absent from the unresolved suffix must therefore belong to the resolved prefix.
+Proceed by induction over the prefix of the ordering returned by `SiblingDependencyLogic.order`. A key is ready only when `dependenciesOf(key, unresolved)` finds no required sibling in the unresolved suffix. Lemma 1 guarantees that every applicable required sibling belongs to the complete closed key set. A required sibling absent from the unresolved suffix must therefore belong to the resolved prefix.
 
 The prefix induction invariant, using Lemma 3 for keys already resolved, says that each such sibling cell also satisfies its accumulated subselections. The prefix OER consequently conforms to the current resolver's instantiated and grounded object fragment, so `materialize` is defined for that resolver input.
 
-The canonical registry's acyclic resolver-demand invariant guarantees that every nonempty unresolved set contains a ready key. `dependencyOrder` rejects a nonempty set with no ready member as a cycle. Independent ready keys may appear in any order because no member requires another member of that ready set.
+The canonical registry's acyclic resolver-demand invariant guarantees that every nonempty unresolved set contains a ready key. `SiblingDependencyLogic.order` rejects a nonempty set with no ready member as a cycle. Independent ready keys may appear in any order because no member requires another member of that ready set.
 
 Node resolution needs no separate dependency-order case. A Node-valued source producer returns a root-field reference to `Query.node`; after the producer is ready, Resolver02 executes that grounded reference inline through the same root-reference mechanism and recursively resolves the returned object's demanded fields. The `Query.node` target has an empty object fragment, so it adds no sibling prerequisite to this ordering. Unequal argument tuples on ordinary Node-valued source fields remain distinct ground producer keys.
 

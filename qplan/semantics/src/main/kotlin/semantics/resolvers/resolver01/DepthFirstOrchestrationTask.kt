@@ -7,7 +7,7 @@ import model.RootFieldReferenceData
 import model.SelectionForest
 import model.outputValue
 import model.schemaType
-import semantics.resolvers.closeResolverDemand
+import semantics.resolvers.ResolverDemandClosureLogic
 import semantics.resolvers.GroundedFieldPublicationOccurrence
 import semantics.shared.OEROccurrence
 import semantics.shared.SharedOrchestrationTask
@@ -32,7 +32,7 @@ internal class DepthFirstOrchestrationTask private constructor(
      * Dispatches source references first, then standard fields in sibling dependency order.
      * Recursive execution finishes each field's fringe here; a reactor leaves that to its queue.
      */
-    fun run(resolveFringe: () -> Unit = {}): Unit = context(operation) {
+    fun run(resolveFringe: () -> Unit = {}) {
         val target = occurrence.target
         val unresolved = closedDemand.byGroundKey().filterKeys { !target.isCellSet(it) }
         val references = unresolved.keys.mapNotNull { key ->
@@ -50,7 +50,8 @@ internal class DepthFirstOrchestrationTask private constructor(
             resolveFringe()
         }
         references.forEach { (key, reference) -> dispatch(key, reference) }
-        dependencyOrder(occurrence.root, path, unresolved.keys - references.keys)
+        SiblingDependencyLogic(operation, occurrence)
+            .order(unresolved.keys - references.keys)
             .forEach { key -> dispatch(key) }
         target.freeze()
     }
@@ -65,15 +66,15 @@ internal class DepthFirstOrchestrationTask private constructor(
             occurrence: OEROccurrence,
             source: EngineObjectData.Sync,
             constructionDemand: SelectionForest,
-        ): DepthFirstOrchestrationTask = context(operation) {
+        ): DepthFirstOrchestrationTask {
             require(source.schemaType == occurrence.target.type) {
                 "Source type ${source.schemaType.name} does not match result type ${occurrence.target.type.name}"
             }
-            val closed = source.closeResolverDemand(occurrence.root, occurrence.path, constructionDemand)
+            val closed = ResolverDemandClosureLogic(operation, occurrence, source).close(constructionDemand)
             require(closed.groundKeys().none { it is ObjectEngineResult.ParentKey }) {
                 "Resolver01-03 and Resolver06-08 do not support @parent fields"
             }
-            DepthFirstOrchestrationTask(operation, occurrence, source, closed)
+            return DepthFirstOrchestrationTask(operation, occurrence, source, closed)
         }
     }
 }

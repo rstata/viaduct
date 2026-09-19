@@ -17,12 +17,6 @@ fun ObjectSelectionForest.instantiateBindings(operation: SharedOperationContext<
         selection.key.arguments.instantiateBindings(operation, selection.key.field)
     }
 
-/** Awaits top-level key bindings and coalesces selections whose keys become equal. */
-suspend fun ObjectSelectionForest.fetchBindings(operation: SharedOperationContext<*>): ObjectSelectionForest =
-    groundSelections { selection ->
-        selection.key.arguments.fetchBindings(operation, selection.key.field)
-    }
-
 /** Specializes this demand to [type] and grounds its top-level keys. */
 fun SelectionForest.applicableGroundSelections(
     operation: SharedOperationContext<*>,

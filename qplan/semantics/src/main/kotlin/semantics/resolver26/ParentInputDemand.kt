@@ -1,4 +1,4 @@
-package semantics.shared
+package semantics.resolver26
 
 import model.Assumptions
 import model.ObjectEngineResult

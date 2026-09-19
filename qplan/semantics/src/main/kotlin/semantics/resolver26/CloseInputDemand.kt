@@ -21,7 +21,6 @@ import model.schemaType
 import model.outputValue
 import model.satisfiableAlternatives
 import semantics.correctresolution.argumentsContainErrorValue
-import semantics.shared.inputParentDemand
 import viaduct.engine.api.EngineObjectData
 import semantics.shared.OEROccurrence
 

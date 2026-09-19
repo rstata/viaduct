@@ -10,7 +10,7 @@ import semantics.correctresolution.argumentsContainErrorValue
 import semantics.shared.OEROccurrence
 import semantics.shared.SharedOperationContext
 import semantics.shared.applicableGroundSelections
-import semantics.shared.inputParentDemand
+import semantics.resolver26.inputParentDemand
 import viaduct.engine.api.EngineObjectData
 
 /**

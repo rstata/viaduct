@@ -8,7 +8,7 @@ import model.outputValue
 import model.schemaType
 import semantics.resolvers.ResolverDemandClosureLogic
 import semantics.shared.OEROccurrence
-import semantics.shared.installParentBackedgeFields
+import semantics.resolver26.installParentBackedgeFields
 import viaduct.engine.api.EngineObjectData
 
 /** Closes one object's demand before passive descent, then installs and launches its field tasks. */

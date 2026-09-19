@@ -1,6 +1,8 @@
-package semantics.shared
+package semantics.resolver26
 
 import model.ObjectEngineResult
+import semantics.shared.OEROccurrence
+import semantics.shared.SharedOperationContext
 
 /** Installs structural backedges without reopening resolution of the containing object. */
 internal fun OEROccurrence.installParentBackedgeFields(

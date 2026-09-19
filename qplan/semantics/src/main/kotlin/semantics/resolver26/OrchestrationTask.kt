@@ -10,7 +10,6 @@ import model.registry.VariableDefinition
 import model.requireQueryTypeDef
 import model.schemaType
 import semantics.shared.OEROccurrence
-import semantics.shared.installParentBackedgeFields
 import viaduct.engine.api.EngineObjectData
 
 /**

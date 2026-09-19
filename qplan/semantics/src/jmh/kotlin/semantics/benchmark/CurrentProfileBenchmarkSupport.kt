@@ -262,13 +262,12 @@ internal class CurrentProfileBenchmarkSupport(
                         result.registeredResolverApplicationIdentityCounts(operation) == witness.applicationIdentityCounts(),
                     )
                     check(
-                        context(operation) {
-                            result.correctResolution(
-                                fragment.subselections
-                                    .merge(world.schema.requireQueryTypeDef())
-                                    .instantiateBindings(operation),
-                            )
-                        },
+                        result.correctResolution(
+                            operation,
+                            fragment.subselections
+                                .merge(world.schema.requireQueryTypeDef())
+                                .instantiateBindings(operation),
+                        ),
                     )
                     result.validateFromFieldBindings(operation, appliedResolverOccurrences)
                     verifiedCases += 1

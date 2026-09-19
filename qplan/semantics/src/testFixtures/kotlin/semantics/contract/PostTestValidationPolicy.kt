@@ -48,25 +48,21 @@ private object ContractPostTestState {
         pending.remove()
         validations.forEach { validation ->
             assertTrue(
-                context(validation.operation) {
-                    validation.result.correctResolution(
-                        validation.selections
-                            .merge(validation.operation.world.schema.requireQueryTypeDef()),
-                    )
-                },
-                context(validation.operation) {
-                    "rooted=${context(validation.operation.world) {
-                        validation.result.rootedAndWellTyped()
-                    }}, " +
-                        "selections=" +
-                        validation.result.conformsToSelections(
-                            validation.selections,
-                        ) +
-                        ", closed=" +
-                        validation.result.isClosedUnderResolverDemand() +
-                        ", resolvers=" +
-                        validation.result.conformsToResolvers()
-                },
+                validation.result.correctResolution(
+                    validation.operation,
+                    validation.selections
+                        .merge(validation.operation.world.schema.requireQueryTypeDef()),
+                ),
+                "rooted=${validation.result.rootedAndWellTyped(validation.operation.world)}, " +
+                    "selections=" +
+                    validation.result.conformsToSelections(
+                        validation.operation,
+                        validation.selections,
+                    ) +
+                    ", closed=" +
+                    validation.result.isClosedUnderResolverDemand(validation.operation) +
+                    ", resolvers=" +
+                    validation.result.conformsToResolvers(validation.operation),
             )
         }
     }

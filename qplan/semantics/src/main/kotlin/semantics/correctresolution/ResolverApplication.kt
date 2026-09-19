@@ -158,11 +158,10 @@ private fun List<RootFieldReferenceInvocationObservation>.haveDistinctInvocation
     return all { observation -> roots.put(observation.invocationRoot, Unit) == null }
 }
 
-context(operation: SharedOperationContext<*>)
-internal fun rootFieldReferenceWitness(
+internal fun SharedOperationContext<*>.rootFieldReferenceWitness(
     primaryRoot: ObjectEngineResult,
 ): RootFieldReferenceWitness {
-    val observations = operation.resolverObserver as? ResolverObservations
+    val observations = resolverObserver as? ResolverObservations
     return RootFieldReferenceWitness(
         observations = observations?.rootFieldReferenceInvocations().orEmpty(),
         allowedPublicationRoots =
@@ -184,18 +183,16 @@ internal fun resolverApplicationCache(
         rootFieldReferenceWitness = rootFieldReferenceWitness,
     )
 
-context(operation: SharedOperationContext<*>)
-internal fun resolverApplicationCache(root: ObjectEngineResult): ResolverApplicationCache =
+internal fun SharedOperationContext<*>.resolverApplicationCache(root: ObjectEngineResult): ResolverApplicationCache =
     resolverApplicationCache(root, rootFieldReferenceWitness(root))
 
 /** Reference invocations published beneath this root and justified by deterministic replay. */
-context(operation: SharedOperationContext<*>)
-internal fun ObjectEngineResult.ownedRootFieldReferenceInvocations(): List<
+internal fun ObjectEngineResult.ownedRootFieldReferenceInvocations(operation: SharedOperationContext<*>): List<
     RootFieldReferenceInvocationObservation,
 > {
-    val witness = rootFieldReferenceWitness(this)
+    val witness = operation.rootFieldReferenceWitness(this)
     val cache = resolverApplicationCache(this, witness)
-    check(conformsToResolvers(cache)) {
+    check(conformsToResolvers(operation, cache)) {
         "Cannot reconstruct root-field-reference applications from a nonconforming result"
     }
     return witness.validatedObservations()
@@ -208,39 +205,219 @@ internal fun ObjectEngineResult.ownedRootFieldReferenceInvocations(): List<
  * argumentless field present in that output belongs to its ancestor source; an absent registered
  * field belongs to its standard resolver.
  */
-context(
+internal fun ObjectEngineResult.reapplyResolver(
     operation: SharedOperationContext<*>,
     resolverApplicationCache: ResolverApplicationCache,
-)
-internal fun ObjectEngineResult.reapplyResolver(
     key: ObjectEngineResult.ObjectKey,
     path: List<PathComponent>,
 ): ReappliedResolver? =
-    resolverApplicationCache.getOrPut(this, key) {
-        val arguments = key.groundedArguments(operation) as? Arguments.Resolved ?: return@getOrPut null
-        val resolver = operation.world.resolverRegistry.resolver(key.field)
-        val coordinate = path + key
-        val fragments =
-            resolver.fragmentsSatisfiedBy(
-                root = resolverApplicationCache.root,
-                result = this,
-                path = coordinate,
-            ) ?: return@getOrPut null
-        val objectFragment = fragments.objectFragment
-        val input: EngineObjectData.Sync =
-            runBlocking {
-                materializeResult(
+    ResolverReplayLogic(operation, resolverApplicationCache).reapply(this, key, path)
+
+/** Reapplies every independently rooted resolver hop that justified one consumer value. */
+internal fun SharedOperationContext<*>.reapplyRootFieldReference(
+    resolverApplicationCache: ResolverApplicationCache,
+    reference: RootFieldReferenceData,
+    publicationRoot: ObjectEngineResult,
+    publicationPath: List<PathComponent>,
+    validationDemand: SelectionForest,
+): ReappliedResolver? =
+    ResolverReplayLogic(this, resolverApplicationCache).reapplyRootFieldReference(
+        reference,
+        publicationRoot,
+        publicationPath,
+        validationDemand,
+    )
+
+/**
+ * Replays deterministic resolver relations using one operation and an existing per-result cache.
+ * Nested Query validation creates its own cache while retaining this cache's reference witness.
+ * This logic neither allocates replacement caches nor changes witness ownership.
+ */
+private class ResolverReplayLogic(
+    private val operation: SharedOperationContext<*>,
+    private val resolverApplicationCache: ResolverApplicationCache,
+) {
+    fun reapply(
+        result: ObjectEngineResult,
+        key: ObjectEngineResult.ObjectKey,
+        path: List<PathComponent>,
+    ): ReappliedResolver? = result.reapplyResolver(key, path)
+
+    private fun ObjectEngineResult.reapplyResolver(
+        key: ObjectEngineResult.ObjectKey,
+        path: List<PathComponent>,
+    ): ReappliedResolver? =
+        resolverApplicationCache.getOrPut(this, key) {
+            val arguments = key.groundedArguments(operation) as? Arguments.Resolved ?: return@getOrPut null
+            val resolver = operation.world.resolverRegistry.resolver(key.field)
+            val coordinate = path + key
+            val fragments =
+                resolver.fragmentsSatisfiedBy(
                     operation = operation,
-                    selections = objectFragment.materializeSelections,
-                    reader = coordinate,
+                    root = resolverApplicationCache.root,
+                    result = this,
+                    path = coordinate,
+                ) ?: return@getOrPut null
+            val objectFragment = fragments.objectFragment
+            val input: EngineObjectData.Sync =
+                runBlocking {
+                    materializeResult(
+                        operation = operation,
+                        selections = objectFragment.materializeSelections,
+                        reader = coordinate,
+                    )
+                }
+            val resolverArguments =
+                Arguments.Resolved.of(
+                    field = key.field,
+                    fields = arguments.fieldValues,
+                )
+            val resolverOccurrenceId = objectFragment.resolverOccurrenceId
+            val queryFragment = fragments.queryFragment
+            val queryValue =
+                if (queryFragment.constructionSelections.isEmpty()) {
+                    engineObjectDataOf(operation.world.schema.requireQueryTypeDef())
+                } else {
+                    val queryResult =
+                        (operation.resolverObserver as? ResolverObservations)
+                            ?.queryFragmentResults(resolverOccurrenceId)
+                            ?.singleOrNull()
+                            ?: return@getOrPut null
+                    val querySelections =
+                        queryFragment.constructionSelections
+                            .merge(operation.world.schema.requireQueryTypeDef())
+                    if (
+                        !queryResult.correctResolution(
+                            operation,
+                            querySelections,
+                            resolverApplicationCache.rootFieldReferenceWitness,
+                        )
+                    ) {
+                        return@getOrPut null
+                    }
+                    runBlocking {
+                        queryResult.materializeResult(
+                            operation = operation,
+                            selections = queryFragment.materializeSelections,
+                            reader = coordinate,
+                        )
+                    }
+                }
+            ReappliedResolver(
+                runBlocking {
+                    context(operation.world) {
+                        resolver.evaluateRelation(
+                            input = input,
+                            queryValue = queryValue,
+                            arguments = resolverArguments,
+                            selections = getCell(key).getValue().get().completedOutputDemand(),
+                            executionContext = ResolutionExecutionContext.Unsupported,
+                        )
+                    }
+                },
+            )
+        }
+
+    /** Reapplies every independently rooted resolver hop that justified one consumer value. */
+    fun reapplyRootFieldReference(
+        reference: RootFieldReferenceData,
+        publicationRoot: ObjectEngineResult,
+        publicationPath: List<PathComponent>,
+        validationDemand: SelectionForest,
+    ): ReappliedResolver? =
+        resolverApplicationCache.getOrPutRootFieldReference(reference, publicationPath) compute@{
+            if (publicationRoot !== resolverApplicationCache.root) return@compute null
+            val candidates =
+                resolverApplicationCache.rootFieldReferenceCandidates(publicationPath)
+                    ?: return@compute null
+            if (candidates.isEmpty()) return@compute null
+
+            val authoritativeNodeIdentity = reference.nodeReferenceIdentityOrNull()
+            var expectedReference = reference
+            candidates.forEach { candidate ->
+                val observation = candidate.observation
+                if (!observation.matches(expectedReference, publicationRoot)) return@compute null
+                val application =
+                    observation.reapplyReferencedResolver(validationDemand) ?: return@compute null
+                resolverApplicationCache.acceptRootFieldReference(candidate)
+                val output = application.output
+                if (output is RootFieldReferenceData) {
+                    expectedReference = output
+                } else {
+                    return@compute ReappliedResolver(
+                        output.withAuthoritativeNodeId(authoritativeNodeIdentity, validationDemand),
+                    )
+                }
+            }
+            null
+        }
+
+    private fun ResolverOutputData?.withAuthoritativeNodeId(
+        identity: NodeReferenceIdentity?,
+        demand: SelectionForest,
+    ): ResolverOutputData? {
+        if (identity == null || this !is EngineObjectData.Sync) return this
+        if (schemaType != identity.type) return this
+        val idField = identity.type.field("id") ?: return this
+        if (demand.merge(identity.type).byKey().keys.none { key -> key.field == idField }) return this
+        return engineObjectDataOf(
+            identity.type,
+            getSelections().associateWith(::outputValue) + (idField.name to identity.id),
+        )
+    }
+
+    private fun RootFieldReferenceInvocationObservation.matches(
+        expectedReference: RootFieldReferenceData,
+        expectedPublicationRoot: ObjectEngineResult,
+    ): Boolean {
+        val expectedInvocationPath: List<PathComponent> =
+            expectedReference.path.mapIndexed { index, field ->
+                ObjectEngineResult.GroundKey.of(
+                    field = field,
+                    arguments =
+                        if (index == expectedReference.path.lastIndex) {
+                            expectedReference.arguments
+                        } else {
+                            Arguments.Resolved.of(field, emptyMap())
+                        },
                 )
             }
+        return reference == expectedReference &&
+            invocationRoot !== expectedPublicationRoot &&
+            invocationRoot.type == operation.world.schema.requireQueryTypeDef() &&
+            invocationRoot.keys.isEmpty() &&
+            invocationPath == expectedInvocationPath &&
+            invocationKey == expectedInvocationPath.last()
+    }
+
+    private fun RootFieldReferenceInvocationObservation.reapplyReferencedResolver(
+        validationDemand: SelectionForest,
+    ): ReappliedResolver? {
+        if (!invocationKey.isContextuallyGrounded(operation)) return null
+        val arguments = invocationKey.groundedArguments(operation) as? Arguments.Resolved ?: return null
+        val resolver = operation.world.resolverRegistry.resolver(invocationKey.field)
+        val fragments = resolver.instantiateFragmentsAt(invocationRoot, invocationPath)
+        if (!fragments.objectFragment.materializeSelections.isEmpty()) return null
+        val input = engineObjectDataOf(invocationKey.field.containingDef)
         val resolverArguments =
             Arguments.Resolved.of(
-                field = key.field,
+                field = invocationKey.field,
                 fields = arguments.fieldValues,
             )
-        val resolverOccurrenceId = objectFragment.resolverOccurrenceId
+        val resolverOccurrenceId = fragments.objectFragment.resolverOccurrenceId
+        if (resolverOccurrenceId != ResolverOccurrenceId.at(invocationRoot, invocationPath)) return null
+        if (
+            resolver.instantiatedVariableDefinitions(resolverOccurrenceId).any { definition ->
+                val instanceId = requireNotNull(definition.variable.instanceId)
+                val source = definition.definition
+                !operation.variableBindings.isBound(instanceId) ||
+                    (source is model.registry.VariableDefinition.FromArgument &&
+                        operation.variableBindings.getBinding(instanceId) !=
+                        VariableBinding.of(source.read(arguments)))
+            }
+        ) {
+            return null
+        }
         val queryFragment = fragments.queryFragment
         val queryValue =
             if (queryFragment.constructionSelections.isEmpty()) {
@@ -250,191 +427,40 @@ internal fun ObjectEngineResult.reapplyResolver(
                     (operation.resolverObserver as? ResolverObservations)
                         ?.queryFragmentResults(resolverOccurrenceId)
                         ?.singleOrNull()
-                        ?: return@getOrPut null
+                        ?: return null
                 val querySelections =
-                    queryFragment.constructionSelections
-                        .merge(operation.world.schema.requireQueryTypeDef())
+                    queryFragment.constructionSelections.merge(operation.world.schema.requireQueryTypeDef())
                 if (
                     !queryResult.correctResolution(
+                        operation,
                         querySelections,
                         resolverApplicationCache.rootFieldReferenceWitness,
                     )
                 ) {
-                    return@getOrPut null
+                    return null
                 }
                 runBlocking {
                     queryResult.materializeResult(
                         operation = operation,
                         selections = queryFragment.materializeSelections,
-                        reader = coordinate,
+                        reader = publicationPath,
                     )
                 }
             }
-        ReappliedResolver(
+        return ReappliedResolver(
             runBlocking {
                 context(operation.world) {
                     resolver.evaluateRelation(
                         input = input,
                         queryValue = queryValue,
                         arguments = resolverArguments,
-                        selections = getCell(key).getValue().get().completedOutputDemand(),
+                        selections = validationDemand,
                         executionContext = ResolutionExecutionContext.Unsupported,
                     )
                 }
             },
         )
     }
-
-/** Reapplies every independently rooted resolver hop that justified one consumer value. */
-context(
-    operation: SharedOperationContext<*>,
-    resolverApplicationCache: ResolverApplicationCache,
-)
-internal fun reapplyRootFieldReference(
-    reference: RootFieldReferenceData,
-    publicationRoot: ObjectEngineResult,
-    publicationPath: List<PathComponent>,
-    validationDemand: SelectionForest,
-): ReappliedResolver? =
-    resolverApplicationCache.getOrPutRootFieldReference(reference, publicationPath) compute@{
-        if (publicationRoot !== resolverApplicationCache.root) return@compute null
-        val candidates =
-            resolverApplicationCache.rootFieldReferenceCandidates(publicationPath)
-                ?: return@compute null
-        if (candidates.isEmpty()) return@compute null
-
-        val authoritativeNodeIdentity = reference.nodeReferenceIdentityOrNull()
-        var expectedReference = reference
-        candidates.forEach { candidate ->
-            val observation = candidate.observation
-            if (!observation.matches(expectedReference, publicationRoot)) return@compute null
-            val application =
-                observation.reapplyReferencedResolver(validationDemand) ?: return@compute null
-            resolverApplicationCache.acceptRootFieldReference(candidate)
-            val output = application.output
-            if (output is RootFieldReferenceData) {
-                expectedReference = output
-            } else {
-                return@compute ReappliedResolver(
-                    output.withAuthoritativeNodeId(authoritativeNodeIdentity, validationDemand),
-                )
-            }
-        }
-        null
-    }
-
-private fun ResolverOutputData?.withAuthoritativeNodeId(
-    identity: NodeReferenceIdentity?,
-    demand: SelectionForest,
-): ResolverOutputData? {
-    if (identity == null || this !is EngineObjectData.Sync) return this
-    if (schemaType != identity.type) return this
-    val idField = identity.type.field("id") ?: return this
-    if (demand.merge(identity.type).byKey().keys.none { key -> key.field == idField }) return this
-    return engineObjectDataOf(
-        identity.type,
-        getSelections().associateWith(::outputValue) + (idField.name to identity.id),
-    )
-}
-
-context(operation: SharedOperationContext<*>)
-private fun RootFieldReferenceInvocationObservation.matches(
-    expectedReference: RootFieldReferenceData,
-    expectedPublicationRoot: ObjectEngineResult,
-): Boolean {
-    val expectedInvocationPath: List<PathComponent> =
-        expectedReference.path.mapIndexed { index, field ->
-            ObjectEngineResult.GroundKey.of(
-                field = field,
-                arguments =
-                    if (index == expectedReference.path.lastIndex) {
-                        expectedReference.arguments
-                    } else {
-                        Arguments.Resolved.of(field, emptyMap())
-                    },
-            )
-        }
-    return reference == expectedReference &&
-        invocationRoot !== expectedPublicationRoot &&
-        invocationRoot.type == operation.world.schema.requireQueryTypeDef() &&
-        invocationRoot.keys.isEmpty() &&
-        invocationPath == expectedInvocationPath &&
-        invocationKey == expectedInvocationPath.last()
-}
-
-context(
-    operation: SharedOperationContext<*>,
-    resolverApplicationCache: ResolverApplicationCache,
-)
-private fun RootFieldReferenceInvocationObservation.reapplyReferencedResolver(
-    validationDemand: SelectionForest,
-): ReappliedResolver? {
-    if (!invocationKey.isContextuallyGrounded(operation)) return null
-    val arguments = invocationKey.groundedArguments(operation) as? Arguments.Resolved ?: return null
-    val resolver = operation.world.resolverRegistry.resolver(invocationKey.field)
-    val fragments = resolver.instantiateFragmentsAt(invocationRoot, invocationPath)
-    if (!fragments.objectFragment.materializeSelections.isEmpty()) return null
-    val input = engineObjectDataOf(invocationKey.field.containingDef)
-    val resolverArguments =
-        Arguments.Resolved.of(
-            field = invocationKey.field,
-            fields = arguments.fieldValues,
-        )
-    val resolverOccurrenceId = fragments.objectFragment.resolverOccurrenceId
-    if (resolverOccurrenceId != ResolverOccurrenceId.at(invocationRoot, invocationPath)) return null
-    if (
-        resolver.instantiatedVariableDefinitions(resolverOccurrenceId).any { definition ->
-            val instanceId = requireNotNull(definition.variable.instanceId)
-            val source = definition.definition
-            !operation.variableBindings.isBound(instanceId) ||
-                (source is model.registry.VariableDefinition.FromArgument &&
-                    operation.variableBindings.getBinding(instanceId) !=
-                    VariableBinding.of(source.read(arguments)))
-        }
-    ) {
-        return null
-    }
-    val queryFragment = fragments.queryFragment
-    val queryValue =
-        if (queryFragment.constructionSelections.isEmpty()) {
-            engineObjectDataOf(operation.world.schema.requireQueryTypeDef())
-        } else {
-            val queryResult =
-                (operation.resolverObserver as? ResolverObservations)
-                    ?.queryFragmentResults(resolverOccurrenceId)
-                    ?.singleOrNull()
-                    ?: return null
-            val querySelections =
-                queryFragment.constructionSelections.merge(operation.world.schema.requireQueryTypeDef())
-            if (
-                !queryResult.correctResolution(
-                    querySelections,
-                    resolverApplicationCache.rootFieldReferenceWitness,
-                )
-            ) {
-                return null
-            }
-            runBlocking {
-                queryResult.materializeResult(
-                    operation = operation,
-                    selections = queryFragment.materializeSelections,
-                    reader = publicationPath,
-                )
-            }
-        }
-    return ReappliedResolver(
-        runBlocking {
-            context(operation.world) {
-                resolver.evaluateRelation(
-                    input = input,
-                    queryValue = queryValue,
-                    arguments = resolverArguments,
-                    selections = validationDemand,
-                    executionContext = ResolutionExecutionContext.Unsupported,
-                )
-            }
-        },
-    )
 }
 
 /**

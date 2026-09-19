@@ -128,13 +128,12 @@ internal class PropertyTestBenchmarkSupport(
                 }
                 profilePhase(profilePhases, "correctResolution") {
                     check(
-                        context(operation) {
-                            result.correctResolution(
-                                fragment.subselections
-                                    .merge(world.schema.requireQueryTypeDef())
-                                    .instantiateBindings(operation),
-                            )
-                        },
+                        result.correctResolution(
+                            operation,
+                            fragment.subselections
+                                .merge(world.schema.requireQueryTypeDef())
+                                .instantiateBindings(operation),
+                        ),
                     )
                 }
                 profilePhase(profilePhases, "from-field binding oracle") {

@@ -177,13 +177,12 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
             suppliedDemandFields.groupingBy { fields -> fields }.eachCount(),
         )
         assertTrue(
-            context(resolution.operation) {
-                resolved.correctResolution(
-                    selections
-                        .merge(world.schema.requireQueryTypeDef())
-                        .instantiateBindings(resolution.operation),
-                )
-            },
+            resolved.correctResolution(
+                resolution.operation,
+                selections
+                    .merge(world.schema.requireQueryTypeDef())
+                    .instantiateBindings(resolution.operation),
+            ),
         )
     }
 

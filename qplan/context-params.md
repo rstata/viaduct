@@ -1,6 +1,6 @@
 # Context Parameters, `Assumptions`, And `SharedOperationContext`
 
-Pure model operations use Kotlin context parameters for the one immutable `Assumptions` value of a reasoning world. Migrated semantics APIs receive their operation or world explicitly through ordinary parameters or a natural extension receiver; their `SharedOperationContext` still describes one resolution or correctness operation. Correctness judgments retain context parameters during the staged migration. Demand closure and sibling dependencies now use focused logic implementations retaining their operation and object occurrence.
+Pure model operations use Kotlin context parameters for the one immutable `Assumptions` value of a reasoning world. Semantics APIs receive their operation or world explicitly through ordinary parameters or a natural extension receiver; their `SharedOperationContext` still describes one resolution or correctness operation. No function defined in any semantics source set declares context parameters. Focused logic implementations retain stable dependencies for demand closure, sibling dependencies, materialization, and correctness replay.
 
 ## Model Context
 
@@ -53,13 +53,13 @@ Use the name `operation` consistently. Access stable configuration through its o
 
 `SharedFieldResolverTask` intentionally enforces an architectural relationship even though current callers use concrete tasks. Maintaining Resolver01–23 helps preserve Resolver26's decomposition and encapsulation, and this contract keeps the important field-task/publication boundary explicit across families. The [maintained-resolver rationale](./resolver-versions.md#purpose) applies to shared members whose purpose is architectural consistency as well as those used by generic algorithms.
 
-When a semantics function calls a model operation that requires `Assumptions`, establish that model context locally. During the migration, also establish a context locally when calling a retained contextual semantics API:
+Correctness predicates keep their result receivers and take explicit operation/world dependencies. `ResolverConformanceLogic`, `ResolverDemandValidationLogic`, and `ResolverReplayLogic` are private implementations in `semantics.correctresolution`; each retains the operation and existing per-result replay cache. A `correctResolution` call allocates one cache shared by demand validation and resolver conformance. Nested Query results allocate their own caches but share the same `RootFieldReferenceWitness`; separate judgments and standalone predicates retain their independent cache/witness lifetimes. Neither belongs in operation state. The operation-bound `rootFieldReferenceWitness`, `resolverApplicationCache` factory overload, and `reapplyRootFieldReference` helper are extensions on `SharedOperationContext<*>`. `ResolverApplicationCache` remains a state abstraction rather than a replay service.
+
+When a semantics function calls a model operation that requires `Assumptions`, establish that model context locally. Semantics predicates take their dependencies directly:
 
 ```kotlin
 fun ObjectEngineResult.validate(operation: SharedOperationContext<*>): Boolean =
-    context(operation.world) {
-        rootedAndWellTyped()
-    }
+    rootedAndWellTyped(operation.world)
 ```
 
 Resolver-specific operation contexts may add stable request references and explicit state properties. They should remain structurally immutable bundles rather than service locators or owners of mutable storage.
@@ -76,7 +76,7 @@ Retain a projection when an existing consumer uses a common contract and would o
 
 ## Call Boundaries
 
-Model context parameters are not global state. Establish the model context at its call boundary and pass the operation explicitly to migrated semantics APIs:
+Model context parameters are not global state. Establish the model context at its call boundary and pass the operation explicitly to semantics APIs:
 
 ```kotlin
 val modelValue = context(world) { objectValue.snipToDemand(selections) }
@@ -85,7 +85,7 @@ val resolution = SharedOperationContext.create(world).resolve(selections)
 
 `SharedOperationContext` is an interface. Its static `create(world, ...)` factory returns an anonymous `SharedOperationContext<Nothing>` for semantic operations that do not dispatch; requesting its dispatcher fails explicitly. The overload accepting `dispatcher` preserves its concrete type. `DepthFirstOperationContext` and `CoroutineOperationContext` are concrete classes that explicitly implement typed `SharedOperationContext` through delegation. Resolver26's `OperationContext` remains an interface because `FieldPublicationOccurrence` delegates to it; its `create(...)` factory returns an anonymous implementation. Each specialized context adds its family-specific references. Resolver26's `forChildScope` creates a new dispatcher under the supplied scope and retains the same world, variable bindings, observer, cycle checker, and binding-declaration state.
 
-Call migrated semantics APIs with explicit dependencies, including inside functions that still declare context parameters. Retain `context(...)` blocks only for calls that still require them: model operations and the remaining correctness judgments. Keep `context(operation.world)` local to modeled field-resolver invocation. Pure parent-input-demand analysis now takes `world` explicitly. Resolver01–23 demand-policy callbacks capture the existing operation lexically; their function types do not acquire context parameters.
+Call semantics APIs with explicit dependencies, including from model functions that declare context parameters. Retain `context(...)` blocks only for calls to unchanged model operations. Keep `context(operation.world)` local to modeled field-resolver invocation. Pure parent-input-demand analysis now takes `world` explicitly. Resolver01–23 demand-policy callbacks capture the existing operation lexically; their function types do not acquire context parameters.
 
 ## Receiver-Style Bodies
 
@@ -102,4 +102,4 @@ Use `run`, not `apply`, when returning a modeled result. `run` returns the lambd
 
 ## Validation
 
-[`ContextParametersTest.kt`](./model/src/test/kotlin/model/ContextParametersTest.kt) exercises model-context establishment and composition. Semantics compilation and tests exercise explicit operation passing, the retained contextual APIs, and model crossings through `operation.world`.
+[`ContextParametersTest.kt`](./model/src/test/kotlin/model/ContextParametersTest.kt) exercises model-context establishment and composition. Semantics compilation and tests exercise explicit operation passing, correctness cache/witness lifetimes, and model crossings through `operation.world`. The context-parameter compiler flag remains necessary for those model calls even though semantics itself declares no context parameters.

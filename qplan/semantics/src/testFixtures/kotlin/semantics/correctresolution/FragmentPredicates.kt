@@ -12,16 +12,15 @@ internal fun ObjectEngineResult.correctResolution(
     fragment: Fragment,
 ): Boolean =
     fragment.nominalType == operation.world.schema.requireQueryTypeDef() &&
-        context(operation) {
-            correctResolution(
-                fragment.subselections
-                    .merge(operation.world.schema.requireQueryTypeDef()),
-            )
-        }
+        correctResolution(
+            operation,
+            fragment.subselections
+                .merge(operation.world.schema.requireQueryTypeDef()),
+        )
 
 internal fun ObjectEngineResult.rootedAndWellTyped(world: Assumptions, fragment: Fragment): Boolean =
     fragment.nominalType == world.schema.requireQueryTypeDef() &&
-        context(world) { this.rootedAndWellTyped() }
+        this.rootedAndWellTyped(world)
 
 internal fun ObjectEngineResult.conformsToFragment(operation: SharedOperationContext<*>, fragment: Fragment): Boolean =
-    context(operation) { conformsToSelections(fragment.subselections) }
+    conformsToSelections(operation, fragment.subselections)

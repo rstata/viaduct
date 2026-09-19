@@ -206,9 +206,7 @@ private fun EngineResult?.requestQueryRoots(operation: SharedOperationContext<*>
 private fun EngineResult?.rootFieldReferenceOccurrences(operation: SharedOperationContext<*>): List<
     RootFieldReferenceInvocationObservation,
 > =
-    context(operation) {
-        (this as? ObjectEngineResult)?.ownedRootFieldReferenceInvocations().orEmpty()
-    }
+    (this as? ObjectEngineResult)?.ownedRootFieldReferenceInvocations(operation).orEmpty()
 
 private fun RootFieldReferenceInvocationObservation.applicationKey(operation: SharedOperationContext<*>): ResolverApplicationKey =
     ResolverApplicationKey(
@@ -262,12 +260,11 @@ private fun FieldResolver.objectFragmentSatisfiedBy(
         constructionSelections.usedVariables().all { variable ->
             operation.variableBindings.isBound(variable.instanceId!!)
         } &&
-            context(operation) {
-                result.conformsToSelectionsAt(
-                    selections = constructionSelections,
-                    path = path.dropLast(1),
-                )
-            }
+            result.conformsToSelectionsAt(
+                operation,
+                selections = constructionSelections,
+                path = path.dropLast(1),
+            )
     }
 }
 

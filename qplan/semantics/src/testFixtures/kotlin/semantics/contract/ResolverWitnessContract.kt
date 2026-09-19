@@ -97,16 +97,14 @@ interface ResolverWitnessContract : ResolverContract {
                 )
                 assertTrue(
                     result.correctResolution(resolution.operation, fragment),
-                    context(resolution.operation) {
-                        "rooted=${context(world) { result.rootedAndWellTyped() }}, " +
-                            "selections=" +
-                            "${result.conformsToSelections(fragment.subselections)}, " +
-                            "closed=${result.isClosedUnderResolverDemand()}, " +
-                            "resolvers=${result.conformsToResolvers()}, " +
-                            "unclosed=${result.unclosedRegisteredResolverOccurrences(resolution.operation).map { cell ->
-                                cell.applicationKey to cell.occurrencePath
-                            }}"
-                    },
+                    "rooted=${result.rootedAndWellTyped(world)}, " +
+                        "selections=" +
+                        "${result.conformsToSelections(resolution.operation, fragment.subselections)}, " +
+                        "closed=${result.isClosedUnderResolverDemand(resolution.operation)}, " +
+                        "resolvers=${result.conformsToResolvers(resolution.operation)}, " +
+                        "unclosed=${result.unclosedRegisteredResolverOccurrences(resolution.operation).map { cell ->
+                            cell.applicationKey to cell.occurrencePath
+                        }}",
                 )
 
                 witness.applications.forEach { application ->

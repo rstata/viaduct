@@ -50,11 +50,10 @@ class InclusionCombinationTest {
                 message,
             )
             assertTrue(
-                context(operation) {
-                    result.correctResolution(
-                        query.subselections.merge(fixture.world.schema.requireQueryTypeDef()),
-                    )
-                },
+                result.correctResolution(
+                    operation,
+                    query.subselections.merge(fixture.world.schema.requireQueryTypeDef()),
+                ),
                 message,
             )
         }
@@ -111,11 +110,10 @@ class InclusionCombinationTest {
                 message,
             )
             assertTrue(
-                context(operation) {
-                    result.correctResolution(
-                        query.subselections.merge(fixture.world.schema.requireQueryTypeDef()),
-                    )
-                },
+                result.correctResolution(
+                    operation,
+                    query.subselections.merge(fixture.world.schema.requireQueryTypeDef()),
+                ),
                 message,
             )
         }
@@ -215,11 +213,10 @@ class InclusionCombinationTest {
                 message,
             )
             assertTrue(
-                context(operation) {
-                    result.correctResolution(
-                        query.subselections.merge(fixture.world.schema.requireQueryTypeDef()),
-                    )
-                },
+                result.correctResolution(
+                    operation,
+                    query.subselections.merge(fixture.world.schema.requireQueryTypeDef()),
+                ),
                 message,
             )
         }

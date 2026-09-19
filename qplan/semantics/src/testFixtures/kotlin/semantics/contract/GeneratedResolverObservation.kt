@@ -55,46 +55,43 @@ object GeneratedCaseAssertions {
     val correctResolution =
         GeneratedCaseAssertion { observation ->
             observation.executions.forEach { execution ->
-                context(execution.operation) {
-                    val correct = execution.result.correctResolution(execution.operation, execution.fragment)
-                    if (!correct) {
-                        fun diagnostic(
-                            name: String,
-                            value: () -> Any?,
-                        ): String =
-                            "$name=" +
-                                runCatching(value).fold(
-                                    onSuccess = Any?::toString,
-                                    onFailure = { failure ->
-                                        "${failure::class.simpleName}: ${failure.message}"
-                                    },
-                                )
+                val correct = execution.result.correctResolution(execution.operation, execution.fragment)
+                if (!correct) {
+                    fun diagnostic(
+                        name: String,
+                        value: () -> Any?,
+                    ): String =
+                        "$name=" +
+                            runCatching(value).fold(
+                                onSuccess = Any?::toString,
+                                onFailure = { failure ->
+                                    "${failure::class.simpleName}: ${failure.message}"
+                                },
+                            )
 
-                        listOf(
-                            diagnostic("rootedAndWellTyped") {
-                                context(execution.world) {
-                                    execution.result.rootedAndWellTyped()
-                                }
-                            },
-                            diagnostic("conformsToSelections") {
-                                execution.result.conformsToSelections(
-                                    execution.fragment.subselections,
-                                )
-                            },
-                            diagnostic("isClosedUnderResolverDemand") {
-                                execution.result.isClosedUnderResolverDemand()
-                            },
-                            diagnostic("unclosedResolverOccurrences") {
-                                execution.result.unclosedRegisteredResolverOccurrences(execution.operation)
-                            },
-                            diagnostic("conformsToResolvers") {
-                                execution.result.conformsToResolvers()
-                            },
-                        ).joinToString(separator = "\n")
-                            .let { diagnostics ->
-                                assertTrue(actual = false, message = diagnostics)
-                            }
-                    }
+                    listOf(
+                        diagnostic("rootedAndWellTyped") {
+                            execution.result.rootedAndWellTyped(execution.world)
+                        },
+                        diagnostic("conformsToSelections") {
+                            execution.result.conformsToSelections(
+                                execution.operation,
+                                execution.fragment.subselections,
+                            )
+                        },
+                        diagnostic("isClosedUnderResolverDemand") {
+                            execution.result.isClosedUnderResolverDemand(execution.operation)
+                        },
+                        diagnostic("unclosedResolverOccurrences") {
+                            execution.result.unclosedRegisteredResolverOccurrences(execution.operation)
+                        },
+                        diagnostic("conformsToResolvers") {
+                            execution.result.conformsToResolvers(execution.operation)
+                        },
+                    ).joinToString(separator = "\n")
+                        .let { diagnostics ->
+                            assertTrue(actual = false, message = diagnostics)
+                        }
                 }
             }
         }

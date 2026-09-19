@@ -77,8 +77,16 @@ class CorrectResolutionTest {
         val result = operation.resolve(selections)
         val querySelections = selections.merge(world.schema.requireQueryTypeDef())
 
-        assertTrue(context(operation) { result.correctResolution(querySelections) })
+        assertTrue(result.correctResolution(operation, querySelections))
         assertEquals(listOf(setOf("name"), setOf("name")), observedFields)
+
+        // A second judgment and each standalone predicate must reapply independently.
+        assertTrue(result.correctResolution(operation, querySelections))
+        assertEquals(3, observedFields.size)
+        assertTrue(result.isClosedUnderResolverDemand(operation))
+        assertEquals(4, observedFields.size)
+        assertTrue(result.conformsToResolvers(operation))
+        assertEquals(5, observedFields.size)
     }
 
     @Test
@@ -93,9 +101,7 @@ class CorrectResolutionTest {
             )
 
         assertFailsWith<IllegalArgumentException> {
-            context(operation) {
-                result.correctResolution(profileSelections)
-            }
+            result.correctResolution(operation, profileSelections)
         }
     }
 
@@ -153,7 +159,7 @@ class CorrectResolutionTest {
         val occurrenceId = ResolverOccurrenceId.at(result, listOf(consumerKey))
         val missingObservation = SharedOperationContext.create(world)
 
-        assertFalse(context(missingObservation) { result.correctResolution(selections) })
+        assertFalse(result.correctResolution(missingObservation, selections))
 
         val incorrectObservation =
             SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
@@ -163,7 +169,7 @@ class CorrectResolutionTest {
                 "source" resolvesTo 8
             },
         )
-        assertFalse(context(incorrectObservation) { result.correctResolution(selections) })
+        assertFalse(result.correctResolution(incorrectObservation, selections))
 
         val correctObservation =
             SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
@@ -173,7 +179,7 @@ class CorrectResolutionTest {
                 "source" resolvesTo 7
             },
         )
-        assertTrue(context(correctObservation) { result.correctResolution(selections) })
+        assertTrue(result.correctResolution(correctObservation, selections))
 
         correctObservation.resolverObserver.onQueryFragmentResult(
             occurrenceId,
@@ -181,7 +187,7 @@ class CorrectResolutionTest {
                 "source" resolvesTo 7
             },
         )
-        assertFalse(context(correctObservation) { result.correctResolution(selections) })
+        assertFalse(result.correctResolution(correctObservation, selections))
     }
 
     @Test
@@ -241,7 +247,7 @@ class CorrectResolutionTest {
                 ).subselections
                 .merge(world.schema.requireQueryTypeDef())
 
-        assertFalse(context(operation) { result.correctResolution(selections) })
+        assertFalse(result.correctResolution(operation, selections))
     }
 
     private companion object {

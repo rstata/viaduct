@@ -401,9 +401,7 @@ class RootFieldReferenceResolutionTest {
         assertEquals(listOf("value-5/value-6"), firstQueryValues)
         assertEquals(listOf("value-9/value-10"), secondQueryValues)
         assertTrue(
-            context(operation) {
-                result.correctResolution(query.subselections.merge(world.schema.requireQueryTypeDef()))
-            },
+            result.correctResolution(operation, query.subselections.merge(world.schema.requireQueryTypeDef())),
         )
     }
 
@@ -500,9 +498,7 @@ class RootFieldReferenceResolutionTest {
         assertEquals(1, targetApplications.get())
         assertEquals(
             true,
-            context(operation) {
-                result.correctResolution(query.subselections.merge(world.schema.requireQueryTypeDef()))
-            },
+            result.correctResolution(operation, query.subselections.merge(world.schema.requireQueryTypeDef())),
         )
     }
 
@@ -611,9 +607,7 @@ class RootFieldReferenceResolutionTest {
             applications.map { it.field.name },
         )
         assertTrue(
-            context(operation) {
-                result.correctResolution(query.subselections.merge(world.schema.requireQueryTypeDef()))
-            },
+            result.correctResolution(operation, query.subselections.merge(world.schema.requireQueryTypeDef())),
         )
     }
 
@@ -674,9 +668,7 @@ class RootFieldReferenceResolutionTest {
         assertNotEquals(applications[1].resolverOccurrenceId, applications[2].resolverOccurrenceId)
         assertEquals(
             true,
-            context(operation) {
-                result.correctResolution(query.subselections.merge(world.schema.requireQueryTypeDef()))
-            },
+            result.correctResolution(operation, query.subselections.merge(world.schema.requireQueryTypeDef())),
         )
         assertEquals(
             3,
@@ -834,9 +826,7 @@ class RootFieldReferenceResolutionTest {
             third.getCell(world.schema.contractKey("Product", "value")).getValue().get(),
         )
         assertTrue(
-            context(operation) {
-                result.correctResolution(query.subselections.merge(world.schema.requireQueryTypeDef()))
-            },
+            result.correctResolution(operation, query.subselections.merge(world.schema.requireQueryTypeDef())),
         )
     }
 
@@ -1028,11 +1018,10 @@ class RootFieldReferenceResolutionTest {
                 assertFalse(runBlocking { referenceCell.fetchActivated() })
             }
             assertTrue(
-                context(operation) {
-                    resolved.correctResolution(
-                        query.subselections.merge(world.schema.requireQueryTypeDef()),
-                    )
-                },
+                resolved.correctResolution(
+                    operation,
+                    query.subselections.merge(world.schema.requireQueryTypeDef()),
+                ),
             )
         }
     }
@@ -1179,7 +1168,7 @@ class RootFieldReferenceResolutionTest {
         )
         val selections = model.selectionForestOf().merge(operation.world.schema.requireQueryTypeDef())
 
-        assertTrue(context(operation) { primaryRoot.correctResolution(selections) })
+        assertTrue(primaryRoot.correctResolution(operation, selections))
         assertEquals(
             1,
             primaryRoot.registeredResolverOccurrenceApplicationIdentityCounts(operation).filterKeys { identity ->
@@ -1211,11 +1200,10 @@ class RootFieldReferenceResolutionTest {
             )
 
         assertTrue(
-            context(validationOperation) {
-                resolution.result.correctResolution(
-                    query.subselections.merge(validationOperation.world.schema.requireQueryTypeDef()),
-                )
-            },
+            resolution.result.correctResolution(
+                validationOperation,
+                query.subselections.merge(validationOperation.world.schema.requireQueryTypeDef()),
+            ),
         )
     }
 
@@ -1277,11 +1265,10 @@ class RootFieldReferenceResolutionTest {
             )
 
         assertFalse(
-            context(validationOperation) {
-                result.correctResolution(
-                    query.subselections.merge(world.schema.requireQueryTypeDef()),
-                )
-            },
+            result.correctResolution(
+                validationOperation,
+                query.subselections.merge(world.schema.requireQueryTypeDef()),
+            ),
         )
     }
 
@@ -1351,11 +1338,10 @@ class RootFieldReferenceResolutionTest {
             )
 
         assertFalse(
-            context(validationOperation) {
-                result.correctResolution(
-                    query.subselections.merge(world.schema.requireQueryTypeDef()),
-                )
-            },
+            result.correctResolution(
+                validationOperation,
+                query.subselections.merge(world.schema.requireQueryTypeDef()),
+            ),
         )
     }
 

@@ -18,22 +18,25 @@ import semantics.shared.SharedOperationContext
  * [selections] must be rooted at the reasoning world's canonical Query type. Reapplying a resolver
  * with a nonempty query fragment also requires the independently resolved Query OER retained in
  * the resolver observations for that exact resolver occurrence to be a correct resolution.
+ * Each judged result gets one replay cache shared by demand and conformance checks. Nested Query
+ * results get their own caches but retain the same reference witness across the whole judgment.
+ * Neither the cache nor the witness is retained by [operation] across separate judgments.
  *
  * This is math, not programming: the Kotlin application syntax here expresses the
  * modeled function relation, not programming-language procedure executions.  These should
  * be reasoned about as inductively-defined relations, not recursive routines.
  */
-context(operation: SharedOperationContext<*>)
 fun ObjectEngineResult.correctResolution(
+    operation: SharedOperationContext<*>,
     selections: ObjectSelectionForest,
 ): Boolean {
-    val rootFieldReferenceWitness = rootFieldReferenceWitness(this)
-    return correctResolution(selections, rootFieldReferenceWitness) &&
+    val rootFieldReferenceWitness = operation.rootFieldReferenceWitness(this)
+    return correctResolution(operation, selections, rootFieldReferenceWitness) &&
         rootFieldReferenceWitness.isComplete()
 }
 
-context(operation: SharedOperationContext<*>)
 internal fun ObjectEngineResult.correctResolution(
+    operation: SharedOperationContext<*>,
     selections: ObjectSelectionForest,
     rootFieldReferenceWitness: RootFieldReferenceWitness,
 ): Boolean {
@@ -42,10 +45,8 @@ internal fun ObjectEngineResult.correctResolution(
     }
     val resolverApplicationCache = resolverApplicationCache(this, rootFieldReferenceWitness)
     val structurallyValid =
-        context(operation.world) {
-            rootedAndWellTyped()
-        } && conformsToSelections(selections)
+        rootedAndWellTyped(operation.world) && conformsToSelections(operation, selections)
     return structurallyValid &&
-        isClosedUnderResolverDemand(resolverApplicationCache) &&
-        conformsToResolvers(resolverApplicationCache)
+        isClosedUnderResolverDemand(operation, resolverApplicationCache) &&
+        conformsToResolvers(operation, resolverApplicationCache)
 }

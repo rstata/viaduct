@@ -39,118 +39,217 @@ import semantics.shared.ResolverObservations
  * This predicate assumes [isClosedUnderResolverDemand] has established that every resolver input
  * value is present. It observes cell values but never access-acceptance results.
  */
-context(operation: SharedOperationContext<*>)
-fun ObjectEngineResult.conformsToResolvers(): Boolean =
-    resolverApplicationCache(this).let { resolverApplicationCache ->
-        conformsToResolvers(resolverApplicationCache) &&
+fun ObjectEngineResult.conformsToResolvers(operation: SharedOperationContext<*>): Boolean =
+    operation.resolverApplicationCache(this).let { resolverApplicationCache ->
+        conformsToResolvers(operation, resolverApplicationCache) &&
             resolverApplicationCache.hasCompleteRootFieldReferenceWitness()
     }
 
-context(operation: SharedOperationContext<*>)
 internal fun ObjectEngineResult.conformsToResolvers(
+    operation: SharedOperationContext<*>,
     resolverApplicationCache: ResolverApplicationCache,
 ): Boolean =
-    context(resolverApplicationCache) {
-        objectConformsToResolvers(
+    ResolverConformanceLogic(operation, resolverApplicationCache).conforms(this)
+
+/** Checks resolver conformance for one result using its operation and existing replay cache. */
+private class ResolverConformanceLogic(
+    private val operation: SharedOperationContext<*>,
+    private val resolverApplicationCache: ResolverApplicationCache,
+) {
+    fun conforms(result: ObjectEngineResult): Boolean =
+        result.objectConformsToResolvers(
             path = emptyList(),
             source = null,
             structuralParent = null,
             producerField = null,
         )
-    }
 
-context(
-    operation: SharedOperationContext<*>,
-    resolverApplicationCache: ResolverApplicationCache,
-)
-private fun ObjectEngineResult.objectConformsToResolvers(
-    path: List<PathComponent>,
-    source: EngineObjectData.Sync?,
-    structuralParent: ObjectEngineResult?,
-    producerField: ViaductSchema.ObjectField?,
-): Boolean =
-    keys.all { key ->
-        if (!getCell(key).getValue().isCompleted) return@all true
-        if (!key.isContextuallyGrounded(operation)) return@all false
-        val value = getCell(key).getValue().get()
-        val arguments = key.groundedArguments(operation)
-        val fieldName = key.field.name
-        source.requireArgumentlessField(key)
-        when {
-            key is ObjectEngineResult.ParentKey ->
-                value === structuralParent &&
-                    operation.world.parentFieldRelations[key.field] == producerField
+    private fun ObjectEngineResult.objectConformsToResolvers(
+        path: List<PathComponent>,
+        source: EngineObjectData.Sync?,
+        structuralParent: ObjectEngineResult?,
+        producerField: ViaductSchema.ObjectField?,
+    ): Boolean =
+        keys.all { key ->
+            if (!getCell(key).getValue().isCompleted) return@all true
+            if (!key.isContextuallyGrounded(operation)) return@all false
+            val value = getCell(key).getValue().get()
+            val arguments = key.groundedArguments(operation)
+            val fieldName = key.field.name
+            source.requireArgumentlessField(key)
+            when {
+                key is ObjectEngineResult.ParentKey ->
+                    value === structuralParent &&
+                        operation.world.parentFieldRelations[key.field] == producerField
 
-            arguments !is Arguments.Resolved ->
-                value is ErrorEngineResult &&
-                    errorArgumentQueryFragmentConforms(
-                        key = key,
-                        path = path + key,
-                    )
+                arguments !is Arguments.Resolved ->
+                    value is ErrorEngineResult &&
+                        errorArgumentQueryFragmentConforms(
+                            key = key,
+                            path = path + key,
+                        )
 
-            source?.isPresent(fieldName) == true ->
-                arguments.fieldValues.isEmpty() &&
-                    value.engineResultConformsToResolverValue(
-                        resolverValue = source.outputValue(fieldName),
-                        expectedType = key.field.outputType,
-                        path = path + key,
-                        structuralParent = this,
-                        producerField = key.field,
-                    )
-
-            key.field in operation.world.resolverRegistry ->
-                reapplyResolver(key, path)
-                    ?.let { application ->
+                source?.isPresent(fieldName) == true ->
+                    arguments.fieldValues.isEmpty() &&
                         value.engineResultConformsToResolverValue(
-                            resolverValue = application.output,
+                            resolverValue = source.outputValue(fieldName),
                             expectedType = key.field.outputType,
                             path = path + key,
                             structuralParent = this,
                             producerField = key.field,
                         )
-                    } == true
 
-            source == null ->
-                value.engineResultConformsToResolvers(
-                    path = path + key,
-                    structuralParent = this,
-                    producerField = key.field,
+                key.field in operation.world.resolverRegistry ->
+                    reapplyResolver(operation, resolverApplicationCache, key, path)
+                        ?.let { application ->
+                            value.engineResultConformsToResolverValue(
+                                resolverValue = application.output,
+                                expectedType = key.field.outputType,
+                                path = path + key,
+                                structuralParent = this,
+                                producerField = key.field,
+                            )
+                        } == true
+
+                source == null ->
+                    value.engineResultConformsToResolvers(
+                        path = path + key,
+                        structuralParent = this,
+                        producerField = key.field,
+                    )
+
+                else -> false
+            }
+        }
+
+    private fun ObjectEngineResult.errorArgumentQueryFragmentConforms(
+        key: ObjectEngineResult.ObjectKey,
+        path: List<PathComponent>,
+    ): Boolean {
+        if (key.field !in operation.world.resolverRegistry) return true
+        val resolver = operation.world.resolverRegistry.resolver(key.field)
+        val queryFragment =
+            resolver.instantiateFragmentsAt(resolverApplicationCache.root, path).queryFragment
+        if (queryFragment.constructionSelections.isEmpty()) return true
+        val queryResults =
+            (operation.resolverObserver as? ResolverObservations)
+                ?.queryFragmentResults(
+                    ResolverOccurrenceId.at(resolverApplicationCache.root, path),
+                ).orEmpty()
+        if (key is ObjectEngineResult.GroundKey) return queryResults.isEmpty()
+        val queryResult = queryResults.singleOrNull() ?: return false
+        val querySelections =
+            queryFragment.constructionSelections.merge(operation.world.schema.requireQueryTypeDef())
+        return queryResult.correctResolution(
+            operation,
+            querySelections,
+            resolverApplicationCache.rootFieldReferenceWitness,
+        )
+    }
+
+    private fun EngineResult?.engineResultConformsToResolvers(
+        path: List<PathComponent>,
+        structuralParent: ObjectEngineResult,
+        producerField: ViaductSchema.ObjectField,
+    ): Boolean =
+        when (this) {
+            null,
+            is ErrorEngineResult,
+            -> true
+
+            is ObjectEngineResult ->
+                objectConformsToResolvers(
+                    path = path,
+                    source = null,
+                    structuralParent = structuralParent,
+                    producerField = producerField,
                 )
+            is ListEngineResult ->
+                indices.all { index ->
+                    get(index).getValue().get().engineResultConformsToResolvers(
+                        path = path + ListEngineResult.Index.of(index),
+                        structuralParent = structuralParent,
+                        producerField = producerField,
+                    )
+                }
+            else -> true
+        }
 
-            else -> false
+    private fun EngineResult?.engineResultConformsToResolverValue(
+        resolverValue: ResolverOutputData?,
+        expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
+        path: List<PathComponent>,
+        structuralParent: ObjectEngineResult,
+        producerField: ViaductSchema.ObjectField,
+    ): Boolean {
+        if (resolverValue is RootFieldReferenceData) {
+            return operation.reapplyRootFieldReference(
+                resolverApplicationCache = resolverApplicationCache,
+                reference = resolverValue,
+                publicationRoot = resolverApplicationCache.root,
+                publicationPath = path,
+                validationDemand = completedOutputDemand(),
+            )?.let { application ->
+                engineResultConformsToResolverValue(
+                    resolverValue = application.output,
+                    expectedType = expectedType,
+                    path = path,
+                    structuralParent = structuralParent,
+                    producerField = producerField,
+                )
+            } == true
+        }
+        return when (this) {
+            null -> resolverValue == null
+            is ErrorEngineResult -> resolverValue is EngineErrorData
+
+            is ObjectEngineResult ->
+                resolverValue is EngineObjectData.Sync &&
+                    objectFieldsConformToResolverValue(
+                        resolverValue = resolverValue,
+                        path = path,
+                        structuralParent = structuralParent,
+                        producerField = producerField,
+                    )
+
+            is ListEngineResult ->
+                resolverValue is List<*> &&
+                    size == resolverValue.size &&
+                    indices.all { index ->
+                        get(index).getValue().get().engineResultConformsToResolverValue(
+                            resolverValue[index],
+                            typeExpr,
+                            path + ListEngineResult.Index.of(index),
+                            structuralParent,
+                            producerField,
+                        )
+                    }
+
+            else ->
+                toEngineOutputData(expectedType.baseTypeDef as ViaductSchema.SimpleTypeDef) ==
+                    resolverValue
         }
     }
 
-context(
-    operation: SharedOperationContext<*>,
-    resolverApplicationCache: ResolverApplicationCache,
-)
-private fun ObjectEngineResult.errorArgumentQueryFragmentConforms(
-    key: ObjectEngineResult.ObjectKey,
-    path: List<PathComponent>,
-): Boolean {
-    if (key.field !in operation.world.resolverRegistry) return true
-    val resolver = operation.world.resolverRegistry.resolver(key.field)
-    val queryFragment =
-        resolver.instantiateFragmentsAt(resolverApplicationCache.root, path).queryFragment
-    if (queryFragment.constructionSelections.isEmpty()) return true
-    val queryResults =
-        (operation.resolverObserver as? ResolverObservations)
-            ?.queryFragmentResults(
-                ResolverOccurrenceId.at(resolverApplicationCache.root, path),
-            ).orEmpty()
-    if (key is ObjectEngineResult.GroundKey) return queryResults.isEmpty()
-    val queryResult = queryResults.singleOrNull() ?: return false
-    val querySelections =
-        queryFragment.constructionSelections.merge(operation.world.schema.requireQueryTypeDef())
-    return queryResult.correctResolution(
-        querySelections,
-        resolverApplicationCache.rootFieldReferenceWitness,
-    )
+    private fun ObjectEngineResult.objectFieldsConformToResolverValue(
+        resolverValue: EngineObjectData.Sync,
+        path: List<PathComponent>,
+        structuralParent: ObjectEngineResult,
+        producerField: ViaductSchema.ObjectField,
+    ): Boolean {
+        if (type != resolverValue.schemaType) return false
+
+        return objectConformsToResolvers(
+            path = path,
+            source = resolverValue,
+            structuralParent = structuralParent,
+            producerField = producerField,
+        )
+    }
 }
 
-context(operation: SharedOperationContext<*>)
 internal fun FieldResolver.fragmentsSatisfiedBy(
+    operation: SharedOperationContext<*>,
     root: ObjectEngineResult,
     result: ObjectEngineResult,
     path: List<PathComponent>,
@@ -164,6 +263,7 @@ internal fun FieldResolver.fragmentsSatisfiedBy(
     return fragments.takeIf {
         val constructionSelections = objectFragment.constructionSelections
         fromArgumentBindingsAgree(
+            operation = operation,
             fragments = fragments,
             arguments = arguments,
         ) &&
@@ -171,14 +271,15 @@ internal fun FieldResolver.fragmentsSatisfiedBy(
                 operation.variableBindings.isBound(variable.instanceId!!)
             } &&
             result.conformsToSelectionsAt(
+                operation = operation,
                 selections = constructionSelections,
                 path = path.dropLast(1),
             )
     }
 }
 
-context(operation: SharedOperationContext<*>)
 private fun FieldResolver.fromArgumentBindingsAgree(
+    operation: SharedOperationContext<*>,
     fragments: ResolverFragments,
     arguments: Arguments.Resolved,
 ): Boolean {
@@ -196,115 +297,4 @@ private fun FieldResolver.fromArgumentBindingsAgree(
                 operation.variableBindings.getBinding(instanceId) ==
                 VariableBinding.of(definition.read(arguments))
         }
-}
-
-context(
-    operation: SharedOperationContext<*>,
-    resolverApplicationCache: ResolverApplicationCache,
-)
-private fun EngineResult?.engineResultConformsToResolvers(
-    path: List<PathComponent>,
-    structuralParent: ObjectEngineResult,
-    producerField: ViaductSchema.ObjectField,
-): Boolean =
-    when (this) {
-        null,
-        is ErrorEngineResult,
-        -> true
-
-        is ObjectEngineResult ->
-            objectConformsToResolvers(
-                path = path,
-                source = null,
-                structuralParent = structuralParent,
-                producerField = producerField,
-            )
-        is ListEngineResult ->
-            indices.all { index ->
-                get(index).getValue().get().engineResultConformsToResolvers(
-                    path = path + ListEngineResult.Index.of(index),
-                    structuralParent = structuralParent,
-                    producerField = producerField,
-                )
-            }
-        else -> true
-    }
-
-context(
-    operation: SharedOperationContext<*>,
-    resolverApplicationCache: ResolverApplicationCache,
-)
-private fun EngineResult?.engineResultConformsToResolverValue(
-    resolverValue: ResolverOutputData?,
-    expectedType: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
-    path: List<PathComponent>,
-    structuralParent: ObjectEngineResult,
-    producerField: ViaductSchema.ObjectField,
-): Boolean {
-    if (resolverValue is RootFieldReferenceData) {
-        return reapplyRootFieldReference(
-            reference = resolverValue,
-            publicationRoot = resolverApplicationCache.root,
-            publicationPath = path,
-            validationDemand = completedOutputDemand(),
-        )?.let { application ->
-            engineResultConformsToResolverValue(
-                resolverValue = application.output,
-                expectedType = expectedType,
-                path = path,
-                structuralParent = structuralParent,
-                producerField = producerField,
-            )
-        } == true
-    }
-    return when (this) {
-        null -> resolverValue == null
-        is ErrorEngineResult -> resolverValue is EngineErrorData
-
-        is ObjectEngineResult ->
-            resolverValue is EngineObjectData.Sync &&
-                objectFieldsConformToResolverValue(
-                    resolverValue = resolverValue,
-                    path = path,
-                    structuralParent = structuralParent,
-                    producerField = producerField,
-                )
-
-        is ListEngineResult ->
-            resolverValue is List<*> &&
-                size == resolverValue.size &&
-                indices.all { index ->
-                    get(index).getValue().get().engineResultConformsToResolverValue(
-                        resolverValue[index],
-                        typeExpr,
-                        path + ListEngineResult.Index.of(index),
-                        structuralParent,
-                        producerField,
-                    )
-                }
-
-        else ->
-            toEngineOutputData(expectedType.baseTypeDef as ViaductSchema.SimpleTypeDef) ==
-                resolverValue
-    }
-}
-
-context(
-    operation: SharedOperationContext<*>,
-    resolverApplicationCache: ResolverApplicationCache,
-)
-private fun ObjectEngineResult.objectFieldsConformToResolverValue(
-    resolverValue: EngineObjectData.Sync,
-    path: List<PathComponent>,
-    structuralParent: ObjectEngineResult,
-    producerField: ViaductSchema.ObjectField,
-): Boolean {
-    if (type != resolverValue.schemaType) return false
-
-    return objectConformsToResolvers(
-        path = path,
-        source = resolverValue,
-        structuralParent = structuralParent,
-        producerField = producerField,
-    )
 }

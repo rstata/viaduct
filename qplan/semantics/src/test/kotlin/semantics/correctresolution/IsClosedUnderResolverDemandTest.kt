@@ -23,7 +23,7 @@ class IsClosedUnderResolverDemandTest {
                 "name" resolvesTo "Ada"
             }
 
-        assertTrue(context(SharedOperationContext.create(world)) { result.isClosedUnderResolverDemand() })
+        assertTrue(result.isClosedUnderResolverDemand(SharedOperationContext.create(world)))
     }
 
     @Test
@@ -99,7 +99,7 @@ class IsClosedUnderResolverDemandTest {
         operation.variableBindings.declareBinding(variableId)
         operation.variableBindings.completeBinding(variableId, 7)
 
-        assertTrue(context(operation) { result.isClosedUnderResolverDemand() })
+        assertTrue(result.isClosedUnderResolverDemand(operation))
     }
 
     private companion object {

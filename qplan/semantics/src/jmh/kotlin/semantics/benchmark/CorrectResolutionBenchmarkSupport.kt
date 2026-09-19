@@ -64,7 +64,7 @@ internal class CorrectResolutionBenchmarkSupport(
                         fragment.subselections
                             .merge(world.schema.requireQueryTypeDef())
                             .instantiateBindings(operation)
-                    check(context(operation) { result.correctResolution(selections) }) {
+                    check(result.correctResolution(operation, selections)) {
                         "Prepared correct-resolution benchmark input is not a correct resolution"
                     }
                     PreparedCorrectResolution(operation, result, selections)
@@ -84,9 +84,7 @@ internal class CorrectResolutionBenchmarkSupport(
         repeat(loopCount) {
             preparedInputs.forEach { prepared ->
                 blackhole.consume(
-                    context(prepared.operation) {
-                        prepared.result.correctResolution(prepared.selections)
-                    },
+                    prepared.result.correctResolution(prepared.operation, prepared.selections),
                 )
             }
         }

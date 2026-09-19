@@ -73,13 +73,12 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
         assertEquals(1, fooApplications)
         assertEquals(setOf("x", "y", "z", "w"), fooDemandFields)
         assertTrue(
-            context(resolution.operation) {
-                resolved.correctResolution(
-                    selections
-                        .merge(world.schema.requireQueryTypeDef())
-                        .instantiateBindings(resolution.operation),
-                )
-            },
+            resolved.correctResolution(
+                resolution.operation,
+                selections
+                    .merge(world.schema.requireQueryTypeDef())
+                    .instantiateBindings(resolution.operation),
+            ),
         )
     }
 

@@ -5,11 +5,15 @@ The semantics project defines transformations, resolver algorithms, and correctn
 ## Principal Judgment
 
 ```kotlin
-context(operation: SharedOperationContext<*>)
-fun ObjectEngineResult.correctResolution(selections: ObjectSelectionForest): Boolean
+fun ObjectEngineResult.correctResolution(
+    operation: SharedOperationContext<*>,
+    selections: ObjectSelectionForest,
+): Boolean
 ```
 
 `correctResolution` judges the value slots of a completed primary Query OER extensionally. When a field resolver declares a nonempty Query-rooted fragment, the judgment also requires the independently resolved Query OER stored for that exact resolver occurrence to be correct and uses its materialized value when re-evaluating the resolver relation. Reapplication supplies the finite canonical demand reconstructed from the completed output occurrence; this is sufficient under the selective-function agreement law and is not a claim that the judgment recovered the algorithm's original supplied demand. Access-result slots are deliberately outside this judgment: access checks are future qplan work, and maintained resolver versions do not publish or agree on those slots. It also does not establish resolver application count, supplied demand, execution order, provider binding, lifecycle ownership, or concurrency. Those properties require separate witnesses and tests. [`testing-contracts.md`](./testing-contracts.md#resolver-fixture-and-oracle-boundary) explains why the judgment reapplies resolver relations and how `FieldResolver.of` and `FieldResolver.ofSelective` define different test-oracle boundaries.
+
+Correctness predicates retain their result receivers and receive `operation` or `world` explicitly. The private `ResolverConformanceLogic`, `ResolverDemandValidationLogic`, and `ResolverReplayLogic` classes retain stable operation/cache dependencies for their recursive checks. Each result judgment has one replay cache shared between demand validation and resolver conformance. Nested Query results get separate caches while sharing the same reference witness; repeated judgments and standalone predicates create fresh state. No cache or witness is moved into long-lived operation state. Operation-bound witness/cache factories and root-reference replay are operation extensions. Semantics declares no context parameters; its remaining local context blocks call model APIs.
 
 ## Vocabulary
 

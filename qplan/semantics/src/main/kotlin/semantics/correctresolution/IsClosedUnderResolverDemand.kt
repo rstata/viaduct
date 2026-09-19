@@ -28,207 +28,204 @@ import viaduct.graphql.schema.ViaductSchema
  *
  * This predicate observes cell-value presence and content, but never access-acceptance results.
  */
-context(operation: SharedOperationContext<*>)
-fun ObjectEngineResult.isClosedUnderResolverDemand(): Boolean =
-    isClosedUnderResolverDemand(resolverApplicationCache(this))
+fun ObjectEngineResult.isClosedUnderResolverDemand(operation: SharedOperationContext<*>): Boolean =
+    isClosedUnderResolverDemand(operation, operation.resolverApplicationCache(this))
 
-context(operation: SharedOperationContext<*>)
 internal fun ObjectEngineResult.isClosedUnderResolverDemand(
+    operation: SharedOperationContext<*>,
     resolverApplicationCache: ResolverApplicationCache,
 ): Boolean =
-    context(resolverApplicationCache) {
-        objectIsClosedUnderResolverDemand(
+    ResolverDemandValidationLogic(operation, resolverApplicationCache).isClosed(this)
+
+/** Checks resolver demand for one result using its operation and existing replay cache. */
+private class ResolverDemandValidationLogic(
+    private val operation: SharedOperationContext<*>,
+    private val resolverApplicationCache: ResolverApplicationCache,
+) {
+    fun isClosed(result: ObjectEngineResult): Boolean =
+        result.objectIsClosedUnderResolverDemand(
             path = emptyList(),
             source = null,
             structuralParent = null,
             producerField = null,
         )
-    }
 
-context(
-    operation: SharedOperationContext<*>,
-    resolverApplicationCache: ResolverApplicationCache,
-)
-private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
-    path: List<PathComponent>,
-    source: EngineObjectData.Sync?,
-    structuralParent: ObjectEngineResult?,
-    producerField: ViaductSchema.ObjectField?,
-): Boolean {
-    val registry = operation.world.resolverRegistry
+    private fun ObjectEngineResult.objectIsClosedUnderResolverDemand(
+        path: List<PathComponent>,
+        source: EngineObjectData.Sync?,
+        structuralParent: ObjectEngineResult?,
+        producerField: ViaductSchema.ObjectField?,
+    ): Boolean {
+        val registry = operation.world.resolverRegistry
 
-    return keys.all { key ->
-        if (!getCell(key).getValue().isCompleted) return@all true
-        if (!key.isContextuallyGrounded(operation)) return@all false
-        val arguments = key.groundedArguments(operation)
-        val value = getCell(key).getValue().get()
-        val fieldName = key.field.name
-        val argumentsContainError = arguments.argumentsContainErrorValue()
-        val sourceSuppliesField = source?.isPresent(fieldName) == true
-        source.requireArgumentlessField(key)
-        val fieldResolverDemandIsClosed =
-            when {
-                key is ObjectEngineResult.ParentKey ->
-                    value === structuralParent &&
-                        operation.world.parentFieldRelations[key.field] == producerField
-                argumentsContainError -> true
-                sourceSuppliesField ->
-                    (arguments as? Arguments.Resolved)
-                        ?.fieldValues
-                        ?.isEmpty() == true
-                key.field !in registry -> source == null
-                else ->
-                    registry
-                        .resolver(key.field)
-                        .let { resolver ->
-                            val coordinate = path + key
-                            val instantiatedSelections =
-                                resolver
-                                    .instantiateFragmentsAt(
-                                        resolverApplicationCache.root,
-                                        coordinate,
-                                    ).objectFragment
-                                    .constructionSelections
-                            if (
-                                instantiatedSelections.usedVariables().all { variable ->
-                                    operation.variableBindings.isBound(variable.instanceId!!)
-                                }
-                            ) {
-                                conformsToSelectionsAt(
-                                    selections = instantiatedSelections,
-                                    path = path,
-                                )
-                            } else {
-                                val instantiatedFragment =
-                                    resolver.objectFragmentAt(
+        return keys.all { key ->
+            if (!getCell(key).getValue().isCompleted) return@all true
+            if (!key.isContextuallyGrounded(operation)) return@all false
+            val arguments = key.groundedArguments(operation)
+            val value = getCell(key).getValue().get()
+            val fieldName = key.field.name
+            val argumentsContainError = arguments.argumentsContainErrorValue()
+            val sourceSuppliesField = source?.isPresent(fieldName) == true
+            source.requireArgumentlessField(key)
+            val fieldResolverDemandIsClosed =
+                when {
+                    key is ObjectEngineResult.ParentKey ->
+                        value === structuralParent &&
+                            operation.world.parentFieldRelations[key.field] == producerField
+                    argumentsContainError -> true
+                    sourceSuppliesField ->
+                        (arguments as? Arguments.Resolved)
+                            ?.fieldValues
+                            ?.isEmpty() == true
+                    key.field !in registry -> source == null
+                    else ->
+                        registry
+                            .resolver(key.field)
+                            .let { resolver ->
+                                val coordinate = path + key
+                                val instantiatedSelections =
+                                    resolver
+                                        .instantiateFragmentsAt(
+                                            resolverApplicationCache.root,
+                                            coordinate,
+                                        ).objectFragment
+                                        .constructionSelections
+                                if (
+                                    instantiatedSelections.usedVariables().all { variable ->
+                                        operation.variableBindings.isBound(variable.instanceId!!)
+                                    }
+                                ) {
+                                    conformsToSelectionsAt(
                                         operation,
-                                        resolverApplicationCache.root,
-                                        coordinate,
+                                        selections = instantiatedSelections,
+                                        path = path,
                                     )
-                                conformsToSelectionsAt(
-                                    instantiatedFragment,
-                                    path,
-                                )
+                                } else {
+                                    val instantiatedFragment =
+                                        resolver.objectFragmentAt(
+                                            operation,
+                                            resolverApplicationCache.root,
+                                            coordinate,
+                                        )
+                                    conformsToSelectionsAt(
+                                        operation,
+                                        instantiatedFragment,
+                                        path,
+                                    )
+                                }
                             }
-                        }
-            }
+                }
 
-        fieldResolverDemandIsClosed &&
-            when {
-                key is ObjectEngineResult.ParentKey -> true
-                argumentsContainError -> true
-                sourceSuppliesField ->
-                    value.engineResultIsClosedUnderResolverDemand(
-                        path = path + key,
-                        source = source.outputValue(fieldName),
-                        structuralParent = this,
-                        producerField = key.field,
-                    )
-                key.field in registry ->
-                    reapplyResolver(key, path)?.let { application ->
+            fieldResolverDemandIsClosed &&
+                when {
+                    key is ObjectEngineResult.ParentKey -> true
+                    argumentsContainError -> true
+                    sourceSuppliesField ->
                         value.engineResultIsClosedUnderResolverDemand(
                             path = path + key,
-                            source = application.output,
+                            source = source.outputValue(fieldName),
                             structuralParent = this,
                             producerField = key.field,
                         )
-                    } == true
-                source == null ->
-                    value.engineResultIsClosedUnderResolverDemand(
-                        path = path + key,
-                        structuralParent = this,
-                        producerField = key.field,
-                    )
-                else -> false
-            }
+                    key.field in registry ->
+                        reapplyResolver(operation, resolverApplicationCache, key, path)?.let { application ->
+                            value.engineResultIsClosedUnderResolverDemand(
+                                path = path + key,
+                                source = application.output,
+                                structuralParent = this,
+                                producerField = key.field,
+                            )
+                        } == true
+                    source == null ->
+                        value.engineResultIsClosedUnderResolverDemand(
+                            path = path + key,
+                            structuralParent = this,
+                            producerField = key.field,
+                        )
+                    else -> false
+                }
+        }
     }
-}
 
-context(
-    operation: SharedOperationContext<*>,
-    resolverApplicationCache: ResolverApplicationCache,
-)
-private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
-    path: List<PathComponent>,
-    source: ResolverOutputData?,
-    structuralParent: ObjectEngineResult,
-    producerField: ViaductSchema.ObjectField,
-): Boolean {
-    if (source is RootFieldReferenceData) {
-        return reapplyRootFieldReference(
-            reference = source,
-            publicationRoot = resolverApplicationCache.root,
-            publicationPath = path,
-            validationDemand = completedOutputDemand(),
-        )?.let { application ->
-            engineResultIsClosedUnderResolverDemand(
-                path = path,
-                source = application.output,
-                structuralParent = structuralParent,
-                producerField = producerField,
-            )
-        } == true
-    }
-    return when (this) {
-        null,
-        is ErrorEngineResult,
-        -> true
-
-        is ObjectEngineResult ->
-            source is EngineObjectData.Sync &&
-                type == source.schemaType &&
-                objectIsClosedUnderResolverDemand(
+    private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
+        path: List<PathComponent>,
+        source: ResolverOutputData?,
+        structuralParent: ObjectEngineResult,
+        producerField: ViaductSchema.ObjectField,
+    ): Boolean {
+        if (source is RootFieldReferenceData) {
+            return operation.reapplyRootFieldReference(
+                resolverApplicationCache = resolverApplicationCache,
+                reference = source,
+                publicationRoot = resolverApplicationCache.root,
+                publicationPath = path,
+                validationDemand = completedOutputDemand(),
+            )?.let { application ->
+                engineResultIsClosedUnderResolverDemand(
                     path = path,
-                    source = source,
+                    source = application.output,
                     structuralParent = structuralParent,
                     producerField = producerField,
                 )
-        is ListEngineResult ->
-            source is List<*> &&
-                size == source.size &&
+            } == true
+        }
+        return when (this) {
+            null,
+            is ErrorEngineResult,
+            -> true
+
+            is ObjectEngineResult ->
+                source is EngineObjectData.Sync &&
+                    type == source.schemaType &&
+                    objectIsClosedUnderResolverDemand(
+                        path = path,
+                        source = source,
+                        structuralParent = structuralParent,
+                        producerField = producerField,
+                    )
+            is ListEngineResult ->
+                source is List<*> &&
+                    size == source.size &&
+                    indices.all { index ->
+                        get(index).getValue().get().engineResultIsClosedUnderResolverDemand(
+                            path = path + ListEngineResult.Index.of(index),
+                            source = source[index],
+                            structuralParent = structuralParent,
+                            producerField = producerField,
+                        )
+                    }
+            else -> true
+        }
+    }
+
+    private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
+        path: List<PathComponent>,
+        structuralParent: ObjectEngineResult,
+        producerField: ViaductSchema.ObjectField,
+    ): Boolean =
+        when (this) {
+            null,
+            is ErrorEngineResult,
+            -> true
+
+            is ObjectEngineResult ->
+                objectIsClosedUnderResolverDemand(
+                    path = path,
+                    source = null,
+                    structuralParent = structuralParent,
+                    producerField = producerField,
+                )
+            is ListEngineResult ->
                 indices.all { index ->
                     get(index).getValue().get().engineResultIsClosedUnderResolverDemand(
                         path = path + ListEngineResult.Index.of(index),
-                        source = source[index],
                         structuralParent = structuralParent,
                         producerField = producerField,
                     )
                 }
-        else -> true
-    }
+            else -> true
+        }
 }
-
-context(
-    operation: SharedOperationContext<*>,
-    resolverApplicationCache: ResolverApplicationCache,
-)
-private fun EngineResult?.engineResultIsClosedUnderResolverDemand(
-    path: List<PathComponent>,
-    structuralParent: ObjectEngineResult,
-    producerField: ViaductSchema.ObjectField,
-): Boolean =
-    when (this) {
-        null,
-        is ErrorEngineResult,
-        -> true
-
-        is ObjectEngineResult ->
-            objectIsClosedUnderResolverDemand(
-                path = path,
-                source = null,
-                structuralParent = structuralParent,
-                producerField = producerField,
-            )
-        is ListEngineResult ->
-            indices.all { index ->
-                get(index).getValue().get().engineResultIsClosedUnderResolverDemand(
-                    path = path + ListEngineResult.Index.of(index),
-                    structuralParent = structuralParent,
-                    producerField = producerField,
-                )
-            }
-        else -> true
-    }
 
 internal fun Arguments.Ground.argumentsContainErrorValue(): Boolean =
     this == Arguments.Error

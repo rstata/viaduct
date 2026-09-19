@@ -25,27 +25,27 @@ import semantics.shared.SharedOperationContext
  *
  * This operation is defined only when applicable selection keys contain no unbound variables.
  */
-context(operation: SharedOperationContext<*>)
 fun ObjectEngineResult.conformsToSelections(
+    operation: SharedOperationContext<*>,
     selections: SelectionForest,
-): Boolean = conformsToSelectionsAt(selections, emptyList())
+): Boolean = conformsToSelectionsAt(operation, selections, emptyList())
 
-context(operation: SharedOperationContext<*>)
 fun ObjectEngineResult.conformsToSelections(
+    operation: SharedOperationContext<*>,
     selections: ObjectSelectionForest,
 ): Boolean =
     type == selections.type &&
-        conformsToSelectionsAt(selections, emptyList())
+        conformsToSelectionsAt(operation, selections, emptyList())
 
 // Checks selections rooted at an OER whose exact absolute path is supplied by the caller.
-context(operation: SharedOperationContext<*>)
 fun ObjectEngineResult.conformsToSelectionsAt(
+    operation: SharedOperationContext<*>,
     selections: SelectionForest,
     path: List<PathComponent>,
-): Boolean = objectConformsToSelections(selections, path)
+): Boolean = objectConformsToSelections(operation, selections, path)
 
-context(operation: SharedOperationContext<*>)
 private fun ObjectEngineResult.objectConformsToSelections(
+    operation: SharedOperationContext<*>,
     selections: SelectionForest,
     path: List<PathComponent>,
 ): Boolean =
@@ -57,13 +57,14 @@ private fun ObjectEngineResult.objectConformsToSelections(
                 .getValue()
                 .get()
                 .engineResultConformsToSelections(
+                    operation = operation,
                     selections = selection.subselections,
                     path = path + key,
                 )
     }
 
-context(operation: SharedOperationContext<*>)
 private fun EngineResult?.engineResultConformsToSelections(
+    operation: SharedOperationContext<*>,
     selections: SelectionForest,
     path: List<PathComponent>,
 ): Boolean =
@@ -74,12 +75,14 @@ private fun EngineResult?.engineResultConformsToSelections(
 
         is ObjectEngineResult ->
             objectConformsToSelections(
+                operation = operation,
                 selections = selections,
                 path = path,
             )
         is ListEngineResult ->
             indices.all { index ->
                 get(index).getValue().get().engineResultConformsToSelections(
+                    operation = operation,
                     selections = selections,
                     path = path + ListEngineResult.Index.of(index),
                 )

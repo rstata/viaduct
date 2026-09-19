@@ -749,11 +749,10 @@ class InclusionConditionTest {
                 applications += observation.field
             }
         val correct =
-            context(operation) {
-                result.correctResolution(
-                    fragment.subselections.merge(schema.requireQueryTypeDef()),
-                )
-            }
+            result.correctResolution(
+                operation,
+                fragment.subselections.merge(schema.requireQueryTypeDef()),
+            )
         return Resolution(result, correct, applications.toList())
     }
 

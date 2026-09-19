@@ -254,13 +254,13 @@ internal class FieldResolutionLogic(
         if (providerError != null) return providerError
 
         val input: EngineObjectData.Sync =
-            context(publication.operation, publication.operation.cycleChecker) {
-                publication.oerOccurrence.target.materializeResolverInput(
-                    selections = fieldResolverOccurrence.inputMaterializeSelections,
-                    reader = fieldResolverOccurrence.publicationPath,
-                    resultPath = publication.oerOccurrence.path,
-                )
-            }
+            publication.oerOccurrence.target.materializeResolverInput(
+                operation = publication.operation,
+                cycleChecker = publication.operation.cycleChecker,
+                selections = fieldResolverOccurrence.inputMaterializeSelections,
+                reader = fieldResolverOccurrence.publicationPath,
+                resultPath = publication.oerOccurrence.path,
+            )
         val queryValue =
             when (val value = queryProducer.await()) {
                 is EngineObjectOrErrorData.Success -> value.value

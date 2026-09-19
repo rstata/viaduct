@@ -1,6 +1,6 @@
 # Context Parameters, `Assumptions`, And `SharedOperationContext`
 
-Pure model operations use Kotlin context parameters for the one immutable `Assumptions` value of a reasoning world. Migrated semantics APIs receive their operation or world explicitly through ordinary parameters or a natural extension receiver; their `SharedOperationContext` still describes one resolution or correctness operation. Materialization and correctness judgments retain context parameters during the staged migration. Demand closure and sibling dependencies now use focused logic implementations retaining their operation and object occurrence.
+Pure model operations use Kotlin context parameters for the one immutable `Assumptions` value of a reasoning world. Migrated semantics APIs receive their operation or world explicitly through ordinary parameters or a natural extension receiver; their `SharedOperationContext` still describes one resolution or correctness operation. Correctness judgments retain context parameters during the staged migration. Demand closure and sibling dependencies now use focused logic implementations retaining their operation and object occurrence.
 
 ## Model Context
 
@@ -40,6 +40,8 @@ fun ObjectEngineResult.ObjectKey.groundedArguments(
     operation: SharedOperationContext<*>,
 ): Arguments.Ground
 ```
+
+Shared `materializeResult` takes an explicit `operation` and an optional `cycleChecker` defaulting to no-op. The two family-specific `materializeResolverInput` extensions require both arguments explicitly. `semantics.resolvers.materializeResolverInput` is a thin wrapper for Resolver01–23 runtime inputs; it delegates to shared `materializeResult` and its private `MaterializationLogic`. `semantics.resolver26.materializeResolverInput` retains its distinct private `ResolverInputMaterializationLogic`, which can reserve symbolic cells and value promises. Both logic implementations retain the two stable dependencies. Runtime coroutine input materialization uses its operation's checker, while DFS explicitly supplies a no-op checker. Nested `ctx.query` results and correctness replay across all families call `materializeResult` directly with its default no-op checker; nested resolution still uses the operation's checker for runtime resolver inputs. The [materialization contract](./semantics/README.md#shared-semantic-boundaries) explains installed promises, pending bindings, symbolic/stored-key lookup, and the distinction between nested queries and declared Query fragments.
 
 Pure semantics-owned demand transformations receive an ordinary `world: Assumptions` parameter. Tasks and logic implementations use their existing operation or publication owner when calling these APIs. Do not introduce a forwarding property or another context bundle just to shorten that access.
 
@@ -83,7 +85,7 @@ val resolution = SharedOperationContext.create(world).resolve(selections)
 
 `SharedOperationContext` is an interface. Its static `create(world, ...)` factory returns an anonymous `SharedOperationContext<Nothing>` for semantic operations that do not dispatch; requesting its dispatcher fails explicitly. The overload accepting `dispatcher` preserves its concrete type. `DepthFirstOperationContext` and `CoroutineOperationContext` are concrete classes that explicitly implement typed `SharedOperationContext` through delegation. Resolver26's `OperationContext` remains an interface because `FieldPublicationOccurrence` delegates to it; its `create(...)` factory returns an anonymous implementation. Each specialized context adds its family-specific references. Resolver26's `forChildScope` creates a new dispatcher under the supplied scope and retains the same world, variable bindings, observer, cycle checker, and binding-declaration state.
 
-Call migrated semantics APIs with explicit dependencies, including inside functions that still declare context parameters. Retain `context(...)` blocks only for calls that still require them: model operations, materialization with an independently selected `CycleCheckState`, and the remaining contextual semantics APIs. Keep `context(operation.world)` local to modeled field-resolver invocation. Pure parent-input-demand analysis now takes `world` explicitly. Resolver01–23 demand-policy callbacks capture the existing operation lexically; their function types do not acquire context parameters.
+Call migrated semantics APIs with explicit dependencies, including inside functions that still declare context parameters. Retain `context(...)` blocks only for calls that still require them: model operations and the remaining correctness judgments. Keep `context(operation.world)` local to modeled field-resolver invocation. Pure parent-input-demand analysis now takes `world` explicitly. Resolver01–23 demand-policy callbacks capture the existing operation lexically; their function types do not acquire context parameters.
 
 ## Receiver-Style Bodies
 

@@ -16,7 +16,7 @@ import model.outputValue
 import model.registry.ResolverFragment
 import model.requireQueryTypeDef
 import semantics.resolvers.GroundedFieldPublicationOccurrence
-import semantics.shared.materialize
+import semantics.resolvers.materializeResolverInput
 
 /** Owns field-local helper coroutines and delegates invocation and publication to resolution logic. */
 internal class CoroutineFieldResolverTask private constructor(
@@ -78,16 +78,19 @@ internal class CoroutineFieldResolverTask private constructor(
         coordinate: List<PathComponent>,
     ): Deferred<EngineObjectOrErrorData> = fieldTaskScope.async {
         try {
-            val queryValue = context(publication.operation, publication.operation.cycleChecker) {
-                if (queryFragment.constructionSelections.isEmpty()) {
-                    engineObjectDataOf(publication.operation.world.schema.requireQueryTypeDef())
-                } else {
-                    val queryResult = publication.operation.startResolve(
-                        publication.operation.world.resolverRegistry.createRootQueryInput(), queryFragment.constructionSelections,
-                    )
-                    publication.operation.resolverObserver.onQueryFragmentResult(queryFragment.resolverOccurrenceId, queryResult)
-                    queryResult.materialize(queryFragment.materializeSelections, coordinate)
-                }
+            val queryValue = if (queryFragment.constructionSelections.isEmpty()) {
+                engineObjectDataOf(publication.operation.world.schema.requireQueryTypeDef())
+            } else {
+                val queryResult = publication.operation.startResolve(
+                    publication.operation.world.resolverRegistry.createRootQueryInput(), queryFragment.constructionSelections,
+                )
+                publication.operation.resolverObserver.onQueryFragmentResult(queryFragment.resolverOccurrenceId, queryResult)
+                queryResult.materializeResolverInput(
+                    operation = publication.operation,
+                    cycleChecker = publication.operation.cycleChecker,
+                    selections = queryFragment.materializeSelections,
+                    reader = coordinate,
+                )
             }
             EngineObjectOrErrorData.of(queryValue)
         } catch (cause: Exception) {

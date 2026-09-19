@@ -10,7 +10,6 @@ import model.ResolverOccurrenceId
 import model.registry.FieldResolver
 import model.registry.ResolverFragment
 import model.usedVariables
-import semantics.shared.CycleCheckState
 import semantics.arbitrary.ResolverApplicationIdentity
 import semantics.arbitrary.ResolverApplicationKey
 import semantics.arbitrary.FieldCoordinate
@@ -19,7 +18,7 @@ import semantics.arbitrary.ResolverOccurrenceApplicationIdentity
 import semantics.arbitrary.resolutionFingerprint
 import semantics.correctresolution.conformsToSelectionsAt
 import semantics.correctresolution.ownedRootFieldReferenceInvocations
-import semantics.shared.materialize
+import semantics.shared.materializeResult
 import semantics.shared.groundedArguments
 import semantics.shared.SharedOperationContext
 import semantics.shared.ResolverObservations
@@ -36,46 +35,45 @@ import semantics.shared.RootFieldReferenceInvocationObservation
 fun EngineResult?.registeredResolverApplicationIdentityCounts(operation: SharedOperationContext<*>):
     Map<ResolverApplicationIdentity, Int> {
     val counts = linkedMapOf<ResolverApplicationIdentity, Int>()
-    context(operation, CycleCheckState.createNOP()) {
-        fun record(
-            root: ObjectEngineResult,
-            cell: RegisteredResolverOccurrence,
-        ) {
-            val resolver = operation.world.resolverRegistry.resolver(cell.field)
-            val fragment =
-                resolver.objectFragmentSatisfiedBy(
-                    operation = operation,
-                    root = root,
-                    result = cell.containingObject,
-                    path = cell.occurrencePath,
-                ) ?: error("Registered resolver occurrence has no complete object fragment")
-            val identity =
-                ResolverApplicationIdentity(
-                    key = cell.applicationKey,
-                    inputFingerprint =
-                        runBlocking {
-                            cell.containingObject
-                                .materialize(
-                                    selections = fragment.materializeSelections,
-                                    reader = cell.occurrencePath,
-                                ).resolutionFingerprint()
-                        },
-                )
-            counts.increment(identity)
-        }
-        requestQueryRoots(operation).forEach { root ->
-            root.forEachRegisteredResolverOccurrence(operation, operation.world.resolverRegistry) { cell -> record(root, cell) }
-        }
-        rootFieldReferenceOccurrences(operation).forEach { occurrence ->
-            counts.increment(
-                ResolverApplicationIdentity(
-                    key = occurrence.applicationKey(operation),
-                    inputFingerprint =
-                        engineObjectDataOf(occurrence.invocationKey.field.containingDef)
-                            .resolutionFingerprint(),
-                ),
+    fun record(
+        root: ObjectEngineResult,
+        cell: RegisteredResolverOccurrence,
+    ) {
+        val resolver = operation.world.resolverRegistry.resolver(cell.field)
+        val fragment =
+            resolver.objectFragmentSatisfiedBy(
+                operation = operation,
+                root = root,
+                result = cell.containingObject,
+                path = cell.occurrencePath,
+            ) ?: error("Registered resolver occurrence has no complete object fragment")
+        val identity =
+            ResolverApplicationIdentity(
+                key = cell.applicationKey,
+                inputFingerprint =
+                    runBlocking {
+                        cell.containingObject
+                            .materializeResult(
+                                operation = operation,
+                                selections = fragment.materializeSelections,
+                                reader = cell.occurrencePath,
+                            ).resolutionFingerprint()
+                    },
             )
-        }
+        counts.increment(identity)
+    }
+    requestQueryRoots(operation).forEach { root ->
+        root.forEachRegisteredResolverOccurrence(operation, operation.world.resolverRegistry) { cell -> record(root, cell) }
+    }
+    rootFieldReferenceOccurrences(operation).forEach { occurrence ->
+        counts.increment(
+            ResolverApplicationIdentity(
+                key = occurrence.applicationKey(operation),
+                inputFingerprint =
+                    engineObjectDataOf(occurrence.invocationKey.field.containingDef)
+                        .resolutionFingerprint(),
+            ),
+        )
     }
     return counts
 }
@@ -104,61 +102,60 @@ private fun EngineResult?.reconstructResolverOccurrenceApplicationIdentityCounts
     includedOccurrences: Set<ResolverOccurrenceId>?,
 ): Map<ResolverOccurrenceApplicationIdentity, Int> {
     val counts = linkedMapOf<ResolverOccurrenceApplicationIdentity, Int>()
-    context(operation, CycleCheckState.createNOP()) {
-        fun record(
-            root: ObjectEngineResult,
-            cell: RegisteredResolverOccurrence,
-        ) {
-            val resolverOccurrenceId = ResolverOccurrenceId.at(root, cell.occurrencePath)
-            if (includedOccurrences != null && resolverOccurrenceId !in includedOccurrences) return
-            val resolver = operation.world.resolverRegistry.resolver(cell.field)
-            val fragment =
-                resolver.objectFragmentSatisfiedBy(
-                    operation = operation,
-                    root = root,
-                    result = cell.containingObject,
-                    path = cell.occurrencePath,
-                ) ?: error("Registered resolver occurrence has no complete object fragment")
-            val identity =
+    fun record(
+        root: ObjectEngineResult,
+        cell: RegisteredResolverOccurrence,
+    ) {
+        val resolverOccurrenceId = ResolverOccurrenceId.at(root, cell.occurrencePath)
+        if (includedOccurrences != null && resolverOccurrenceId !in includedOccurrences) return
+        val resolver = operation.world.resolverRegistry.resolver(cell.field)
+        val fragment =
+            resolver.objectFragmentSatisfiedBy(
+                operation = operation,
+                root = root,
+                result = cell.containingObject,
+                path = cell.occurrencePath,
+            ) ?: error("Registered resolver occurrence has no complete object fragment")
+        val identity =
+            ResolverOccurrenceApplicationIdentity(
+                resolverOccurrenceId = resolverOccurrenceId,
+                applicationIdentity =
+                    ResolverApplicationIdentity(
+                        key = cell.applicationKey,
+                        inputFingerprint =
+                            runBlocking {
+                                cell.containingObject
+                                    .materializeResult(
+                                        operation = operation,
+                                        selections = fragment.materializeSelections,
+                                        reader = cell.occurrencePath,
+                                    ).resolutionFingerprint()
+                            },
+                    ),
+            )
+        counts.increment(identity)
+    }
+    requestQueryRoots(operation).forEach { root ->
+        root.forEachRegisteredResolverOccurrence(operation, operation.world.resolverRegistry) { cell ->
+            record(root, cell)
+        }
+    }
+    rootFieldReferenceOccurrences(operation).forEach { occurrence ->
+        val resolverOccurrenceId =
+            ResolverOccurrenceId.at(occurrence.invocationRoot, occurrence.invocationPath)
+        if (includedOccurrences == null || resolverOccurrenceId in includedOccurrences) {
+            counts.increment(
                 ResolverOccurrenceApplicationIdentity(
                     resolverOccurrenceId = resolverOccurrenceId,
                     applicationIdentity =
                         ResolverApplicationIdentity(
-                            key = cell.applicationKey,
+                            key = occurrence.applicationKey(operation),
                             inputFingerprint =
-                                runBlocking {
-                                    cell.containingObject
-                                        .materialize(
-                                            selections = fragment.materializeSelections,
-                                            reader = cell.occurrencePath,
-                                        ).resolutionFingerprint()
-                                },
+                                engineObjectDataOf(occurrence.invocationKey.field.containingDef)
+                                    .resolutionFingerprint(),
                         ),
-                )
-            counts.increment(identity)
-        }
-        requestQueryRoots(operation).forEach { root ->
-            root.forEachRegisteredResolverOccurrence(operation, operation.world.resolverRegistry) { cell ->
-                record(root, cell)
-            }
-        }
-        rootFieldReferenceOccurrences(operation).forEach { occurrence ->
-            val resolverOccurrenceId =
-                ResolverOccurrenceId.at(occurrence.invocationRoot, occurrence.invocationPath)
-            if (includedOccurrences == null || resolverOccurrenceId in includedOccurrences) {
-                counts.increment(
-                    ResolverOccurrenceApplicationIdentity(
-                        resolverOccurrenceId = resolverOccurrenceId,
-                        applicationIdentity =
-                            ResolverApplicationIdentity(
-                                key = occurrence.applicationKey(operation),
-                                inputFingerprint =
-                                    engineObjectDataOf(occurrence.invocationKey.field.containingDef)
-                                        .resolutionFingerprint(),
-                            ),
-                    ),
-                )
-            }
+                ),
+            )
         }
     }
     return counts

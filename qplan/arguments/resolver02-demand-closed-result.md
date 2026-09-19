@@ -34,7 +34,7 @@ Before a key is resolved, every sibling subtree required by its instantiated and
 
 Proceed by induction over the prefix of the ordering returned by `SiblingDependencyLogic.order`. A key is ready only when `dependenciesOf(key, unresolved)` finds no required sibling in the unresolved suffix. Lemma 1 guarantees that every applicable required sibling belongs to the complete closed key set. A required sibling absent from the unresolved suffix must therefore belong to the resolved prefix.
 
-The prefix induction invariant, using Lemma 3 for keys already resolved, says that each such sibling cell also satisfies its accumulated subselections. The prefix OER consequently conforms to the current resolver's instantiated and grounded object fragment, so `materialize` is defined for that resolver input.
+The prefix induction invariant, using Lemma 3 for keys already resolved, says that each such sibling cell also satisfies its accumulated subselections. The prefix OER consequently conforms to the current resolver's instantiated and grounded object fragment, so the Resolver01–23 `materializeResolverInput` wrapper and its shared `materializeResult` projection are defined for that resolver input.
 
 The canonical registry's acyclic resolver-demand invariant guarantees that every nonempty unresolved set contains a ready key. `SiblingDependencyLogic.order` rejects a nonempty set with no ready member as a cycle. Independent ready keys may appear in any order because no member requires another member of that ready set.
 

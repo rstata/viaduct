@@ -24,8 +24,7 @@ import model.schemaType
 import semantics.shared.groundedArguments
 import semantics.shared.isContextuallyGrounded
 import model.selectionForestOf
-import semantics.shared.CycleCheckState
-import semantics.shared.materialize
+import semantics.shared.materializeResult
 import semantics.shared.SharedOperationContext
 import semantics.shared.ResolverObservations
 import semantics.shared.RootFieldReferenceInvocationObservation
@@ -230,12 +229,11 @@ internal fun ObjectEngineResult.reapplyResolver(
         val objectFragment = fragments.objectFragment
         val input: EngineObjectData.Sync =
             runBlocking {
-                context(operation, CycleCheckState.createNOP()) {
-                    materialize(
-                        selections = objectFragment.materializeSelections,
-                        reader = coordinate,
-                    )
-                }
+                materializeResult(
+                    operation = operation,
+                    selections = objectFragment.materializeSelections,
+                    reader = coordinate,
+                )
             }
         val resolverArguments =
             Arguments.Resolved.of(
@@ -265,12 +263,11 @@ internal fun ObjectEngineResult.reapplyResolver(
                     return@getOrPut null
                 }
                 runBlocking {
-                    context(operation, CycleCheckState.createNOP()) {
-                        queryResult.materialize(
-                            selections = queryFragment.materializeSelections,
-                            reader = coordinate,
-                        )
-                    }
+                    queryResult.materializeResult(
+                        operation = operation,
+                        selections = queryFragment.materializeSelections,
+                        reader = coordinate,
+                    )
                 }
             }
         ReappliedResolver(
@@ -418,12 +415,11 @@ private fun RootFieldReferenceInvocationObservation.reapplyReferencedResolver(
                 return null
             }
             runBlocking {
-                context(operation, CycleCheckState.createNOP()) {
-                    queryResult.materialize(
-                        selections = queryFragment.materializeSelections,
-                        reader = publicationPath,
-                    )
-                }
+                queryResult.materializeResult(
+                    operation = operation,
+                    selections = queryFragment.materializeSelections,
+                    reader = publicationPath,
+                )
             }
         }
     return ReappliedResolver(

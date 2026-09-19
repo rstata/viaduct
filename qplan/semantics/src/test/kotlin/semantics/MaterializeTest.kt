@@ -24,7 +24,7 @@ import model.materializeSelectionForestOf
 import model.testing.TestWorld
 import semantics.shared.CycleCheckState
 import semantics.shared.ResolverReadCycleException
-import semantics.shared.materialize
+import semantics.shared.materializeResult
 import semantics.shared.SharedOperationContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -37,8 +37,6 @@ import kotlin.test.assertSame
 import viaduct.engine.api.EngineObjectData
 
 class MaterializeTest {
-    private val cycleChecker = CycleCheckState.createNOP()
-
     @Test
     fun `materialization awaits a present deferred value`() =
         runBlocking {
@@ -67,12 +65,11 @@ class MaterializeTest {
             val promise = cell.createValuePromise()
             val materialized =
                 async(start = CoroutineStart.UNDISPATCHED) {
-                    context(SharedOperationContext.create(world), cycleChecker) {
-                        result.materialize(
-                            selections = selections,
-                            reader = emptyList(),
-                        )
-                    }
+                    result.materializeResult(
+                        operation = SharedOperationContext.create(world),
+                        selections = selections,
+                        reader = emptyList(),
+                    )
                 }
 
             assertFalse(materialized.isCompleted)
@@ -102,12 +99,11 @@ class MaterializeTest {
 
         assertFailsWith<NoSuchElementException> {
             runBlocking {
-                context(SharedOperationContext.create(world), cycleChecker) {
-                    result.materialize(
-                        selections = selections,
-                        reader = emptyList(),
-                    )
-                }
+                result.materializeResult(
+                    operation = SharedOperationContext.create(world),
+                    selections = selections,
+                    reader = emptyList(),
+                )
             }
         }
     }
@@ -155,12 +151,12 @@ class MaterializeTest {
         val failure =
             assertFailsWith<ResolverReadCycleException> {
                 runBlocking {
-                    context(SharedOperationContext.create(world), cycleChecker) {
-                        result.materialize(
-                            selections = selections,
-                            reader = reader,
-                        )
-                    }
+                    result.materializeResult(
+                        operation = SharedOperationContext.create(world),
+                        cycleChecker = cycleChecker,
+                        selections = selections,
+                        reader = reader,
+                    )
                 }
             }
 
@@ -241,9 +237,7 @@ class MaterializeTest {
                     .materializeSelections
 
             val materialized =
-                context(SharedOperationContext.create(world), cycleChecker) {
-                    parentResult.materialize(selections, emptyList())
-                }
+                parentResult.materializeResult(SharedOperationContext.create(world), selections, emptyList())
 
             assertSame(parent.gjDef, materialized.type)
             assertNotNull(materialized.type.getFieldDefinition("user"))
@@ -302,9 +296,7 @@ class MaterializeTest {
                 )
 
             val materialized =
-                context(SharedOperationContext.create(world), cycleChecker) {
-                    result.materialize(selections, emptyList())
-                }
+                result.materializeResult(SharedOperationContext.create(world), selections, emptyList())
 
             assertEquals(setOf("first", "second"), materialized.selectionValues().keys)
             assertEquals("same", materialized.selectionValues().getValue("first"))

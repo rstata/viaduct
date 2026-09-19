@@ -27,7 +27,7 @@ import model.schemaType
 import semantics.correctresolution.argumentsContainErrorValue
 import semantics.shared.SharedFieldPublicationOccurrence
 import semantics.shared.OEROccurrence
-import semantics.shared.materialize
+import semantics.shared.materializeResult
 import viaduct.engine.api.EngineObjectData
 
 /**
@@ -213,18 +213,22 @@ internal class FieldResolverTask private constructor(
         resolutionLogic.publishFieldError(cause)
     }
 
-    /** Resolves an isolated Query selection as structured child work of this field task. */
+    /**
+     * Resolves a nested `ctx.query` selection as structured child work of this field task.
+     *
+     * This is distinct from the resolver's declared Query fragment. Startup installs the selected
+     * result cells; [materializeResult] projects their values for the caller and can await them.
+     */
     override suspend fun resolveSelectionSet(
         selections: MaterializeSelectionForest,
     ): EngineObjectData.Sync {
         val childOperation = publication.operation.forChildScope(fieldTaskScope)
         val result = childOperation.startResolve(selections.constructionSelections())
-        return context(childOperation, childOperation.cycleChecker) {
-            result.materialize(
-                selections = selections,
-                reader = publication.sourceOccurrence.publicationPath,
-            )
-        }
+        return result.materializeResult(
+            operation = childOperation,
+            selections = selections,
+            reader = publication.sourceOccurrence.publicationPath,
+        )
     }
 
     // Only ordinary fields have an initial Query producer; references launch one per invocation.
@@ -339,11 +343,11 @@ private suspend fun ResolverFragment.resolveQueryFragment(
                 )
             },
     )
-    return context(operation, operation.cycleChecker) {
-        queryResult.materializeResolverInput(
-            selections = symbolicSelections,
-            reader = coordinate,
-            resultPath = emptyList(),
-        )
-    }
+    return queryResult.materializeResolverInput(
+        operation = operation,
+        cycleChecker = operation.cycleChecker,
+        selections = symbolicSelections,
+        reader = coordinate,
+        resultPath = emptyList(),
+    )
 }

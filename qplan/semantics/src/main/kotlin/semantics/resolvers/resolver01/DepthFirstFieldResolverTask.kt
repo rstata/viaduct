@@ -23,7 +23,7 @@ import semantics.resolvers.prepareInvocation
 import semantics.shared.CycleCheckState
 import semantics.shared.SharedFieldResolverTask
 import semantics.shared.RootFieldReferenceInvocationObservation
-import semantics.shared.materialize
+import semantics.resolvers.materializeResolverInput
 import semantics.shared.withAuthoritativeNodeId
 import viaduct.engine.api.EngineObjectData
 
@@ -52,63 +52,61 @@ internal class DepthFirstFieldResolverTask private constructor(
 
     /** Invokes one field, follows reference tails, and publishes its passively resolved output. */
     fun run(): Unit = with(publication) {
-        context(operation) {
-            val key = selection.groundKey()
-            val invocationDemand = this.invocationDemand ?: operation.complete(selection.subselections)
-            var value: ResolverOutputData? = reference ?: when (val arguments = key.arguments) {
-                Arguments.Error -> {
-                    check(publicationCell.getValue().complete(ErrorEngineResult.of(EngineErrorData.of()))) {
-                        "Cell value was completed twice"
-                    }
-                    return@context
+        val key = selection.groundKey()
+        val invocationDemand = this.invocationDemand ?: operation.complete(selection.subselections)
+        var value: ResolverOutputData? = reference ?: when (val arguments = key.arguments) {
+            Arguments.Error -> {
+                check(publicationCell.getValue().complete(ErrorEngineResult.of(EngineErrorData.of()))) {
+                    "Cell value was completed twice"
                 }
-                is Arguments.Resolved -> {
-                    val resolver = operation.world.resolverRegistry.resolver(key.field)
-                    val fragments = resolver.instantiateFragmentsAt(oerOccurrence.root, publicationPath)
-                    val input = runBlocking {
-                        // Sibling dependency order and depth-first dispatch make this input ready.
-                        context(operation, CycleCheckState.createNOP()) {
-                            oerOccurrence.target.materialize(
-                                selections = fragments.objectFragment.materializeSelections,
-                                reader = publicationPath,
-                            )
-                        }
-                    }
-                    runBlocking {
-                        context(operation.world) {
-                            resolver(
-                                input = input,
-                                queryValue = resolveQueryFragment(fragments.queryFragment, publicationPath),
-                                arguments = arguments,
-                                selections = invocationDemand,
-                                executionContext = ResolutionExecutionContext.Unsupported,
-                            )
-                        }
+                return@with
+            }
+            is Arguments.Resolved -> {
+                val resolver = operation.world.resolverRegistry.resolver(key.field)
+                val fragments = resolver.instantiateFragmentsAt(oerOccurrence.root, publicationPath)
+                val input = runBlocking {
+                    // Sibling dependency order and depth-first dispatch make this input ready.
+                    oerOccurrence.target.materializeResolverInput(
+                        operation = operation,
+                        cycleChecker = CycleCheckState.createNOP(),
+                        selections = fragments.objectFragment.materializeSelections,
+                        reader = publicationPath,
+                    )
+                }
+                runBlocking {
+                    context(operation.world) {
+                        resolver(
+                            input = input,
+                            queryValue = resolveQueryFragment(fragments.queryFragment, publicationPath),
+                            arguments = arguments,
+                            selections = invocationDemand,
+                            executionContext = ResolutionExecutionContext.Unsupported,
+                        )
                     }
                 }
             }
-            var nodeIdentity: NodeReferenceIdentity? = null
-            while (value is RootFieldReferenceData) {
-                val reference = value
-                require(reference.conformsToResolverOutputSchemaType(publicationExpectedType)) {
-                    "Root-field reference does not conform to ${publicationExpectedType}"
-                }
-                nodeIdentity = nodeIdentity ?: reference.nodeReferenceIdentityOrNull()
-                value = resolveRootFieldReference(
-                    reference, oerOccurrence.root, publicationPath, invocationDemand,
-                )
-            }
-            val result = operation.passiveValues.resolvePassiveValues(
-                value = value.withAuthoritativeNodeId(nodeIdentity, invocationDemand),
-                root = oerOccurrence.root,
-                expectedType = publicationExpectedType,
-                path = publicationPath,
-                constructionDemand = selection.subselections,
-                invocationDemand = invocationDemand,
-                parent = oerOccurrence,
-            )
-            check(publicationCell.getValue().complete(result)) { "Cell value was completed twice" }
         }
+        var nodeIdentity: NodeReferenceIdentity? = null
+        while (value is RootFieldReferenceData) {
+            val reference = value
+            require(reference.conformsToResolverOutputSchemaType(publicationExpectedType)) {
+                "Root-field reference does not conform to ${publicationExpectedType}"
+            }
+            nodeIdentity = nodeIdentity ?: reference.nodeReferenceIdentityOrNull()
+            value = resolveRootFieldReference(
+                reference, oerOccurrence.root, publicationPath, invocationDemand,
+            )
+        }
+        val result = operation.passiveValues.resolvePassiveValues(
+            value = value.withAuthoritativeNodeId(nodeIdentity, invocationDemand),
+            root = oerOccurrence.root,
+            expectedType = publicationExpectedType,
+            path = publicationPath,
+            constructionDemand = selection.subselections,
+            invocationDemand = invocationDemand,
+            parent = oerOccurrence,
+        )
+        check(publicationCell.getValue().complete(result)) { "Cell value was completed twice" }
     }
 
     /** Invokes one independently rooted reference target using this resolver's Query-fragment policy. */
@@ -167,9 +165,12 @@ internal class DepthFirstFieldResolverTask private constructor(
             .resolve(queryFragment.constructionSelections)
         operation.resolverObserver.onQueryFragmentResult(queryFragment.resolverOccurrenceId, queryResult)
         return runBlocking {
-            context(operation, CycleCheckState.createNOP()) {
-                queryResult.materialize(queryFragment.materializeSelections, coordinate)
-            }
+            queryResult.materializeResolverInput(
+                operation = operation,
+                cycleChecker = CycleCheckState.createNOP(),
+                selections = queryFragment.materializeSelections,
+                reader = coordinate,
+            )
         }
     }
 }

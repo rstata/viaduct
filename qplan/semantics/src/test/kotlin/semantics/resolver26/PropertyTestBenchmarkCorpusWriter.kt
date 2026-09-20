@@ -1,5 +1,6 @@
 package semantics.resolver26
 
+import semantics.shared.ResolverInvocationObservation
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.Fragment
@@ -52,15 +53,24 @@ object PropertyTestBenchmarkCorpusWriter {
                     val world: Assumptions =
                         testWorld.newAssumptions(selectiveResolvers = true)
                     val fragment: Fragment = world.fragmentFrom(testCase.query.source)
-                    val operation =
-                        SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+
                     testCase.registry.clearResolutionWitness()
                     val appliedResolverOccurrences =
                         ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
-                    val result: ObjectEngineResult =
-                        operation.resolveObserved(fragment.subselections) { application ->
-                            appliedResolverOccurrences += application.resolverOccurrenceId
+
+                    val witnessObserver = testCase.registry.resolverObserver()
+
+                    val recordingObserver = object : RecordingResolverObserver() {
+                        override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                            super.onResolverInvocation(observation)
+                            witnessObserver.onResolverInvocation(observation)
+                            appliedResolverOccurrences += observation.resolverOccurrenceId
                         }
+                    }
+                    val operation =
+                        SharedOperationContext.create(world, resolverObserver = recordingObserver)
+                    val result: ObjectEngineResult =
+                        operation.resolve(fragment.subselections)
                     val witness: ResolutionWitness = testCase.registry.resolutionWitness()
                     check(witness.applications.size == EXPECTED_RESOLVER_APPLICATIONS)
                     check(

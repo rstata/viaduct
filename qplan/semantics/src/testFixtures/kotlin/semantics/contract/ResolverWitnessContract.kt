@@ -61,7 +61,6 @@ interface ResolverWitnessContract : ResolverContract {
                     counts,
                     config,
                     profile = "resolver03-construction-witness",
-                    captureSuppliedDemand = true,
                 ) { testWorld, testCase ->
                 generatedFromArgumentVariables +=
                     testCase.registry.features.fromArgumentVariableCount
@@ -74,6 +73,7 @@ interface ResolverWitnessContract : ResolverContract {
                         world,
                         world.objectOf("Query"),
                         fragment.subselections,
+                        resolverObserver = registry.resolverObserver(captureSuppliedDemand = true),
                     )
                 val result = resolution.result
                 val witness = registry.resolutionWitness()
@@ -155,6 +155,7 @@ interface ResolverWitnessContract : ResolverContract {
                         permutedWorld,
                         permutedWorld.objectOf("Query"),
                         permuted.subselections,
+                        resolverObserver = registry.resolverObserver(captureSuppliedDemand = true),
                     ).result
                 val permutedWitness = registry.resolutionWitness()
                 assertTrue(result.sameCompletedResultAs(permutedResult))

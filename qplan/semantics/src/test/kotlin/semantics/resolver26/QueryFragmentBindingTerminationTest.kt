@@ -243,7 +243,7 @@ class QueryFragmentBindingTerminationTest {
         ).assumptions
 
         val operation = SharedOperationContext.create(world, resolverObserver = object : SharedResolverObserver {
-            override fun onQueryFragmentResult(resolverOccurrenceId: ResolverOccurrenceId, result: ObjectEngineResult) {
+            override fun onQueryFragmentPrepared(resolverOccurrenceId: ResolverOccurrenceId, result: ObjectEngineResult) {
                 check(queryResult == null) { "Only the consumer has a Query fragment" }
                 queryResult = result
                 consumerOccurrence = resolverOccurrenceId

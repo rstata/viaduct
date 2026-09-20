@@ -83,8 +83,8 @@ internal class CoroutineFieldResolverTask private constructor(
             } else {
                 val queryResult = publication.operation.startResolve(
                     publication.operation.world.resolverRegistry.createRootQueryInput(), queryFragment.constructionSelections,
+                    queryFragmentOwner = queryFragment.resolverOccurrenceId,
                 )
-                publication.operation.resolverObserver.onQueryFragmentResult(queryFragment.resolverOccurrenceId, queryResult)
                 queryResult.materializeResolverInput(
                     operation = publication.operation,
                     cycleChecker = publication.operation.cycleChecker,

@@ -1,5 +1,7 @@
 package semantics.contract
 
+import semantics.shared.ResolverInvocationObservation
+import semantics.shared.RecordingResolverObserver
 import model.requireField
 import model.requireObjectField
 import model.EngineErrorData
@@ -254,6 +256,21 @@ interface NodeResolverContract : ResolverContract {
 
     @Test
     fun `resolves an empty query through field and node resolvers`() {
+        val invocationObserver = object : ResolverApplicationArguments() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                val input = observation.input
+                if (
+                    field.containingDef.name == "Query" &&
+                    field.name.startsWith("viewer") ||
+                    field.containingDef.name == "User" &&
+                    field.name == "greeting"
+                ) {
+                    require(input.hasExactlyFields())
+                }
+            }
+        }
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -272,16 +289,6 @@ interface NodeResolverContract : ResolverContract {
                         @resolver(result: "sumplus1(${'$'}prefix)")
                     }
                     """.trimIndent(),
-                applicationObserver = { field, input, _, _ ->
-                    if (
-                        field.containingDef.name == "Query" &&
-                        field.name.startsWith("viewer") ||
-                        field.containingDef.name == "User" &&
-                        field.name == "greeting"
-                    ) {
-                        require(input.hasExactlyFields())
-                    }
-                },
             )
         val world = testWorld.assumptions
         resolveAndValidate(
@@ -295,12 +302,13 @@ interface NodeResolverContract : ResolverContract {
                   }
                 }
                 """.trimIndent(),
+                resolverObserver = invocationObserver,
             )
-        testWorld.applicationArguments.assertArguments(
+        invocationObserver.assertArguments(
             world.schema.requireObjectField("Query", "viewer"),
             mapOf("id" to "1"),
         )
-        testWorld.applicationArguments.assertArguments(
+        invocationObserver.assertArguments(
             world.schema.requireObjectField("User", "greeting"),
             mapOf("prefix" to 5),
         )
@@ -471,6 +479,13 @@ interface NodeResolverContract : ResolverContract {
     @Test
     fun `dispatches every nested node-list reference occurrence`() {
         val observedFields = mutableListOf<String>()
+        val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                observedFields += field.name
+            }
+        }
         val testWorld =
             TestWorld.fromSDL(
                 selectiveResolvers = selectiveResolvers,
@@ -480,9 +495,6 @@ interface NodeResolverContract : ResolverContract {
                     type User implements Node { id: ID!, name: String! }
                     type Query { matrix: [[User!]!]! }
                     """.trimIndent(),
-                applicationObserver = { field, _, _, _ ->
-                    observedFields += field.name
-                },
                 nodeResolvers = { schema ->
                     mapOf(
                         schema.contractObjectType("User") to
@@ -518,7 +530,7 @@ interface NodeResolverContract : ResolverContract {
         val world = testWorld.newAssumptions()
         val schema = world.schema
         val result =
-            resolveAndValidate(world, "query { matrix { id name } }")
+            resolveAndValidate(world, "query { matrix { id name } }", resolverObserver = invocationObserver)
         val matrix =
             assertIs<ListEngineResult>(
                 result.getCell(schema.contractKey("Query", "matrix")).get(),

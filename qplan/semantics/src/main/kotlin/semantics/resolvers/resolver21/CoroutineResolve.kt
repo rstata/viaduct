@@ -2,6 +2,7 @@ package semantics.resolvers.resolver21
 
 import kotlinx.coroutines.coroutineScope
 import model.ObjectEngineResult
+import model.ResolverOccurrenceId
 import model.SelectionForest
 import model.schemaType
 import semantics.shared.CycleCheckState
@@ -29,12 +30,14 @@ internal class CoroutineResolve(
 internal fun CoroutineOperationContext.startResolve(
     source: EngineObjectData.Sync,
     selections: SelectionForest,
+    queryFragmentOwner: ResolverOccurrenceId? = null,
 ): ObjectEngineResult {
     val result = ObjectEngineResult.of(source.schemaType, mutable = true)
-    dispatcher.dispatchOrchestrator(
+    val orchestration =
         CoroutineOrchestrationTask.create(
             this@startResolve, OEROccurrence(result, emptyList(), result), source, selections,
-        ),
-    )
+        )
+    queryFragmentOwner?.let { resolverObserver.onQueryFragmentPrepared(it, result) }
+    dispatcher.dispatchOrchestrator(orchestration)
     return result
 }

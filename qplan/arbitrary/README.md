@@ -69,3 +69,7 @@ Run generator tests with:
 ```
 
 Resolver properties live in `semantics` and are included in `./gradlew check`. Deep stress and broad campaigns are opt-in and require explicit seeds.
+
+## Resolution Witnesses
+
+World construction only assembles deterministic model resolvers. To record execution, pass `registry.resolverObserver(...)` to the semantics operation or contract resolution helper. The observer consumes the shared `onResolverInvocation` event before ordinary and reference-target calls, including calls that later fail or cancel. It retains invocation IDs and Query/reference evidence, and can append full fingerprint witnesses or lightweight application counts to the registry's diagnostic logs. Supplied-demand capture is opt-in; `clearResolutionWitness()` and `clearResolutionApplicationCounts()` still control log lifetime. The raw selective-node demand log remains separate because it measures demand actually delivered to the generated node callback. Correctness replay does not emit shared invocation events.

@@ -1,5 +1,7 @@
 package semantics.contract
 
+import semantics.shared.ResolverInvocationObservation
+import semantics.shared.RecordingResolverObserver
 import model.requireQueryTypeDef
 import model.requireObjectField
 import model.ObjectEngineResult
@@ -19,6 +21,27 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
     fun `disjoint successor demand is closed before one selective producer application`() {
         var fooApplications = 0
         var fooDemandFields: Set<String>? = null
+        val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                val demand = observation.suppliedDemand
+                if (
+                    field.containingDef.name == "Query" &&
+                    field.name == "foo" &&
+                    demand != null
+                ) {
+                    fooApplications += 1
+                    fooDemandFields =
+                        demand
+                            .merge(field.type.baseTypeDef as ViaductSchema.Object)
+                            .groundKeys()
+                            .mapTo(linkedSetOf()) { groundKey ->
+                                groundKey.field.name
+                            }
+                }
+            }
+        }
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -37,22 +60,6 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                       w: Int!
                     }
                     """.trimIndent(),
-                applicationObserver = { field, _, _, demand ->
-                    if (
-                        field.containingDef.name == "Query" &&
-                        field.name == "foo" &&
-                        demand != null
-                    ) {
-                        fooApplications += 1
-                        fooDemandFields =
-                            demand
-                                .merge(field.type.baseTypeDef as ViaductSchema.Object)
-                                .groundKeys()
-                                .mapTo(linkedSetOf()) { groundKey ->
-                                    groundKey.field.name
-                                }
-                    }
-                },
             )
         val world = testWorld.assumptions
         val fooKey = world.schema.contractKey("Query", "foo")
@@ -64,7 +71,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
             )
 
         val resolution =
-            resolveAndValidateObserved(world, world.objectOf("Query"), selections)
+            resolveAndValidateObserved(world, world.objectOf("Query"), selections, resolverObserver = invocationObserver)
         val resolved = resolution.result
         val foo = resolved.getCell(fooKey).get() as ObjectEngineResult
 
@@ -86,6 +93,27 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
     fun `open resolver template closes demand before an argumentless descendant launches`() {
         var nodeApplications = 0
         var nodeDemandFields: Set<String>? = null
+        val invocationObserver = object : ResolverApplicationArguments() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                val demand = observation.suppliedDemand
+                if (
+                    field.containingDef.name == "Mid" &&
+                    field.name == "node" &&
+                    demand != null
+                ) {
+                    nodeApplications += 1
+                    nodeDemandFields =
+                        demand
+                            .merge(field.type.baseTypeDef as ViaductSchema.Object)
+                            .groundKeys()
+                            .mapTo(linkedSetOf()) { groundKey ->
+                                groundKey.field.name
+                            }
+                }
+            }
+        }
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -115,32 +143,16 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                       second: Int!
                     }
                     """.trimIndent(),
-                applicationObserver = { field, _, _, demand ->
-                    if (
-                        field.containingDef.name == "Mid" &&
-                        field.name == "node" &&
-                        demand != null
-                    ) {
-                        nodeApplications += 1
-                        nodeDemandFields =
-                            demand
-                                .merge(field.type.baseTypeDef as ViaductSchema.Object)
-                                .groundKeys()
-                                .mapTo(linkedSetOf()) { groundKey ->
-                                    groundKey.field.name
-                                }
-                    }
-                },
             )
         val world = testWorld.assumptions
         val triggerKey = world.schema.contractKey("Query", "trigger")
 
-        val resolved = resolveAndValidate(world, "query { trigger }")
+        val resolved = resolveAndValidate(world, "query { trigger }", resolverObserver = invocationObserver)
 
         assertEquals(2, resolved.getCell(triggerKey).get())
         assertEquals(1, nodeApplications)
         assertEquals(setOf("first", "second"), nodeDemandFields)
-        testWorld.applicationArguments.assertArguments(
+        invocationObserver.assertArguments(
             world.schema.requireObjectField("Query", "late"),
             mapOf("arg" to 1),
         )
@@ -150,6 +162,27 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
     fun `open resolver template retains output demand through nested resolver inputs`() {
         var nodeApplications = 0
         var nodeDemandFields: Set<String>? = null
+        val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                val demand = observation.suppliedDemand
+                if (
+                    field.containingDef.name == "Passive" &&
+                    field.name == "node" &&
+                    demand != null
+                ) {
+                    nodeApplications += 1
+                    nodeDemandFields =
+                        demand
+                            .merge(field.type.baseTypeDef as ViaductSchema.Object)
+                            .groundKeys()
+                            .mapTo(linkedSetOf()) { groundKey ->
+                                groundKey.field.name
+                            }
+                }
+            }
+        }
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -197,27 +230,11 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                       deep: Int!
                     }
                     """.trimIndent(),
-                applicationObserver = { field, _, _, demand ->
-                    if (
-                        field.containingDef.name == "Passive" &&
-                        field.name == "node" &&
-                        demand != null
-                    ) {
-                        nodeApplications += 1
-                        nodeDemandFields =
-                            demand
-                                .merge(field.type.baseTypeDef as ViaductSchema.Object)
-                                .groundKeys()
-                                .mapTo(linkedSetOf()) { groundKey ->
-                                    groundKey.field.name
-                                }
-                    }
-                },
             )
         val world = testWorld.assumptions
         val resultKey = world.schema.contractKey("Query", "result")
 
-        val resolved = resolveAndValidate(world, "query { result }")
+        val resolved = resolveAndValidate(world, "query { result }", resolverObserver = invocationObserver)
 
         assertEquals(2, resolved.getCell(resultKey).get())
         assertEquals(1, nodeApplications)
@@ -228,6 +245,28 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
     fun `future variable boundary selects its passive predecessors`() {
         var parentApplications = 0
         var parentDemandFields: Set<String>? = null
+        val invocationObserver = object : ResolverApplicationArguments() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                val demand = observation.suppliedDemand
+                if (
+                    field.containingDef.name == "Query" &&
+                    field.name == "parent" &&
+                    demand != null
+                ) {
+                    parentApplications += 1
+                    parentDemandFields =
+                        linkedSetOf<String>().also { fields ->
+                            demand
+                                .merge(field.type.baseTypeDef as ViaductSchema.Object)
+                                .forEach { selection ->
+                                    fields += selection.key.field.name
+                                }
+                        }
+                }
+            }
+        }
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -250,33 +289,16 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                         @resolver(of: "source", result: "sum(source)")
                     }
                     """.trimIndent(),
-                applicationObserver = { field, _, _, demand ->
-                    if (
-                        field.containingDef.name == "Query" &&
-                        field.name == "parent" &&
-                        demand != null
-                    ) {
-                        parentApplications += 1
-                        parentDemandFields =
-                            linkedSetOf<String>().also { fields ->
-                                demand
-                                    .merge(field.type.baseTypeDef as ViaductSchema.Object)
-                                    .forEach { selection ->
-                                        fields += selection.key.field.name
-                                    }
-                            }
-                    }
-                },
             )
         val world = testWorld.assumptions
         val lateKey = world.schema.contractKey("Query", "late")
 
-        val resolved = resolveAndValidate(world, "query { late }")
+        val resolved = resolveAndValidate(world, "query { late }", resolverObserver = invocationObserver)
 
         assertEquals(7, resolved.getCell(lateKey).get())
         assertEquals(1, parentApplications)
         assertEquals(setOf("source"), parentDemandFields)
-        testWorld.applicationArguments.assertArguments(
+        invocationObserver.assertArguments(
             world.schema.requireObjectField("Payload", "computed"),
             mapOf("value" to 7),
         )
@@ -286,6 +308,19 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
     fun `late variable selection crosses a passive object field`() {
         var holderApplications = 0
         var computedApplications = 0
+        val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                val demand = observation.suppliedDemand
+                if (demand != null) {
+                    when (field.containingDef.name to field.name) {
+                        "Query" to "holder" -> holderApplications += 1
+                        "Nested" to "computed" -> computedApplications += 1
+                    }
+                }
+            }
+        }
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -311,19 +346,11 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                         @resolver(result: "sum(${'$'}value)")
                     }
                     """.trimIndent(),
-                applicationObserver = { field, _, _, demand ->
-                    if (demand != null) {
-                        when (field.containingDef.name to field.name) {
-                            "Query" to "holder" -> holderApplications += 1
-                            "Nested" to "computed" -> computedApplications += 1
-                        }
-                    }
-                },
             )
         val world = testWorld.assumptions
         val resultKey = world.schema.contractKey("Query", "result")
 
-        val resolved = resolveAndValidate(world, "query { result }")
+        val resolved = resolveAndValidate(world, "query { result }", resolverObserver = invocationObserver)
 
         assertEquals(7, resolved.getCell(resultKey).get())
         assertEquals(1, holderApplications)
@@ -334,6 +361,19 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
     fun `late equal child calls retain their symbolic identities`() {
         var parentApplications = 0
         var childApplications = 0
+        val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                val demand = observation.suppliedDemand
+                if (demand != null) {
+                    when (field.containingDef.name to field.name) {
+                        "Query" to "parent" -> parentApplications += 1
+                        "Parent" to "child" -> childApplications += 1
+                    }
+                }
+            }
+        }
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -362,20 +402,12 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
                         @resolver(result: "sum(${'$'}value)")
                     }
                     """.trimIndent(),
-                applicationObserver = { field, _, _, demand ->
-                    if (demand != null) {
-                        when (field.containingDef.name to field.name) {
-                            "Query" to "parent" -> parentApplications += 1
-                            "Parent" to "child" -> childApplications += 1
-                        }
-                    }
-                },
             )
         val world = testWorld.assumptions
         val outerKey = world.schema.contractKey("Query", "outer")
         val parentKey = world.schema.contractKey("Query", "parent")
 
-        val resolved = resolveAndValidate(world, "query { early outer }")
+        val resolved = resolveAndValidate(world, "query { early outer }", resolverObserver = invocationObserver)
         val parent = resolved.getCell(parentKey).get() as ObjectEngineResult
 
         assertEquals(1, resolved.getCell(outerKey).get())

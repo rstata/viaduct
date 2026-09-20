@@ -1,16 +1,21 @@
 package semantics.correctresolution
 
+import java.util.concurrent.CopyOnWriteArrayList
+import kotlinx.coroutines.runBlocking
 import model.Arguments
 import model.ObjectEngineResult
 import model.ResolverOccurrenceId
 import model.emptyFragmentOf
+import model.engineObjectDataOf
 import model.engineResultOf
 import model.fragmentFrom
 import model.merge
 import model.objectOf
+import model.registry.ResolutionExecutionContext
 import model.requireObjectField
 import model.requireQueryTypeDef
 import model.requireType
+import model.selectionForestOf
 import model.ObjectSelectionForest
 import model.testing.fieldResolverOf
 import model.testing.selectiveFieldResolverOf
@@ -24,8 +29,38 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import semantics.shared.SharedOperationContext
 import semantics.shared.RecordingResolverObserver
+import semantics.shared.ResolverInvocationObservation
 
 class CorrectResolutionTest {
+    @Test
+    fun `direct resolve invocation and invocation through correctness replay do not cause invocation observations`() = runBlocking {
+        val testWorld = TestWorld.fromDSL("extend type Query { value: Int @resolver(result: 7) }")
+        val events = CopyOnWriteArrayList<ResolverInvocationObservation>()
+        val observer = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                events += observation
+            }
+        }
+        val world = testWorld.assumptions
+        val operation = SharedOperationContext.create(world, resolverObserver = observer)
+        val fragment = world.fragmentFrom("fragment Main on Query { value }")
+        val root = operation.resolve(fragment.subselections)
+        assertEquals(1, events.size)
+        repeat(2) { assertTrue(root.correctResolution(operation, fragment)) }
+        val field = world.schema.requireObjectField("Query", "value")
+        context(world) {
+            world.resolverRegistry.resolver(field)(
+                engineObjectDataOf(world.schema.requireQueryTypeDef()),
+                engineObjectDataOf(world.schema.requireQueryTypeDef()),
+                Arguments.Resolved.of(field, emptyMap()),
+                selectionForestOf(),
+                ResolutionExecutionContext.Unsupported,
+            )
+        }
+        assertEquals(1, events.size)
+    }
+
     @Test
     fun `correctness reapplies a selective resolver with completed output demand`() {
         val observedFields = mutableListOf<Set<String>>()
@@ -163,7 +198,7 @@ class CorrectResolutionTest {
 
         val incorrectObservation =
             SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
-        incorrectObservation.resolverObserver.onQueryFragmentResult(
+        incorrectObservation.resolverObserver.onQueryFragmentPrepared(
             occurrenceId,
             world.engineResultOf("Query") {
                 "source" resolvesTo 8
@@ -173,7 +208,7 @@ class CorrectResolutionTest {
 
         val correctObservation =
             SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
-        correctObservation.resolverObserver.onQueryFragmentResult(
+        correctObservation.resolverObserver.onQueryFragmentPrepared(
             occurrenceId,
             world.engineResultOf("Query") {
                 "source" resolvesTo 7
@@ -181,7 +216,7 @@ class CorrectResolutionTest {
         )
         assertTrue(result.correctResolution(correctObservation, selections))
 
-        correctObservation.resolverObserver.onQueryFragmentResult(
+        correctObservation.resolverObserver.onQueryFragmentPrepared(
             occurrenceId,
             world.engineResultOf("Query") {
                 "source" resolvesTo 7

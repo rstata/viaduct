@@ -26,9 +26,8 @@ import model.registry.ProviderFragment
 import model.registry.VariableDefinition
 import model.requireQueryTypeDef
 import model.selectionForestOf
-import model.usedVariables
-import model.variableArgumentNames
 import semantics.correctresolution.argumentsContainErrorValue
+import semantics.shared.ResolverInvocationObservation
 import semantics.shared.RootFieldReferenceInvocationObservation
 import semantics.shared.fetchGroundedArguments
 import semantics.shared.withAuthoritativeNodeId
@@ -266,16 +265,8 @@ internal class FieldResolutionLogic(
                 is EngineObjectOrErrorData.Success -> value.value
                 is EngineObjectOrErrorData.Error -> return value.error
             }
-        val variableArgumentCount = selection.key.arguments.variableArgumentNames().size
-        val variableResolverOccurrenceIds =
-            selection.key.arguments
-                .usedVariables()
-                .mapNotNullTo(linkedSetOf()) { variable ->
-                    variable.instanceId?.resolverOccurrenceId
-                }
-
-        publication.operation.resolverObserver.onResolverApplication(
-            Resolver26ApplicationObservation(
+        publication.operation.resolverObserver.onResolverInvocation(
+            ResolverInvocationObservation(
                 occurrencePath = fieldResolverOccurrence.publicationPath,
                 field = selection.key.field,
                 input = input,
@@ -283,8 +274,6 @@ internal class FieldResolutionLogic(
                 arguments = resolverArguments,
                 suppliedDemand = invocationDemand,
                 resolverOccurrenceId = fieldResolverOccurrence.resolverOccurrenceId,
-                variableArgumentCount = variableArgumentCount,
-                variableResolverOccurrenceIds = variableResolverOccurrenceIds,
             ),
         )
 
@@ -391,8 +380,8 @@ internal class FieldResolutionLogic(
                 is EngineObjectOrErrorData.Success -> value.value
                 is EngineObjectOrErrorData.Error -> return value.error
             }
-        publication.operation.resolverObserver.onResolverApplication(
-            Resolver26ApplicationObservation(
+        publication.operation.resolverObserver.onResolverInvocation(
+            ResolverInvocationObservation(
                 occurrencePath = fieldResolverOccurrence.invocationPath,
                 field = fieldResolverOccurrence.selection.key.field,
                 input = input,
@@ -400,8 +389,6 @@ internal class FieldResolutionLogic(
                 arguments = arguments,
                 suppliedDemand = invocationDemand,
                 resolverOccurrenceId = fieldResolverOccurrence.resolverOccurrenceId,
-                variableArgumentCount = 0,
-                variableResolverOccurrenceIds = emptySet(),
             ),
         )
         return context(publication.operation.world) {

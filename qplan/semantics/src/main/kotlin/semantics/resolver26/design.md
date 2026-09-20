@@ -98,7 +98,7 @@ The `CompletableFuture` translation belongs to the GraphQL execution adapter tha
 
 ### Resolver26 Operation State
 
-`OperationContext` is the interface for this scope's stable reference bundle. It explicitly extends `SharedOperationContext<CoroutineTaskDispatcher<OrchestrationTask, FieldPublicationOccurrence>>`. Its `create(...)` factory returns an anonymous implementation delegating the shared operation properties and adding the specialized resolver observer, `cycleChecker: CycleCheckState`, and `bindingsState: BindingDeclarationsState`. The context neither implements those state protocols nor owns their mutable storage. `forChildScope` changes the dispatcher scope while retaining the same logical operation state. `FieldPublicationOccurrence` is a class implementing `OperationContext by operation`; `FieldResolverTask` supplies that occurrence through its typed `publication` property. The concrete task also retains its shared coroutine lifecycle base, original publication, and execution-bridge capability.
+`OperationContext` is the interface for this scope's stable reference bundle. It explicitly extends `SharedOperationContext<CoroutineTaskDispatcher<OrchestrationTask, FieldPublicationOccurrence>>`. Its `create(...)` factory returns an anonymous implementation delegating the shared operation properties and retaining the shared resolver observer and adding `cycleChecker: CycleCheckState` and `bindingsState: BindingDeclarationsState`. The context neither implements those state protocols nor owns their mutable storage. `forChildScope` changes the dispatcher scope while retaining the same logical operation state. `FieldPublicationOccurrence` is a class implementing `OperationContext by operation`; `FieldResolverTask` supplies that occurrence through its typed `publication` property. The concrete task also retains its shared coroutine lifecycle base, original publication, and execution-bridge capability.
 
 `OEROccurrence` bundles the root OER, exact root-relative structural path, target OER, and optional immediate parent occurrence that remain unchanged while Resolver26 orchestrates or resolves one object occurrence. Primary-operation and Query-fragment roots create self-rooted occurrences without parents. Passive object materialization creates descendant occurrences at the exact field-and-list path where each new target is published. The occurrence context is shared across resolver families, preserving the same root, path, and structural-parent identity through their common passive resolution.
 
@@ -159,7 +159,7 @@ After task-local producer setup, `FieldResolutionLogic`:
 3. materializes the resolver's condition-filtered input demand from exact OER cells;
 4. derives invocation successor demand from the key's closed construction demand;
 5. awaits the independently orchestrated Query-rooted input;
-6. records the occurrence-aware application observation;
+6. emits `SharedResolverObserver.onResolverInvocation` with the occurrence and prepared inputs;
 7. invokes the selective resolver once;
 8. builds the passive result shape while synchronously launching one orchestration lifecycle per OER; and
 9. publishes the containing value.
@@ -172,7 +172,7 @@ The owning selection condition guards ordinary Query-fragment construction deman
 
 Argument errors complete the value slot with `ErrorEngineResult` without invoking the resolver. Successful values complete the value slot once. Resolver26 does not yet publish field- or type-checker-result slots: access-check resolution and execution are future work, and checker slots are not part of the current resolver contract.
 
-Resolver observations are semantically passive evidence. Resolver26 records Query-fragment results and application facts for validation, but replacing a normally returning, non-mutating observer with a NOP preserves semantic resolution results. Because callbacks are synchronous, an observer that throws or blocks can still change failure or latency and violates the intended instrumentation contract.
+Resolver observations are semantically passive evidence. All resolver families emit `onQueryFragmentPrepared` after preparing each nonempty declared Query-fragment orchestration and before dispatch, `onResolverInvocation` immediately before ordinary and reference-target resolver entry, and the existing reference-hop association event. Resolver26 uses this shared observer without a model callback or a separate observation entry point. The Query event retains a live OER, not completed materialization; invocation events retain attempts, not return values. These records support validation, but replacing a normally returning, non-mutating observer with a NOP preserves semantic resolution results. Because callbacks are synchronous, an observer that throws or blocks can still change failure or latency and violates the intended instrumentation contract.
 
 ## Successor Demand
 

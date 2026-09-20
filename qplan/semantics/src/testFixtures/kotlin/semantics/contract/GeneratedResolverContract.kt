@@ -326,7 +326,7 @@ interface SelectiveNodeGeneratedResolverContract : GeneratedCaseAssertionPolicy 
                 { testWorld, testCase ->
                     coverage.generatedNodeResolvers += testCase.registry.nodeResolverTypes.size
                     val observation =
-                        observeGeneratedCaseWithCurrentAssertions(testWorld, testCase)
+                        observeGeneratedCaseWithCurrentAssertions(testWorld, testCase, captureSuppliedDemand = true)
                     val nodeLoaderApplications =
                         observation.ordinaryApplications.filter { application ->
                             testCase.registry
@@ -355,7 +355,6 @@ interface SelectiveNodeGeneratedResolverContract : GeneratedCaseAssertionPolicy 
                 checkGeneratedProfile(
                     profile = "selective-node",
                     config = config,
-                    captureSuppliedDemand = true,
                     property = property(sampledCoverage),
                 )
             if (run.selectedCase == null) {
@@ -371,7 +370,6 @@ interface SelectiveNodeGeneratedResolverContract : GeneratedCaseAssertionPolicy 
                             profile = "selective-node",
                             config = config,
                             seed = NODE_ACTIVATION_SEED,
-                            captureSuppliedDemand = true,
                             property = property(activationCoverage),
                         )
                 }
@@ -1116,7 +1114,6 @@ private suspend fun checkGeneratedProfile(
     profile: String,
     config: Config,
     seed: Long? = null,
-    captureSuppliedDemand: Boolean = false,
     property: suspend (TestWorld, ResolverTestCase) -> Unit,
 ): ResolverTestRun =
     checkGeneratedCases(
@@ -1125,7 +1122,6 @@ private suspend fun checkGeneratedProfile(
         expectedCases = GENERATED_PROFILE_CASE_BUDGET,
         config = config,
         seed = seed,
-        captureSuppliedDemand = captureSuppliedDemand,
         property = property,
     )
 
@@ -1147,7 +1143,6 @@ private suspend fun checkGeneratedCases(
     expectedCases: Int,
     config: Config,
     seed: Long? = null,
-    captureSuppliedDemand: Boolean = false,
     property: suspend (TestWorld, ResolverTestCase) -> Unit,
 ): ResolverTestRun =
     checkResolverTestCases(
@@ -1155,7 +1150,6 @@ private suspend fun checkGeneratedCases(
         config = config,
         profile = profile,
         seed = seed,
-        captureSuppliedDemand = captureSuppliedDemand,
         property = property,
     ).also { run ->
         val effectiveExpectedCases =
@@ -1175,8 +1169,9 @@ private fun GeneratedCaseAssertionPolicy.observeGeneratedCaseWithCurrentAssertio
     testWorld: TestWorld,
     testCase: ResolverTestCase,
     assertions: List<GeneratedCaseAssertion> = generatedCaseAssertions,
+    captureSuppliedDemand: Boolean = false,
 ): GeneratedCaseObservation =
-    observeGeneratedCase(testWorld, testCase)
+    observeGeneratedCase(testWorld, testCase, captureSuppliedDemand)
         .assertAll(assertions)
 
 private fun ArbitraryRegistry.hasNonemptyObjectFragment(

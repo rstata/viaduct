@@ -1,7 +1,9 @@
 package semantics.arbitrary
 
+import semantics.resolvers.resolver01.resolve as resolveObservedField
 import kotlinx.coroutines.runBlocking
 
+import model.fragmentFrom
 import model.Arguments
 import model.Assumptions
 import io.kotest.property.Arb
@@ -629,27 +631,26 @@ class GeneratorTest {
         val countWorld =
             registry.world(
                 schema = schema,
-                captureResolutionWitness = false,
             ).assumptions
         val field =
             countWorld.schema.requireObjectField(
                 coordinate.typeName,
                 coordinate.fieldName,
             )
-        val input = countWorld.schema.objectOf("Query")
-        val arguments = Arguments.Resolved.of(field, emptyMap())
 
         registry.clearResolutionApplicationCounts()
-        context(Assumptions.of(countWorld.schema, countWorld.resolverRegistry, false)) {
-            countWorld.resolverRegistry.resolver(field)(
-                input = input,
-                queryValue = engineObjectDataOf(countWorld.schema.requireQueryTypeDef()),
-                arguments = arguments,
-                executionContext = ResolutionExecutionContext.Unsupported,
-            )
-        }
+        val operation = semantics.shared.SharedOperationContext.create(
+            world = Assumptions.of(countWorld.schema, countWorld.resolverRegistry, false),
+            resolverObserver = registry.resolverObserver(captureResolutionWitness = false),
+        )
+        val generatedField = schema.query.fields.single { it.name == coordinate.fieldName }
+        val subselection = if (schema.isComposite(generatedField.type.namedType)) " { __typename }" else ""
+        operation.resolveObservedField(countWorld.fragmentFrom("fragment Test on Query { ${field.name}$subselection }").subselections)
 
-        assertEquals(mapOf(coordinate to 1L), registry.resolutionApplicationCounts())
+        val counts = registry.resolutionApplicationCounts()
+        assertEquals(1L, counts.getValue(coordinate))
+        assertTrue(counts.filterKeys { it != coordinate }.keys.all { it.fieldName == "V_A_typename" })
+        assertTrue(counts.values.all { it == 1L })
         assertTrue(registry.resolutionWitness().applications.isEmpty())
     }
 

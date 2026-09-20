@@ -20,6 +20,12 @@ interface ResolverSelectiveDemandWitnessContract : ResolverContract {
     @Test
     fun `producer witness captures exact successor demand`() {
         var producerDemand: SelectionForest? = null
+        val invocationObserver = object : semantics.shared.RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: semantics.shared.ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                if (observation.field.name == "item") producerDemand = observation.suppliedDemand
+            }
+        }
         val testWorld =
             TestWorld.fromSDL(
                 selectiveResolvers = selectiveResolvers,
@@ -42,10 +48,6 @@ interface ResolverSelectiveDemandWitnessContract : ResolverContract {
                             fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
                                 schema.objectOf("Item") {
                                     "base" setTo "input"
-                                }
-                            }.observeApplications { _, _, suppliedDemand ->
-                                if (suppliedDemand != null) {
-                                    producerDemand = suppliedDemand
                                 }
                             },
                         computed to
@@ -72,6 +74,7 @@ interface ResolverSelectiveDemandWitnessContract : ResolverContract {
                 world,
                 world.objectOf("Query"),
                 fragment.subselections,
+                resolverObserver = invocationObserver,
             )
         val result = resolution.result
 

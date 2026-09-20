@@ -23,6 +23,7 @@ import org.reactivestreams.Subscriber
 import org.reactivestreams.Subscription
 import semantics.resolver26.resolver26CoroutineContext
 import semantics.resolver26.startResolve
+import semantics.shared.SharedResolverObserver
 import semantics.shared.SharedOperationContext
 
 /**
@@ -72,7 +73,13 @@ class QPlanExecutionStrategy(
 
         val root =
             try {
-                SharedOperationContext.create(world).startResolve(selections, requestScope)
+                SharedOperationContext.create(
+                    world,
+                    resolverObserver = executionContext.graphQLContext.getOrDefault(
+                        SharedResolverObserver::class.java,
+                        SharedResolverObserver.createNOP(),
+                    ),
+                ).startResolve(selections, requestScope)
             } catch (throwable: Exception) {
                 executionContext.graphQLContext.delete(lifetimeKey)
                 requestJob.cancel(requestCancellation("QPlan request failed to start", throwable))

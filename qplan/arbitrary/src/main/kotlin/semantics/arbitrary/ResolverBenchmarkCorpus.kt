@@ -22,13 +22,9 @@ class ResolverBenchmarkCorpus private constructor(
         get() = schema.sdl
 
     fun world(
-        captureResolutionWitness: Boolean = false,
-        captureResolutionApplicationCounts: Boolean = false,
     ): TestWorld =
         registry.world(
             schemaSDL = schemaSDL,
-            captureResolutionWitness = captureResolutionWitness,
-            captureResolutionApplicationCounts = captureResolutionApplicationCounts,
         )
 
     fun generateQueries(

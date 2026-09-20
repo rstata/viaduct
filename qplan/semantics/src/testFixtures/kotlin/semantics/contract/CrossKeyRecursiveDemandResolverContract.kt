@@ -1,5 +1,7 @@
 package semantics.contract
 
+import semantics.shared.ResolverInvocationObservation
+import semantics.shared.RecordingResolverObserver
 import model.testing.TestWorld
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -8,6 +10,20 @@ interface CrossKeyRecursiveDemandResolverContract : ResolverContract {
     @Test
     fun `does not copy recursive demand between different grounded keys`() {
         var childrenApplications = 0
+        val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                if (field.containingDef.name == "Item" &&
+                    field.name == "children"
+                ) {
+                    childrenApplications += 1
+                    check(childrenApplications <= 12) {
+                        "recursive demand crossed grounded keys"
+                    }
+                }
+            }
+        }
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -21,16 +37,6 @@ interface CrossKeyRecursiveDemandResolverContract : ResolverContract {
                       children(depth: Int!): [Item!]! @resolver(result: [{}])
                     }
                     """.trimIndent(),
-                applicationObserver = { field, _, _, _ ->
-                    if (field.containingDef.name == "Item" &&
-                        field.name == "children"
-                    ) {
-                        childrenApplications += 1
-                        check(childrenApplications <= 12) {
-                            "recursive demand crossed grounded keys"
-                        }
-                    }
-                },
             )
         val world = testWorld.assumptions
 
@@ -48,6 +54,7 @@ interface CrossKeyRecursiveDemandResolverContract : ResolverContract {
                   }
                 }
             """.trimIndent(),
+            resolverObserver = invocationObserver,
         )
 
         assertEquals(4, childrenApplications)

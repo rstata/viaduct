@@ -24,6 +24,7 @@ import model.ObjectEngineResult
 import model.SourceSchemaAdapter
 import model.testing.TestWorld
 import semantics.resolver26.resolver26CoroutineContext
+import semantics.shared.SharedResolverObserver
 import viaduct.graphql.schema.ViaductSchema
 
 /**
@@ -37,9 +38,10 @@ class ExecutionTestFixture private constructor(
         query: String,
         variables: Map<String, Any?> = emptyMap(),
         incrementalSupport: Boolean = false,
+        resolverObserver: SharedResolverObserver = SharedResolverObserver.createNOP(),
     ): ExecutionResult =
         try {
-            runQueryAsync(query, variables, incrementalSupport).join()
+            runQueryAsync(query, variables, incrementalSupport, resolverObserver).join()
         } catch (exception: CompletionException) {
             throw exception.cause ?: exception
         }
@@ -48,12 +50,14 @@ class ExecutionTestFixture private constructor(
         query: String,
         variables: Map<String, Any?> = emptyMap(),
         incrementalSupport: Boolean = false,
+        resolverObserver: SharedResolverObserver = SharedResolverObserver.createNOP(),
     ): CompletableFuture<ExecutionResult> {
         val input =
             ExecutionInput
                 .newExecutionInput()
                 .query(query)
                 .variables(variables)
+                .graphQLContext { context -> context.put(SharedResolverObserver::class.java, resolverObserver) }
         if (incrementalSupport) {
             GraphQL
                 .unusualConfiguration(input)

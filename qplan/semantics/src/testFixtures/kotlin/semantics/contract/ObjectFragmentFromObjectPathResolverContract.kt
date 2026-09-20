@@ -1,5 +1,7 @@
 package semantics.contract
 
+import semantics.shared.ResolverInvocationObservation
+import semantics.shared.RecordingResolverObserver
 import model.requireObjectField
 import model.ObjectEngineResult
 import model.EngineErrorData
@@ -271,6 +273,24 @@ interface ObjectFragmentFromObjectPathResolverContract :
             var observedResultInput = false
             var consumedKey: String? = null
             var consumedValue: EngineOutputData? = null
+            val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                val input = observation.input
+                if (
+                    field.containingDef.name == "Query" &&
+                    field.name == "result"
+                ) {
+                    val consumed =
+                        input.selectionValues().entries
+                            .single { (key, _) -> key == "consume" }
+                    consumedKey = consumed.key
+                    consumedValue = consumed.value
+                    observedResultInput = true
+                }
+            }
+        }
             val testWorld =
                 TestWorld.fromDSL(
                     selectiveResolvers = selectiveResolvers,
@@ -287,25 +307,12 @@ interface ObjectFragmentFromObjectPathResolverContract :
                           consume(value: Int): Int @resolver(result: $dslValue)
                         }
                         """.trimIndent(),
-                    applicationObserver = { field, input, _, _ ->
-                        if (
-                            field.containingDef.name == "Query" &&
-                            field.name == "result"
-                        ) {
-                            val consumed =
-                                input.selectionValues().entries
-                                    .single { (key, _) -> key == "consume" }
-                            consumedKey = consumed.key
-                            consumedValue = consumed.value
-                            observedResultInput = true
-                        }
-                    },
                 )
             val world = testWorld.assumptions
             val resultField = world.schema.requireObjectField("Query", "result")
             val resultKey = ObjectEngineResult.GroundKey.of(resultField, emptyMap())
             val resolver = world.resolverRegistry.resolver(resultField)
-            val resolution = resolveAndValidateObserved(world, "query { result }")
+            val resolution = resolveAndValidateObserved(world, "query { result }", resolverObserver = invocationObserver)
             val resolved = resolution.result
             val boundVariable =
                 resolver
@@ -380,6 +387,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
 
     @Test
     fun `converts a terminal scalar list to a ground input list`() {
+        val applicationArguments = ResolverApplicationArguments()
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -404,10 +412,10 @@ interface ObjectFragmentFromObjectPathResolverContract :
                 emptyMap(),
             )
 
-        val resolved = resolveAndValidate(world, "query { result }")
+        val resolved = resolveAndValidate(world, "query { result }", resolverObserver = applicationArguments)
 
         assertEquals(10, resolved.getCell(resultKey).get())
-        testWorld.applicationArguments.assertArguments(
+        applicationArguments.assertArguments(
             world.schema.requireObjectField("Query", "consume"),
             mapOf("values" to listOf(2, 3, 5)),
         )

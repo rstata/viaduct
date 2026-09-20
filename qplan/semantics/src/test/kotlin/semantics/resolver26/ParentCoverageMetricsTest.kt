@@ -1,5 +1,6 @@
 package semantics.resolver26
 
+import semantics.shared.ResolverInvocationObservation
 import model.operationSelectionsFrom
 import model.testing.TestWorld
 import semantics.shared.SharedOperationContext
@@ -54,20 +55,25 @@ class ParentCoverageMetricsTest {
                     """.trimIndent(),
             )
         val world = testWorld.assumptions
+
+        val coverage = mutableListOf<ParentSelectionSetCoverage>()
+
+        val recordingObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                coverage += ParentCoverageAnalyzer(world).analyze(observation)
+            }
+        }
         val operation =
             SharedOperationContext.create(
                 world = world,
-                resolverObserver = RecordingResolverObserver(),
+                resolverObserver = recordingObserver,
             )
-        val coverage = mutableListOf<ParentSelectionSetCoverage>()
-
-        operation.resolveObserved(
+        operation.resolve(
             world.operationSelectionsFrom(
                 "query { grand { parentNode { child { result } } } }",
             ),
-        ) { application ->
-            coverage += ParentCoverageAnalyzer(world).analyze(application)
-        }
+        )
 
         val childParent =
             coverage.single { parent ->

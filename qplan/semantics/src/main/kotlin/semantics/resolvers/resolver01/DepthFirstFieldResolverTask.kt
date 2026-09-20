@@ -20,6 +20,7 @@ import model.requireQueryTypeDef
 import semantics.resolvers.GroundedFieldPublicationOccurrence
 import semantics.resolvers.emptyObjectInput
 import semantics.resolvers.prepareInvocation
+import semantics.shared.ResolverInvocationObservation
 import semantics.shared.CycleCheckState
 import semantics.shared.SharedFieldResolverTask
 import semantics.shared.RootFieldReferenceInvocationObservation
@@ -73,11 +74,24 @@ internal class DepthFirstFieldResolverTask private constructor(
                         reader = publicationPath,
                     )
                 }
+                val queryValue = resolveQueryFragment(fragments.queryFragment, publicationPath)
                 runBlocking {
                     context(operation.world) {
+                        // Coroutine entry is interruptible; record only after crossing that boundary.
+                        operation.resolverObserver.onResolverInvocation(
+                            ResolverInvocationObservation(
+                                occurrencePath = publicationPath,
+                                field = key.field,
+                                input = input,
+                                inputSelections = fragments.objectFragment.materializeSelections,
+                                arguments = arguments,
+                                suppliedDemand = invocationDemand.takeIf { operation.world.selectiveResolvers },
+                                resolverOccurrenceId = fragments.objectFragment.resolverOccurrenceId,
+                            ),
+                        )
                         resolver(
                             input = input,
-                            queryValue = resolveQueryFragment(fragments.queryFragment, publicationPath),
+                            queryValue = queryValue,
                             arguments = arguments,
                             selections = invocationDemand,
                             executionContext = ResolutionExecutionContext.Unsupported,
@@ -123,11 +137,24 @@ internal class DepthFirstFieldResolverTask private constructor(
                 queryFragment = invocation.fragments.queryFragment,
                 coordinate = invocation.path,
             )
+        val input = invocation.emptyObjectInput()
         val output =
             runBlocking {
                 context(operation.world) {
+                    // Reference targets have the same interruptible coroutine-entry boundary.
+                    operation.resolverObserver.onResolverInvocation(
+                        ResolverInvocationObservation(
+                            occurrencePath = invocation.path,
+                            field = invocation.key.field,
+                            input = input,
+                            inputSelections = invocation.fragments.objectFragment.materializeSelections,
+                            arguments = reference.arguments,
+                            suppliedDemand = invocationDemand.takeIf { operation.world.selectiveResolvers },
+                            resolverOccurrenceId = invocation.fragments.objectFragment.resolverOccurrenceId,
+                        ),
+                    )
                     invocation.resolver(
-                        input = invocation.emptyObjectInput(),
+                        input = input,
                         queryValue = queryValue,
                         arguments = reference.arguments,
                         selections = invocationDemand,
@@ -162,8 +189,7 @@ internal class DepthFirstFieldResolverTask private constructor(
             return engineObjectDataOf(operation.world.schema.requireQueryTypeDef())
         }
         val queryResult = DepthFirstResolve(operation, operation.complete)
-            .resolve(queryFragment.constructionSelections)
-        operation.resolverObserver.onQueryFragmentResult(queryFragment.resolverOccurrenceId, queryResult)
+            .resolve(queryFragment.constructionSelections, queryFragment.resolverOccurrenceId)
         return runBlocking {
             queryResult.materializeResolverInput(
                 operation = operation,

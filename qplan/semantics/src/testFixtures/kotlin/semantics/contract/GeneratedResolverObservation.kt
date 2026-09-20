@@ -160,11 +160,13 @@ fun GeneratedCaseObservation.assertAll(
 fun ResolverContract.observeGeneratedCase(
     testWorld: TestWorld,
     testCase: ResolverTestCase,
+    captureSuppliedDemand: Boolean = false,
 ): GeneratedCaseObservation {
     testCase.registry.clearResolutionWitness()
     val ordinary =
         observeGeneratedResolution(
             testWorld = testWorld,
+            resolverObserver = testCase.registry.resolverObserver(captureSuppliedDemand = captureSuppliedDemand),
             querySource = testCase.query.source,
         )
     val ordinaryApplications = testCase.registry.resolutionWitness().applications
@@ -173,6 +175,7 @@ fun ResolverContract.observeGeneratedCase(
         testCase.registry.withoutResolutionWitnessCapture {
             observeGeneratedResolution(
                 testWorld = testWorld,
+                resolverObserver = testCase.registry.resolverObserver(captureResolutionWitness = false, captureResolutionApplicationCounts = false),
                 querySource = testCase.query.permutationEquivalentSource,
             )
         }
@@ -187,6 +190,7 @@ fun ResolverContract.observeGeneratedCase(
 
 private fun ResolverContract.observeGeneratedResolution(
     testWorld: TestWorld,
+    resolverObserver: semantics.shared.SharedResolverObserver,
     querySource: String,
 ): GeneratedResolutionObservation {
     val world = testWorld.newAssumptions(selectiveResolvers)
@@ -196,6 +200,7 @@ private fun ResolverContract.observeGeneratedResolution(
             world,
             world.objectOf("Query"),
             fragment.subselections,
+            resolverObserver = resolverObserver,
         )
     return GeneratedResolutionObservation(
         operation = subject.operation,

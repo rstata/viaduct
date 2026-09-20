@@ -1,5 +1,7 @@
 package semantics.contract
 
+import semantics.shared.ResolverInvocationObservation
+import semantics.shared.RecordingResolverObserver
 import model.EngineResult
 import model.ObjectEngineResult
 import model.objectOf
@@ -138,6 +140,20 @@ private data class RecursiveOutputFixtureResult(
 )
 
 private fun ResolverContract.resolveRecursiveOutputFixture(): RecursiveOutputFixtureResult {
+    val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                val input = observation.input
+
+                if (
+                    field.containingDef.name == "Query" &&
+                    field.name == "chain"
+                ) {
+                    require(input.hasExactlyFields())
+                }
+            }
+        }
     val testWorld =
         TestWorld.fromDSL(
             selectiveResolvers = selectiveResolvers,
@@ -163,18 +179,10 @@ private fun ResolverContract.resolveRecursiveOutputFixture(): RecursiveOutputFix
                     )
                 }
                 """.trimIndent(),
-            applicationObserver = { field, input, _, _ ->
-                if (
-                    field.containingDef.name == "Query" &&
-                    field.name == "chain"
-                ) {
-                    require(input.hasExactlyFields())
-                }
-            },
         )
     val world = testWorld.assumptions
     val result =
-        resolveAndValidate(world, "query { chain { computed } }")
+        resolveAndValidate(world, "query { chain { computed } }", resolverObserver = invocationObserver)
     val chain =
         assertIs<ObjectEngineResult>(
             result.getCell(world.schema.contractKey("Query", "chain")).get(),

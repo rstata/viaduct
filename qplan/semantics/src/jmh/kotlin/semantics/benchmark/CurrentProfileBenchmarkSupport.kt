@@ -28,7 +28,6 @@ import semantics.correctresolution.correctResolution
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Collections
-import java.util.concurrent.ConcurrentHashMap
 import java.util.Locale
 import kotlin.math.ceil
 import semantics.shared.SharedOperationContext
@@ -52,16 +51,7 @@ internal fun interface ResolverBenchmarkSubject {
     ): ObjectEngineResult
 }
 
-internal fun interface ObservedResolverBenchmarkSubject {
-    fun resolve(
-        operation: SharedOperationContext<*>,
-        root: EngineObjectData.Sync,
-        selections: SelectionForest,
-        applicationObserver: (ResolverBenchmarkApplicationObservation) -> Unit,
-    ): ObjectEngineResult
-}
-
-internal data class ResolverBenchmarkApplicationObservation(
+internal data class ResolverBenchmarkInvocationObservation(
     val occurrencePath: List<PathComponent>,
     val resolverOccurrenceId: ResolverOccurrenceId,
     val variableArgumentCount: Int,
@@ -70,7 +60,6 @@ internal data class ResolverBenchmarkApplicationObservation(
 
 internal class CurrentProfileBenchmarkSupport(
     private val subject: ResolverBenchmarkSubject,
-    private val observedSubject: ObservedResolverBenchmarkSubject,
 ) {
     private val corpus: ResolverBenchmarkCorpus =
         ResolverBenchmarkCorpus.load(SCHEMA_RESOURCE, REGISTRY_RESOURCE)
@@ -120,24 +109,36 @@ internal class CurrentProfileBenchmarkSupport(
     }
 
     fun reportOverheadStatistics() {
-        val testWorld = corpus.world(captureResolutionWitness = true)
+        val testWorld = corpus.world()
         val variableArgumentCounts = mutableListOf<Long>()
         val samples =
             querySources.map { source ->
                 val world = testWorld.newAssumptions(selectiveResolvers = true)
-                val operation = SharedOperationContext.create(world)
                 val selections = world.fragmentFrom(source).subselections
                 corpus.registry.clearResolutionWitness()
                 val applicationObservations =
                     Collections.synchronizedList(
-                        mutableListOf<ResolverBenchmarkApplicationObservation>(),
+                        mutableListOf<ResolverBenchmarkInvocationObservation>(),
                     )
+                val witnessObserver = corpus.registry.resolverObserver()
+                val observer = object : RecordingResolverObserver() {
+                    override fun onResolverInvocation(observation: semantics.shared.ResolverInvocationObservation) {
+                        super.onResolverInvocation(observation)
+                        witnessObserver.onResolverInvocation(observation)
+                        applicationObservations += ResolverBenchmarkInvocationObservation(
+                            occurrencePath = observation.occurrencePath,
+                            resolverOccurrenceId = observation.resolverOccurrenceId,
+                            variableArgumentCount = observation.variableArgumentCount,
+                            variableSourceOccurrenceIds = observation.variableResolverOccurrenceIds,
+                        )
+                    }
+                }
+                val operation = SharedOperationContext.create(world, resolverObserver = observer)
                 val result =
-                    observedSubject.resolve(
+                    subject.resolve(
                         operation = operation,
                         root = world.objectOf("Query"),
                         selections = selections,
-                        applicationObserver = applicationObservations::add,
                     )
                 val witness = corpus.registry.resolutionWitness()
                 check(applicationObservations.size == witness.applications.size) {
@@ -242,20 +243,15 @@ internal class CurrentProfileBenchmarkSupport(
                 ) { testWorld, testCase ->
                     check(testCase.query.selectionDepth >= 4)
                     val world = testWorld.newAssumptions(selectiveResolvers = true)
-                    val operation =
-                        SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+                    val observer = testCase.registry.resolverObserver()
+                    val operation = SharedOperationContext.create(world, resolverObserver = observer)
                     val fragment = world.fragmentFrom(testCase.query.source)
                     testCase.registry.clearResolutionWitness()
-                    val appliedResolverOccurrences =
-                        ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
                     val result =
-                        observedSubject.resolve(
+                        subject.resolve(
                             operation = operation,
                             root = world.objectOf("Query"),
                             selections = fragment.subselections,
-                            applicationObserver = { application ->
-                                appliedResolverOccurrences += application.resolverOccurrenceId
-                            },
                         )
                     val witness = testCase.registry.resolutionWitness()
                     check(
@@ -269,7 +265,7 @@ internal class CurrentProfileBenchmarkSupport(
                                 .instantiateBindings(operation),
                         ),
                     )
-                    result.validateFromFieldBindings(operation, appliedResolverOccurrences)
+                    result.validateFromFieldBindings(operation, observer.invokedResolverOccurrences())
                     verifiedCases += 1
                 }
             check(run.attemptedCases == FULL_CASE_COUNT)
@@ -438,7 +434,7 @@ internal class CurrentProfileBenchmarkSupport(
         )
     }
 
-    private fun List<ResolverBenchmarkApplicationObservation>.maximumVariableStackDepth(): Long {
+    private fun List<ResolverBenchmarkInvocationObservation>.maximumVariableStackDepth(): Long {
         val executedOccurrences =
             mapTo(linkedSetOf()) { observation -> observation.resolverOccurrenceId }
         val childrenBySource =

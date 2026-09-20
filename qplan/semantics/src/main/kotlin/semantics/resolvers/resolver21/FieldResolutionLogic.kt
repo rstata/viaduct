@@ -14,6 +14,7 @@ import model.nodeReferenceIdentityOrNull
 import model.registry.ResolutionExecutionContext
 import semantics.resolvers.emptyObjectInput
 import semantics.resolvers.prepareInvocation
+import semantics.shared.ResolverInvocationObservation
 import semantics.shared.RootFieldReferenceInvocationObservation
 import semantics.resolvers.materializeResolverInput
 import semantics.shared.withAuthoritativeNodeId
@@ -82,6 +83,17 @@ internal class FieldResolutionLogic(
             is EngineObjectOrErrorData.Success -> value.value
             is EngineObjectOrErrorData.Error -> return value.error
         }
+        publication.operation.resolverObserver.onResolverInvocation(
+            ResolverInvocationObservation(
+                occurrencePath = publication.publicationPath,
+                field = publication.selection.key.field,
+                input = input,
+                inputSelections = fragments.objectFragment.materializeSelections,
+                arguments = arguments,
+                suppliedDemand = invocationDemand.takeIf { publication.operation.world.selectiveResolvers },
+                resolverOccurrenceId = fragments.objectFragment.resolverOccurrenceId,
+            ),
+        )
         return context(publication.operation.world) {
             resolver(
                 input,
@@ -104,9 +116,21 @@ internal class FieldResolutionLogic(
             is EngineObjectOrErrorData.Success -> value.value
             is EngineObjectOrErrorData.Error -> return value.error
         }
+        val input = invocation.emptyObjectInput()
+        publication.operation.resolverObserver.onResolverInvocation(
+            ResolverInvocationObservation(
+                occurrencePath = invocation.path,
+                field = invocation.key.field,
+                input = input,
+                inputSelections = invocation.fragments.objectFragment.materializeSelections,
+                arguments = reference.arguments,
+                suppliedDemand = invocationDemand.takeIf { publication.operation.world.selectiveResolvers },
+                resolverOccurrenceId = invocation.fragments.objectFragment.resolverOccurrenceId,
+            ),
+        )
         val output = context(publication.operation.world) {
             invocation.resolver(
-                input = invocation.emptyObjectInput(),
+                input = input,
                 queryValue = queryValue,
                 arguments = reference.arguments,
                 selections = invocationDemand,

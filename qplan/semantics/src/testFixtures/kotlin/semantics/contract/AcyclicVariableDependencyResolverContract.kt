@@ -1,5 +1,7 @@
 package semantics.contract
 
+import semantics.shared.ResolverInvocationObservation
+import semantics.shared.RecordingResolverObserver
 import model.requireObjectField
 import model.Arguments
 import io.kotest.matchers.collections.shouldContainExactly
@@ -13,6 +15,7 @@ import kotlin.test.assertEquals
 interface AcyclicVariableDependencyResolverContract : ResolverContract {
     @Test
     fun `accepts an acyclic path-variable dependency chain`() {
+        val applicationArguments = ResolverApplicationArguments()
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -47,14 +50,14 @@ interface AcyclicVariableDependencyResolverContract : ResolverContract {
         val world = testWorld.assumptions
         val cKey = world.schema.contractKey("Query", "c")
 
-        val resolved = resolveAndValidate(world, "query { c }")
+        val resolved = resolveAndValidate(world, "query { c }", resolverObserver = applicationArguments)
 
         assertEquals(1, resolved.getCell(cKey).get())
-        testWorld.applicationArguments.assertDistinctArguments(
+        applicationArguments.assertDistinctArguments(
             world.schema.requireObjectField("Query", "a"),
             mapOf("seed" to 1),
         )
-        testWorld.applicationArguments.assertDistinctArguments(
+        applicationArguments.assertDistinctArguments(
             world.schema.requireObjectField("Query", "d"),
             mapOf("seed" to 1),
         )
@@ -102,6 +105,16 @@ interface AcyclicVariableDependencyResolverContract : ResolverContract {
     fun `orders argument-bearing applications through a path-variable dependency`() {
         val argumentApplications =
             ConcurrentLinkedQueue<Pair<String, Arguments.Resolved>>()
+        val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                val arguments = observation.arguments
+                if (field.name == "first" || field.name == "consume") {
+                    argumentApplications += field.name to arguments
+                }
+            }
+        }
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -122,16 +135,11 @@ interface AcyclicVariableDependencyResolverContract : ResolverContract {
                         @resolver(result: "sum(${'$'}value, ${'$'}value)")
                     }
                     """.trimIndent(),
-                applicationObserver = { field, _, arguments, _ ->
-                    if (field.name == "first" || field.name == "consume") {
-                        argumentApplications += field.name to arguments
-                    }
-                },
             )
         val world = testWorld.assumptions
         val resultKey = world.schema.contractKey("Query", "result")
 
-        val resolved = resolveAndValidate(world, "query { result }")
+        val resolved = resolveAndValidate(world, "query { result }", resolverObserver = invocationObserver)
 
         assertEquals(4, resolved.getCell(resultKey).get())
         argumentApplications.toList().shouldContainExactly(

@@ -8,6 +8,8 @@ import viaduct.graphql.schema.ViaductSchema
 import model.SelectionForest
 import semantics.shared.SharedOperationContext
 import semantics.shared.RecordingResolverObserver
+import semantics.shared.SharedResolverObserver
+import semantics.shared.ResolverObservations
 
 /** Subject-specific evidence retained alongside one resolution result. */
 interface ResolverResolutionObservation {
@@ -19,9 +21,10 @@ interface ResolverResolutionObservation {
         get() = null
 }
 
-private data class ResultOnlyResolverResolutionObservation(
+private data class RecordedResolverResolutionObservation(
     override val result: ObjectEngineResult,
     override val operation: SharedOperationContext<*>,
+    override val appliedResolverOccurrences: Set<ResolverOccurrenceId>?,
 ) : ResolverResolutionObservation
 
 /**
@@ -41,14 +44,16 @@ interface ResolverContract {
         world: Assumptions,
         root: EngineObjectData.Sync,
         selections: SelectionForest,
+        resolverObserver: SharedResolverObserver = RecordingResolverObserver(),
     ): ResolverResolutionObservation =
         SharedOperationContext.create(
             world = world,
-            resolverObserver = RecordingResolverObserver(),
+            resolverObserver = resolverObserver,
         ).let { operation ->
-            ResultOnlyResolverResolutionObservation(
+            RecordedResolverResolutionObservation(
                 result = resolve(operation, root, selections),
                 operation = operation,
+                appliedResolverOccurrences = (resolverObserver as? ResolverObservations)?.invokedResolverOccurrences(),
             )
         }
 

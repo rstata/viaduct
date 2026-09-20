@@ -1,68 +1,15 @@
 package semantics.resolver26
 
-import viaduct.graphql.schema.ViaductSchema
-
-import model.Arguments
-
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
-import model.PathComponent
-import model.ResolverOccurrenceId
-import model.SelectionForest
-import model.MaterializeSelectionForest
-import viaduct.engine.api.EngineObjectData
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.CoroutineContext
-import model.ObjectEngineResult
-import semantics.shared.SharedResolverObserver
-import semantics.shared.RootFieldReferenceInvocationObservation
 
 internal const val RESOLVER26_THREAD_COUNT_PROPERTY = "resolver26.thread.count"
 internal const val RESOLVER26_THREAD_COUNT_ENVIRONMENT = "RESOLVER26_THREAD_COUNT"
-
-internal data class Resolver26ApplicationObservation(
-    val occurrencePath: List<PathComponent>,
-    val field: ViaductSchema.ObjectField,
-    val input: EngineObjectData.Sync,
-    val inputSelections: MaterializeSelectionForest,
-    val arguments: Arguments.Resolved,
-    val suppliedDemand: SelectionForest,
-    val resolverOccurrenceId: ResolverOccurrenceId,
-    val variableArgumentCount: Int,
-    val variableResolverOccurrenceIds: Set<ResolverOccurrenceId>,
-)
-
-/** Semantically passive Resolver26 application instrumentation. */
-internal typealias Resolver26ApplicationObserver = (Resolver26ApplicationObservation) -> Unit
-
-/** Resolver26's semantically passive extension of the shared observation boundary. */
-internal interface ResolverObserver : SharedResolverObserver {
-    fun onResolverApplication(observation: Resolver26ApplicationObservation)
-}
-
-internal fun SharedResolverObserver.withResolver26Applications(
-    applicationObserver: Resolver26ApplicationObserver,
-): ResolverObserver {
-    val delegate = this
-    return object : ResolverObserver {
-        override fun onQueryFragmentResult(
-            resolverOccurrenceId: ResolverOccurrenceId,
-            result: ObjectEngineResult,
-        ) = delegate.onQueryFragmentResult(resolverOccurrenceId, result)
-
-        override fun onRootFieldReferenceInvocation(
-            observation: RootFieldReferenceInvocationObservation,
-        ) = delegate.onRootFieldReferenceInvocation(observation)
-
-        override fun onResolverApplication(observation: Resolver26ApplicationObservation) {
-            (delegate as? ResolverObserver)?.onResolverApplication(observation)
-            applicationObserver(observation)
-        }
-    }
-}
 
 // Returns the positive externally configured worker count, defaulting to one.
 internal fun configuredResolver26ThreadCount(): Int {

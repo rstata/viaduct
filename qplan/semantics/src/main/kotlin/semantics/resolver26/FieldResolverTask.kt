@@ -330,7 +330,7 @@ private suspend fun ResolverFragment.resolveQueryFragment(
             source = source,
             initialDemand = symbolicSelections.constructionSelections() + providerDemand,
         )
-    operation.resolverObserver.onQueryFragmentResult(resolverOccurrenceId, queryResult)
+    operation.resolverObserver.onQueryFragmentPrepared(resolverOccurrenceId, queryResult)
     operation.dispatcher.dispatchOrchestrator(orchestration)
     queryResult.completeProviderBindings(
         operation = operation,

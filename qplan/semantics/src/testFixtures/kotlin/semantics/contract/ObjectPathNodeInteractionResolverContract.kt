@@ -1,5 +1,6 @@
 package semantics.contract
 
+import semantics.shared.ResolverInvocationObservation
 import model.requireObjectField
 import model.testing.TestWorld
 import kotlin.test.Test
@@ -81,6 +82,19 @@ interface ObjectPathNodeInteractionResolverContract : ResolverContract {
     @Test
     fun `retains potential demand through a passive node reference`() {
         var triggerInputKeys: Set<String>? = null
+        val invocationObserver = object : ResolverApplicationArguments() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                val input = observation.input
+                if (
+                    field.containingDef.name == "Item" &&
+                    field.name == "trigger"
+                ) {
+                    triggerInputKeys = input.selectionValues().keys
+                }
+            }
+        }
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -126,14 +140,6 @@ interface ObjectPathNodeInteractionResolverContract : ResolverContract {
                       related: Profile!
                     }
                     """.trimIndent(),
-                applicationObserver = { field, input, _, _ ->
-                    if (
-                        field.containingDef.name == "Item" &&
-                        field.name == "trigger"
-                    ) {
-                        triggerInputKeys = input.selectionValues().keys
-                    }
-                },
             )
         val world = testWorld.assumptions
 
@@ -149,9 +155,10 @@ interface ObjectPathNodeInteractionResolverContract : ResolverContract {
                       driver { id }
                     }
             """.trimIndent(),
+            resolverObserver = invocationObserver,
         )
 
-        testWorld.applicationArguments.assertApplicationCount(
+        invocationObserver.assertApplicationCount(
             world.schema.requireObjectField("Query", "driver"),
             1,
         )

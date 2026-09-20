@@ -1,5 +1,6 @@
 package semantics.resolver26
 
+import semantics.shared.ResolverInvocationObservation
 import kotlinx.coroutines.runBlocking
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
@@ -52,11 +53,17 @@ class InclusionConditionTest {
             }
             """.trimIndent(),
         )
-        val operation = SharedOperationContext.create(world.assumptions)
+
         val applications = Collections.synchronizedList(mutableListOf<String>())
-        val result = operation.resolveObserved(world.assumptions.fragmentFrom("fragment Test on Query { controller healthy }").subselections) {
-            applications += it.field.name
+
+        val recordingObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                applications += observation.field.name
+            }
         }
+        val operation = SharedOperationContext.create(world.assumptions, resolverObserver = recordingObserver)
+        val result = operation.resolve(world.assumptions.fragmentFrom("fragment Test on Query { controller healthy }").subselections)
 
         for (name in listOf("controller", "outer")) {
             val key = ObjectEngineResult.GroundKey.of(world.schema.requireObjectField("Query", name), emptyMap())
@@ -511,7 +518,7 @@ class InclusionConditionTest {
         val resolution = world.resolve("query { outer }")
         val dependency = world.schema.requireObjectField("Query", "dependency")
 
-        assertEquals(0, world.applicationArguments.arguments(dependency).size)
+        assertFalse(dependency in resolution.applications)
         assertTrue(resolution.correct)
     }
 
@@ -737,17 +744,23 @@ class InclusionConditionTest {
 
     private fun TestWorld.resolve(query: String): Resolution {
         val fragment = assumptions.fragmentFrom(query.replace("query", "fragment Query on Query"))
+
+        val applications =
+            Collections.synchronizedList(mutableListOf<ViaductSchema.ObjectField>())
+
+        val recordingObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                applications += observation.field
+            }
+        }
         val operation =
             SharedOperationContext.create(
                 world = assumptions,
-                resolverObserver = RecordingResolverObserver(),
+                resolverObserver = recordingObserver,
             )
-        val applications =
-            Collections.synchronizedList(mutableListOf<ViaductSchema.ObjectField>())
         val result =
-            operation.resolveObserved(fragment.subselections) { observation ->
-                applications += observation.field
-            }
+            operation.resolve(fragment.subselections)
         val correct =
             result.correctResolution(
                 operation,

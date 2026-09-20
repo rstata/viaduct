@@ -1,5 +1,7 @@
 package semantics.contract
 
+import semantics.shared.ResolverInvocationObservation
+import semantics.shared.RecordingResolverObserver
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import model.EngineResult
 import model.ListEngineResult
@@ -34,6 +36,13 @@ interface EmptyObjectFragmentResolverContract :
 
     @Test
     fun `accepts position-distinct passive fields in list output`() {
+        val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val input = observation.input
+                require(input.hasExactlyFields())
+            }
+        }
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -54,17 +63,25 @@ interface EmptyObjectFragmentResolverContract :
                       extra: Int
                     }
                     """.trimIndent(),
-                applicationObserver = { _, input, _, _ ->
-                    require(input.hasExactlyFields())
-                },
             )
         val world = testWorld.assumptions
-        resolveAndValidate(world, "query { items { selected } }")
+        resolveAndValidate(world, "query { items { selected } }", resolverObserver = invocationObserver)
     }
 
     @Test
     fun `specializes shared list continuation and concrete argument defaults`() {
         val applications = ConcurrentLinkedQueue<String>()
+        val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                val input = observation.input
+                require(input.hasExactlyFields())
+                if (field.name == "computed") {
+                    applications += field.containingDef.name
+                }
+            }
+        }
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -93,15 +110,9 @@ interface EmptyObjectFragmentResolverContract :
                       computed: Int! @resolver(result: 3)
                     }
                     """.trimIndent(),
-                applicationObserver = { field, input, _, _ ->
-                    require(input.hasExactlyFields())
-                    if (field.name == "computed") {
-                        applications += field.containingDef.name
-                    }
-                },
             )
         val world = testWorld.assumptions
-        val result = resolveAndValidate(world, "query { items { computed } }")
+        val result = resolveAndValidate(world, "query { items { computed } }", resolverObserver = invocationObserver)
         val items =
             assertIs<ListEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "items")).get(),
@@ -124,6 +135,13 @@ interface EmptyObjectFragmentResolverContract :
 
     @Test
     fun `applies a concrete implementation default after interface dispatch`() {
+        val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val input = observation.input
+                require(input.hasExactlyFields())
+            }
+        }
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -143,13 +161,10 @@ interface EmptyObjectFragmentResolverContract :
                         @resolver(result: "sum(${'$'}factor)")
                     }
                     """.trimIndent(),
-                applicationObserver = { _, input, _, _ ->
-                    require(input.hasExactlyFields())
-                },
             )
         val world = testWorld.assumptions
         val result =
-            resolveAndValidate(world, "query { item { computed } }")
+            resolveAndValidate(world, "query { item { computed } }", resolverObserver = invocationObserver)
         val item =
             assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "item")).get(),

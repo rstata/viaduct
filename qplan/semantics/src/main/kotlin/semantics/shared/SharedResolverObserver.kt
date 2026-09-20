@@ -28,11 +28,27 @@ data class RootFieldReferenceInvocationObservation(
  * latency by throwing or blocking.
  */
 interface SharedResolverObserver {
-    fun onQueryFragmentResult(
+    /**
+     * Associates a nonempty declared Query fragment with its live root, after orchestration
+     * preparation and before dispatch. The root's selected cells and values may be unfinished.
+     * This is not an observation of a nested ctx.query call or of completed materialization.
+     */
+    fun onQueryFragmentPrepared(
         resolverOccurrenceId: ResolverOccurrenceId,
         result: ObjectEngineResult,
     )
 
+    /**
+     * Records each attempted resolver call immediately before entering FieldResolver.invoke.
+     * Emit inside the execution coroutine, after input preparation, with no suspension,
+     * dispatch, or interruptible coroutine-entry boundary between this event and the call.
+     */
+    fun onResolverInvocation(observation: ResolverInvocationObservation) = Unit
+
+    /**
+     * Associates a publication with a reference hop after its helper returns. This does not
+     * record a return value or guarantee resolver entry: input errors can short-circuit the helper.
+     */
     fun onRootFieldReferenceInvocation(
         observation: RootFieldReferenceInvocationObservation,
     ) = Unit
@@ -42,8 +58,11 @@ interface SharedResolverObserver {
     }
 }
 
-/** Read-only Query-fragment evidence retained by an instrumented resolver observer. */
+/** Read-only invocation identities, Query roots, and reference hops retained by an observer. */
 interface ResolverObservations {
+    /** Exact attempted invocations; count-sensitive consumers must retain their own event log. */
+    fun invokedResolverOccurrences(): Set<ResolverOccurrenceId> = emptySet()
+
     fun queryFragmentResults(
         resolverOccurrenceId: ResolverOccurrenceId,
     ): List<ObjectEngineResult>
@@ -53,14 +72,26 @@ interface ResolverObservations {
     fun rootFieldReferenceInvocations(): List<RootFieldReferenceInvocationObservation> = emptyList()
 }
 
-/** Records every observation without rejecting or overwriting duplicates. */
-class RecordingResolverObserver : SharedResolverObserver, ResolverObservations {
+/**
+ * Records invocation identities plus Query roots and reference hops. Query and reference records
+ * preserve duplicates; invocation identities form a set. Subclasses can retain full invocation
+ * events when counts, arguments, or inputs are needed.
+ */
+open class RecordingResolverObserver : SharedResolverObserver, ResolverObservations {
+    private val invokedOccurrences = ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
+
+    override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+        invokedOccurrences += observation.resolverOccurrenceId
+    }
+
+    override fun invokedResolverOccurrences(): Set<ResolverOccurrenceId> = invokedOccurrences.toSet()
+
     private val queryResults =
         ConcurrentHashMap<ResolverOccurrenceId, ConcurrentLinkedQueue<ObjectEngineResult>>()
     private val rootFieldReferenceInvocations =
         ConcurrentLinkedQueue<RootFieldReferenceInvocationObservation>()
 
-    override fun onQueryFragmentResult(
+    override fun onQueryFragmentPrepared(
         resolverOccurrenceId: ResolverOccurrenceId,
         result: ObjectEngineResult,
     ) {
@@ -87,7 +118,7 @@ class RecordingResolverObserver : SharedResolverObserver, ResolverObservations {
 }
 
 private object NOPResolverObserver : SharedResolverObserver {
-    override fun onQueryFragmentResult(
+    override fun onQueryFragmentPrepared(
         resolverOccurrenceId: ResolverOccurrenceId,
         result: ObjectEngineResult,
     ) = Unit

@@ -144,6 +144,14 @@ class QPlanDeferTest {
     @Test
     fun `selective producer receives demand for initial and deferred fields`() {
         var suppliedDemand: SelectionForest? = null
+        val observer = object : semantics.shared.RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: semantics.shared.ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                val demand = observation.suppliedDemand
+                if (field.name == "viewer") suppliedDemand = demand
+            }
+        }
         val world =
             TestWorld.fromSDL(
                 schemaSDL = NESTED_SCHEMA,
@@ -164,16 +172,13 @@ class QPlanDeferTest {
                             },
                     )
                 },
-                applicationObserver = { field, _, _, demand ->
-                    if (field.name == "viewer") suppliedDemand = demand
-                },
             )
         val fixture = ExecutionTestFixture.fromWorld(NESTED_SCHEMA, world)
 
         val initial =
             assertIs<IncrementalExecutionResult>(
                 fixture
-                    .runQueryAsync(NESTED_DEFER_QUERY, incrementalSupport = true)
+                    .runQueryAsync(NESTED_DEFER_QUERY, incrementalSupport = true, resolverObserver = observer)
                     .get(5, TimeUnit.SECONDS),
             )
         initial.incrementalItemPublisher.nextIncrementalResult().get(5, TimeUnit.SECONDS)

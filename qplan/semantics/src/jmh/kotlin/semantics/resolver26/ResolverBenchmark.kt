@@ -20,8 +20,6 @@ import org.openjdk.jmh.infra.IterationParams
 import org.openjdk.jmh.runner.IterationType
 import semantics.benchmark.CurrentProfileBenchmarkSupport
 import semantics.benchmark.DEFAULT_OVERHEAD_LOOP_COUNT
-import semantics.benchmark.ObservedResolverBenchmarkSubject
-import semantics.benchmark.ResolverBenchmarkApplicationObservation
 import semantics.benchmark.ResolverBenchmarkSubject
 import java.nio.file.Files
 import java.nio.file.Path
@@ -44,32 +42,9 @@ open class ResolverBenchmark {
     @Param("$DEFAULT_OVERHEAD_LOOP_COUNT")
     var loopCount: Int = DEFAULT_OVERHEAD_LOOP_COUNT
 
-    private val support =
-        CurrentProfileBenchmarkSupport(
-            subject = ResolverBenchmarkSubject { operation, _, selections ->
-                operation.resolve(selections)
-            },
-            observedSubject =
-                ObservedResolverBenchmarkSubject {
-                        operation,
-                        _,
-                        selections,
-                        applicationObserver,
-                    ->
-                    operation.resolveObserved(selections) { observation ->
-                        applicationObserver(
-                            ResolverBenchmarkApplicationObservation(
-                                occurrencePath = observation.occurrencePath,
-                                resolverOccurrenceId = observation.resolverOccurrenceId,
-                                variableArgumentCount =
-                                    observation.variableArgumentCount,
-                                variableSourceOccurrenceIds =
-                                    observation.variableResolverOccurrenceIds,
-                            ),
-                        )
-                    }
-                },
-        )
+    private val support = CurrentProfileBenchmarkSupport(
+        subject = ResolverBenchmarkSubject { operation, _, selections -> operation.resolve(selections) },
+    )
 
     private var profileRecording: Recording? = null
 

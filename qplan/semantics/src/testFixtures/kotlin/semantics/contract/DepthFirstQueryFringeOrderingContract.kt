@@ -1,5 +1,7 @@
 package semantics.contract
 
+import semantics.shared.ResolverInvocationObservation
+import semantics.shared.RecordingResolverObserver
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import model.RootFieldReferenceData
@@ -15,6 +17,13 @@ interface DepthFirstQueryFringeOrderingContract : ResolverContract {
     @Test
     fun `reference Query fragment finishes before the enclosing passive fringe runs`() {
         val applications = mutableListOf<String>()
+        val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                applications += field.name
+            }
+        }
         val fixture = TestWorld.fromSDL(
             selectiveResolvers = selectiveResolvers,
             schemaSDL = """
@@ -30,7 +39,6 @@ interface DepthFirstQueryFringeOrderingContract : ResolverContract {
                 }
                 type Child { value: Int! }
             """.trimIndent(),
-            applicationObserver = { field, _, _, _ -> applications += field.name },
             fieldResolvers = { schema ->
                 val target = schema.requireObjectField("Query", "target")
                 mapOf(
@@ -55,7 +63,7 @@ interface DepthFirstQueryFringeOrderingContract : ResolverContract {
                 )
             },
         )
-        resolveAndValidate(fixture.assumptions, "{ container { left { value } values } after }")
+        resolveAndValidate(fixture.assumptions, "{ container { left { value } values } after }", resolverObserver = invocationObserver)
         assertEquals(listOf("container", "dependency", "target", "value", "after"), applications)
     }
 }

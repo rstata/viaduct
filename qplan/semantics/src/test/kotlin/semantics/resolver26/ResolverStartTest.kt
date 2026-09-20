@@ -5,6 +5,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.job
@@ -12,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import model.ObjectEngineResult
 import model.ErrorEngineResult
+import model.ResolverOccurrenceId
 import model.emptyFragmentOf
 import model.fragmentFrom
 import model.operationSelectionsFrom
@@ -19,7 +21,11 @@ import model.requireField
 import model.requireObjectField
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
+import semantics.contract.get
+import semantics.shared.RecordingResolverObserver
+import semantics.shared.ResolverInvocationObservation
 import semantics.shared.SharedOperationContext
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -28,11 +34,87 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotSame
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class ResolverStartTest {
+    @Test
+    fun `nested execution retains observer but only query fragment emits preparation`() {
+        val observer = InvocationRecordingObserver()
+        val testWorld = TestWorld.fromSDL(
+            schemaSDL = "type Query { outer: Int inner: Int dependency: Int }",
+            fieldResolvers = { schema ->
+                val empty = schema.emptyFragmentOf("Query")
+                val nested = schema.fragmentFrom("fragment Nested on Query { inner }")
+                mapOf(
+                    schema.requireObjectField("Query", "outer") to fieldResolverOf(empty) { _, _, executionContext ->
+                        executionContext.resolveSelectionSet(nested.materializeSelections).get("inner")
+                    },
+                    schema.requireObjectField("Query", "inner") to fieldResolverOf(
+                        empty, schema.fragmentFrom("fragment Input on Query { dependency }"),
+                    ) { _, query, _ -> query.get("dependency") },
+                    schema.requireObjectField("Query", "dependency") to fieldResolverOf(empty) { _, _ -> 7 },
+                )
+            },
+        )
+        val operation = SharedOperationContext.create(testWorld.assumptions, resolverObserver = observer)
+        val root = operation.resolve(operation.world.operationSelectionsFrom("{ outer }"))
+        val byField = observer.events.associateBy { it.field.name }
+        assertEquals(setOf("outer", "inner", "dependency"), byField.keys)
+        assertEquals(3, observer.events.size)
+        val outer = byField.getValue("outer").resolverOccurrenceId
+        val inner = byField.getValue("inner").resolverOccurrenceId
+        val dependency = byField.getValue("dependency").resolverOccurrenceId
+        assertEquals(ResolverOccurrenceId.at(root, byField.getValue("outer").occurrencePath), outer)
+        assertNotEquals(ResolverOccurrenceId.at(root, byField.getValue("inner").occurrencePath), inner)
+        assertEquals(setOf(inner), observer.allQueryFragmentResults().keys)
+        val queryRoot = observer.queryFragmentResults(inner).single()
+        assertEquals(ResolverOccurrenceId.at(queryRoot, byField.getValue("dependency").occurrencePath), dependency)
+        assertEquals(7, root.getCell(root.keys.single()).get())
+    }
+
+    @Test
+    fun `request cancellation records entered producer but not waiting consumer`() = runBlocking {
+        val entered = CompletableDeferred<Unit>()
+        val stopped = CompletableDeferred<Unit>()
+        val observer = InvocationRecordingObserver()
+        val testWorld = TestWorld.fromSDL(
+            schemaSDL = "type Query { consumer: Int slow: Int }",
+            fieldResolvers = { schema ->
+                mapOf(
+                    schema.requireObjectField("Query", "consumer") to fieldResolverOf(
+                        schema.fragmentFrom("fragment Input on Query { slow }"),
+                    ) { _, _ -> error("consumer must not enter") },
+                    schema.requireObjectField("Query", "slow") to fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                        entered.complete(Unit)
+                        try {
+                            awaitCancellation()
+                        } finally {
+                            stopped.complete(Unit)
+                        }
+                    },
+                )
+            },
+        )
+        val job = Job()
+        try {
+            val operation = SharedOperationContext.create(testWorld.assumptions, resolverObserver = observer)
+            operation.startResolve(
+                operation.world.operationSelectionsFrom("{ consumer }"),
+                CoroutineScope(resolver26CoroutineContext() + job),
+            )
+            withTimeout(5000) { entered.await() }
+            job.cancelAndJoin()
+            withTimeout(5000) { stopped.await() }
+            assertEquals(listOf("slow"), observer.events.map { it.field.name })
+            assertEquals(observer.events.map { it.resolverOccurrenceId }.toSet(), observer.invokedResolverOccurrences())
+        } finally {
+            job.cancelAndJoin()
+        }
+    }
+
     @Test
     fun `nested selection execution is owned by the calling field task`() =
         runBlocking {
@@ -475,6 +557,15 @@ class ResolverStartTest {
         } catch (failure: Exception) {
             failure
         }
+
+    private class InvocationRecordingObserver : RecordingResolverObserver() {
+        val events = CopyOnWriteArrayList<ResolverInvocationObservation>()
+
+        override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+            super.onResolverInvocation(observation)
+            events += observation
+        }
+    }
 
     private companion object {
         val SCHEMA =

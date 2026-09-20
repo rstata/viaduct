@@ -2,6 +2,7 @@ package semantics.resolver26
 
 import kotlinx.coroutines.CoroutineScope
 import semantics.shared.CycleCheckState
+import semantics.shared.SharedResolverObserver
 import semantics.shared.SharedOperationContext
 
 /**
@@ -9,7 +10,6 @@ import semantics.shared.SharedOperationContext
  * Child execution scopes share the logical operation's configuration and mutable state references.
  */
 internal interface OperationContext : SharedOperationContext<CoroutineTaskDispatcher<OrchestrationTask, FieldPublicationOccurrence>> {
-    override val resolverObserver: ResolverObserver
     val cycleChecker: CycleCheckState
     val bindingsState: BindingDeclarationsState
 
@@ -21,7 +21,7 @@ internal interface OperationContext : SharedOperationContext<CoroutineTaskDispat
         fun create(
             base: SharedOperationContext<*>,
             requestScope: CoroutineScope,
-            resolverObserver: ResolverObserver,
+            resolverObserver: SharedResolverObserver,
             cycleChecker: CycleCheckState = CycleCheckState.create(),
             bindingsState: BindingDeclarationsState = BindingDeclarationsState(),
         ): OperationContext {
@@ -37,7 +37,6 @@ internal interface OperationContext : SharedOperationContext<CoroutineTaskDispat
             )
             return object : OperationContext,
                 SharedOperationContext<CoroutineTaskDispatcher<OrchestrationTask, FieldPublicationOccurrence>> by operationDelegate {
-                override val resolverObserver = resolverObserver
                 override val cycleChecker = cycleChecker
                 override val bindingsState = bindingsState
             }

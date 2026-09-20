@@ -56,10 +56,6 @@ typealias SelectiveFieldResolverFunction =
 typealias VariablesProviderFunction =
     suspend (Arguments.Resolved) -> Map<String, EngineInputData?>
 
-/** Observes one complete (null demand) or selective field-resolver application boundary. */
-typealias FieldResolverApplicationObserver =
-    (EngineObjectData.Sync, Arguments.Resolved, SelectionForest?) -> Unit
-
 /** Paired materialization and construction views of one instantiated resolver input fragment. */
 sealed interface ResolverFragment {
     val resolverOccurrenceId: ResolverOccurrenceId
@@ -116,7 +112,6 @@ class FieldResolver private constructor(
     private val function: SelectiveFieldResolverFunction,
     private val projectNonselectiveOutput: Boolean,
     private val projectionDemand: (SelectionForest) -> SelectionForest,
-    private val applicationObserver: FieldResolverApplicationObserver,
 ) {
     val objectFragment: SelectionForest =
         objectFragmentTemplate.constructionSelections()
@@ -246,11 +241,6 @@ class FieldResolver private constructor(
         selections: SelectionForest = selectionForestOf(),
         executionContext: ResolutionExecutionContext,
     ): ResolverOutputData? {
-        applicationObserver(
-            input,
-            arguments,
-            selections.takeIf { world.selectiveResolvers },
-        )
         return evaluateRelation(input, queryValue, arguments, selections, executionContext)
     }
 
@@ -290,8 +280,8 @@ class FieldResolver private constructor(
         /**
          * Constructs one fully assembled canonical registry entry.
          *
-         * External composition is responsible for lowering coordinates and attaching variables and
-         * observers before calling this factory.
+         * External composition is responsible for lowering coordinates and attaching variables
+         * before calling this factory.
          */
         fun of(
             field: ViaductSchema.ObjectField,
@@ -301,7 +291,6 @@ class FieldResolver private constructor(
             variables: Map<Arguments.Variable, VariableDefinition>,
             function: NonselectiveFieldResolverFunction,
             projectionDemand: (SelectionForest) -> SelectionForest = { it },
-            applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
             variablesProvider: VariablesProviderFunction? = null,
         ): FieldResolver {
             validateFactoryArguments(
@@ -324,7 +313,6 @@ class FieldResolver private constructor(
                 },
                 projectNonselectiveOutput = true,
                 projectionDemand = projectionDemand,
-                applicationObserver = applicationObserver,
             )
         }
 
@@ -341,7 +329,6 @@ class FieldResolver private constructor(
             queryType: ViaductSchema.Object,
             variables: Map<Arguments.Variable, VariableDefinition>,
             function: SelectiveFieldResolverFunction,
-            applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
             variablesProvider: VariablesProviderFunction? = null,
         ): FieldResolver {
             validateFactoryArguments(
@@ -362,7 +349,6 @@ class FieldResolver private constructor(
                 function = function,
                 projectNonselectiveOutput = false,
                 projectionDemand = { it },
-                applicationObserver = applicationObserver,
             )
         }
 
@@ -381,7 +367,6 @@ class FieldResolver private constructor(
             variables: Map<Arguments.Variable, VariableDefinition>,
             function: SelectiveFieldResolverFunction,
             projectionDemand: (SelectionForest) -> SelectionForest = { it },
-            applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
             variablesProvider: VariablesProviderFunction? = null,
         ): FieldResolver {
             validateFactoryArguments(
@@ -402,7 +387,6 @@ class FieldResolver private constructor(
                 function = function,
                 projectNonselectiveOutput = true,
                 projectionDemand = projectionDemand,
-                applicationObserver = applicationObserver,
             )
         }
 
@@ -414,7 +398,6 @@ class FieldResolver private constructor(
             variables: Map<Arguments.Variable, VariableDefinition>,
             function: NonselectiveFieldResolverFunction,
             projectionDemand: (SelectionForest) -> SelectionForest = { it },
-            applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
             variablesProvider: VariablesProviderFunction? = null,
         ): FieldResolver =
             of(
@@ -425,7 +408,6 @@ class FieldResolver private constructor(
                 variables = variables,
                 function = function,
                 projectionDemand = projectionDemand,
-                applicationObserver = applicationObserver,
                 variablesProvider = variablesProvider,
             )
 
@@ -436,7 +418,6 @@ class FieldResolver private constructor(
             queryType: ViaductSchema.Object,
             variables: Map<Arguments.Variable, VariableDefinition>,
             function: SelectiveFieldResolverFunction,
-            applicationObserver: FieldResolverApplicationObserver = { _, _, _ -> },
             variablesProvider: VariablesProviderFunction? = null,
         ): FieldResolver =
             ofSelective(
@@ -446,7 +427,6 @@ class FieldResolver private constructor(
                 queryType = queryType,
                 variables = variables,
                 function = function,
-                applicationObserver = applicationObserver,
                 variablesProvider = variablesProvider,
             )
 

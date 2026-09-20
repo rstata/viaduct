@@ -51,7 +51,6 @@ fun ViaductSchema.ObjectField.testRoot(): ObjectEngineResult =
  */
 class TestWorld private constructor(
     private val injector: Injector,
-    private val recordedApplicationArguments: ResolverApplicationArguments?,
 ) {
     private val gjSchema: GJSchema = injector.getInstance(GJSchema::class.java)
     val schema: ViaductSchema = gjSchema
@@ -59,17 +58,6 @@ class TestWorld private constructor(
         injector.getInstance(ResolverRegistry::class.java)
     val assumptions: Assumptions =
         injector.getInstance(Assumptions::class.java)
-
-    /**
-     * Resolver arguments recorded for this schema-embedded deterministic world.
-     *
-     * Argument recording is intentionally limited to worlds created by [fromDSL].
-     */
-    val applicationArguments: ResolverApplicationArguments
-        get() =
-            checkNotNull(recordedApplicationArguments) {
-                "Resolver application arguments are recorded only for TestWorld.fromDSL"
-            }
 
     /** Creates independent request-local binding state over this world's schema and registry. */
     fun newAssumptions(
@@ -105,7 +93,6 @@ class TestWorld private constructor(
             variableProviders:
                 (ViaductSchema) -> Map<Arguments.Variable, VariableDeclaration> = { emptyMap() },
             selectiveResolvers: Boolean = true,
-            applicationObserver: CanonicalFieldResolverApplicationObserver? = null,
         ): TestWorld =
             create(
                 schemaSDL = schemaSDL,
@@ -113,8 +100,6 @@ class TestWorld private constructor(
                 fieldResolvers = fieldResolvers,
                 variableProviders = variableProviders,
                 selectiveResolvers = selectiveResolvers,
-                applicationObserver = applicationObserver,
-                applicationArguments = null,
             )
 
         private fun create(
@@ -123,8 +108,6 @@ class TestWorld private constructor(
             fieldResolvers: ((ViaductSchema) -> Map<ViaductSchema.Field, FieldResolverDefinition>)?,
             variableProviders: (ViaductSchema) -> Map<Arguments.Variable, VariableDeclaration>,
             selectiveResolvers: Boolean,
-            applicationObserver: CanonicalFieldResolverApplicationObserver?,
-            applicationArguments: ResolverApplicationArguments?,
         ): TestWorld {
             val injector =
                 Guice.createInjector(
@@ -134,11 +117,10 @@ class TestWorld private constructor(
                         fieldResolvers = fieldResolvers,
                         variableProviders = variableProviders,
                         selectiveResolvers = selectiveResolvers,
-                        applicationObserver = applicationObserver,
                     ),
                 )
             return try {
-                TestWorld(injector, applicationArguments)
+                TestWorld(injector)
             } catch (exception: ProvisionException) {
                 val cause = exception.cause
                 if (cause is RuntimeException) throw cause
@@ -157,18 +139,14 @@ class TestWorld private constructor(
         fun fromDSL(
             schemaSDL: String,
             selectiveResolvers: Boolean = true,
-            applicationObserver: CanonicalFieldResolverApplicationObserver? = null,
         ): TestWorld {
             val dsl = ResolverTestDsl.parse(schemaSDL)
-            val applicationArguments = ResolverApplicationArguments()
             return create(
                 schemaSDL = dsl.schemaSDL,
                 nodeResolvers = dsl::nodeResolvers,
                 fieldResolvers = dsl::fieldResolvers,
                 variableProviders = dsl::variableProviders,
                 selectiveResolvers = selectiveResolvers,
-                applicationObserver = applicationArguments.observer(applicationObserver),
-                applicationArguments = applicationArguments,
             )
         }
     }
@@ -181,7 +159,6 @@ private class TestWorldModule(
     private val fieldResolvers: ((ViaductSchema) -> Map<ViaductSchema.Field, FieldResolverDefinition>)?,
     private val variableProviders: (ViaductSchema) -> Map<Arguments.Variable, VariableDeclaration>,
     private val selectiveResolvers: Boolean,
-    private val applicationObserver: CanonicalFieldResolverApplicationObserver?,
 ) : AbstractModule() {
     override fun configure() {
         bind(String::class.java)
@@ -224,7 +201,6 @@ private class TestWorldModule(
             nodeResolvers = nodeResolvers,
             fieldResolvers = fieldResolvers,
             variableProviders = variableProviders,
-            applicationObserver = applicationObserver,
         )
 
     @Provides

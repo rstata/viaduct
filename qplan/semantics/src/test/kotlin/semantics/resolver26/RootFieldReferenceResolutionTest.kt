@@ -1,5 +1,6 @@
 package semantics.resolver26
 
+import semantics.shared.ResolverInvocationObservation
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
@@ -504,7 +505,7 @@ class RootFieldReferenceResolutionTest {
 
     @Test
     fun `embedded reference reaches its target through three namespace fields`() {
-        val applications = CopyOnWriteArrayList<Resolver26ApplicationObservation>()
+        val applications = CopyOnWriteArrayList<ResolverInvocationObservation>()
         val testWorld =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -573,11 +574,19 @@ class RootFieldReferenceResolutionTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation =
-            SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+
         val query = world.fragmentFrom("fragment Result on Query { container { product { value } } }")
+
+        val recordingObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                applications.add(observation)
+            }
+        }
+        val operation =
+            SharedOperationContext.create(world, resolverObserver = recordingObserver)
         val result =
-            operation.resolveObserved(query.subselections, applications::add)
+            operation.resolve(query.subselections)
         val container =
             assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "container")).getValue().get(),
@@ -613,7 +622,7 @@ class RootFieldReferenceResolutionTest {
 
     @Test
     fun `direct resolver result tail resolves every hop with a fresh occurrence root`() {
-        val applications = CopyOnWriteArrayList<Resolver26ApplicationObservation>()
+        val applications = CopyOnWriteArrayList<ResolverInvocationObservation>()
         val testWorld =
             TestWorld.fromSDL(
                 schemaSDL =
@@ -649,11 +658,19 @@ class RootFieldReferenceResolutionTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation =
-            SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+
         val query = world.fragmentFrom("fragment Result on Query { first { value } }")
+
+        val recordingObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                applications.add(observation)
+            }
+        }
+        val operation =
+            SharedOperationContext.create(world, resolverObserver = recordingObserver)
         val result =
-            operation.resolveObserved(query.subselections, applications::add)
+            operation.resolve(query.subselections)
         val product =
             assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "first")).getValue().get(),
@@ -1162,7 +1179,7 @@ class RootFieldReferenceResolutionTest {
                 Arguments.of(consumer, mapOf("value" to variable)),
             )
         primaryRoot.setCellValue(consumerKey, ErrorEngineResult.of(EngineErrorData.of()))
-        observer.onQueryFragmentResult(
+        observer.onQueryFragmentPrepared(
             ResolverOccurrenceId.at(primaryRoot, listOf(consumerKey)),
             queryResult,
         )

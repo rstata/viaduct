@@ -1,5 +1,7 @@
 package semantics.arbitrary
 
+import semantics.shared.RecordingResolverObserver
+import semantics.shared.ResolverInvocationObservation
 import viaduct.graphql.schema.ViaductSchema
 
 import model.Arguments
@@ -30,7 +32,6 @@ import model.requireType
 import model.registry.ProviderFragment
 import model.selectionForestOf
 import model.toMaterializeSelectionForest
-import model.testing.CanonicalFieldResolverApplicationObserver
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import model.testing.fromArgument
@@ -342,40 +343,15 @@ class ArbitraryRegistry internal constructor(
         return nodeLoaderPossibleTypes(schema, this).isNotEmpty()
     }
 
-    fun world(
-        schema: ArbitrarySchema,
-        resolverProgramMutation: ResolverProgramMutation = ResolverProgramMutation.NONE,
-        selectiveNodeResolvers: Boolean = false,
+    /** Creates request-local observation state; constructing a model world installs no hooks. */
+    fun resolverObserver(
         captureSuppliedDemand: Boolean = false,
         captureResolutionWitness: Boolean = true,
         captureResolutionApplicationCounts: Boolean = !captureResolutionWitness,
-    ): TestWorld =
-        world(
-            schemaSDL = schema.sdl,
-            resolverProgramMutation = resolverProgramMutation,
-            selectiveNodeResolvers = selectiveNodeResolvers,
-            captureSuppliedDemand = captureSuppliedDemand,
-            captureResolutionWitness = captureResolutionWitness,
-            captureResolutionApplicationCounts = captureResolutionApplicationCounts,
-        )
-
-    fun world(
-        schemaSDL: String,
         resolverProgramMutation: ResolverProgramMutation = ResolverProgramMutation.NONE,
-        selectiveNodeResolvers: Boolean = false,
-        captureSuppliedDemand: Boolean = false,
-        captureResolutionWitness: Boolean = true,
-        captureResolutionApplicationCounts: Boolean = !captureResolutionWitness,
-    ): TestWorld {
-        require(captureResolutionWitness || !captureSuppliedDemand) {
-            "Supplied demand can only be retained in a resolution witness"
-        }
-        require(!(captureResolutionWitness && captureResolutionApplicationCounts)) {
-            "Resolution witness and application-count capture are mutually exclusive"
-        }
-        val firstInputs = ConcurrentHashMap<FieldCoordinate, EngineObjectData.Sync>()
-        val firstArguments = ConcurrentHashMap<FieldCoordinate, Arguments.Resolved>()
-        val applicationOrdinals = ConcurrentHashMap<FieldCoordinate, AtomicInteger>()
+    ): RecordingResolverObserver {
+        require(captureResolutionWitness || !captureSuppliedDemand)
+        require(!(captureResolutionWitness && captureResolutionApplicationCounts))
         fun recordApplication(
             coordinate: FieldCoordinate,
             arguments: Arguments.Resolved,
@@ -395,25 +371,37 @@ class ArbitraryRegistry internal constructor(
                 }
             }
         }
-        val applicationObserver: CanonicalFieldResolverApplicationObserver? =
-            if (captureResolutionWitness || captureResolutionApplicationCounts) {
-                { field, input, arguments, suppliedDemand ->
-                    val coordinate =
-                        FieldCoordinate(
-                            field.containingDef.name,
-                            field.name,
-                        )
-                    recordApplication(coordinate, arguments, input, suppliedDemand)
-                    if (
-                        resolverProgramMutation ==
-                        ResolverProgramMutation.DUPLICATE_APPLICATION
-                    ) {
-                        recordApplication(coordinate, arguments, input, suppliedDemand)
-                    }
+        return object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val coordinate = FieldCoordinate(observation.field.containingDef.name, observation.field.name)
+                recordApplication(coordinate, observation.arguments, observation.input, observation.suppliedDemand)
+                if (resolverProgramMutation == ResolverProgramMutation.DUPLICATE_APPLICATION) {
+                    recordApplication(coordinate, observation.arguments, observation.input, observation.suppliedDemand)
                 }
-            } else {
-                null
             }
+        }
+    }
+
+    fun world(
+        schema: ArbitrarySchema,
+        resolverProgramMutation: ResolverProgramMutation = ResolverProgramMutation.NONE,
+        selectiveNodeResolvers: Boolean = false,
+    ): TestWorld =
+        world(
+            schemaSDL = schema.sdl,
+            resolverProgramMutation = resolverProgramMutation,
+            selectiveNodeResolvers = selectiveNodeResolvers,
+        )
+
+    fun world(
+        schemaSDL: String,
+        resolverProgramMutation: ResolverProgramMutation = ResolverProgramMutation.NONE,
+        selectiveNodeResolvers: Boolean = false,
+    ): TestWorld {
+        val firstInputs = ConcurrentHashMap<FieldCoordinate, EngineObjectData.Sync>()
+        val firstArguments = ConcurrentHashMap<FieldCoordinate, Arguments.Resolved>()
+        val applicationOrdinals = ConcurrentHashMap<FieldCoordinate, AtomicInteger>()
         val world =
             TestWorld.fromSDL(
             schemaSDL = schemaSDL,
@@ -443,7 +431,6 @@ class ArbitraryRegistry internal constructor(
                         }
                 }.toMap()
             },
-            applicationObserver = applicationObserver,
             fieldResolvers = { canonicalSchema ->
                 val sourceSchema = SourceSchemaAdapter(canonicalSchema)
                 fieldValues.map { (coordinate, plan) ->

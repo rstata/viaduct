@@ -1,5 +1,7 @@
 package semantics.contract
 
+import semantics.shared.ResolverInvocationObservation
+import semantics.shared.RecordingResolverObserver
 import java.util.concurrent.atomic.AtomicInteger
 import model.Arguments
 import model.ObjectEngineResult
@@ -77,6 +79,15 @@ interface QueryFragmentResolverContract : ResolverContract {
     @Test
     fun `query fragments preserve aliases bind arguments and do not share OERs`() {
         val sourceApplications = AtomicInteger()
+        val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                if (field.name == "source") {
+                    sourceApplications.incrementAndGet()
+                }
+            }
+        }
         val testWorld =
             TestWorld.fromSDL(
                 selectiveResolvers = selectiveResolvers,
@@ -87,11 +98,6 @@ interface QueryFragmentResolverContract : ResolverContract {
                       consumer(value: Int!): Int!
                     }
                     """.trimIndent(),
-                applicationObserver = { field, _, _, _ ->
-                    if (field.name == "source") {
-                        sourceApplications.incrementAndGet()
-                    }
-                },
                 fieldResolvers = { schema ->
                     val source = schema.requireObjectField("Query", "source")
                     val consumer = schema.requireObjectField("Query", "consumer")
@@ -141,6 +147,7 @@ interface QueryFragmentResolverContract : ResolverContract {
                   second: consumer(value: 3)
                 }
                 """.trimIndent(),
+                resolverObserver = invocationObserver,
             )
         val result = resolution.result
         val observations = resolution.operation.resolverObserver as ResolverObservations

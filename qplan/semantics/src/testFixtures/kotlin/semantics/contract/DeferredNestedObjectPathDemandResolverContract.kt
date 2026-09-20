@@ -8,6 +8,7 @@ import kotlin.test.assertEquals
 interface DeferredNestedObjectPathDemandResolverContract : ResolverContract {
     @Test
     fun `retains potential demand beyond a deferred nested resolver`() {
+        val applicationArguments = ResolverApplicationArguments()
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -48,6 +49,7 @@ interface DeferredNestedObjectPathDemandResolverContract : ResolverContract {
                   driver
                 }
                 """.trimIndent(),
+                resolverObserver = applicationArguments,
             )
 
         assertEquals(
@@ -57,7 +59,7 @@ interface DeferredNestedObjectPathDemandResolverContract : ResolverContract {
                     world.schema.contractKey("Query", "driver"),
                 ).get(),
         )
-        testWorld.applicationArguments.assertArguments(
+        applicationArguments.assertArguments(
             world.schema.requireObjectField("Item", "result"),
             mapOf("value" to 7),
         )

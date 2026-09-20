@@ -1,5 +1,7 @@
 package semantics.contract
 
+import semantics.shared.ResolverInvocationObservation
+import semantics.shared.RecordingResolverObserver
 import model.requireQueryTypeDef
 import model.requireObjectField
 import model.ObjectEngineResult
@@ -23,6 +25,26 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
     @Test
     fun `equal pre-grounded selections merge in fragments and external queries`() {
         val suppliedDemandFields = ConcurrentLinkedQueue<Set<String>>()
+        val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                val demand = observation.suppliedDemand
+                if (
+                    field.containingDef.name == "Query" &&
+                    field.name == "payload" &&
+                    demand != null
+                ) {
+                    suppliedDemandFields +=
+                        demand
+                            .merge(field.type.baseTypeDef as ViaductSchema.Object)
+                            .groundKeys()
+                            .mapTo(linkedSetOf()) { key ->
+                                key.field.name
+                            }
+                }
+            }
+        }
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -43,21 +65,6 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                       two: Int!
                     }
                     """.trimIndent(),
-                applicationObserver = { field, _, _, demand ->
-                    if (
-                        field.containingDef.name == "Query" &&
-                        field.name == "payload" &&
-                        demand != null
-                    ) {
-                        suppliedDemandFields +=
-                            demand
-                                .merge(field.type.baseTypeDef as ViaductSchema.Object)
-                                .groundKeys()
-                                .mapTo(linkedSetOf()) { key ->
-                                    key.field.name
-                                }
-                    }
-                },
             )
         val world = testWorld.assumptions
         val resultKey = world.schema.contractKey("Query", "result")
@@ -68,6 +75,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                 world,
                 world.objectOf("Query"),
                 resultSelections,
+                resolverObserver = invocationObserver,
             )
 
         assertEquals(8, resolvedResult.getCell(resultKey).get())
@@ -96,6 +104,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                 world,
                 world.objectOf("Query"),
                 externalSelections,
+                resolverObserver = invocationObserver,
             )
         val payload =
             assertIs<ObjectEngineResult>(
@@ -114,6 +123,26 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
     @Test
     fun `equal symbolic selections coalesce independently of response aliases`() {
         val suppliedDemandFields = ConcurrentLinkedQueue<Set<String>>()
+        val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                val demand = observation.suppliedDemand
+                if (
+                    field.containingDef.name == "Query" &&
+                    field.name == "payload" &&
+                    demand != null
+                ) {
+                    suppliedDemandFields +=
+                        demand
+                            .merge(field.type.baseTypeDef as ViaductSchema.Object)
+                            .groundKeys()
+                            .mapTo(linkedSetOf()) { key ->
+                                key.field.name
+                            }
+                }
+            }
+        }
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -134,21 +163,6 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                       two: Int!
                     }
                     """.trimIndent(),
-                applicationObserver = { field, _, _, demand ->
-                    if (
-                        field.containingDef.name == "Query" &&
-                        field.name == "payload" &&
-                        demand != null
-                    ) {
-                        suppliedDemandFields +=
-                            demand
-                                .merge(field.type.baseTypeDef as ViaductSchema.Object)
-                                .groundKeys()
-                                .mapTo(linkedSetOf()) { key ->
-                                    key.field.name
-                                }
-                    }
-                },
             )
         val world = testWorld.assumptions
         val resultKey =
@@ -165,7 +179,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
             )
 
         val resolution =
-            resolveAndValidateObserved(world, world.objectOf("Query"), selections)
+            resolveAndValidateObserved(world, world.objectOf("Query"), selections, resolverObserver = invocationObserver)
         val resolved = resolution.result
 
         assertEquals(8, resolved.getCell(resultKey).get())
@@ -189,6 +203,26 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
     @Test
     fun `a symbolic fromArgument key remains distinct from an equal grounded key`() {
         val suppliedDemandFields = ConcurrentLinkedQueue<Set<String>>()
+        val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                val demand = observation.suppliedDemand
+                if (
+                    field.containingDef.name == "Nested" &&
+                    field.name == "child" &&
+                    demand != null
+                ) {
+                    suppliedDemandFields +=
+                        demand
+                            .merge(field.type.baseTypeDef as ViaductSchema.Object)
+                            .groundKeys()
+                            .mapTo(linkedSetOf()) { key ->
+                                key.field.name
+                            }
+                }
+            }
+        }
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -226,21 +260,6 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                       two: Int!
                     }
                     """.trimIndent(),
-                applicationObserver = { field, _, _, demand ->
-                    if (
-                        field.containingDef.name == "Nested" &&
-                        field.name == "child" &&
-                        demand != null
-                    ) {
-                        suppliedDemandFields +=
-                            demand
-                                .merge(field.type.baseTypeDef as ViaductSchema.Object)
-                                .groundKeys()
-                                .mapTo(linkedSetOf()) { key ->
-                                    key.field.name
-                                }
-                    }
-                },
             )
         val world = testWorld.assumptions
         val resultKey = world.schema.contractKey("Query", "result")
@@ -258,7 +277,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
                 """.trimIndent(),
             )
 
-        val resolved = resolveAndValidate(world, selections)
+        val resolved = resolveAndValidate(world, selections, resolverObserver = invocationObserver)
 
         assertEquals(5, resolved.getCell(resultKey).get())
         assertEquals(

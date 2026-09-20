@@ -9,6 +9,7 @@ import kotlin.test.assertEquals
 interface NestedFromArgumentDemandResolverContract : ResolverContract {
     @Test
     fun `retains passive demand below an ungrounded nested resolver key`() {
+        val applicationArguments = ResolverApplicationArguments()
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -41,6 +42,7 @@ interface NestedFromArgumentDemandResolverContract : ResolverContract {
                   result(value: 7)
                 }
                 """.trimIndent(),
+                resolverObserver = applicationArguments,
             )
 
         assertEquals(
@@ -53,7 +55,7 @@ interface NestedFromArgumentDemandResolverContract : ResolverContract {
                     ),
                 ).get(),
         )
-        testWorld.applicationArguments.assertApplications(
+        applicationArguments.assertApplications(
             mapOf(
                 world.schema.requireObjectField("Query", "holder") to listOf(emptyMap()),
                 world.schema.requireObjectField("Query", "result") to

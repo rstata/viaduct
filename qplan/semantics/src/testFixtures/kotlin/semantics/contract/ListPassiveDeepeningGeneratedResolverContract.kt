@@ -9,7 +9,6 @@ import model.SelectionForest
 import model.fragmentFrom
 import semantics.shared.instantiateBindings
 import semantics.shared.SharedOperationContext
-import semantics.shared.RecordingResolverObserver
 import model.merge
 import model.objectOf
 import semantics.arbitrary.Config
@@ -64,7 +63,7 @@ interface ListPassiveDeepeningGeneratedResolverContract : ResolverContract {
                 batch.queries.forEach { query ->
                     val world = testWorld.newAssumptions(selectiveResolvers)
                     val operation =
-                        SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+                        SharedOperationContext.create(world, resolverObserver = registry.resolverObserver())
                     val fragment = world.fragmentFrom(query.source)
                     listDeepeningCases +=
                         countListPassiveDeepening(

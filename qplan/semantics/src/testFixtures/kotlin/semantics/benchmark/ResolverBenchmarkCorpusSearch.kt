@@ -23,8 +23,8 @@ import semantics.arbitrary.checkResolverTestCases
 import semantics.arbitrary.encodeResolverBenchmarkCorpus
 import semantics.arbitrary.resolverBenchmarkCorpusSearchConfig
 import semantics.arbitrary.resolverBenchmarkOverheadQueryConfig
-import semantics.resolver26.Resolver26ApplicationObservation
-import semantics.resolver26.resolveObserved
+import semantics.shared.ResolverInvocationObservation
+import semantics.resolver26.resolve
 import semantics.shared.SharedOperationContext
 import java.nio.file.Files
 import java.nio.file.Path
@@ -95,9 +95,6 @@ object ResolverBenchmarkCorpusSearch {
             config = resolverBenchmarkCorpusSearchConfig(),
             profile = "resolver-benchmark-corpus-search",
             seed = seed,
-            captureSuppliedDemand = false,
-            captureResolutionWitness = true,
-            captureResolutionApplicationCounts = false,
         ) { testWorld, testCase ->
             val coordinates = requireNotNull(testCase.coordinates)
             val key = coordinates.schemaIndex to coordinates.registryIndex
@@ -138,12 +135,17 @@ object ResolverBenchmarkCorpusSearch {
         registry.clearResolutionWitness()
         val applicationObservations =
             Collections.synchronizedList(
-                mutableListOf<Resolver26ApplicationObservation>(),
+                mutableListOf<ResolverInvocationObservation>(),
             )
-        val result =
-            SharedOperationContext.create(world).resolveObserved(fragment.subselections) { observation ->
+        val witnessObserver = registry.resolverObserver()
+        val observer = object : semantics.shared.RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                witnessObserver.onResolverInvocation(observation)
                 applicationObservations += observation
             }
+        }
+        val result = SharedOperationContext.create(world, resolverObserver = observer).resolve(fragment.subselections)
         val witness = registry.resolutionWitness()
         check(applicationObservations.size == witness.applications.size)
         val shape = result.shape()
@@ -264,7 +266,7 @@ object ResolverBenchmarkCorpusSearch {
             )
     }
 
-    private fun List<Resolver26ApplicationObservation>.maximumVariableStackDepth(): Long {
+    private fun List<ResolverInvocationObservation>.maximumVariableStackDepth(): Long {
         val executedOccurrences =
             mapTo(linkedSetOf()) { observation -> observation.resolverOccurrenceId }
         val childrenBySource =

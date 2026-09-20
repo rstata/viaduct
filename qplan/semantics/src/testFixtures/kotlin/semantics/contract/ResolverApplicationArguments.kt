@@ -4,8 +4,25 @@ import model.Arguments
 
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import viaduct.graphql.schema.ViaductSchema
-import model.testing.ResolverApplicationArguments
 import kotlin.test.assertEquals
+
+/** Records invocation arguments without retaining materialized input graphs. */
+open class ResolverApplicationArguments : semantics.shared.RecordingResolverObserver() {
+    private val argumentsByField = linkedMapOf<ViaductSchema.Field, MutableList<Arguments.Resolved>>()
+
+    override fun onResolverInvocation(observation: semantics.shared.ResolverInvocationObservation) {
+        super.onResolverInvocation(observation)
+        synchronized(argumentsByField) {
+            argumentsByField.getOrPut(observation.field, ::mutableListOf).add(observation.arguments)
+        }
+    }
+
+    fun arguments(field: ViaductSchema.Field): List<Arguments.Resolved> =
+        synchronized(argumentsByField) { argumentsByField[field].orEmpty().toList() }
+
+    fun all(): Map<ViaductSchema.Field, List<Arguments.Resolved>> =
+        synchronized(argumentsByField) { argumentsByField.mapValues { (_, values) -> values.toList() } }
+}
 
 internal fun ResolverApplicationArguments.assertApplicationCount(
     field: ViaductSchema.Field,

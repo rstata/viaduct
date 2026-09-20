@@ -12,7 +12,6 @@ import model.SelectionForest
 import model.materializeSelectionForestOf
 import model.objectKey
 import model.registry.FieldResolver
-import model.registry.FieldResolverApplicationObserver
 import model.registry.NonselectiveFieldResolverFunction
 import model.registry.ResolutionExecutionContext
 import model.registry.SelectiveFieldResolverFunction
@@ -36,7 +35,6 @@ class FieldResolverDefinition private constructor(
     private val selective: Boolean,
     private val passesDemand: Boolean,
     private val projectionDemand: (SelectionForest) -> SelectionForest,
-    private val applicationObserver: FieldResolverApplicationObserver,
     internal val variablesProviderNames: Set<String>,
     internal val variablesProvider: VariablesProviderFunction?,
 ) {
@@ -52,7 +50,6 @@ class FieldResolverDefinition private constructor(
             selective = selective,
             passesDemand = passesDemand,
             projectionDemand = projectionDemand,
-            applicationObserver = applicationObserver,
             variablesProviderNames = variablesProviderNames,
             variablesProvider = variablesProvider,
         )
@@ -67,7 +64,6 @@ class FieldResolverDefinition private constructor(
             selective = selective,
             passesDemand = passesDemand,
             projectionDemand = { demand -> transform(projectionDemand(demand)) },
-            applicationObserver = applicationObserver,
             variablesProviderNames = variablesProviderNames,
             variablesProvider = variablesProvider,
         )
@@ -94,7 +90,6 @@ class FieldResolverDefinition private constructor(
             selective = true,
             passesDemand = true,
             projectionDemand = { it },
-            applicationObserver = applicationObserver,
             variablesProviderNames = variablesProviderNames,
             variablesProvider = variablesProvider,
         )
@@ -107,7 +102,6 @@ class FieldResolverDefinition private constructor(
             selective = selective,
             passesDemand = passesDemand,
             projectionDemand = projectionDemand,
-            applicationObserver = applicationObserver,
             variablesProviderNames = variablesProviderNames,
             variablesProvider = variablesProvider,
         )
@@ -120,25 +114,6 @@ class FieldResolverDefinition private constructor(
             selective = selective,
             passesDemand = passesDemand,
             projectionDemand = projectionDemand,
-            applicationObserver = applicationObserver,
-            variablesProviderNames = variablesProviderNames,
-            variablesProvider = variablesProvider,
-        )
-
-    fun observeApplications(
-        observer: FieldResolverApplicationObserver,
-    ): FieldResolverDefinition =
-        FieldResolverDefinition(
-            objectFragment = objectFragment,
-            queryFragment = queryFragment,
-            function = function,
-            selective = selective,
-            passesDemand = passesDemand,
-            projectionDemand = projectionDemand,
-            applicationObserver = { input, arguments, selections ->
-                applicationObserver(input, arguments, selections)
-                observer(input, arguments, selections)
-            },
             variablesProviderNames = variablesProviderNames,
             variablesProvider = variablesProvider,
         )
@@ -157,7 +132,6 @@ class FieldResolverDefinition private constructor(
             selective = selective,
             passesDemand = passesDemand,
             projectionDemand = projectionDemand,
-            applicationObserver = applicationObserver,
             variablesProviderNames = variableNames.toSet(),
             variablesProvider = provider,
         )
@@ -222,7 +196,6 @@ class FieldResolverDefinition private constructor(
                         executionContext,
                     )
                 },
-                applicationObserver = applicationObserver,
                 variablesProvider = variablesProvider,
             )
         } else if (passesDemand) {
@@ -241,7 +214,6 @@ class FieldResolverDefinition private constructor(
                         executionContext,
                     )
                 },
-                applicationObserver = applicationObserver,
                 variablesProvider = variablesProvider,
             )
         } else {
@@ -261,7 +233,6 @@ class FieldResolverDefinition private constructor(
                     )
                 },
                 projectionDemand = projectionDemand,
-                applicationObserver = applicationObserver,
                 variablesProvider = variablesProvider,
             )
         }
@@ -282,7 +253,6 @@ class FieldResolverDefinition private constructor(
                 selective = false,
                 passesDemand = false,
                 projectionDemand = { it },
-                applicationObserver = { _, _, _ -> },
                 variablesProviderNames = emptySet(),
                 variablesProvider = null,
             )
@@ -299,7 +269,6 @@ class FieldResolverDefinition private constructor(
                 selective = true,
                 passesDemand = true,
                 projectionDemand = { it },
-                applicationObserver = { _, _, _ -> },
                 variablesProviderNames = emptySet(),
                 variablesProvider = null,
             )
@@ -325,7 +294,6 @@ class FieldResolverDefinition private constructor(
                 selective = false,
                 passesDemand = true,
                 projectionDemand = { it },
-                applicationObserver = { _, _, _ -> },
                 variablesProviderNames = emptySet(),
                 variablesProvider = null,
             )

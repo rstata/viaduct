@@ -1,5 +1,7 @@
 package semantics.contract
 
+import semantics.shared.ResolverInvocationObservation
+import semantics.shared.RecordingResolverObserver
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 import model.Arguments
@@ -388,6 +390,13 @@ interface DepthFirstRootFieldReferenceOrderingContract : ResolverContract {
     @Test
     fun `executes an embedded root reference before its containing object's sibling resolver`() {
         val applications = CopyOnWriteArrayList<String>()
+        val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                applications += field.name
+            }
+        }
         val testWorld =
             TestWorld.fromSDL(
                 selectiveResolvers = selectiveResolvers,
@@ -407,7 +416,6 @@ interface DepthFirstRootFieldReferenceOrderingContract : ResolverContract {
                       value: String!
                     }
                     """.trimIndent(),
-                applicationObserver = { field, _, _, _ -> applications += field.name },
                 fieldResolvers = { schema ->
                     val container = schema.requireObjectField("Query", "container")
                     val target = schema.requireObjectField("Query", "target")
@@ -431,7 +439,7 @@ interface DepthFirstRootFieldReferenceOrderingContract : ResolverContract {
             )
         val world = testWorld.assumptions
 
-        resolveAndValidate(world, "query { container { product { value } sibling } }")
+        resolveAndValidate(world, "query { container { product { value } sibling } }", resolverObserver = invocationObserver)
 
         assertEquals(listOf("container", "target", "sibling"), applications.toList())
     }

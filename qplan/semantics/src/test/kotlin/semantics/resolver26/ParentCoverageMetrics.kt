@@ -1,5 +1,6 @@
 package semantics.resolver26
 
+import semantics.shared.ResolverInvocationObservation
 import model.Arguments
 import model.Assumptions
 import model.EngineOutputData
@@ -69,7 +70,7 @@ internal class ParentCoverageAnalyzer(
         mutableMapOf<ViaductSchema.ObjectField, Int>()
 
     fun analyze(
-        application: Resolver26ApplicationObservation,
+        application: ResolverInvocationObservation,
     ): List<ParentSelectionSetCoverage> {
         val resolver = world.resolverRegistry.resolver(application.field)
         val variableSources = resolver.variableSourcesByName()

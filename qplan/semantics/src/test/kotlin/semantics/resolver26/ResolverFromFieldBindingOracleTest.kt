@@ -64,7 +64,7 @@ class ResolverFromFieldBindingOracleTest {
                 -1,
             )
         }
-        operation.resolverObserver.onQueryFragmentResult(
+        operation.resolverObserver.onQueryFragmentPrepared(
             ResolverOccurrenceId.at(primaryResult, emptyList()),
             queryResult,
         )

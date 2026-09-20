@@ -24,21 +24,9 @@ fun SharedOperationContext<*>.resolve(selections: SelectionForest): ObjectEngine
         coroutineContext = resolver26CoroutineContext(),
     )
 
-/** Includes validation instrumentation. */
-internal fun SharedOperationContext<*>.resolveObserved(
-    selections: SelectionForest,
-    applicationObserver: Resolver26ApplicationObserver,
-): ObjectEngineResult =
-    resolve(
-        selections = selections,
-        coroutineContext = resolver26CoroutineContext(),
-        applicationObserver = applicationObserver,
-    )
-
 internal fun SharedOperationContext<*>.resolve(
     selections: SelectionForest,
     coroutineContext: CoroutineContext,
-    applicationObserver: Resolver26ApplicationObserver = {},
 ): ObjectEngineResult =
     runBlocking(coroutineContext) {
         withTimeout(15_000) {
@@ -46,7 +34,6 @@ internal fun SharedOperationContext<*>.resolve(
                 startResolve(
                     selections = selections,
                     requestScope = this,
-                    applicationObserver = applicationObserver,
                 )
             }
         }
@@ -61,17 +48,6 @@ internal fun SharedOperationContext<*>.resolve(
 fun SharedOperationContext<*>.startResolve(
     selections: SelectionForest,
     requestScope: CoroutineScope,
-): ObjectEngineResult =
-    startResolve(
-        selections = selections,
-        requestScope = requestScope,
-        applicationObserver = {},
-    )
-
-private fun SharedOperationContext<*>.startResolve(
-    selections: SelectionForest,
-    requestScope: CoroutineScope,
-    applicationObserver: Resolver26ApplicationObserver,
 ): ObjectEngineResult {
     require(world.selectiveResolvers) {
         "Resolver26 requires selective resolvers"
@@ -80,10 +56,7 @@ private fun SharedOperationContext<*>.startResolve(
         OperationContext.create(
             base = this@startResolve,
             requestScope = requestScope,
-            resolverObserver =
-                resolverObserver.withResolver26Applications(
-                    applicationObserver,
-                ),
+            resolverObserver = resolverObserver,
         )
     return resolver26Operation.startResolve(selections)
 }

@@ -196,3 +196,7 @@ Add a scenario to the narrowest existing feature contract when every implementat
 Create a feature contract when the scenario establishes a distinct capability with a different support matrix. Create a policy mixin when it establishes an implementation choice shared across feature scopes.
 
 Keep implementation-specific witness, mutation, depth, and stress tests separate when their assertions intentionally exceed the shared capability.
+
+## Observation Configuration
+
+Configure `SharedOperationContext.resolverObserver` (or the contract's `resolverObserver` argument) when executing a resolver. `TestWorld` and `FieldResolver` do not own observation hooks. `ResolverApplicationArguments` in semantics test fixtures records the shared pre-invocation event for DSL argument assertions. Generated cases use `registry.resolverObserver(...)` to capture either full fingerprint witnesses or count-only measurements; supplied-demand capture remains opt-in. Configure mutation recording on this observer as well as the mutated world. Each recorder retains exact invoked occurrence IDs and declared Query roots for validation. Replay of deterministic resolver relations emits no algorithm events. See [the observation inventory](./README.md#resolution-observations) for timing and family coverage.

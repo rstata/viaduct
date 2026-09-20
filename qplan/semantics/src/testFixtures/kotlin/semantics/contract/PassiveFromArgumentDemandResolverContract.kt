@@ -9,6 +9,7 @@ import kotlin.test.assertEquals
 interface PassiveFromArgumentDemandResolverContract : ResolverContract {
     @Test
     fun `closes potential demand before descending through a passive object`() {
+        val applicationArguments = ResolverApplicationArguments()
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -59,6 +60,7 @@ interface PassiveFromArgumentDemandResolverContract : ResolverContract {
                   result(value: 7)
                 }
                 """.trimIndent(),
+                resolverObserver = applicationArguments,
             )
 
         assertEquals(
@@ -70,15 +72,15 @@ interface PassiveFromArgumentDemandResolverContract : ResolverContract {
                 ),
             ).get(),
         )
-        testWorld.applicationArguments.assertApplicationCount(
+        applicationArguments.assertApplicationCount(
             world.schema.requireObjectField("Bridge", "load"),
             1,
         )
-        testWorld.applicationArguments.assertApplicationCount(
+        applicationArguments.assertApplicationCount(
             world.schema.requireObjectField("Container", "trigger"),
             1,
         )
-        testWorld.applicationArguments.assertArguments(
+        applicationArguments.assertArguments(
             world.schema.requireObjectField("Container", "trigger"),
             mapOf("value" to 7),
         )

@@ -198,18 +198,6 @@ class SymbolicKeyIdentityTest {
                                     "one" setTo 3
                                     "two" setTo 5
                                 }
-                            }.observeApplications { _, arguments, demand ->
-                                if (demand != null) {
-                                    frankApplications += 1
-                                    frankDemandFields +=
-                                        demand
-                                            .merge(
-                                                schema.requireType("Payload") as ViaductSchema.Object,
-                                            ).groundKeys()
-                                            .mapTo(linkedSetOf()) { groundKey ->
-                                                groundKey.field.name
-                                            }
-                                }
                             },
                     )
                 },
@@ -224,7 +212,24 @@ class SymbolicKeyIdentityTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+        val operation = SharedOperationContext.create(world, resolverObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: semantics.shared.ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                if (observation.field.name != "frank") return
+                val demand = observation.suppliedDemand
+                if (demand != null) {
+                    frankApplications += 1
+                    frankDemandFields +=
+                        demand
+                            .merge(
+                                world.schema.requireType("Payload") as ViaductSchema.Object,
+                            ).groundKeys()
+                            .mapTo(linkedSetOf()) { groundKey ->
+                                groundKey.field.name
+                            }
+                }
+            }
+        })
         val resultKey =
             ObjectEngineResult.GroundKey.of(
                 world.schema.requireObjectField("Query", "result"),
@@ -338,17 +343,6 @@ class SymbolicKeyIdentityTest {
                                     "one" setTo 3
                                     "two" setTo 5
                                 }
-                            }.observeApplications { _, arguments, demand ->
-                                if (demand != null) {
-                                    frankArguments += arguments
-                                    frankDemandFields +=
-                                        demand
-                                            .merge(payloadType)
-                                            .groundKeys()
-                                            .mapTo(linkedSetOf()) { groundKey ->
-                                                groundKey.field.name
-                                            }
-                                }
                             },
                     )
                 },
@@ -362,7 +356,24 @@ class SymbolicKeyIdentityTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+        val operation = SharedOperationContext.create(world, resolverObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: semantics.shared.ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                if (observation.field.name != "frank") return
+                val arguments = observation.arguments
+                val demand = observation.suppliedDemand
+                if (demand != null) {
+                    frankArguments += arguments
+                    frankDemandFields +=
+                        demand
+                            .merge(world.schema.requireType("Payload") as ViaductSchema.Object)
+                            .groundKeys()
+                            .mapTo(linkedSetOf()) { groundKey ->
+                                groundKey.field.name
+                            }
+                }
+            }
+        })
         val leftKey =
             ObjectEngineResult.GroundKey.of(
                 world.schema.requireObjectField("Query", "left"),

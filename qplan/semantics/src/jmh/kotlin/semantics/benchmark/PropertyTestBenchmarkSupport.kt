@@ -4,7 +4,6 @@ import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.Fragment
 import model.ObjectEngineResult
-import model.ResolverOccurrenceId
 import model.fragmentFrom
 import semantics.shared.instantiateBindings
 import model.merge
@@ -20,9 +19,7 @@ import jdk.jfr.Category
 import jdk.jfr.Event
 import jdk.jfr.Label
 import jdk.jfr.Name
-import java.util.concurrent.ConcurrentHashMap
 import semantics.shared.SharedOperationContext
-import semantics.shared.RecordingResolverObserver
 
 internal const val DEFAULT_PROPERTY_TEST_LOOP_COUNT = 1
 
@@ -46,7 +43,7 @@ private class PropertyTestPhaseEvent : Event() {
  * Runs the frozen Resolver26 property case through the same measured body as the broad campaign.
  */
 internal class PropertyTestBenchmarkSupport(
-    private val subject: ObservedResolverBenchmarkSubject,
+    private val subject: ResolverBenchmarkSubject,
 ) {
     private lateinit var corpus: ResolverBenchmarkCorpus
     private lateinit var testWorld: model.testing.TestWorld
@@ -59,7 +56,7 @@ internal class PropertyTestBenchmarkSupport(
                 PROPERTY_TEST_SCHEMA_RESOURCE,
                 PROPERTY_TEST_REGISTRY_RESOURCE,
             )
-        testWorld = corpus.world(captureResolutionWitness = true)
+        testWorld = corpus.world()
         querySource =
             requireNotNull(
                 javaClass.classLoader.getResourceAsStream(PROPERTY_TEST_QUERY_RESOURCE),
@@ -97,20 +94,15 @@ internal class PropertyTestBenchmarkSupport(
                 } finally {
                     preparationEvent?.finish()
                 }
-                val operation =
-                    SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+                val observer = corpus.registry.resolverObserver()
+                val operation = SharedOperationContext.create(world, resolverObserver = observer)
                 corpus.registry.clearResolutionWitness()
-                val appliedResolverOccurrences =
-                    ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
                 val result: ObjectEngineResult =
                     profilePhase(profilePhases, "Resolver26") {
                         subject.resolve(
                             operation = operation,
                             root = world.objectOf("Query"),
                             selections = fragment.subselections,
-                            applicationObserver = { application ->
-                                appliedResolverOccurrences += application.resolverOccurrenceId
-                            },
                         )
                     }
                 val witness: ResolutionWitness =
@@ -137,7 +129,7 @@ internal class PropertyTestBenchmarkSupport(
                     )
                 }
                 profilePhase(profilePhases, "from-field binding oracle") {
-                    result.validateFromFieldBindings(operation, appliedResolverOccurrences)
+                    result.validateFromFieldBindings(operation, observer.invokedResolverOccurrences())
                 }
                 blackhole.consume(result)
             }

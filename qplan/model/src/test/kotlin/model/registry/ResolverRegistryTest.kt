@@ -212,14 +212,12 @@ class ResolverRegistryTest {
         val world =
             TestWorld.fromSDL(
                 schemaSDL = SCHEMA_SDL,
-                applicationObserver = { field, _, _, _ ->
-                    observedFields += field.name
-                },
                 nodeResolvers = { schema ->
                     val user = schema.requireType("User") as ViaductSchema.Object
                     mapOf(
                         user to
                             nodeResolverOf { id ->
+                                observedFields += "node"
                                 assertEquals("42", id)
                                 schema.objectOf("User") {
                                     "id" setTo "lookup-id"
@@ -236,6 +234,7 @@ class ResolverRegistryTest {
                             fieldResolverOf(
                                 objectFragment = queryFragment,
                                 function = { parent, arguments ->
+                                    observedFields += "user"
                                     assertEquals(schema.requireQueryTypeDef(), parent.schemaType)
                                     assertTrue(parent.getSelections().none())
                                     assertTrue(arguments.fieldValues.isEmpty())
@@ -725,7 +724,6 @@ class ResolverRegistryTest {
                 nodeResolvers = emptyMap(),
                 fieldResolvers = emptyMap(),
                 variableProviders = emptyMap(),
-                applicationObserver = null,
             )
         }
     }

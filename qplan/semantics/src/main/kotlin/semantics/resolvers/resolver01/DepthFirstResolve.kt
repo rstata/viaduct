@@ -1,6 +1,7 @@
 package semantics.resolvers.resolver01
 
 import model.ObjectEngineResult
+import model.ResolverOccurrenceId
 import model.SelectionForest
 import model.requireQueryTypeDef
 import semantics.shared.OEROccurrence
@@ -15,17 +16,21 @@ internal class DepthFirstResolve(
     private val operation = DepthFirstOperationContext(operation, complete, dispatcher)
 
     /** Dispatches orchestration for a fresh Query root and resolves its accumulated fringe. */
-    fun resolve(selections: SelectionForest): ObjectEngineResult {
+    fun resolve(
+        selections: SelectionForest,
+        queryFragmentOwner: ResolverOccurrenceId? = null,
+    ): ObjectEngineResult {
         val source = operation.world.resolverRegistry.createRootQueryInput()
         val result = ObjectEngineResult.of(operation.world.schema.requireQueryTypeDef(), mutable = true)
-        dispatcher.dispatchOrchestrator(
+        val orchestration =
             DepthFirstOrchestrationTask.create(
                 operation = operation,
                 occurrence = OEROccurrence(result, emptyList(), result),
                 source = source,
                 constructionDemand = selections,
-            ),
-        )
+            )
+        queryFragmentOwner?.let { operation.resolverObserver.onQueryFragmentPrepared(it, result) }
+        dispatcher.dispatchOrchestrator(orchestration)
         dispatcher.resolveOrchestrators()
         return result
     }

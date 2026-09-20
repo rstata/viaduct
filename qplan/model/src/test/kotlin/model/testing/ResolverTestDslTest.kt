@@ -66,18 +66,6 @@ class ResolverTestDslTest {
         val result = world.apply(total, container, mapOf("extra" to 4))
 
         assertEquals(10, result)
-        assertEquals(
-            listOf(Arguments.Resolved.of(total, mapOf("extra" to 4))),
-            world.applicationArguments.arguments(total),
-        )
-        assertEquals(
-            mapOf<ViaductSchema.Field, List<Arguments.Resolved>>(
-                containerField to
-                    listOf(Arguments.Resolved.of(containerField, emptyMap())),
-                total to listOf(Arguments.Resolved.of(total, mapOf("extra" to 4))),
-            ),
-            world.applicationArguments.all(),
-        )
     }
 
     @Test

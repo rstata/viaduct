@@ -217,3 +217,7 @@ type User implements Node
 Using an argument in `idFrom` reads it directly and does not define a resolver-registry variable.
 
 An unknown ID, an ID registered for an incompatible Node type, a duplicate global ID, or additional fields in a Node reference is rejected.
+
+## Invocation Assertions
+
+Resolver execution observations belong to semantics, not the model DSL. Use `semantics.contract.ResolverApplicationArguments` as the operation's `resolverObserver` (or pass it to `resolveAndValidate`) and assert its recorded argument tuples after resolution. Constructing or directly invoking a model fixture does not automatically record an application.

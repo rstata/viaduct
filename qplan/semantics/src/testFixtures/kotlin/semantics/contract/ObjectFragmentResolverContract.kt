@@ -1,5 +1,7 @@
 package semantics.contract
 
+import semantics.shared.ResolverInvocationObservation
+import semantics.shared.RecordingResolverObserver
 import model.requireField
 import model.requireObjectField
 import viaduct.engine.api.EngineObjectData
@@ -29,6 +31,23 @@ import kotlin.test.assertTrue
 interface ObjectFragmentResolverContract : ResolverContract {
     @Test
     fun `DSL materializes argumentless and argument-bearing aliases by response key`() {
+        val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                val input = observation.input
+                if (field.containingDef.name == "User" && field.name == "total") {
+                    assertEquals(
+                        mapOf(
+                            "plainValue" to 5,
+                            "byTwo" to 2,
+                            "byThree" to 3,
+                        ),
+                        input.selectionValues().toMap(),
+                    )
+                }
+            }
+        }
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -49,22 +68,10 @@ interface ObjectFragmentResolverContract : ResolverContract {
                         )
                     }
                     """.trimIndent(),
-                applicationObserver = { field, input, _, _ ->
-                    if (field.containingDef.name == "User" && field.name == "total") {
-                        assertEquals(
-                            mapOf(
-                                "plainValue" to 5,
-                                "byTwo" to 2,
-                                "byThree" to 3,
-                            ),
-                            input.selectionValues().toMap(),
-                        )
-                    }
-                },
             )
         val world = testWorld.assumptions
         val result =
-            resolveAndValidate(world, "query { viewer { total } }")
+            resolveAndValidate(world, "query { viewer { total } }", resolverObserver = invocationObserver)
         val viewer =
             assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "viewer")).get(),
@@ -79,6 +86,19 @@ interface ObjectFragmentResolverContract : ResolverContract {
     @Test
     fun `DSL collects one alias across non-overlapping concrete types`() {
         val observed = ConcurrentHashMap<String, Int>()
+        val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                val input = observation.input
+                if (field.containingDef.name == "Holder" && field.name == "chosen") {
+                    val item = assertIs<EngineObjectData.Sync>(input.selectionValues().getValue("item"))
+                    assertEquals(setOf("value"), item.selectionValues().keys)
+                    observed[item.type.name] =
+                        assertIs<Int>(item.selectionValues().getValue("value"))
+                }
+            }
+        }
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -113,18 +133,10 @@ interface ObjectFragmentResolverContract : ResolverContract {
                       beta: Int!
                     }
                     """.trimIndent(),
-                applicationObserver = { field, input, _, _ ->
-                    if (field.containingDef.name == "Holder" && field.name == "chosen") {
-                        val item = assertIs<EngineObjectData.Sync>(input.selectionValues().getValue("item"))
-                        assertEquals(setOf("value"), item.selectionValues().keys)
-                        observed[item.type.name] =
-                            assertIs<Int>(item.selectionValues().getValue("value"))
-                    }
-                },
             )
         val world = testWorld.assumptions
         val result =
-            resolveAndValidate(world, "query { holders { chosen } }")
+            resolveAndValidate(world, "query { holders { chosen } }", resolverObserver = invocationObserver)
         val holders =
             assertIs<ListEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "holders")).get(),
@@ -268,6 +280,20 @@ interface ObjectFragmentResolverContract : ResolverContract {
 
     @Test
     fun `closes and orders transitive sibling resolver demand`() {
+        val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                val input = observation.input
+                val actualFields = input.selectionValues().keys
+                when (field.containingDef.name to field.name) {
+                    "User" to "display" ->
+                        require(actualFields == setOf("first", "last"))
+                    "User" to "greeting" ->
+                        require(actualFields == setOf("display"))
+                }
+            }
+        }
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -286,19 +312,10 @@ interface ObjectFragmentResolverContract : ResolverContract {
                         @resolver(of: "display", result: "sumplus1(display)")
                     }
                     """.trimIndent(),
-                applicationObserver = { field, input, _, _ ->
-                    val actualFields = input.selectionValues().keys
-                    when (field.containingDef.name to field.name) {
-                        "User" to "display" ->
-                            require(actualFields == setOf("first", "last"))
-                        "User" to "greeting" ->
-                            require(actualFields == setOf("display"))
-                    }
-                },
             )
         val world = testWorld.assumptions
         val result =
-            resolveAndValidate(world, "query { viewer { greeting } }")
+            resolveAndValidate(world, "query { viewer { greeting } }", resolverObserver = invocationObserver)
         val viewer =
             assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "viewer")).get(),
@@ -312,6 +329,28 @@ interface ObjectFragmentResolverContract : ResolverContract {
 
     @Test
     fun `resolves descendant demand before its consuming sibling`() {
+        val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                val input = observation.input
+                when (field.containingDef.name to field.name) {
+                    "Profile" to "rendered" ->
+                        require(
+                            input.selectionValues().keys == setOf("raw"),
+                        )
+                    "User" to "message" -> {
+                        require(
+                            input.selectionValues().keys == setOf("profile"),
+                        )
+                        val profile = input.selectionValues().values.single() as EngineObjectData.Sync
+                        require(
+                            profile.selectionValues().keys == setOf("rendered"),
+                        )
+                    }
+                }
+            }
+        }
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -336,27 +375,10 @@ interface ObjectFragmentResolverContract : ResolverContract {
                         @resolver(of: "raw", result: "sumplus1(raw)")
                     }
                     """.trimIndent(),
-                applicationObserver = { field, input, _, _ ->
-                    when (field.containingDef.name to field.name) {
-                        "Profile" to "rendered" ->
-                            require(
-                                input.selectionValues().keys == setOf("raw"),
-                            )
-                        "User" to "message" -> {
-                            require(
-                                input.selectionValues().keys == setOf("profile"),
-                            )
-                            val profile = input.selectionValues().values.single() as EngineObjectData.Sync
-                            require(
-                                profile.selectionValues().keys == setOf("rendered"),
-                            )
-                        }
-                    }
-                },
             )
         val world = testWorld.assumptions
         val result =
-            resolveAndValidate(world, "query { viewer { message } }")
+            resolveAndValidate(world, "query { viewer { message } }", resolverObserver = invocationObserver)
         val viewer =
             assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "viewer")).get(),
@@ -464,6 +486,20 @@ interface ObjectFragmentResolverContract : ResolverContract {
     fun `list null and error elements preserve position and skip descendants`() {
         var itemsApplications = 0
         var computedApplications = 0
+        val invocationObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                val input = observation.input
+                when (field.containingDef.name to field.name) {
+                    "Query" to "items" -> {
+                        require(input.hasExactlyFields())
+                        itemsApplications += 1
+                    }
+                    "Item" to "computed" -> computedApplications += 1
+                }
+            }
+        }
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -480,19 +516,10 @@ interface ObjectFragmentResolverContract : ResolverContract {
                         @resolver(of: "seed", result: "sum(seed, seed)")
                     }
                     """.trimIndent(),
-                applicationObserver = { field, input, _, _ ->
-                    when (field.containingDef.name to field.name) {
-                        "Query" to "items" -> {
-                            require(input.hasExactlyFields())
-                            itemsApplications += 1
-                        }
-                        "Item" to "computed" -> computedApplications += 1
-                    }
-                },
             )
         val world = testWorld.assumptions
         val result =
-            resolveAndValidate(world, "query { items { computed } }")
+            resolveAndValidate(world, "query { items { computed } }", resolverObserver = invocationObserver)
         val items =
             assertIs<ListEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "items")).get(),
@@ -512,6 +539,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
 
     @Test
     fun `error-valued resolver argument does not import transitive demand`() {
+        val applicationArguments = ResolverApplicationArguments()
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -546,8 +574,8 @@ interface ObjectFragmentResolverContract : ResolverContract {
                 selectiveResolvers = false,
             )
         val expected =
-            semantics.shared.SharedOperationContext.create(completeWorld).resolveWithResolver01(selections)
-        val result = resolveAndValidate(world, selections)
+            semantics.shared.SharedOperationContext.create(completeWorld, resolverObserver = applicationArguments).resolveWithResolver01(selections)
+        val result = resolveAndValidate(world, selections, resolverObserver = applicationArguments)
 
         assertEquals(
             expected.keys.mapTo(linkedSetOf()) { key -> key.visibleIdentity() },
@@ -570,7 +598,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
             1,
             result.getCell(world.schema.contractKey("Query", "result")).get(),
         )
-        testWorld.applicationArguments.assertApplicationCount(
+        applicationArguments.assertApplicationCount(
             world.schema.requireObjectField("Query", "dependency"),
             0,
         )

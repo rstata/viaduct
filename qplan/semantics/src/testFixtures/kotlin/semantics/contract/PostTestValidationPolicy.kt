@@ -15,6 +15,8 @@ import semantics.correctresolution.correctResolution
 import semantics.correctresolution.isClosedUnderResolverDemand
 import semantics.correctresolution.rootedAndWellTyped
 import kotlin.test.assertTrue
+import semantics.shared.SharedResolverObserver
+import semantics.shared.RecordingResolverObserver
 import semantics.shared.SharedOperationContext
 
 /**
@@ -72,14 +74,16 @@ internal fun ResolverContract.resolveAndValidate(
     world: Assumptions,
     root: EngineObjectData.Sync,
     selections: SelectionForest,
-): ObjectEngineResult = resolveAndValidateObserved(world, root, selections).result
+    resolverObserver: SharedResolverObserver = RecordingResolverObserver(),
+): ObjectEngineResult = resolveAndValidateObserved(world, root, selections, resolverObserver).result
 
 internal fun ResolverContract.resolveAndValidateObserved(
     world: Assumptions,
     root: EngineObjectData.Sync,
     selections: SelectionForest,
+    resolverObserver: SharedResolverObserver = RecordingResolverObserver(),
 ): ResolverResolutionObservation {
-    val observation = observeResolution(world, root, selections)
+    val observation = observeResolution(world, root, selections, resolverObserver)
     if (this is CorrectResolutionPostTestPolicy) {
         ContractPostTestState.record(
             PendingResolutionValidation(
@@ -95,11 +99,13 @@ internal fun ResolverContract.resolveAndValidateObserved(
 internal fun ResolverContract.resolveAndValidate(
     world: Assumptions,
     selections: SelectionForest,
+    resolverObserver: SharedResolverObserver = RecordingResolverObserver(),
 ): ObjectEngineResult =
     resolveAndValidate(
         world = world,
         root = world.objectOf("Query"),
         selections = selections,
+        resolverObserver = resolverObserver,
     )
 
 internal fun ResolverContract.resolveAndValidate(
@@ -107,6 +113,7 @@ internal fun ResolverContract.resolveAndValidate(
     documentSource: String,
     variables: Map<String, Any?> = emptyMap(),
     operationName: String? = null,
+    resolverObserver: SharedResolverObserver = RecordingResolverObserver(),
 ): ObjectEngineResult =
     resolveAndValidate(
         world = world,
@@ -116,6 +123,7 @@ internal fun ResolverContract.resolveAndValidate(
                 variables = variables,
                 operationName = operationName,
             ),
+        resolverObserver = resolverObserver,
     )
 
 internal fun ResolverContract.resolveAndValidateObserved(
@@ -123,6 +131,7 @@ internal fun ResolverContract.resolveAndValidateObserved(
     documentSource: String,
     variables: Map<String, Any?> = emptyMap(),
     operationName: String? = null,
+    resolverObserver: SharedResolverObserver = RecordingResolverObserver(),
 ): ResolverResolutionObservation =
     resolveAndValidateObserved(
         world = world,
@@ -133,4 +142,5 @@ internal fun ResolverContract.resolveAndValidateObserved(
                 variables = variables,
                 operationName = operationName,
             ),
+        resolverObserver = resolverObserver,
     )

@@ -45,7 +45,7 @@ class QueryFragmentProducerTest {
             val consumerInvoked = AtomicBoolean()
             val observer =
                 object : SharedResolverObserver {
-                    override fun onQueryFragmentResult(
+                    override fun onQueryFragmentPrepared(
                         resolverOccurrenceId: ResolverOccurrenceId,
                         result: ObjectEngineResult,
                     ): Nothing = throw failure
@@ -92,7 +92,7 @@ class QueryFragmentProducerTest {
                 val producerStarted = AtomicBoolean()
                 val observer =
                     object : SharedResolverObserver {
-                        override fun onQueryFragmentResult(
+                        override fun onQueryFragmentPrepared(
                             resolverOccurrenceId: ResolverOccurrenceId,
                             result: ObjectEngineResult,
                         ) {
@@ -132,7 +132,7 @@ class QueryFragmentProducerTest {
         val requestScope = CoroutineScope(dispatcher + requestJob)
         val queryOccurrences = mutableListOf<ResolverOccurrenceId>()
         val observer = object : SharedResolverObserver {
-            override fun onQueryFragmentResult(resolverOccurrenceId: ResolverOccurrenceId, result: ObjectEngineResult) {
+            override fun onQueryFragmentPrepared(resolverOccurrenceId: ResolverOccurrenceId, result: ObjectEngineResult) {
                 queryOccurrences += resolverOccurrenceId
                 requestJob.cancel(CancellationException("cancelled during reference Query production"))
             }
@@ -227,7 +227,7 @@ class QueryFragmentProducerTest {
             OperationContext.create(
                 base = baseOperation,
                 requestScope = requestScope,
-                resolverObserver = observer.withResolver26Applications {},
+                resolverObserver = observer,
             )
         val source = operation.world.resolverRegistry.createRootQueryInput()
         val root =

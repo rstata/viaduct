@@ -1,5 +1,6 @@
 package semantics.resolver26
 
+import semantics.shared.ResolverInvocationObservation
 import model.requireObjectField
 import semantics.contract.selectionValues
 import model.ListEngineResult
@@ -63,31 +64,36 @@ class ResolverOccurrenceWitnessTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+
         val fragment =
             world.fragmentFrom(
                 "fragment QueryResult on Query { first second }",
             )
         val log = ResolutionOccurrenceApplicationLog()
 
+        val recordingObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                log.record(
+                    resolverOccurrenceId = observation.resolverOccurrenceId,
+                    occurrencePath = observation.occurrencePath,
+                    field =
+                        FieldCoordinate(
+                            observation.field.containingDef.name,
+                            observation.field.name,
+                        ),
+                    arguments = observation.arguments,
+                    input = observation.input,
+                    suppliedDemand = observation.suppliedDemand,
+                )
+            }
+        }
+        val operation = SharedOperationContext.create(world, resolverObserver = recordingObserver)
+
         val result =
             operation.resolve(
                 selections = fragment.subselections,
                 coroutineContext = EmptyCoroutineContext,
-                applicationObserver = { application ->
-                    log.record(
-                        resolverOccurrenceId = application.resolverOccurrenceId,
-                        occurrencePath = application.occurrencePath,
-                        field =
-                            FieldCoordinate(
-                                application.field.containingDef.name,
-                                application.field.name,
-                            ),
-                        arguments = application.arguments,
-                        input = application.input,
-                        suppliedDemand = application.suppliedDemand,
-                    )
-                },
             )
         val witness = log.snapshot()
         val expected =
@@ -184,31 +190,36 @@ class ResolverOccurrenceWitnessTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+
         val fragment =
             world.fragmentFrom(
                 "fragment QueryResult on Query { items { computed } }",
             )
         val log = ResolutionOccurrenceApplicationLog()
 
+        val recordingObserver = object : RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                log.record(
+                    resolverOccurrenceId = observation.resolverOccurrenceId,
+                    occurrencePath = observation.occurrencePath,
+                    field =
+                        FieldCoordinate(
+                            observation.field.containingDef.name,
+                            observation.field.name,
+                        ),
+                    arguments = observation.arguments,
+                    input = observation.input,
+                    suppliedDemand = observation.suppliedDemand,
+                )
+            }
+        }
+        val operation = SharedOperationContext.create(world, resolverObserver = recordingObserver)
+
         val result: ObjectEngineResult =
             operation.resolve(
                 selections = fragment.subselections,
                 coroutineContext = EmptyCoroutineContext,
-                applicationObserver = { application ->
-                    log.record(
-                        resolverOccurrenceId = application.resolverOccurrenceId,
-                        occurrencePath = application.occurrencePath,
-                        field =
-                            FieldCoordinate(
-                                application.field.containingDef.name,
-                                application.field.name,
-                            ),
-                        arguments = application.arguments,
-                        input = application.input,
-                        suppliedDemand = application.suppliedDemand,
-                    )
-                },
             )
         val witness = log.snapshot()
         val expected =

@@ -5,6 +5,7 @@ plugins {
 
 dependencies {
     api(project(":model"))
+    api(project(":semantics"))
     api(testFixtures(project(":model")))
     api("io.kotest:kotest-property-jvm:5.9.1")
 

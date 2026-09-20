@@ -1,12 +1,9 @@
 package semantics.resolver26
 
-import semantics.resolver26.resolve
 
 import viaduct.engine.api.EngineObjectData
 
-import model.Assumptions
 import model.ObjectEngineResult
-import model.ResolverOccurrenceId
 import model.SelectionForest
 import semantics.arbitrary.Config
 import semantics.arbitrary.ResolverVariableSingletonCoercionEnabled
@@ -23,11 +20,8 @@ import semantics.contract.ObjectFragmentGeneratedResolverContract
 import semantics.contract.QueryFragmentGeneratedResolverContract
 import semantics.contract.RootFieldReferenceGeneratedResolverContract
 import semantics.contract.SelectiveNodeGeneratedResolverContract
-import semantics.contract.ResolverResolutionObservation
 import semantics.contract.SometimesPassiveGeneratedResolverContract
-import java.util.concurrent.ConcurrentHashMap
 import semantics.shared.SharedOperationContext
-import semantics.shared.RecordingResolverObserver
 
 class ResolverGeneratedTest :
     EmptyObjectFragmentGeneratedResolverContract,
@@ -70,33 +64,4 @@ class ResolverGeneratedTest :
         selections: SelectionForest,
     ): ObjectEngineResult =
         operation.resolve(selections)
-
-    override fun observeResolution(
-        world: Assumptions,
-        root: EngineObjectData.Sync,
-        selections: SelectionForest,
-    ): ResolverResolutionObservation {
-        val operation =
-            SharedOperationContext.create(
-                world = world,
-                resolverObserver = RecordingResolverObserver(),
-            )
-        val appliedResolverOccurrences =
-            ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
-        val result =
-            operation.resolveObserved(selections) { application ->
-                appliedResolverOccurrences += application.resolverOccurrenceId
-            }
-        return Resolver26ResolutionObservation(
-            result = result,
-            operation = operation,
-            appliedResolverOccurrences = appliedResolverOccurrences.toSet(),
-        )
-    }
 }
-
-private data class Resolver26ResolutionObservation(
-    override val result: ObjectEngineResult,
-    override val operation: SharedOperationContext<*>,
-    override val appliedResolverOccurrences: Set<ResolverOccurrenceId>,
-) : ResolverResolutionObservation

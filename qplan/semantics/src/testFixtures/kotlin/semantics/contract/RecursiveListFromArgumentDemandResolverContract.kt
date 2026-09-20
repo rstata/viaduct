@@ -9,6 +9,7 @@ import kotlin.test.assertEquals
 interface RecursiveListFromArgumentDemandResolverContract : ResolverContract {
     @Test
     fun `deepens an already launched recursive list with typename demand`() {
+        val applicationArguments = ResolverApplicationArguments()
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -51,6 +52,7 @@ interface RecursiveListFromArgumentDemandResolverContract : ResolverContract {
                   result(value: 7)
                 }
                 """.trimIndent(),
+                resolverObserver = applicationArguments,
             )
 
         assertEquals(
@@ -62,15 +64,15 @@ interface RecursiveListFromArgumentDemandResolverContract : ResolverContract {
                 ),
             ).get(),
         )
-        testWorld.applicationArguments.assertApplicationCount(
+        applicationArguments.assertApplicationCount(
             world.schema.requireObjectField("Item", "children"),
             1,
         )
-        testWorld.applicationArguments.assertApplicationCount(
+        applicationArguments.assertApplicationCount(
             world.schema.requireObjectField("Item", "consume"),
             1,
         )
-        testWorld.applicationArguments.assertArguments(
+        applicationArguments.assertArguments(
             world.schema.requireObjectField("Item", "consume"),
             mapOf("value" to 7),
         )

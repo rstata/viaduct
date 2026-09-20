@@ -167,9 +167,6 @@ suspend fun checkResolverTestCases(
     config: Config = Config.default,
     profile: String = "resolver-generated",
     seed: Long? = null,
-    captureSuppliedDemand: Boolean = false,
-    captureResolutionWitness: Boolean = true,
-    captureResolutionApplicationCounts: Boolean = !captureResolutionWitness,
     property: suspend (TestWorld, ResolverTestCase) -> Unit,
 ): ResolverTestRun {
     require(profile.isNotBlank())
@@ -180,9 +177,6 @@ suspend fun checkResolverTestCases(
         config = config,
         profile = profile,
         seed = runSeed,
-        captureSuppliedDemand = captureSuppliedDemand,
-        captureResolutionWitness = captureResolutionWitness,
-        captureResolutionApplicationCounts = captureResolutionApplicationCounts,
         property = property,
     )
 }
@@ -199,9 +193,6 @@ suspend fun executeResolverTestCases(
     config: Config = Config.default,
     profile: String = "resolver-generated",
     seed: Long,
-    captureSuppliedDemand: Boolean = false,
-    captureResolutionWitness: Boolean = true,
-    captureResolutionApplicationCounts: Boolean = !captureResolutionWitness,
     property: suspend (TestWorld, ResolverTestCase) -> Unit,
 ): ResolverTestRun {
     require(profile.isNotBlank())
@@ -233,10 +224,6 @@ suspend fun executeResolverTestCases(
                 registry.world(
                     schema = batch.schema,
                     selectiveNodeResolvers = config[SelectiveNodeResolversEnabled],
-                    captureSuppliedDemand = captureSuppliedDemand,
-                    captureResolutionWitness = captureResolutionWitness,
-                    captureResolutionApplicationCounts =
-                        captureResolutionApplicationCounts,
                 )
             batch.queries.forEachIndexed { queryOffset, query ->
                 val queryIndex = queryOffset + 1

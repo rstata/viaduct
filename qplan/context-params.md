@@ -31,7 +31,7 @@ The compiler supplies both calls from the existing context. A context parameter 
 
 ## Semantics Dependencies
 
-Use the operation as an extension receiver when the function's principal role is executing that operation. Resolver entry points use `SharedOperationContext<*>.resolve(...)`, `.resolveObserved(...)`, and `.startResolve(...)`; startup within an existing execution scope uses `OperationContext.startResolve(...)` or `CoroutineOperationContext.startResolve(...)`. These extensions live in the corresponding resolver-family packages, and callers import the selected algorithm. They preserve the existing request scopes, dispatcher/state identities, and demand-policy captures.
+Use the operation as an extension receiver when the function's principal role is executing that operation. Resolver entry points use `SharedOperationContext<*>.resolve(...)` and `.startResolve(...)`; startup within an existing execution scope uses `OperationContext.startResolve(...)` or `CoroutineOperationContext.startResolve(...)`. These extensions live in the corresponding resolver-family packages, and callers import the selected algorithm. They preserve the existing request scopes, dispatcher/state identities, and demand-policy captures.
 
 Preserve an existing data receiver when the function primarily transforms or inspects selections, keys, values, or results, and pass its operation/world dependency as an ordinary parameter:
 

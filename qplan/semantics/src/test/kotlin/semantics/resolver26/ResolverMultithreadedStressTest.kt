@@ -1,5 +1,6 @@
 package semantics.resolver26
 
+import semantics.shared.ResolverInvocationObservation
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
@@ -192,23 +193,26 @@ private suspend fun runResolver26MultithreadedStress(
             config = campaignRun.config,
             profile = campaignRun.propertyProfile,
             seed = campaignRun.seed,
-            captureResolutionWitness = false,
-            captureResolutionApplicationCounts = false,
         ) { testWorld, testCase ->
             val world: Assumptions =
                 testWorld.newAssumptions(selectiveResolvers = true)
             val fragment: Fragment = world.fragmentFrom(testCase.query.source)
-            val operation =
-                SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+
             val appliedResolverOccurrences =
                 ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
+
+            val recordingObserver = object : RecordingResolverObserver() {
+                override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                    super.onResolverInvocation(observation)
+                    appliedResolverOccurrences += observation.resolverOccurrenceId
+                }
+            }
+            val operation =
+                SharedOperationContext.create(world, resolverObserver = recordingObserver)
             val result: ObjectEngineResult =
                 operation.resolve(
                     selections = fragment.subselections,
                     coroutineContext = dispatcher,
-                    applicationObserver = { application ->
-                        appliedResolverOccurrences += application.resolverOccurrenceId
-                    },
                 )
             // Resolution has quiesced; all post-resolution oracle work remains serial here.
             assertTrue(

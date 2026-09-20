@@ -42,12 +42,16 @@ class GraphQLExecuteSmokeTest {
               value: Int
             }
             """.trimIndent()
+        val observer = object : semantics.shared.RecordingResolverObserver() {
+            override fun onResolverInvocation(observation: semantics.shared.ResolverInvocationObservation) {
+                super.onResolverInvocation(observation)
+                val field = observation.field
+                applications += "${field.containingDef.name}.${field.name}"
+            }
+        }
         val world =
             TestWorld.fromDSL(
                 resolverSchema,
-                applicationObserver = { field, _, _, _ ->
-                    applications += "${field.containingDef.name}.${field.name}"
-                },
             )
         val fixture =
             ExecutionTestFixture.fromWorld(
@@ -80,7 +84,7 @@ class GraphQLExecuteSmokeTest {
                 world = world,
             )
 
-        fixture.runQuery("query { __typename }").assertResult(
+        fixture.runQuery("query { __typename }", resolverObserver = observer).assertResult(
             mapOf("__typename" to "Query"),
         )
         assertTrue(applications.isEmpty())
@@ -110,6 +114,7 @@ class GraphQLExecuteSmokeTest {
                   namedKind: __typename
                 }
                 """.trimIndent(),
+                resolverObserver = observer,
             )
 
         result.assertResult(

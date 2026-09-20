@@ -1,5 +1,6 @@
 package semantics.resolver26
 
+import semantics.shared.ResolverInvocationObservation
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.EngineOutputData
@@ -359,20 +360,23 @@ internal suspend fun runResolver26BroadStress(
                 val world: Assumptions =
                     testWorld.newAssumptions(selectiveResolvers = true)
                 val fragment: Fragment = world.fragmentFrom(testCase.query.source)
-                val recordingObserver = RecordingResolverObserver()
-                val operation =
-                    SharedOperationContext.create(world, resolverObserver = recordingObserver)
+
                 testCase.registry.clearResolutionWitness()
                 val occurrenceLog = ResolutionOccurrenceApplicationLog()
                 resolutionCalls += 1
-                val result: ObjectEngineResult =
-                    operation.resolveObserved(fragment.subselections) { application ->
+
+                val witnessObserver = testCase.registry.resolverObserver()
+
+                val recordingObserver = object : RecordingResolverObserver() {
+                    override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                        super.onResolverInvocation(observation)
+                        witnessObserver.onResolverInvocation(observation)
                         val parentActivations =
-                            application.input.materializedParentFieldActivations(
-                                application.inputSelections,
+                            observation.input.materializedParentFieldActivations(
+                                observation.inputSelections,
                             )
                         val parentCoverage =
-                            ParentCoverageAnalyzer(world).analyze(application)
+                            ParentCoverageAnalyzer(world).analyze(observation)
                         synchronized(parentCoverageLock) {
                             caseParentFocusedCoverage +=
                                 parentFocusedCoverageSnapshot(world, parentCoverage)
@@ -479,17 +483,22 @@ internal suspend fun runResolver26BroadStress(
                             }
                         }
                         occurrenceLog.record(
-                            resolverOccurrenceId = application.resolverOccurrenceId,
-                            occurrencePath = application.occurrencePath,
+                            resolverOccurrenceId = observation.resolverOccurrenceId,
+                            occurrencePath = observation.occurrencePath,
                             field =
                                 FieldCoordinate(
-                                    application.field.containingDef.name,
-                                    application.field.name,
+                                    observation.field.containingDef.name,
+                                    observation.field.name,
                                 ),
-                            arguments = application.arguments,
-                            input = application.input,
+                            arguments = observation.arguments,
+                            input = observation.input,
                         )
                     }
+                }
+                val operation =
+                    SharedOperationContext.create(world, resolverObserver = recordingObserver)
+                val result: ObjectEngineResult =
+                    operation.resolve(fragment.subselections)
                 val witness: ResolutionWitness = testCase.registry.resolutionWitness()
                 val rootFieldReferenceInvocations =
                     recordingObserver.rootFieldReferenceInvocations()

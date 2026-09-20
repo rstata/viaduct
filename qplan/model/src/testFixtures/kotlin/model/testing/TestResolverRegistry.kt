@@ -121,15 +121,11 @@ fun selectiveNodeResolverOf(
     ) -> ResolverOutputData?,
 ): NodeResolverFunction = NodeResolverFunction(NodeResolverFunction.Mode.SELECTIVE, function)
 
-typealias CanonicalFieldResolverApplicationObserver =
-    (ViaductSchema.Field, EngineObjectData.Sync, Arguments.Resolved, SelectionForest?) -> Unit
-
 internal fun resolverRegistryOf(
     schema: GJSchema,
     nodeResolvers: Map<ViaductSchema.Object, NodeResolverFunction>,
     fieldResolvers: Map<ViaductSchema.Field, FieldResolverDefinition>,
     variableProviders: Map<Arguments.Variable, VariableDeclaration>,
-    applicationObserver: CanonicalFieldResolverApplicationObserver?,
 ): ResolverRegistry {
     val lowering = NodeResolverLowering(schema, nodeResolvers, fieldResolvers)
     val variablesProviderTemplates =
@@ -175,19 +171,9 @@ internal fun resolverRegistryOf(
                 else -> declaration
             }
         }
-    val observedResolvers =
-        if (applicationObserver == null) {
-            registryResolvers
-        } else {
-            registryResolvers.mapValues { (field, resolver) ->
-                resolver.observeApplications { input, arguments, demand ->
-                    applicationObserver(field, input, arguments, demand)
-                }
-            }
-        }
     return TestResolverRegistry(
         schema = schema,
-        fieldResolverDefinitions = observedResolvers,
+        fieldResolverDefinitions = registryResolvers,
         variableDeclarations = registryVariableProviders,
     )
 }

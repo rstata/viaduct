@@ -1,7 +1,9 @@
 package semantics.arbitrary
 
+import semantics.resolvers.resolver01.resolve as resolveObservedFields
 import kotlinx.coroutines.runBlocking
 
+import model.fragmentFrom
 import model.Arguments
 import model.Assumptions
 import viaduct.engine.api.EngineObjectData
@@ -90,7 +92,8 @@ class ResolverCoverageAdversarialTest {
                                     .objectNamed(coordinate.typeName)
                                     .fields
                                     .single { candidate -> candidate.name == coordinate.fieldName }
-                            field.type.listDepth == (if (listOutput) 1 else 0) &&
+                            coordinate.typeName == "Query" &&
+                                field.type.listDepth == (if (listOutput) 1 else 0) &&
                                 schema.isComposite(field.type.namedType) &&
                                 schema.possibleObjects(field.type.namedType)
                                     .all { possible ->
@@ -104,44 +107,14 @@ class ResolverCoverageAdversarialTest {
             val world = registry.world(schema).assumptions
             val producerField =
                 world.schema.requireObjectField(sourceField.typeName, sourceField.fieldName)
-            val emptyInput = world.schema.objectOf(sourceField.typeName)
-            val producerValue =
-                context(Assumptions.of(world.schema, world.resolverRegistry, false)) {
-                    world.resolverRegistry
-                        .resolver(producerField)(
-                            input = emptyInput,
-                            queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
-                            arguments = Arguments.Resolved.of(producerField, emptyMap()),
-                            executionContext = ResolutionExecutionContext.Unsupported,
-                        )
-                }
-            val nodeReference =
-                if (listOutput) {
-                    assertIs<model.RootFieldReferenceData>(
-                        assertIs<List<*>>(producerValue).first(),
-                    )
-                } else {
-                    assertIs<model.RootFieldReferenceData>(producerValue)
-                }
-            val queryNode = world.schema.requireObjectField("Query", "node")
-
             registry.clearResolutionWitness()
-            context(Assumptions.of(world.schema, world.resolverRegistry, false)) {
-                world.resolverRegistry
-                    .resolver(producerField)(
-                        input = emptyInput,
-                        queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
-                        arguments = Arguments.Resolved.of(producerField, emptyMap()),
-                        executionContext = ResolutionExecutionContext.Unsupported,
-                    )
-                world.resolverRegistry
-                    .resolver(queryNode)(
-                        input = world.schema.objectOf("Query"),
-                        queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
-                        arguments = nodeReference.arguments,
-                        executionContext = ResolutionExecutionContext.Unsupported,
-                    )
-            }
+            val operation = semantics.shared.SharedOperationContext.create(
+                world = Assumptions.of(world.schema, world.resolverRegistry, false),
+                resolverObserver = registry.resolverObserver(),
+            )
+            operation.resolveObservedFields(
+                world.fragmentFrom("fragment Test on Query { ${producerField.name} { id } }").subselections,
+            )
 
             assertEquals(
                 listOf(

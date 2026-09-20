@@ -24,6 +24,7 @@ interface ObjectFragmentFromArgumentResolverContract :
     RecursiveListFromArgumentDemandResolverContract {
     @Test
     fun `resolves input selected with a fromArgument variable`() {
+        val applicationArguments = ResolverApplicationArguments()
         val testWorld =
             TestWorld.fromDSL(
                 selectiveResolvers = selectiveResolvers,
@@ -59,12 +60,13 @@ interface ObjectFragmentFromArgumentResolverContract :
                 }
                 """.trimIndent(),
                 variables = mapOf("first" to 7, "second" to 8),
+                resolverObserver = applicationArguments,
             )
         val resolved = resolution.result
 
         assertEquals(14, resolved.getCell(firstKey).get())
         assertEquals(16, resolved.getCell(secondKey).get())
-        testWorld.applicationArguments.assertArguments(
+        applicationArguments.assertArguments(
             world.schema.requireField("Query", "consume"),
             mapOf("value" to 7),
             mapOf("value" to 8),

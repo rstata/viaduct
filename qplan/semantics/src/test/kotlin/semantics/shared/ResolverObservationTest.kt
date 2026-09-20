@@ -6,24 +6,35 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import model.ObjectEngineResult
 import model.ResolverOccurrenceId
 import model.RootFieldReferenceData
 import model.SelectionForest
 import model.emptyFragmentOf
 import model.fragmentFrom
+import model.merge
 import model.operationSelectionsFrom
 import model.requireObjectField
+import model.requireQueryTypeDef
 import model.selectionForestOf
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import org.junit.jupiter.api.DynamicTest.dynamicTest
 import org.junit.jupiter.api.TestFactory
+import semantics.correctresolution.correctResolution
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -38,6 +49,7 @@ import semantics.resolvers.resolver22.resolve as resolve22
 import semantics.resolvers.resolver23.resolve as resolve23
 import semantics.resolver26.resolve as resolve26
 import semantics.resolver26.Resolver26DispatcherResource
+import semantics.resolver26.startResolve
 
 class ResolverObservationTest : Resolver26DispatcherResource {
     private class Subject(
@@ -296,4 +308,191 @@ class ResolverObservationTest : Resolver26DispatcherResource {
             if (subject.selective) assertFalse(assertNotNull(event.suppliedDemand).isEmpty()) else assertNull(event.suppliedDemand)
         }
     }
+
+    @TestFactory
+    fun `reference targets own their Query roots and replay leaves observations unchanged`() =
+        subjects
+            .filter(Subject::queryFragments)
+            .map { subject ->
+                dynamicTest(subject.name) {
+                    val entries = CopyOnWriteArrayList<String>()
+                    val events = CopyOnWriteArrayList<ResolverInvocationObservation>()
+                    val observer =
+                        object : CorrectnessResolverObserver() {
+                            override fun onResolverInvocation(
+                                observation: ResolverInvocationObservation,
+                            ) {
+                                super.onResolverInvocation(observation)
+                                events += observation
+                            }
+                        }
+                    val testWorld =
+                        TestWorld.fromSDL(
+                            selectiveResolvers = subject.selective,
+                            schemaSDL =
+                                "type Query { reference: Int target: Int dependency: Int }",
+                            fieldResolvers = { schema ->
+                                val target = schema.requireObjectField("Query", "target")
+                                val empty = schema.emptyFragmentOf("Query")
+                                mapOf(
+                                    schema.requireObjectField("Query", "reference") to
+                                        fieldResolverOf(empty) { _, _ ->
+                                            entries += "reference"
+                                            RootFieldReferenceData.of(
+                                                listOf(target),
+                                                emptyMap(),
+                                            )
+                                        },
+                                    target to
+                                        fieldResolverOf(
+                                            empty,
+                                            schema.fragmentFrom(
+                                                "fragment Required on Query { dependency }",
+                                            ),
+                                        ) { _, query, _ ->
+                                            entries += "target"
+                                            query.get("dependency")
+                                        },
+                                    schema.requireObjectField("Query", "dependency") to
+                                        fieldResolverOf(empty) { _, _ ->
+                                            entries += "dependency"
+                                            7
+                                        },
+                                )
+                            },
+                        )
+                    val world = testWorld.assumptions
+                    val operation =
+                        SharedOperationContext.create(
+                            world,
+                            resolverObserver = observer,
+                        )
+                    val selections = world.operationSelectionsFrom("{ reference }")
+                    val root = subject.resolve(operation, selections)
+                    assertEquals(7, root.getCell(root.keys.single()).get())
+                    assertEquals(
+                        listOf("reference", "dependency", "target"),
+                        entries.toList(),
+                    )
+                    assertEquals(entries.toList(), events.map { it.field.name })
+                    val targetEvent = events.single { it.field.name == "target" }
+                    val dependencyEvent = events.single { it.field.name == "dependency" }
+                    val hop = observer.rootFieldReferenceInvocations().single()
+                    assertEquals(
+                        ResolverOccurrenceId.at(hop.invocationRoot, hop.invocationPath),
+                        targetEvent.resolverOccurrenceId,
+                    )
+                    assertNotEquals(
+                        ResolverOccurrenceId.at(root, targetEvent.occurrencePath),
+                        targetEvent.resolverOccurrenceId,
+                    )
+                    assertEquals(
+                        setOf(targetEvent.resolverOccurrenceId),
+                        observer.allQueryFragmentResults().keys,
+                    )
+                    val queryRoot =
+                        observer.queryFragmentResults(targetEvent.resolverOccurrenceId).single()
+                    assertEquals(
+                        ResolverOccurrenceId.at(queryRoot, dependencyEvent.occurrencePath),
+                        dependencyEvent.resolverOccurrenceId,
+                    )
+                    assertEquals(7, queryRoot.getCell(queryRoot.keys.single()).get())
+                    val eventsBeforeReplay = events.toList()
+                    val queryRootsBeforeReplay = observer.allQueryFragmentResults()
+                    val hopsBeforeReplay = observer.rootFieldReferenceInvocations()
+                    repeat(2) {
+                        assertTrue(
+                            root.correctResolution(
+                                operation,
+                                selections.merge(world.schema.requireQueryTypeDef()),
+                            ),
+                        )
+                    }
+                    assertTrue(entries.size > 3)
+                    assertEquals(eventsBeforeReplay, events.toList())
+                    assertEquals(queryRootsBeforeReplay, observer.allQueryFragmentResults())
+                    assertEquals(hopsBeforeReplay, observer.rootFieldReferenceInvocations())
+                    assertSame(
+                        queryRoot,
+                        observer.queryFragmentResults(targetEvent.resolverOccurrenceId).single(),
+                    )
+                }
+            }
+
+    @Test
+    fun `cancelling a blocked reference Query fragment omits its target observation`(): Unit =
+        runBlocking {
+            val entered = CompletableDeferred<Unit>()
+            val stopped = CompletableDeferred<Unit>()
+            val entries = CopyOnWriteArrayList<String>()
+            val events = CopyOnWriteArrayList<ResolverInvocationObservation>()
+            val observer =
+                object : CorrectnessResolverObserver() {
+                    override fun onResolverInvocation(
+                        observation: ResolverInvocationObservation,
+                    ) {
+                        super.onResolverInvocation(observation)
+                        events += observation
+                    }
+                }
+            val testWorld =
+                TestWorld.fromSDL(
+                    schemaSDL = "type Query { reference: Int target: Int dependency: Int }",
+                    fieldResolvers = { schema ->
+                        val target = schema.requireObjectField("Query", "target")
+                        val empty = schema.emptyFragmentOf("Query")
+                        mapOf(
+                            schema.requireObjectField("Query", "reference") to
+                                fieldResolverOf(empty) { _, _ ->
+                                    entries += "reference"
+                                    RootFieldReferenceData.of(listOf(target), emptyMap())
+                                },
+                            target to
+                                fieldResolverOf(
+                                    empty,
+                                    schema.fragmentFrom(
+                                        "fragment Required on Query { dependency }",
+                                    ),
+                                ) { _, _, _ ->
+                                    entries += "target"
+                                    error("A target with unfinished Query input cannot enter")
+                                },
+                            schema.requireObjectField("Query", "dependency") to
+                                fieldResolverOf(empty) { _, _ ->
+                                    entries += "dependency"
+                                    entered.complete(Unit)
+                                    try {
+                                        awaitCancellation()
+                                    } finally {
+                                        stopped.complete(Unit)
+                                    }
+                                },
+                        )
+                    },
+                )
+            val operation =
+                SharedOperationContext.create(
+                    testWorld.assumptions,
+                    resolverObserver = observer,
+                )
+            val job = Job()
+            try {
+                operation.startResolve(
+                    operation.world.operationSelectionsFrom("{ reference }"),
+                    CoroutineScope(resolverDispatcher + job),
+                )
+                withTimeout(5_000) { entered.await() }
+                assertEquals(1, observer.allQueryFragmentResults().size)
+                val targetId = observer.allQueryFragmentResults().keys.single()
+                assertFalse(targetId in observer.invokedResolverOccurrences())
+                job.cancelAndJoin()
+                withTimeout(5_000) { stopped.await() }
+                assertEquals(listOf("reference", "dependency"), entries.toList())
+                assertEquals(entries.toList(), events.map { it.field.name })
+                assertFalse(targetId in observer.invokedResolverOccurrences())
+                assertTrue(observer.rootFieldReferenceInvocations().isEmpty())
+            } finally {
+                job.cancelAndJoin()
+            }
+        }
 }

@@ -21,8 +21,10 @@ import model.requireObjectField
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import semantics.contract.get
+import semantics.shared.CycleCheckState
 import semantics.shared.ResolverObserver
 import semantics.shared.ResolverInvocationObservation
+import semantics.shared.ResolverReadCycleException
 import semantics.shared.SharedOperationContext
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -30,8 +32,10 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
@@ -76,6 +80,98 @@ class ResolverStartTest : Resolver26DispatcherResource {
         assertEquals(ResolverOccurrenceId.at(queryRoot, byField.getValue("dependency").occurrencePath), dependency)
         assertEquals(7, root.getCell(root.keys.single()).get())
     }
+
+    @Test
+    fun `successful nested query retains its caller dependency in the operation checker`(): Unit =
+        runBlocking {
+            lateinit var observedChecker: CycleCheckState
+            val testWorld =
+                TestWorld.fromSDL(
+                    schemaSDL = "type Query { outer: Int!, inner: Int! }",
+                    fieldResolvers = { schema ->
+                        val outer = schema.requireObjectField("Query", "outer")
+                        val inner = schema.requireObjectField("Query", "inner")
+                        val nested = schema.fragmentFrom("fragment Nested on Query { inner }")
+                        mapOf(
+                            outer to
+                                fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _, executionContext ->
+                                    observedChecker =
+                                        assertIs<FieldResolverTask>(executionContext)
+                                            .publication
+                                            .operation
+                                            .cycleChecker
+                                    executionContext
+                                        .resolveSelectionSet(nested.materializeSelections)
+                                        .get("inner")
+                                },
+                            inner to
+                                fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> 7 },
+                        )
+                    },
+                )
+            val operation = SharedOperationContext.create(testWorld.assumptions)
+            val result =
+                operation.resolveWithTestDispatcher(
+                    operation.world.operationSelectionsFrom("query { outer }"),
+                )
+            val outerKey =
+                ObjectEngineResult.GroundKey.of(
+                    operation.world.schema.requireObjectField("Query", "outer"),
+                    emptyMap(),
+                )
+            val innerKey =
+                ObjectEngineResult.GroundKey.of(
+                    operation.world.schema.requireObjectField("Query", "inner"),
+                    emptyMap(),
+                )
+            val outerCell = result.getCell(outerKey)
+            assertEquals(7, outerCell.getValue().await())
+
+            assertFailsWith<ResolverReadCycleException> {
+                observedChecker.cycleCheck(reader = listOf(innerKey), cell = outerCell)
+            }
+        }
+
+    @Test
+    fun `recursive nested query retains runtime read cycle rejection`(): Unit =
+        runBlocking {
+            val invocations = AtomicInteger()
+            val testWorld =
+                TestWorld.fromSDL(
+                    schemaSDL = "type Query { recursive: Int! }",
+                    fieldResolvers = { schema ->
+                        val field = schema.requireObjectField("Query", "recursive")
+                        val nested =
+                            schema.fragmentFrom("fragment Nested on Query { recursive }")
+                        mapOf(
+                            field to
+                                fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _, executionContext ->
+                                    if (invocations.incrementAndGet() > 1) {
+                                        7
+                                    } else {
+                                        executionContext
+                                            .resolveSelectionSet(nested.materializeSelections)
+                                            .get("recursive")
+                                    }
+                                },
+                        )
+                    },
+                )
+            val operation = SharedOperationContext.create(testWorld.assumptions)
+            val result =
+                operation.resolveWithTestDispatcher(
+                    operation.world.operationSelectionsFrom("query { recursive }"),
+                )
+            val key =
+                ObjectEngineResult.GroundKey.of(
+                    operation.world.schema.requireObjectField("Query", "recursive"),
+                    emptyMap(),
+                )
+
+            assertEquals(2, invocations.get())
+            val error = assertIs<ErrorEngineResult>(result.getCell(key).getValue().await())
+            assertIs<ResolverReadCycleException>(error.errorData.cause)
+        }
 
     @Test
     fun `request cancellation records entered producer but not waiting consumer`() = runBlocking {

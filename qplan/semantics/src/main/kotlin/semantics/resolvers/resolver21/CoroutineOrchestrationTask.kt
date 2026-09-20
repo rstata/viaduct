@@ -51,6 +51,9 @@ internal class CoroutineOrchestrationTask private constructor(
                 (!source.isPresent(key.field.name) || source.outputValue(key.field.name) is RootFieldReferenceData)
         }
 
+    override fun duplicateDispatchException(): RuntimeException =
+        IllegalStateException("Object orchestrated twice: ${occurrence.path}")
+
     override fun installFieldTasks() {
         CoroutineFieldResolverTask.launchAll(this, closedDemand)
     }

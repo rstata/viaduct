@@ -285,6 +285,241 @@ class CorrectResolutionTest : Resolver26DispatcherResource {
         assertFalse(result.correctResolution(operation, selections))
     }
 
+    @Test
+    fun `invalid result root is rejected before resolver replay`() {
+        val world =
+            TestWorld
+                .fromSDL(
+                    """
+                    type Query { profile: Profile! }
+                    type Profile { value: Int! }
+                    """.trimIndent(),
+                    fieldResolvers = { schema ->
+                        mapOf(
+                            schema.requireObjectField("Profile", "value") to
+                                fieldResolverOf(schema.emptyFragmentOf("Profile")) { _, _ ->
+                                    error("A non-Query root must be rejected before replay")
+                                },
+                        )
+                    },
+                ).assumptions
+        val result = world.engineResultOf("Profile") { "value" resolvesTo 7 }
+        val query = world.fragmentFrom("fragment ignored on Query { profile { value } }")
+
+        assertFalse(result.correctResolution(SharedOperationContext.create(world), query))
+    }
+
+    @Test
+    fun `missing client selection is rejected before replaying existing fields`() {
+        val world =
+            TestWorld
+                .fromSDL(
+                    "type Query { existing: Int! missing: Int! }",
+                    fieldResolvers = { schema ->
+                        mapOf(
+                            schema.requireObjectField("Query", "existing") to
+                                fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                    error("Selection validation must precede replay")
+                                },
+                        )
+                    },
+                ).assumptions
+        val result = world.engineResultOf("Query") { "existing" resolvesTo 7 }
+        val query = world.fragmentFrom("fragment ignored on Query { existing missing }")
+
+        assertFalse(result.correctResolution(SharedOperationContext.create(world), query))
+    }
+
+    @Test
+    fun `missing resolver input is rejected before invoking its relation`() {
+        val world =
+            TestWorld
+                .fromSDL(
+                    "type Query { source: Int! consumer: Int! }",
+                    fieldResolvers = { schema ->
+                        mapOf(
+                            schema.requireObjectField("Query", "consumer") to
+                                fieldResolverOf(
+                                    schema.fragmentFrom("fragment ignored on Query { source }"),
+                                ) { _, _ ->
+                                    error("Missing resolver demand must be rejected before replay")
+                                },
+                        )
+                    },
+                ).assumptions
+        val result = world.engineResultOf("Query") { "consumer" resolvesTo 7 }
+        val query = world.fragmentFrom("fragment ignored on Query { consumer }")
+
+        assertFalse(result.correctResolution(SharedOperationContext.create(world), query))
+    }
+
+    @Test
+    fun `closed but corrupted scalar output fails conformance with one replay`() {
+        var replays = 0
+        val world =
+            TestWorld
+                .fromSDL(
+                    "type Query { value: Int! }",
+                    fieldResolvers = { schema ->
+                        mapOf(
+                            schema.requireObjectField("Query", "value") to
+                                fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                    replays += 1
+                                    7
+                                },
+                        )
+                    },
+                ).assumptions
+        val result = world.engineResultOf("Query") { "value" resolvesTo 8 }
+        val query = world.fragmentFrom("fragment ignored on Query { value }")
+
+        assertFalse(result.correctResolution(SharedOperationContext.create(world), query))
+        assertEquals(1, replays, "Demand and conformance must share their replay")
+    }
+
+    @Test
+    fun `parent backedge must name the exact containing occurrence`() {
+        val world =
+            TestWorld
+                .fromSDL(
+                    """
+                    directive @parent on FIELD_DEFINITION
+                    type Query { child: Child! }
+                    type Child { parent: Query @parent }
+                    """.trimIndent(),
+                    fieldResolvers = { schema ->
+                        mapOf(
+                            schema.requireObjectField("Query", "child") to
+                                fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                    schema.objectOf("Child")
+                                },
+                        )
+                    },
+                ).assumptions
+        val operation = SharedOperationContext.create(world)
+        val query = world.schema.emptyFragmentOf("Query")
+
+        fun result(correctParent: Boolean): ObjectEngineResult {
+            val root =
+                ObjectEngineResult.of(
+                    world.schema.requireQueryTypeDef(),
+                    mutable = true,
+                )
+            val child =
+                ObjectEngineResult.of(
+                    world.schema.requireType("Child") as ViaductSchema.Object,
+                    mutable = true,
+                )
+            child.setCellValue(
+                ObjectEngineResult.ParentKey.of(
+                    world.schema.requireObjectField("Child", "parent"),
+                ),
+                if (correctParent) root else world.engineResultOf("Query"),
+            )
+            child.freeze()
+            root.setCellValue(
+                ObjectEngineResult.GroundKey.of(
+                    world.schema.requireObjectField("Query", "child"),
+                    emptyMap(),
+                ),
+                child,
+            )
+            root.freeze()
+            return root
+        }
+
+        assertTrue(result(true).correctResolution(operation, query))
+        assertFalse(result(false).correctResolution(operation, query))
+    }
+
+    @Test
+    fun `nested Query results replay independently without poisoning later judgments`() {
+        val replays = mutableListOf<String>()
+        val world =
+            TestWorld
+                .fromSDL(
+                    "type Query { source: Int! left: Int! right: Int! }",
+                    fieldResolvers = { schema ->
+                        buildMap {
+                            put(
+                                schema.requireObjectField("Query", "source"),
+                                fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
+                                    replays += "source"
+                                    7
+                                },
+                            )
+                            for (name in listOf("left", "right")) {
+                                put(
+                                    schema.requireObjectField("Query", name),
+                                    fieldResolverOf(
+                                        objectFragment = schema.emptyFragmentOf("Query"),
+                                        queryFragment =
+                                            schema.fragmentFrom(
+                                                "fragment ignored on Query { aliased: source }",
+                                            ),
+                                    ) { _, queryValue, _ ->
+                                        replays += name
+                                        queryValue.get("aliased")
+                                    },
+                                )
+                            }
+                        }
+                    },
+                ).assumptions
+        val query = world.fragmentFrom("fragment ignored on Query { left right }")
+        val result =
+            world.engineResultOf("Query") {
+                "left" resolvesTo 7
+                "right" resolvesTo 7
+            }
+
+        fun operation(rightValue: Int): SharedOperationContext<*> {
+            val operation =
+                SharedOperationContext.create(
+                    world,
+                    resolverObserver = CorrectnessResolverObserver(),
+                )
+            for (name in listOf("left", "right")) {
+                val key =
+                    ObjectEngineResult.GroundKey.of(
+                        world.schema.requireObjectField("Query", name),
+                        emptyMap(),
+                    )
+                operation.resolverObserver.onQueryFragmentPrepared(
+                    ResolverOccurrenceId.at(result, listOf(key)),
+                    world.engineResultOf("Query") {
+                        "source" resolvesTo if (name == "right") rightValue else 7
+                    },
+                )
+            }
+            return operation
+        }
+
+        val validOperation = operation(7)
+        repeat(2) {
+            replays.clear()
+            assertTrue(result.correctResolution(validOperation, query))
+            assertEquals(
+                mapOf("source" to 2, "left" to 1, "right" to 1),
+                replays.groupingBy { it }.eachCount(),
+            )
+        }
+
+        replays.clear()
+        assertFalse(result.correctResolution(operation(8), query))
+        assertEquals(
+            mapOf("source" to 2, "left" to 1),
+            replays.groupingBy { it }.eachCount(),
+        )
+
+        replays.clear()
+        assertTrue(result.correctResolution(validOperation, query))
+        assertEquals(
+            mapOf("source" to 2, "left" to 1, "right" to 1),
+            replays.groupingBy { it }.eachCount(),
+        )
+    }
+
     private companion object {
         val SCHEMA_SDL =
             """

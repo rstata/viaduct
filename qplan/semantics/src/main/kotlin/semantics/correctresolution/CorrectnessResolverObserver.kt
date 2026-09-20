@@ -12,7 +12,11 @@ import semantics.shared.RootFieldReferenceInvocationObservation
  * Records invocation identities plus Query roots and reference hops. Query and reference records
  * preserve duplicates; invocation identities form a set. Subclasses can retain full invocation
  * events when counts, arguments, or inputs are needed. Correctness consumers read snapshots
- * directly from this recorder.
+ * directly from this recorder. Use a fresh recorder for each semantic operation.
+ *
+ * A subclass that overrides a recording callback must call the corresponding `super` implementation
+ * to preserve this recorder's correctness evidence before adding its own records. Consumers that need
+ * only a subset of these records should implement [ResolverObserver] directly instead.
  */
 open class CorrectnessResolverObserver : ResolverObserver {
     private val invokedOccurrences = ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()

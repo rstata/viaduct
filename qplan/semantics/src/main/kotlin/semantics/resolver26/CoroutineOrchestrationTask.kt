@@ -24,11 +24,16 @@ internal abstract class CoroutineOrchestrationTask<O : SharedOperationContext<*>
 
     /** Claims dispatch before validation or entering a request-root coroutine. */
     internal fun checkDispatch() {
-        require(launched.compareAndSet(false, true)) {
-            "Orchestration task at ${occurrence.path} was dispatched twice"
+        if (!launched.compareAndSet(false, true)) {
+            throw duplicateDispatchException()
         }
         validateDispatch()
     }
+
+    protected open fun duplicateDispatchException(): RuntimeException =
+        IllegalArgumentException(
+            "Orchestration task at ${occurrence.path} was dispatched twice",
+        )
 
     /** Installs field tasks before sealing this object's field set. */
     internal fun run() {

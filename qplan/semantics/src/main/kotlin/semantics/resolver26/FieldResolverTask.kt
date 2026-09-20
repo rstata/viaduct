@@ -228,6 +228,7 @@ internal class FieldResolverTask private constructor(
             operation = childOperation,
             selections = selections,
             reader = publication.sourceOccurrence.publicationPath,
+            cycleChecker = childOperation.cycleChecker,
         )
     }
 

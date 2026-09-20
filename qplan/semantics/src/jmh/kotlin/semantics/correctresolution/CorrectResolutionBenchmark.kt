@@ -23,11 +23,14 @@ import semantics.benchmark.DEFAULT_CORRECT_RESOLUTION_LOOP_COUNT
 import semantics.benchmark.DEFAULT_CORRECT_RESOLUTION_QUERY_SEED
 import semantics.benchmark.ResolverBenchmarkSubject
 import semantics.resolver26.resolve
+import semantics.resolver26.ResolutionDispatcherFactory
+import semantics.resolver26.configuredResolutionThreadCount
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 import jdk.jfr.Configuration
 import jdk.jfr.Recording
+import kotlinx.coroutines.ExecutorCoroutineDispatcher
 
 private const val PROFILE_OUTPUT_PROPERTY = "correctResolutionProfileOutput"
 private const val PROFILE_RECORDING_NAME = "correct-resolution-measurement"
@@ -52,10 +55,12 @@ open class CorrectResolutionBenchmark {
     @Param("$DEFAULT_CORRECT_RESOLUTION_LOOP_COUNT")
     var loopCount: Int = DEFAULT_CORRECT_RESOLUTION_LOOP_COUNT
 
+    private lateinit var resolverDispatcher: ExecutorCoroutineDispatcher
+
     private val support =
         CorrectResolutionBenchmarkSupport(
             subject = ResolverBenchmarkSubject { operation, _, selections ->
-                operation.resolve(selections)
+                operation.resolve(selections, resolverDispatcher)
             },
         )
 
@@ -63,7 +68,20 @@ open class CorrectResolutionBenchmark {
 
     @Setup(Level.Trial)
     fun prepareTrial() {
-        support.prepareTrial(inputCount, querySeed)
+        val dispatcher =
+            ResolutionDispatcherFactory.create(configuredResolutionThreadCount())
+        resolverDispatcher = dispatcher
+        try {
+            support.prepareTrial(inputCount, querySeed)
+        } catch (throwable: Throwable) {
+            dispatcher.close()
+            throw throwable
+        }
+    }
+
+    @TearDown(Level.Trial)
+    fun closeTrial() {
+        resolverDispatcher.close()
     }
 
     @Setup(Level.Iteration)

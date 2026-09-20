@@ -28,7 +28,7 @@ import viaduct.engine.api.EngineObjectData
 import semantics.shared.SharedOperationContext
 import semantics.correctresolution.CorrectnessResolverObserver
 
-class SymbolicKeyIdentityTest {
+class SymbolicKeyIdentityTest : Resolver26DispatcherResource {
     @Test
     fun `list elements reuse one resolver-owned symbolic child key`() {
         val resultFragment =
@@ -112,7 +112,7 @@ class SymbolicKeyIdentityTest {
             )
 
         val resolved =
-            operation.resolve(fragment.subselections)
+            operation.resolveWithTestDispatcher(fragment.subselections)
         val items = assertIs<ListEngineResult>(resolved.getCell(itemsKey).getValue().get())
         val childKeys =
             items.indices.map { index ->
@@ -244,7 +244,7 @@ class SymbolicKeyIdentityTest {
             )
 
         val resolved =
-            operation.resolve(fragment.subselections)
+            operation.resolveWithTestDispatcher(fragment.subselections)
         val frankKeys =
             resolved.keys.filter { objectKey -> objectKey.field.name == "frank" }
         val literalKeys =
@@ -395,7 +395,7 @@ class SymbolicKeyIdentityTest {
             )
 
         val resolved =
-            operation.resolve(fragment.subselections)
+            operation.resolveWithTestDispatcher(fragment.subselections)
         val frankKeys =
             resolved.keys.filter { objectKey -> objectKey.field.name == "frank" }
 

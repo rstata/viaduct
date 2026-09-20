@@ -12,19 +12,14 @@ import semantics.shared.OEROccurrence
 import semantics.shared.SharedOperationContext
 
 /**
- * Resolves selective demand once per object-local symbolic key.
+ * Resolves selective demand once per object-local symbolic key on [coroutineContext].
  *
  * Keys coalesce when their fields and argument expressions are equal. Variables in those
  * expressions identify their owning resolver occurrences, so equal uses of one variable instance
- * coalesce while variables owned by different resolver occurrences remain distinct.
+ * coalesce while variables owned by different resolver occurrences remain distinct. The caller
+ * owns the context and its execution resources; the resolver neither retains nor closes them.
  */
-fun SharedOperationContext<*>.resolve(selections: SelectionForest): ObjectEngineResult =
-    resolve(
-        selections = selections,
-        coroutineContext = resolver26CoroutineContext(),
-    )
-
-internal fun SharedOperationContext<*>.resolve(
+fun SharedOperationContext<*>.resolve(
     selections: SelectionForest,
     coroutineContext: CoroutineContext,
 ): ObjectEngineResult =

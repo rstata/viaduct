@@ -36,7 +36,8 @@ class ResolverGeneratedTest :
     MixedVariableGeneratedResolverContract,
     QueryFragmentGeneratedResolverContract,
     SometimesPassiveGeneratedResolverContract,
-    FeatureInteractionGeneratedResolverContract {
+    FeatureInteractionGeneratedResolverContract,
+    Resolver26DispatcherResource {
     override val nodeRootFieldReferencesEnabled: Boolean
         get() = true
 
@@ -63,5 +64,5 @@ class ResolverGeneratedTest :
         root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult =
-        operation.resolve(selections)
+        operation.resolveWithTestDispatcher(selections)
 }

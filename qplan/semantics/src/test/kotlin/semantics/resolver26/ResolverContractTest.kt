@@ -60,11 +60,12 @@ class ResolverContractTest :
     LateObjectPathDemandResolverContract,
     SelectiveResolverOutputPolicyContract,
     SelectiveObjectFragmentOutputPolicyContract,
-    CorrectResolutionPostTestPolicy {
+    CorrectResolutionPostTestPolicy,
+    Resolver26DispatcherResource {
     override fun resolve(
         operation: SharedOperationContext<*>,
         root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult =
-        operation.resolve(selections)
+        operation.resolveWithTestDispatcher(selections)
 }

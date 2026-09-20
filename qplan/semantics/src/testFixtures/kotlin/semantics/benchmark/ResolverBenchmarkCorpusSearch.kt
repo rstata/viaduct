@@ -32,6 +32,9 @@ import java.util.Collections
 import kotlin.io.path.createDirectories
 import kotlin.math.abs
 import kotlin.math.ceil
+import kotlin.coroutines.CoroutineContext
+import semantics.resolver26.ResolutionDispatcherFactory
+import semantics.resolver26.configuredResolutionThreadCount
 
 object ResolverBenchmarkCorpusSearch {
     @JvmStatic
@@ -46,8 +49,10 @@ object ResolverBenchmarkCorpusSearch {
         val benchmarkQueryCount = arguments[3].toInt()
         val benchmarkQuerySeed = arguments[4].toLong()
         val winner =
-            runBlocking {
-                search(seed, counts)
+            ResolutionDispatcherFactory.create(configuredResolutionThreadCount()).use { dispatcher ->
+                runBlocking {
+                    search(seed, counts, dispatcher)
+                }
             }
         outputDirectory.createDirectories()
         Files.writeString(outputDirectory.resolve("schema.graphqls"), winner.schema.sdl)
@@ -88,6 +93,7 @@ object ResolverBenchmarkCorpusSearch {
     private suspend fun search(
         seed: Long,
         counts: TestCaseCount,
+        resolverCoroutineContext: CoroutineContext,
     ): Candidate {
         val candidates = linkedMapOf<Pair<Int, Int>, Candidate>()
         checkResolverTestCases(
@@ -107,6 +113,7 @@ object ResolverBenchmarkCorpusSearch {
                     candidate.observe(
                         testWorld.newAssumptions(selectiveResolvers = true),
                         testCase,
+                        resolverCoroutineContext,
                     )
                 } catch (_: TimeoutCancellationException) {
                     candidate.disqualified = true
@@ -130,6 +137,7 @@ object ResolverBenchmarkCorpusSearch {
     private fun Candidate.observe(
         world: Assumptions,
         testCase: ResolverTestCase,
+        resolverCoroutineContext: CoroutineContext,
     ) {
         val fragment: Fragment = world.fragmentFrom(testCase.query.source)
         registry.clearResolutionWitness()
@@ -144,7 +152,11 @@ object ResolverBenchmarkCorpusSearch {
                 applicationObservations += observation
             }
         }
-        val result = SharedOperationContext.create(world, resolverObserver = observer).resolve(fragment.subselections)
+        val result =
+            SharedOperationContext.create(world, resolverObserver = observer).resolve(
+                selections = fragment.subselections,
+                coroutineContext = resolverCoroutineContext,
+            )
         val witness = registry.resolutionWitness()
         check(applicationObservations.size == witness.applications.size)
         val shape = result.shape()

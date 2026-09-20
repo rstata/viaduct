@@ -19,7 +19,7 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import semantics.shared.OEROccurrence
 
-class OrchestrationTaskTest {
+class OrchestrationTaskTest : Resolver26DispatcherResource {
     @Test
     fun `factory closes demand without dispatching field work`(): Unit = runBlocking {
         val world = TestWorld.fromDSL(
@@ -55,7 +55,7 @@ class OrchestrationTaskTest {
 
     @Test
     fun `object orchestration validates source and target types at construction`(): Unit =
-        runBlocking(resolver26CoroutineContext()) {
+        runBlocking(resolverDispatcher) {
             coroutineScope {
                 val world =
                     TestWorld

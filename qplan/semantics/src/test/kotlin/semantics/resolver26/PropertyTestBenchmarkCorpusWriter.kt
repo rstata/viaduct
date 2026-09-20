@@ -41,95 +41,105 @@ object PropertyTestBenchmarkCorpusWriter {
         val previousCase = System.getProperty(RESOLVER_TEST_CASE_PROPERTY)
         System.setProperty(RESOLVER_TEST_CASE_PROPERTY, SELECTED_CASE)
         try {
-            runBlocking {
-                var captured = false
-                checkResolverTestCases(
-                    counts = campaignRun.counts,
-                    config = campaignRun.config,
-                    profile = campaignRun.propertyProfile,
-                    seed = campaignRun.seed,
-                ) { testWorld, testCase ->
-                    val coordinates = requireNotNull(testCase.coordinates)
-                    val world: Assumptions =
-                        testWorld.newAssumptions(selectiveResolvers = true)
-                    val fragment: Fragment = world.fragmentFrom(testCase.query.source)
+            ResolutionDispatcherFactory.create(configuredResolutionThreadCount()).use { dispatcher ->
+                runBlocking {
+                    var captured = false
+                    checkResolverTestCases(
+                        counts = campaignRun.counts,
+                        config = campaignRun.config,
+                        profile = campaignRun.propertyProfile,
+                        seed = campaignRun.seed,
+                    ) { testWorld, testCase ->
+                        val coordinates = requireNotNull(testCase.coordinates)
+                        val world: Assumptions =
+                            testWorld.newAssumptions(selectiveResolvers = true)
+                        val fragment: Fragment = world.fragmentFrom(testCase.query.source)
 
-                    testCase.registry.clearResolutionWitness()
-                    val appliedResolverOccurrences =
-                        ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
+                        testCase.registry.clearResolutionWitness()
+                        val appliedResolverOccurrences =
+                            ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
 
-                    val witnessObserver = testCase.registry.resolverObserver()
+                        val witnessObserver = testCase.registry.resolverObserver()
 
-                    val recordingObserver = object : CorrectnessResolverObserver() {
-                        override fun onResolverInvocation(observation: ResolverInvocationObservation) {
-                            super.onResolverInvocation(observation)
-                            witnessObserver.onResolverInvocation(observation)
-                            appliedResolverOccurrences += observation.resolverOccurrenceId
+                        val recordingObserver = object : CorrectnessResolverObserver() {
+                            override fun onResolverInvocation(observation: ResolverInvocationObservation) {
+                                super.onResolverInvocation(observation)
+                                witnessObserver.onResolverInvocation(observation)
+                                appliedResolverOccurrences += observation.resolverOccurrenceId
+                            }
                         }
-                    }
-                    val operation =
-                        SharedOperationContext.create(world, resolverObserver = recordingObserver)
-                    val result: ObjectEngineResult =
-                        operation.resolve(fragment.subselections)
-                    val witness: ResolutionWitness = testCase.registry.resolutionWitness()
-                    check(witness.applications.size == EXPECTED_RESOLVER_APPLICATIONS)
-                    check(
-                        result.registeredResolverApplicationIdentityCounts(operation) == witness.applicationIdentityCounts(),
-                    )
-                    check(
-                        result.correctResolution(operation, fragment),
-                    )
-                    result.validateFromFieldBindings(operation, appliedResolverOccurrences)
-
-                    Files.createDirectories(outputDirectory)
-                    Files.writeString(
-                        outputDirectory.resolve("schema.graphqls"),
-                        testCase.schema.sdl,
-                    )
-                    Files.writeString(
-                        outputDirectory.resolve("registry.json"),
-                        testCase.registry.encodeResolverBenchmarkCorpus(
-                            schema = testCase.schema,
-                            metrics =
-                                mapOf(
-                                    "campaignBaseSeed" to
-                                        Resolver26BroadStressCampaign
-                                            .round(CAMPAIGN_ROUND)
-                                            .baseSeed,
-                                    "campaignRound" to CAMPAIGN_ROUND.toLong(),
-                                    "propertySeed" to campaignRun.seed,
-                                    "queryIndex" to
-                                        coordinates.queryIndex.toLong(),
-                                    "registryIndex" to
-                                        coordinates.registryIndex.toLong(),
-                                    "resolverApplications" to
-                                        witness.applications.size.toLong(),
-                                    "schemaIndex" to
-                                        coordinates.schemaIndex.toLong(),
-                                ),
-                        ),
-                    )
-                    Files.writeString(
-                        outputDirectory.resolve("query.graphql"),
-                        testCase.query.source + System.lineSeparator(),
-                    )
-                    Files.writeString(
-                        outputDirectory.resolve("provenance.txt"),
-                        buildString {
-                            appendLine("campaignRound=$CAMPAIGN_ROUND")
-                            appendLine("profile=${campaignRun.propertyProfile}")
-                            appendLine("propertySeed=${campaignRun.seed}")
-                            appendLine("campaignSize=${campaignRun.counts.summary()}")
-                            appendLine("selectedCase=$SELECTED_CASE")
-                            appendLine(
-                                "resolverApplications=${witness.applications.size}",
+                        val operation =
+                            SharedOperationContext.create(
+                                world,
+                                resolverObserver = recordingObserver,
                             )
-                        },
-                    )
-                    captured = true
-                }
-                check(captured) {
-                    "Property-test benchmark case $SELECTED_CASE was not captured"
+                        val result: ObjectEngineResult =
+                            operation.resolve(
+                                selections = fragment.subselections,
+                                coroutineContext = dispatcher,
+                            )
+                        val witness: ResolutionWitness = testCase.registry.resolutionWitness()
+                        check(witness.applications.size == EXPECTED_RESOLVER_APPLICATIONS)
+                        check(
+                            result.registeredResolverApplicationIdentityCounts(operation) ==
+                                witness.applicationIdentityCounts(),
+                        )
+                        check(result.correctResolution(operation, fragment))
+                        result.validateFromFieldBindings(
+                            operation,
+                            appliedResolverOccurrences,
+                        )
+
+                        Files.createDirectories(outputDirectory)
+                        Files.writeString(
+                            outputDirectory.resolve("schema.graphqls"),
+                            testCase.schema.sdl,
+                        )
+                        Files.writeString(
+                            outputDirectory.resolve("registry.json"),
+                            testCase.registry.encodeResolverBenchmarkCorpus(
+                                schema = testCase.schema,
+                                metrics =
+                                    mapOf(
+                                        "campaignBaseSeed" to
+                                            Resolver26BroadStressCampaign
+                                                .round(CAMPAIGN_ROUND)
+                                                .baseSeed,
+                                        "campaignRound" to CAMPAIGN_ROUND.toLong(),
+                                        "propertySeed" to campaignRun.seed,
+                                        "queryIndex" to
+                                            coordinates.queryIndex.toLong(),
+                                        "registryIndex" to
+                                            coordinates.registryIndex.toLong(),
+                                        "resolverApplications" to
+                                            witness.applications.size.toLong(),
+                                        "schemaIndex" to
+                                            coordinates.schemaIndex.toLong(),
+                                    ),
+                            ),
+                        )
+                        Files.writeString(
+                            outputDirectory.resolve("query.graphql"),
+                            testCase.query.source + System.lineSeparator(),
+                        )
+                        Files.writeString(
+                            outputDirectory.resolve("provenance.txt"),
+                            buildString {
+                                appendLine("campaignRound=$CAMPAIGN_ROUND")
+                                appendLine("profile=${campaignRun.propertyProfile}")
+                                appendLine("propertySeed=${campaignRun.seed}")
+                                appendLine("campaignSize=${campaignRun.counts.summary()}")
+                                appendLine("selectedCase=$SELECTED_CASE")
+                                appendLine(
+                                    "resolverApplications=${witness.applications.size}",
+                                )
+                            },
+                        )
+                        captured = true
+                    }
+                    check(captured) {
+                        "Property-test benchmark case $SELECTED_CASE was not captured"
+                    }
                 }
             }
         } finally {

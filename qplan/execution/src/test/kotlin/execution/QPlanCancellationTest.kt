@@ -6,14 +6,12 @@ import graphql.incremental.DelayedIncrementalPartialResult
 import graphql.incremental.IncrementalExecutionResult
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutionException
-import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import model.RootFieldReferenceData
@@ -22,6 +20,7 @@ import model.fragmentFrom
 import model.requireObjectField
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
+import semantics.resolver26.ResolutionDispatcherFactory
 import org.reactivestreams.Publisher
 import org.reactivestreams.Subscriber
 import org.reactivestreams.Subscription
@@ -62,7 +61,7 @@ class QPlanCancellationTest {
     @Test
     fun `task-local cancellation crosses ordinary GraphQL completion`() =
         runBlocking {
-            forEachWorkerCount { workerCount, coroutineContext ->
+            forEachThreadCount { threadCount, coroutineContext ->
                 val result =
                     cancellationFixture(coroutineContext)
                         .runQueryAsync("query { fast cancelled }")
@@ -71,11 +70,11 @@ class QPlanCancellationTest {
                 assertEquals(
                     mapOf("fast" to 1, "cancelled" to null),
                     result.getData(),
-                    "workerCount=$workerCount",
+                    "threadCount=$threadCount",
                 )
                 assertTrue(
                     result.errors.single().message.contains("provider cancelled"),
-                    "workerCount=$workerCount",
+                    "threadCount=$threadCount",
                 )
             }
         }
@@ -83,7 +82,7 @@ class QPlanCancellationTest {
     @Test
     fun `task-local cancellation crosses deferred GraphQL completion`() =
         runBlocking {
-            forEachWorkerCount { workerCount, coroutineContext ->
+            forEachThreadCount { threadCount, coroutineContext ->
                 val initial =
                     assertIs<IncrementalExecutionResult>(
                         cancellationFixture(coroutineContext)
@@ -101,7 +100,7 @@ class QPlanCancellationTest {
                 assertEquals(mapOf("cancelled" to null), payload.getData())
                 assertTrue(
                     payload.errors.single().message.contains("provider cancelled"),
-                    "workerCount=$workerCount",
+                    "threadCount=$threadCount",
                 )
                 assertFalse(delayed.hasNext())
             }
@@ -110,7 +109,7 @@ class QPlanCancellationTest {
     @Test
     fun `list element exception is local with successful siblings`() =
         runBlocking {
-            forEachWorkerCount { workerCount, coroutineContext ->
+            forEachThreadCount { threadCount, coroutineContext ->
                 val pendingStarted = CompletableDeferred<Unit>()
                 val failingStarted = CompletableDeferred<Unit>()
                 val allowResults = CompletableDeferred<Unit>()
@@ -142,20 +141,19 @@ class QPlanCancellationTest {
                 val message = payload.errors.single().message
                 assertTrue(
                     message.contains("list element bug"),
-                    "workerCount=$workerCount, message=$message",
+                    "threadCount=$threadCount, message=$message",
                 )
                 assertFalse(delayed.hasNext())
             }
         }
 
-    private suspend fun forEachWorkerCount(
-        test: suspend (workerCount: Int, coroutineContext: CoroutineContext) -> Unit,
+    private suspend fun forEachThreadCount(
+        test: suspend (threadCount: Int, coroutineContext: CoroutineContext) -> Unit,
     ) {
-        listOf(1, 4).forEach { workerCount ->
-            Executors
-                .newFixedThreadPool(workerCount)
-                .asCoroutineDispatcher()
-                .use { dispatcher -> test(workerCount, dispatcher) }
+        listOf(1, 4).forEach { threadCount ->
+            ResolutionDispatcherFactory
+                .create(threadCount)
+                .use { dispatcher -> test(threadCount, dispatcher) }
         }
     }
 

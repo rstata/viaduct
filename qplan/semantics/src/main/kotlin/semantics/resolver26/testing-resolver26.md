@@ -4,13 +4,13 @@
 
 Every Resolver26 test uses one externally configurable resolution thread count, including static contracts, generated properties, coordinate replays, deep stress, broad stress, and multithreaded campaigns. Ordinary tests default to one; the dedicated `resolver26MultithreadedStress` task defaults to 100.
 
-Set it with the Gradle property `-Presolver26ThreadCount=N`, the JVM property `-Dresolver26.thread.count=N`, or the environment variable `RESOLVER26_THREAD_COUNT=N`; the Gradle property is preferred in commands in this guide. The value must be a positive integer.
+The Gradle property, JVM property, and environment entry all use the durable configuration name `viaduct.resolution.threadcount`; the Gradle property is preferred in commands in this guide. The value must be a positive integer.
 
-Direct-launcher campaign commands do not run their rounds under Gradle, so set `RESOLVER26_THREAD_COUNT` for those commands.
+Direct-launcher campaign commands do not run their rounds under Gradle, so pass `viaduct.resolution.threadcount` through `env` for those commands.
 
-The setting controls the fixed dispatcher inherited by all Resolver26 coroutines within a request. It does not make separate generated cases concurrent: cases are generated, resolved, and validated one at a time so a failure retains an exact seed and `S:R:Q` coordinate.
+The setting controls the fixed dispatcher inherited by all Resolver26 coroutines within a request. It does not make separate generated cases concurrent: cases are generated, resolved, and validated one at a time so a failure retains an exact seed and `S:R:Q` coordinate. Configuration is read once at each owning setup boundary rather than for every resolution.
 
-Resolver26 caches one process-scoped daemon pool per configured count. Workers are named `resolver26-N-M`, where `N` is the configured pool size and `M` identifies a worker in that pool.
+`ResolutionDispatcherFactory.create(threadCount)` creates a fresh caller-owned fixed dispatcher and retains no pools. Ordinary JUnit tests reuse one configured dispatcher per concrete test class; each standalone property-test round and corpus tool owns one dispatcher for its complete computation; each JMH trial owns one dispatcher outside measured work; and the execution fixture owns its default dispatcher while an execution strategy borrows its embedding service's supplied context. Every owner closes its dispatcher after its lifetime. Threads are daemon-backed and named `resolver26-N-M`, where `N` is a process-local pool identifier and `M` is a thread identifier local to that pool. Neither number is the configured thread count. The names group thread-dump entries by pool and support profiler filtering and per-thread CPU sampling; they are diagnostic labels rather than observations or measurements.
 
 ## Concurrency Boundary
 
@@ -22,34 +22,34 @@ Keep this division strict when adding instrumentation: capture concurrent events
 
 ## Ordinary Runs
 
-Run all non-stress Resolver26 tests on the default single worker:
+Run all non-stress Resolver26 tests on the default single thread:
 
 ```shell
 ./gradlew :semantics:test --tests 'semantics.resolver26.*'
 ```
 
-Run the same static, generated, witness, and mutation suite with five resolution workers:
+Run the same static, generated, witness, and mutation suite with five resolution threads:
 
 ```shell
-./gradlew :semantics:test --tests 'semantics.resolver26.*' -Presolver26ThreadCount=5
+./gradlew :semantics:test --tests 'semantics.resolver26.*' -Pviaduct.resolution.threadcount=5
 ```
 
 Run one class or test method by using the normal Gradle test filter and the same thread-count property:
 
 ```shell
-./gradlew :semantics:test --tests 'semantics.resolver26.SymbolicKeyIdentityTest' -Presolver26ThreadCount=2
+./gradlew :semantics:test --tests 'semantics.resolver26.SymbolicKeyIdentityTest' -Pviaduct.resolution.threadcount=2
 ```
 
 Run the generated Resolver26 contracts under a fixed property seed:
 
 ```shell
-./gradlew :semantics:test --tests 'semantics.resolver26.ResolverGeneratedTest' -PresolverPropertySeed=424242 -Presolver26ThreadCount=5
+./gradlew :semantics:test --tests 'semantics.resolver26.ResolverGeneratedTest' -PresolverPropertySeed=424242 -Pviaduct.resolution.threadcount=5
 ```
 
 Replay one exact generated coordinate with the same concurrency:
 
 ```shell
-./gradlew :semantics:resolverPropertyReplay -PresolverPropertyClass=semantics.resolver26.ResolverGeneratedTest -PresolverPropertyProfile=feature-interaction -PresolverPropertySeed=424242 -PresolverPropertyCase=2:2:1 -Presolver26ThreadCount=5
+./gradlew :semantics:resolverPropertyReplay -PresolverPropertyClass=semantics.resolver26.ResolverGeneratedTest -PresolverPropertyProfile=feature-interaction -PresolverPropertySeed=424242 -PresolverPropertyCase=2:2:1 -Pviaduct.resolution.threadcount=5
 ```
 
 ## Stress Runs
@@ -57,7 +57,7 @@ Replay one exact generated coordinate with the same concurrency:
 Run the recursive deep stress property with a fixed seed and optional case count:
 
 ```shell
-RESOLVER26_STRESS_CASES=100000 ./gradlew :semantics:resolver26Stress -Presolver26StressSeed=424242 -Presolver26ThreadCount=5
+RESOLVER26_STRESS_CASES=100000 ./gradlew :semantics:resolver26Stress -Presolver26StressSeed=424242 -Pviaduct.resolution.threadcount=5
 ```
 
 Resolver26 deep stress enables root-field references and fails unless it both generates and invokes at least one, so the usual `resolver26Stress` command cannot pass after exercising only the older feature set. Run the focused 250-case product when the root-reference interactions themselves are the subject:
@@ -74,7 +74,7 @@ The focused task hard-requires observed namespace depths two, three, and four; z
 Run one unfiltered broad product by choosing a directed profile, seed, and `S:R:Q` dimensions:
 
 ```shell
-./gradlew :semantics:resolver26BroadStress -Presolver26BroadStressProfile=multiple-owners -Presolver26BroadStressSeed=424242 -Presolver26BroadStressSize=20:10:50 -Presolver26ThreadCount=5
+./gradlew :semantics:resolver26BroadStress -Presolver26BroadStressProfile=multiple-owners -Presolver26BroadStressSeed=424242 -Presolver26BroadStressSize=20:10:50 -Pviaduct.resolution.threadcount=5
 ```
 
 Every Resolver26 broad profile includes a forced great-grandparent path: its deepest resolver input selects `parent.parent.parent`, queries activate that resolver, and generated variables are never inserted directly beneath a parent selection. Generated resolver value plans also retain `@parent` fields, and the parent-enabled harness requires evidence that at least one resolver output supplies one. The dedicated parent-focused stress generates a `40:5:5` product and reports it as four consecutive 250-case, 10-schema slices. It supplements the fixed spine with independently shaped parent chains and records parent fields actually present in materialized resolver inputs, separating fixed-spine and random activations and reporting a consecutive parent-depth histogram. Its coverage analyzer attributes selected resolvers to every enclosing materialized parent selection set; reports exact variable-bearing argument selections in those resolvers' object and Query inputs by depth, fragment, and `FromArgument`/`FromObjectField`/`FromQueryField` source combination; and measures diagonal demand when a resolver selected beneath one parent independently starts another top-level parent chain. Exact registered-occurrence accounting also identifies source-supplied active fields whose skipped standard resolver has parent input demand, records their maximum parent depths, and hard-requires at least one such speculative-demand occurrence. Each slice prints an unambiguous `HIT` or `MISS` for nine criteria, and the combined report summarizes both how many slices completely hit each criterion and how many generated cases contributed any evidence, including per-slice instance counts: parent topology, resolver placement, variable sources, mixed source pairs, input locations, argument-selection depths, diagonal depths, variable-source/input-fragment combinations on diagonals, and sometimes-passive parent demand. Individual-slice misses remain diagnostic, but a miss in the combined four-slice coverage fails the test; resolution, binding, occurrence-accounting, the combined sometimes-passive-parent activation requirement, and forbidden direct-variable invariants remain independent assertions. `ParentQueryFragmentVariableResolverContract` deterministically covers Query-fragment variable use on diagonal parent demand for all three binding sources, independent of whether a random run reports a hit. Run the randomized profile with:
@@ -89,7 +89,7 @@ Every Resolver26 broad profile includes a forced great-grandparent path: its dee
 Run one persisted five-profile campaign round:
 
 ```shell
-RESOLVER26_THREAD_COUNT=5 ./run-property-test-campaign.sh \
+env 'viaduct.resolution.threadcount=5' ./run-property-test-campaign.sh \
   classpath:/semantics/property-tests/campaigns/resolver26-broad-campaign-v1.json \
   81
 ```
@@ -97,31 +97,31 @@ RESOLVER26_THREAD_COUNT=5 ./run-property-test-campaign.sh \
 Run the dispatcher-instrumented campaign with selected rounds and either each round's recorded dimensions or one overriding size:
 
 ```shell
-./gradlew :semantics:resolver26MultithreadedStress -Presolver26MultithreadedStressRounds=1,46,81,95 -Presolver26MultithreadedStressSize=campaign -Presolver26ThreadCount=10
+./gradlew :semantics:resolver26MultithreadedStress -Presolver26MultithreadedStressRounds=1,46,81,95 -Presolver26MultithreadedStressSize=campaign -Pviaduct.resolution.threadcount=10
 ```
 
-With no overrides, the dedicated task runs round 1 at its recorded campaign dimensions: five profiles of 2,000 cases, for 10,000 cases total, on 100 workers:
+With no overrides, the dedicated task runs round 1 at its recorded campaign dimensions: five profiles of 2,000 cases, for 10,000 cases total, on 100 threads:
 
 ```shell
 ./gradlew :semantics:resolver26MultithreadedStress
 ```
 
-The dedicated multithreaded task records continuation overlap and worker names. Its assertions are useful scheduling evidence, but external OS observation is the stronger check that those workers actually execute on multiple CPUs.
+The dedicated multithreaded task records continuation overlap and thread names. Its assertions are useful scheduling evidence, but external OS observation is the stronger check that those threads actually execute on multiple CPUs.
 
 ## CPU Parallelism Probe
 
-Use a sufficiently deep run and at least two Resolver26 workers; very small cases can finish before sampling or offer too little runnable work. Run Gradle in the background, wait for its test worker, and sample that JVM from a second shell:
+Use a sufficiently deep run and at least two Resolver26 threads; very small cases can finish before sampling or offer too little runnable work. Run Gradle in the background, wait for its test worker, and sample that JVM from a second shell:
 
 ```shell
 mkdir -p build/reports/resolver26-cpu-probe
-./gradlew :semantics:resolver26MultithreadedStress -Presolver26MultithreadedStressRounds=81 -Presolver26MultithreadedStressSize=20:10:10 -Presolver26ThreadCount=10 --rerun-tasks --console=plain >build/reports/resolver26-cpu-probe/run.log 2>&1 &
+./gradlew :semantics:resolver26MultithreadedStress -Presolver26MultithreadedStressRounds=81 -Presolver26MultithreadedStressSize=20:10:10 -Pviaduct.resolution.threadcount=10 --rerun-tasks --console=plain >build/reports/resolver26-cpu-probe/run.log 2>&1 &
 gradle_pid=$!
 while ! worker_pid=$(jps -lv | awk '/GradleWorkerMain/ { print $1; exit }') || [[ -z $worker_pid ]]; do sleep 1; done
 pidstat -t -p "$worker_pid" 1 8 | tee build/reports/resolver26-cpu-probe/pidstat.log
 wait "$gradle_pid"
 ```
 
-Reasonable evidence consists of the Gradle worker process exceeding `100%` CPU while multiple `resolver26-10-*` rows report nonzero CPU in the same samples. Process CPU over `100%` indicates use of more than one core; the named thread rows distinguish Resolver26 work from JIT, GC, and Gradle activity.
+Reasonable evidence consists of the Gradle worker process exceeding `100%` CPU while multiple rows from one `resolver26-N-*` pool report nonzero CPU in the same samples. Pool identifier `N` is discovered from the thread names and is not the configured thread count. Process CPU over `100%` indicates use of more than one core; the named thread rows distinguish Resolver26 work from JIT, GC, and Gradle activity.
 
 If `pidstat` is unavailable, use `top -H -p "$worker_pid"` for live per-thread CPU or `ps -L -p "$worker_pid" -o pid,tid,pcpu,comm` for repeated snapshots. This is evidence rather than a proof: OS accounting is sampled, thread names may be truncated, and brief runs can evade observation.
 
@@ -129,10 +129,10 @@ Avoid selecting an unrelated Gradle worker when other builds are active. Stop ot
 
 ## Canonical Million-Case Campaign
 
-When a request says to run the Resolver26 one-million-query test, it means the complete checked-in `resolver26-broad-campaign-v1` campaign at one Resolver26 worker. From the `qplan` directory, run exactly:
+When a request says to run the Resolver26 one-million-query test, it means the complete checked-in `resolver26-broad-campaign-v1` campaign at one Resolver26 thread. From the `qplan` directory, run exactly:
 
 ```shell
-RESOLVER26_THREAD_COUNT=1 ./run-property-test-campaign.sh \
+env 'viaduct.resolution.threadcount=1' ./run-property-test-campaign.sh \
   classpath:/semantics/property-tests/campaigns/resolver26-broad-campaign-v1.json
 ```
 
@@ -143,7 +143,7 @@ Success means that the command exits zero after printing `Completed 100 round(s)
 The driver's final wall-clock total covers the 100 launcher JVMs but excludes the initial Gradle install. To measure the complete command, including that one incremental install, use:
 
 ```shell
-/usr/bin/time -p env RESOLVER26_THREAD_COUNT=1 \
+/usr/bin/time -p env 'viaduct.resolution.threadcount=1' \
   ./run-property-test-campaign.sh \
   classpath:/semantics/property-tests/campaigns/resolver26-broad-campaign-v1.json
 ```
@@ -153,7 +153,7 @@ The driver's final wall-clock total covers the 100 launcher JVMs but excludes th
 When a request says to run the Resolver26 100,000-case or ten-round performance sample, use this fixed phase-weighted subset:
 
 ```shell
-RESOLVER26_THREAD_COUNT=1 ./run-property-test-campaign.sh \
+env 'viaduct.resolution.threadcount=1' ./run-property-test-campaign.sh \
   classpath:/semantics/property-tests/campaigns/resolver26-broad-campaign-v1.json \
   1 20 21 33 45 46 63 80 90 98
 ```
@@ -170,11 +170,11 @@ Favor cases that activate combinations of features, not registries that merely c
 
 Bound list fanout and other multiplicative dimensions so large worlds do not collapse into a few resource explosions, but do not make the corpus shallow. Preserve registry diversity during query-heavy phases; many queries against one simple registry are not a substitute for varied resolver graphs.
 
-Use low and high thread counts across the campaign. One worker preserves a deterministic baseline, two to ten workers exercise common interleavings, and a larger pool supplies additional scheduling pressure. The thread count changes scheduling, not the semantic corpus, so exact seeds and coordinates remain replayable at any count.
+Use low and high thread counts across the campaign. One thread preserves a deterministic baseline, two to ten threads exercise common interleavings, and a larger pool supplies additional scheduling pressure. The thread count changes scheduling, not the semantic corpus, so exact seeds and coordinates remain replayable at any count.
 
 Audit both generated features and activated behavior. Track attempted and completed cases, resolver applications, variable-owner applications, provider-path depth, selection depth, list occurrences, equal visible symbolic arguments, and required structural signatures. A green run that never activates its target interaction is not evidence for that interaction.
 
-When a case fails, first replay its exact profile, seed, coordinate, and thread count. Then replay at one and several worker counts, classify the failure as resolver, generator, oracle, campaign, or resource-envelope behavior, and reduce a real Resolver26 defect to a deterministic regression before changing the implementation.
+When a case fails, first replay its exact profile, seed, coordinate, and thread count. Then replay at one and several thread counts, classify the failure as resolver, generator, oracle, campaign, or resource-envelope behavior, and reduce a real Resolver26 defect to a deterministic regression before changing the implementation.
 
 ## Improving The Corpus
 
@@ -193,7 +193,7 @@ This appendix records known weaknesses in Resolver26's test infrastructure. They
 ### Restore Witness Coverage In Multithreaded Stress
 
 - [ ] Run multithreaded stress with resolution-witness capture, plus a separate pass with count-only capture because those modes are intentionally mutually exclusive. Both recorders are already thread-safe, but `runResolver26MultithreadedStress` currently disables both, so the instrumented campaign checks only extensional correctness and from-field bindings.
-- [ ] Audit and replace unsynchronized mutable application counters and lists throughout deterministic resolver contracts, including `EmptyObjectFragmentResolverContract.kt`, `ObjectFragmentResolverContract.kt`, `VariableSelectionIdentityResolverContract.kt`, `ObjectFragmentFromArgumentResolverContract.kt`, and `NodeResolverContract.kt`; multiple Resolver26 workers may invoke fixture resolvers concurrently, and assertions that depend on append order or ordinary integer increments are harness races rather than valid resolver checks.
+- [ ] Audit and replace unsynchronized mutable application counters and lists throughout deterministic resolver contracts, including `EmptyObjectFragmentResolverContract.kt`, `ObjectFragmentResolverContract.kt`, `VariableSelectionIdentityResolverContract.kt`, `ObjectFragmentFromArgumentResolverContract.kt`, and `NodeResolverContract.kt`; multiple Resolver26 threads may invoke fixture resolvers concurrently, and assertions that depend on append order or ordinary integer increments are harness races rather than valid resolver checks.
 - [ ] Add a focused concurrency regression for the fixture instrumentation itself, then rerun representative deterministic contracts at several thread counts to prove that recorded counts and observations are stable without imposing execution order.
 
 ### Make Structural Coverage Interaction-Local

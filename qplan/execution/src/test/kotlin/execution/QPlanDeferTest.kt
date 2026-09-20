@@ -1,6 +1,7 @@
 package execution
 
 import execution.testing.ExecutionTestFixture
+import execution.testing.ExecutionTestFixtureResource
 import graphql.incremental.DeferPayload
 import graphql.incremental.DelayedIncrementalPartialResult
 import graphql.incremental.IncrementalExecutionResult
@@ -31,7 +32,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-class QPlanDeferTest {
+class QPlanDeferTest : ExecutionTestFixtureResource {
     @Test
     fun `returns non-deferred data before a deferred qplan resolver completes`() =
         runBlocking {
@@ -172,7 +173,7 @@ class QPlanDeferTest {
                     )
                 },
             )
-        val fixture = ExecutionTestFixture.fromWorld(NESTED_SCHEMA, world)
+        val fixture = fixtureFromWorld(NESTED_SCHEMA, world)
 
         val initial =
             assertIs<IncrementalExecutionResult>(
@@ -335,7 +336,7 @@ class QPlanDeferTest {
                     )
                 },
             )
-        return ExecutionTestFixture.fromWorld(SCHEMA, world)
+        return fixtureFromWorld(SCHEMA, world)
     }
 
     private fun nestedDelayedFixture(
@@ -375,7 +376,7 @@ class QPlanDeferTest {
                     )
                 },
             )
-        return ExecutionTestFixture.fromWorld(NESTED_SCHEMA, world)
+        return fixtureFromWorld(NESTED_SCHEMA, world)
     }
 
     private fun dependentDeferredFixture(
@@ -425,7 +426,7 @@ class QPlanDeferTest {
                     )
                 },
             )
-        return ExecutionTestFixture.fromWorld(DEPENDENT_SCHEMA, world)
+        return fixtureFromWorld(DEPENDENT_SCHEMA, world)
     }
 
     private companion object {

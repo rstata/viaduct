@@ -1,5 +1,7 @@
 package semantics.resolver26.inclusion
 
+import semantics.resolver26.Resolver26DispatcherResource
+
 import kotlinx.coroutines.runBlocking
 import model.Fragment
 import model.ObjectEngineResult
@@ -17,7 +19,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-class InclusionCombinationTest {
+class InclusionCombinationTest : Resolver26DispatcherResource {
     @Test
     fun `seed alternatives combine include and skip conditions for t3`() {
         T3Vector.all.forEach { vector ->
@@ -29,7 +31,7 @@ class InclusionCombinationTest {
                     world = world,
                     resolverObserver = CorrectnessResolverObserver(),
                 )
-            val result = operation.resolve(query.subselections)
+            val result = operation.resolveWithTestDispatcher(query.subselections)
             val oracle = T3Oracle(vector)
             val message = vector.toString()
 
@@ -74,7 +76,7 @@ class InclusionCombinationTest {
                     world = world,
                     resolverObserver = CorrectnessResolverObserver(),
                 )
-            val result = operation.resolve(query.subselections)
+            val result = operation.resolveWithTestDispatcher(query.subselections)
             val oracle = T2Oracle(vector)
             val message = vector.toString()
             repeat(CHAIN_DEPTH) { depth ->
@@ -148,7 +150,7 @@ class InclusionCombinationTest {
                     world = world,
                     resolverObserver = CorrectnessResolverObserver(),
                 )
-            val result = operation.resolve(query.subselections)
+            val result = operation.resolveWithTestDispatcher(query.subselections)
             val oracle = T1Oracle(vector)
             val message = vector.toString()
             witnessedDirectOnlyWithExcludedT2T3Aliases =

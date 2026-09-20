@@ -2,13 +2,11 @@ package semantics.resolver26
 
 import semantics.shared.ResolverInvocationObservation
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -44,7 +42,7 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import viaduct.engine.api.EngineObjectData
 
-class RootFieldReferenceResolutionTest {
+class RootFieldReferenceResolutionTest : Resolver26DispatcherResource {
     @Test
     fun `list provider awaits root-reference elements`() {
         val resultFragment =
@@ -100,7 +98,7 @@ class RootFieldReferenceResolutionTest {
         val observer = CorrectnessResolverObserver()
         val operation = SharedOperationContext.create(world, resolverObserver = observer)
 
-        val resolved = operation.resolve(query.subselections)
+        val resolved = operation.resolveWithTestDispatcher(query.subselections)
 
         assertEquals(
             7,
@@ -380,7 +378,7 @@ class RootFieldReferenceResolutionTest {
         val query = world.fragmentFrom("fragment Result on Query { container { product { value } } }")
         val operation =
             SharedOperationContext.create(world, resolverObserver = CorrectnessResolverObserver())
-        val result = operation.resolve(query.subselections)
+        val result = operation.resolveWithTestDispatcher(query.subselections)
         val container =
             assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "container")).getValue().get(),
@@ -481,7 +479,7 @@ class RootFieldReferenceResolutionTest {
         val query = world.fragmentFrom("fragment Result on Query { container { product { value } } }")
         val operation =
             SharedOperationContext.create(world, resolverObserver = CorrectnessResolverObserver())
-        val result = operation.resolve(query.subselections)
+        val result = operation.resolveWithTestDispatcher(query.subselections)
         val container =
             assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "container")).getValue().get(),
@@ -586,7 +584,7 @@ class RootFieldReferenceResolutionTest {
         val operation =
             SharedOperationContext.create(world, resolverObserver = recordingObserver)
         val result =
-            operation.resolve(query.subselections)
+            operation.resolveWithTestDispatcher(query.subselections)
         val container =
             assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "container")).getValue().get(),
@@ -670,7 +668,7 @@ class RootFieldReferenceResolutionTest {
         val operation =
             SharedOperationContext.create(world, resolverObserver = recordingObserver)
         val result =
-            operation.resolve(query.subselections)
+            operation.resolveWithTestDispatcher(query.subselections)
         val product =
             assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "first")).getValue().get(),
@@ -821,7 +819,7 @@ class RootFieldReferenceResolutionTest {
             world.fragmentFrom("fragment Result on Query { container { products { value } } }")
         val operation =
             SharedOperationContext.create(world, resolverObserver = CorrectnessResolverObserver())
-        val result = operation.resolve(query.subselections)
+        val result = operation.resolveWithTestDispatcher(query.subselections)
         val container =
             assertIs<ObjectEngineResult>(
                 result.getCell(world.schema.contractKey("Query", "container")).getValue().get(),
@@ -850,8 +848,8 @@ class RootFieldReferenceResolutionTest {
     @Test
     fun `task-local cancellation becomes a list-element field error and preserves siblings`() =
         runBlocking {
-            listOf(1, 4).forEach { workerCount ->
-                Executors.newFixedThreadPool(workerCount).asCoroutineDispatcher().use { dispatcher ->
+            listOf(1, 4).forEach { threadCount ->
+                ResolutionDispatcherFactory.create(threadCount).use { dispatcher ->
                     val successfulReferenceCompleted = CompletableDeferred<Unit>()
                     val world =
                         listReferenceFailureWorld(
@@ -882,7 +880,7 @@ class RootFieldReferenceResolutionTest {
                             assertIs<CancellationException>(error.errorData.cause).message,
                         )
                         assertEquals(3, withTimeout(5_000) { numbers[2].getValue().await() })
-                        assertTrue(requestJob.isActive, "workerCount=$workerCount")
+                        assertTrue(requestJob.isActive, "threadCount=$threadCount")
                     } finally {
                         requestJob.cancelAndJoin()
                     }
@@ -893,8 +891,8 @@ class RootFieldReferenceResolutionTest {
     @Test
     fun `list-element exception becomes an error value and preserves siblings`() =
         runBlocking {
-            listOf(1, 4).forEach { workerCount ->
-                Executors.newFixedThreadPool(workerCount).asCoroutineDispatcher().use { dispatcher ->
+            listOf(1, 4).forEach { threadCount ->
+                ResolutionDispatcherFactory.create(threadCount).use { dispatcher ->
                     val successfulReferenceCompleted = CompletableDeferred<Unit>()
                     val world =
                         listReferenceFailureWorld(
@@ -927,10 +925,10 @@ class RootFieldReferenceResolutionTest {
                                     "VariablesProvider returned invalid variables. " +
                                         "Missing keys: ready",
                                 ),
-                            "workerCount=$workerCount",
+                            "threadCount=$threadCount",
                         )
                         assertEquals(3, withTimeout(5_000) { numbers[2].getValue().await() })
-                        assertTrue(requestJob.isActive, "workerCount=$workerCount")
+                        assertTrue(requestJob.isActive, "threadCount=$threadCount")
                     } finally {
                         requestJob.cancelAndJoin()
                     }
@@ -1020,7 +1018,7 @@ class RootFieldReferenceResolutionTest {
                 )
             val operation =
                 SharedOperationContext.create(world, resolverObserver = CorrectnessResolverObserver())
-            val resolved = operation.resolve(query.subselections)
+            val resolved = operation.resolveWithTestDispatcher(query.subselections)
             val container =
                 assertIs<ObjectEngineResult>(
                     resolved.getCell(world.schema.contractKey("Query", "container")).getValue().get(),
@@ -1156,7 +1154,7 @@ class RootFieldReferenceResolutionTest {
         val observer = CorrectnessResolverObserver()
         val operation = SharedOperationContext.create(world, resolverObserver = observer)
         val queryFragment = world.fragmentFrom(queryFragmentSource)
-        val queryResult = operation.resolve(queryFragment.subselections)
+        val queryResult = operation.resolveWithTestDispatcher(queryFragment.subselections)
         assertEquals(1, observer.rootFieldReferenceInvocations().size)
 
         val primaryRoot =
@@ -1265,7 +1263,7 @@ class RootFieldReferenceResolutionTest {
         val query = world.fragmentFrom("fragment Result on Query { container { product { value } } }")
         val observer = CorrectnessResolverObserver()
         val operation = SharedOperationContext.create(world, resolverObserver = observer)
-        val result = operation.resolve(query.subselections)
+        val result = operation.resolveWithTestDispatcher(query.subselections)
         val observation = observer.rootFieldReferenceInvocations().single()
         val malformedObserver = CorrectnessResolverObserver()
         malformedObserver.onRootFieldReferenceInvocation(
@@ -1335,7 +1333,7 @@ class RootFieldReferenceResolutionTest {
             )
         val observer = CorrectnessResolverObserver()
         val operation = SharedOperationContext.create(world, resolverObserver = observer)
-        val result = operation.resolve(query.subselections)
+        val result = operation.resolveWithTestDispatcher(query.subselections)
         val observations = observer.rootFieldReferenceInvocations()
         assertEquals(2, observations.size)
         val malformedObserver = CorrectnessResolverObserver()
@@ -1432,7 +1430,7 @@ class RootFieldReferenceResolutionTest {
         val world = testWorld.assumptions
         val query = world.fragmentFrom("fragment Result on Query { result(enabled: $enabled) }")
         val operation = SharedOperationContext.create(world, resolverObserver = CorrectnessResolverObserver())
-        val result = operation.resolve(query.subselections)
+        val result = operation.resolveWithTestDispatcher(query.subselections)
         return ConditionalPassiveListResolution(result, operation, targetApplications)
     }
 
@@ -1601,7 +1599,7 @@ class RootFieldReferenceResolutionTest {
         query: String,
     ): ObjectEngineResult {
         val fragment = world.fragmentFrom(query)
-        return SharedOperationContext.create(world).resolve(fragment.subselections)
+        return SharedOperationContext.create(world).resolveWithTestDispatcher(fragment.subselections)
     }
 
     private data class ConditionalPassiveListResolution(

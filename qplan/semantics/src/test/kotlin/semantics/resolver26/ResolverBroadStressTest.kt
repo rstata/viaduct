@@ -64,11 +64,12 @@ import semantics.shared.SharedOperationContext
 import semantics.correctresolution.CorrectnessResolverObserver
 import viaduct.engine.api.EngineObjectData
 import viaduct.graphql.schema.ViaductSchema
+import kotlin.coroutines.CoroutineContext
 
 /**
  * Unfiltered Resolver26 stress: every generated registry/query product is resolved and validated.
  */
-class ResolverBroadStressTest {
+class ResolverBroadStressTest : Resolver26DispatcherResource {
     @Test
     fun `root field reference focused randomized worlds resolve correctly`(): Unit =
         runBlocking {
@@ -79,6 +80,7 @@ class ResolverBroadStressTest {
             val counts = execution.counts
             val completed =
                 runResolver26BroadStress(
+                    resolverCoroutineContext = resolverDispatcher,
                     requiredSignatures = emptySet(),
                     propertyProfile = propertyProfile,
                     counts = counts,
@@ -109,6 +111,7 @@ class ResolverBroadStressTest {
             val counts = execution.counts
             val completed =
                 runResolver26BroadStress(
+                    resolverCoroutineContext = resolverDispatcher,
                     requiredSignatures =
                         setOf(
                             Resolver26StructuralSignature.GREAT_GRANDPARENT_PARENT_DEMAND,
@@ -163,6 +166,7 @@ class ResolverBroadStressTest {
         runBlocking {
             val broadProfile: Resolver26BroadStressProfile = configuredProfile()
             runResolver26BroadStress(
+                resolverCoroutineContext = resolverDispatcher,
                 requiredSignatures = broadProfile.requiredSignatures,
                 propertyProfile = broadProfile.propertyProfile,
                 counts = configuredCounts(broadProfile),
@@ -237,6 +241,7 @@ class ResolverBroadStressTest {
 
 // Resolves and independently validates every case in one Resolver26 generated product.
 internal suspend fun runResolver26BroadStress(
+    resolverCoroutineContext: CoroutineContext,
     requiredSignatures: Set<Resolver26StructuralSignature>,
     propertyProfile: String,
     counts: TestCaseCount,
@@ -498,7 +503,10 @@ internal suspend fun runResolver26BroadStress(
                 val operation =
                     SharedOperationContext.create(world, resolverObserver = recordingObserver)
                 val result: ObjectEngineResult =
-                    operation.resolve(fragment.subselections)
+                    operation.resolve(
+                        selections = fragment.subselections,
+                        coroutineContext = resolverCoroutineContext,
+                    )
                 val witness: ResolutionWitness = testCase.registry.resolutionWitness()
                 val rootFieldReferenceInvocations =
                     recordingObserver.rootFieldReferenceInvocations()

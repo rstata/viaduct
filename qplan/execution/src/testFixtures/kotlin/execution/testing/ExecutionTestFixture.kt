@@ -19,11 +19,14 @@ import graphql.schema.idl.SchemaGenerator
 import graphql.schema.idl.SchemaParser
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
+import java.util.concurrent.ExecutorService
 import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import model.ObjectEngineResult
 import model.SourceSchemaAdapter
 import model.testing.TestWorld
-import semantics.resolver26.resolver26CoroutineContext
+import semantics.resolver26.ResolutionDispatcherFactory
+import semantics.resolver26.configuredResolutionThreadCount
 import semantics.shared.ResolverObserver
 import viaduct.graphql.schema.ViaductSchema
 
@@ -33,7 +36,8 @@ import viaduct.graphql.schema.ViaductSchema
 class ExecutionTestFixture private constructor(
     private val graphQL: GraphQL,
     private val root: ObjectEngineResult? = null,
-) {
+    private val ownedResolverDispatcher: ExecutorCoroutineDispatcher? = null,
+) : AutoCloseable {
     fun runQuery(
         query: String,
         variables: Map<String, Any?> = emptyMap(),
@@ -69,6 +73,15 @@ class ExecutionTestFixture private constructor(
         return graphQL.executeAsync(input.build())
     }
 
+    override fun close() {
+        ownedResolverDispatcher?.close()
+    }
+
+    internal fun ownedResolverDispatcherIsShutdown(): Boolean? =
+        ownedResolverDispatcher?.let { dispatcher ->
+            (dispatcher.executor as ExecutorService).isShutdown
+        }
+
     companion object {
         fun fromSDL(schemaSDL: String): ExecutionTestFixture =
             fromWorld(
@@ -85,6 +98,17 @@ class ExecutionTestFixture private constructor(
                 world = TestWorld.fromDSL(resolverSchemaSDL),
             )
 
+        internal fun fromResolverDSL(
+            schemaSDL: String,
+            resolverSchemaSDL: String,
+            resolverCoroutineContext: CoroutineContext,
+        ): ExecutionTestFixture =
+            fromWorld(
+                schemaSDL = schemaSDL,
+                world = TestWorld.fromDSL(resolverSchemaSDL),
+                resolverCoroutineContext = resolverCoroutineContext,
+            )
+
         /**
          * Builds a fixture directly from resolver-test DSL.
          *
@@ -97,10 +121,51 @@ class ExecutionTestFixture private constructor(
                 resolverSchemaSDL = resolverSchemaSDL,
             )
 
+        internal fun fromResolverDSL(
+            resolverSchemaSDL: String,
+            resolverCoroutineContext: CoroutineContext,
+        ): ExecutionTestFixture =
+            fromResolverDSL(
+                schemaSDL = executableSchemaSDL(resolverSchemaSDL),
+                resolverSchemaSDL = resolverSchemaSDL,
+                resolverCoroutineContext = resolverCoroutineContext,
+            )
+
         internal fun fromWorld(
             schemaSDL: String,
             world: TestWorld,
-            resolverCoroutineContext: CoroutineContext = resolver26CoroutineContext(),
+        ): ExecutionTestFixture {
+            val dispatcher =
+                ResolutionDispatcherFactory.create(configuredResolutionThreadCount())
+            return try {
+                createFromWorld(
+                    schemaSDL = schemaSDL,
+                    world = world,
+                    resolverCoroutineContext = dispatcher,
+                    ownedResolverDispatcher = dispatcher,
+                )
+            } catch (throwable: Throwable) {
+                dispatcher.close()
+                throw throwable
+            }
+        }
+
+        internal fun fromWorld(
+            schemaSDL: String,
+            world: TestWorld,
+            resolverCoroutineContext: CoroutineContext,
+        ): ExecutionTestFixture =
+            createFromWorld(
+                schemaSDL = schemaSDL,
+                world = world,
+                resolverCoroutineContext = resolverCoroutineContext,
+            )
+
+        private fun createFromWorld(
+            schemaSDL: String,
+            world: TestWorld,
+            resolverCoroutineContext: CoroutineContext,
+            ownedResolverDispatcher: ExecutorCoroutineDispatcher? = null,
         ): ExecutionTestFixture {
             val runtimeWiring =
                 RuntimeWiring
@@ -123,7 +188,10 @@ class ExecutionTestFixture private constructor(
                     )
                     .instrumentation(QPlanInstrumentation())
                     .build()
-            return ExecutionTestFixture(graphQL)
+            return ExecutionTestFixture(
+                graphQL = graphQL,
+                ownedResolverDispatcher = ownedResolverDispatcher,
+            )
         }
 
         /**

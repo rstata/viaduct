@@ -7,6 +7,9 @@ import semantics.arbitrary.ResolverTestExecution
 import semantics.resolver26.Resolver26StructuralSignature
 import semantics.resolver26.runResolver26BroadStress
 import java.io.File
+import kotlin.coroutines.CoroutineContext
+import semantics.resolver26.ResolutionDispatcherFactory
+import semantics.resolver26.configuredResolutionThreadCount
 
 const val GENERATOR_CONFIG_INDEX_RESOURCE =
     "/semantics/property-tests/generator-configs/index.json"
@@ -51,23 +54,30 @@ object PropertyTestRoundRunner {
             "Round ${round.id} does not contain test-input profile " +
                 execution.selectedTestInputProfileId
         }
-        selectedRuns.forEach { (index, run) ->
-            val propertyProfile =
-                "${round.id}-run-${(index + 1).toString().padStart(2, '0')}-" +
-                    run.testInputProfileId
-            val config = generatorConfigs[run.testInputProfileId].toConfig()
-            val resolverExecution =
-                ResolverTestExecution(
-                    counts = run.counts,
-                    selectedCase = execution.selectedCase,
-                )
-            completedCases +=
-                subject(run.subjectProfileId).execute(
-                    run = run,
-                    propertyProfile = propertyProfile,
-                    config = config,
-                    execution = resolverExecution,
-                )
+        val resolverDispatcher =
+            ResolutionDispatcherFactory.create(configuredResolutionThreadCount())
+        try {
+            selectedRuns.forEach { (index, run) ->
+                val propertyProfile =
+                    "${round.id}-run-${(index + 1).toString().padStart(2, '0')}-" +
+                        run.testInputProfileId
+                val config = generatorConfigs[run.testInputProfileId].toConfig()
+                val resolverExecution =
+                    ResolverTestExecution(
+                        counts = run.counts,
+                        selectedCase = execution.selectedCase,
+                    )
+                completedCases +=
+                    subject(run.subjectProfileId).execute(
+                        run = run,
+                        propertyProfile = propertyProfile,
+                        config = config,
+                        execution = resolverExecution,
+                        resolverCoroutineContext = resolverDispatcher,
+                    )
+            }
+        } finally {
+            resolverDispatcher.close()
         }
         val result =
             PropertyTestRoundResult(
@@ -155,6 +165,7 @@ private fun interface PropertyTestSubject {
         propertyProfile: String,
         config: Config,
         execution: ResolverTestExecution,
+        resolverCoroutineContext: CoroutineContext,
     ): Int
 }
 
@@ -166,8 +177,10 @@ private object Resolver26BroadCorrectnessSubject : PropertyTestSubject {
         propertyProfile: String,
         config: Config,
         execution: ResolverTestExecution,
+        resolverCoroutineContext: CoroutineContext,
     ): Int =
         runResolver26BroadStress(
+            resolverCoroutineContext = resolverCoroutineContext,
             requiredSignatures =
                 run.requiredCoverage.mapTo(linkedSetOf(), ::structuralSignature),
             propertyProfile = propertyProfile,

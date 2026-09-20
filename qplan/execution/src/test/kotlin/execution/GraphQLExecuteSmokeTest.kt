@@ -1,6 +1,6 @@
 package execution
 
-import execution.testing.ExecutionTestFixture
+import execution.testing.ExecutionTestFixtureResource
 import execution.testing.assertResult
 import java.util.concurrent.ConcurrentLinkedQueue
 import model.testing.TestWorld
@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
  *
  * These tests intentionally assert only behavior observable through GraphQL.execute.
  */
-class GraphQLExecuteSmokeTest {
+class GraphQLExecuteSmokeTest : ExecutionTestFixtureResource {
     @Test
     fun `completes external typename without qplan typename resolver applications`() {
         val applications = ConcurrentLinkedQueue<String>()
@@ -53,7 +53,7 @@ class GraphQLExecuteSmokeTest {
                 resolverSchema,
             )
         val fixture =
-            ExecutionTestFixture.fromWorld(
+            fixtureFromWorld(
                 schemaSDL =
                     """
                     type Query {
@@ -139,7 +139,7 @@ class GraphQLExecuteSmokeTest {
     @Test
     fun `specializes shared list continuation and concrete argument defaults`() {
         val fixture =
-            ExecutionTestFixture.fromResolverDSL(
+            fixtureFromResolverDSL(
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -183,7 +183,7 @@ class GraphQLExecuteSmokeTest {
     @Test
     fun `resolves an empty query through field and node resolvers`() {
         val fixture =
-            ExecutionTestFixture.fromResolverDSL(
+            fixtureFromResolverDSL(
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -229,7 +229,7 @@ class GraphQLExecuteSmokeTest {
     @Test
     fun `materializes argumentless and argument-bearing aliases by response key`() {
         val fixture =
-            ExecutionTestFixture.fromResolverDSL(
+            fixtureFromResolverDSL(
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -259,7 +259,7 @@ class GraphQLExecuteSmokeTest {
     @Test
     fun `collects one alias across non-overlapping concrete types`() {
         val fixture =
-            ExecutionTestFixture.fromResolverDSL(
+            fixtureFromResolverDSL(
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -309,7 +309,7 @@ class GraphQLExecuteSmokeTest {
     @Test
     fun `closes and orders transitive sibling resolver demand`() {
         val fixture =
-            ExecutionTestFixture.fromResolverDSL(
+            fixtureFromResolverDSL(
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -337,7 +337,7 @@ class GraphQLExecuteSmokeTest {
     @Test
     fun `resolves descendant demand before its consuming sibling`() {
         val fixture =
-            ExecutionTestFixture.fromResolverDSL(
+            fixtureFromResolverDSL(
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -371,7 +371,7 @@ class GraphQLExecuteSmokeTest {
     @Test
     fun `resolves recursive demand introduced by an object fragment`() {
         val fixture =
-            ExecutionTestFixture.fromResolverDSL(
+            fixtureFromResolverDSL(
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -406,7 +406,7 @@ class GraphQLExecuteSmokeTest {
     @Test
     fun `resolves input selected with a fromArgument variable`() {
         val fixture =
-            ExecutionTestFixture.fromResolverDSL(
+            fixtureFromResolverDSL(
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -443,7 +443,7 @@ class GraphQLExecuteSmokeTest {
     @Test
     fun `retains passive demand below an ungrounded nested resolver key`() {
         val fixture =
-            ExecutionTestFixture.fromResolverDSL(
+            fixtureFromResolverDSL(
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -484,7 +484,7 @@ class GraphQLExecuteSmokeTest {
     @Test
     fun `binds a variable from a direct active scalar provider`() {
         val fixture =
-            ExecutionTestFixture.fromResolverDSL(
+            fixtureFromResolverDSL(
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -509,7 +509,7 @@ class GraphQLExecuteSmokeTest {
     @Test
     fun `reads a nested provider after its active ancestor publishes passive content`() {
         val fixture =
-            ExecutionTestFixture.fromResolverDSL(
+            fixtureFromResolverDSL(
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -538,7 +538,7 @@ class GraphQLExecuteSmokeTest {
     @Test
     fun `converts a terminal scalar list to a ground input list`() {
         val fixture =
-            ExecutionTestFixture.fromResolverDSL(
+            fixtureFromResolverDSL(
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -562,7 +562,7 @@ class GraphQLExecuteSmokeTest {
     @Test
     fun `waits for a provider value before expanding a nested variable use`() {
         val fixture =
-            ExecutionTestFixture.fromResolverDSL(
+            fixtureFromResolverDSL(
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -592,7 +592,7 @@ class GraphQLExecuteSmokeTest {
     @Test
     fun `installs a resolver promise below a passive provider field`() {
         val fixture =
-            ExecutionTestFixture.fromResolverDSL(
+            fixtureFromResolverDSL(
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -627,7 +627,7 @@ class GraphQLExecuteSmokeTest {
     @Test
     fun `accepts an acyclic mixed-variable dependency chain`() {
         val fixture =
-            ExecutionTestFixture.fromResolverDSL(
+            fixtureFromResolverDSL(
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -661,7 +661,7 @@ class GraphQLExecuteSmokeTest {
     @Test
     fun `applies the configured identity policy after variable selections ground equally`() {
         val fixture =
-            ExecutionTestFixture.fromResolverDSL(
+            fixtureFromResolverDSL(
                 resolverSchemaSDL =
                     """
                     extend type Query {
@@ -689,7 +689,7 @@ class GraphQLExecuteSmokeTest {
     @Test
     fun `list null and error elements preserve position and skip descendants`() {
         val fixture =
-            ExecutionTestFixture.fromResolverDSL(
+            fixtureFromResolverDSL(
                 resolverSchemaSDL =
                     """
                     extend type Query {

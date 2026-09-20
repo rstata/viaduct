@@ -37,8 +37,9 @@ import semantics.resolvers.resolver21.resolve as resolve21
 import semantics.resolvers.resolver22.resolve as resolve22
 import semantics.resolvers.resolver23.resolve as resolve23
 import semantics.resolver26.resolve as resolve26
+import semantics.resolver26.Resolver26DispatcherResource
 
-class ResolverObservationTest {
+class ResolverObservationTest : Resolver26DispatcherResource {
     private class Subject(
         val name: String,
         val selective: Boolean,
@@ -59,7 +60,7 @@ class ResolverObservationTest {
         Subject("Resolver21", false, false) { resolve21(it) },
         Subject("Resolver22", false, true) { resolve22(it) },
         Subject("Resolver23", true, true) { resolve23(it) },
-        Subject("Resolver26", true, true) { resolve26(it) },
+        Subject("Resolver26", true, true) { resolve26(it, resolverDispatcher) },
     )
 
     @TestFactory

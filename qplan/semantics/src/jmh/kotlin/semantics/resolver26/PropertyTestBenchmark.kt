@@ -25,6 +25,7 @@ import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 import jdk.jfr.Configuration
 import jdk.jfr.Recording
+import kotlinx.coroutines.ExecutorCoroutineDispatcher
 
 private const val PROFILE_OUTPUT_PROPERTY = "propertyTestProfileOutput"
 private const val PROFILE_RECORDING_NAME = "property-test-measurement"
@@ -41,15 +42,33 @@ open class PropertyTestBenchmark {
     @Param("$DEFAULT_PROPERTY_TEST_LOOP_COUNT")
     var loopCount: Int = DEFAULT_PROPERTY_TEST_LOOP_COUNT
 
-    private val support = PropertyTestBenchmarkSupport(
-        subject = ResolverBenchmarkSubject { operation, _, selections -> operation.resolve(selections) },
-    )
+    private lateinit var resolverDispatcher: ExecutorCoroutineDispatcher
+
+    private val support =
+        PropertyTestBenchmarkSupport(
+            subject = ResolverBenchmarkSubject { operation, _, selections ->
+                operation.resolve(selections, resolverDispatcher)
+            },
+        )
 
     private var profileRecording: Recording? = null
 
     @Setup(Level.Trial)
     fun prepareTrial() {
-        support.prepareTrial()
+        val dispatcher =
+            ResolutionDispatcherFactory.create(configuredResolutionThreadCount())
+        resolverDispatcher = dispatcher
+        try {
+            support.prepareTrial()
+        } catch (throwable: Throwable) {
+            dispatcher.close()
+            throw throwable
+        }
+    }
+
+    @TearDown(Level.Trial)
+    fun closeTrial() {
+        resolverDispatcher.close()
     }
 
     @Setup(Level.Iteration)

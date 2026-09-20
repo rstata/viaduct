@@ -1,15 +1,15 @@
 package execution
 
-import execution.testing.ExecutionTestFixture
+import execution.testing.ExecutionTestFixtureResource
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-class QPlanExecutionStrategyTest {
+class QPlanExecutionStrategyTest : ExecutionTestFixtureResource {
     @Test
     fun `resolves an operation with variables objects and lists`() {
         val fixture =
-            ExecutionTestFixture.fromResolverDSL(
+            fixtureFromResolverDSL(
                 schemaSDL = VALUE_SCHEMA,
                 resolverSchemaSDL = VALUE_RESOLVERS,
             )
@@ -56,7 +56,7 @@ class QPlanExecutionStrategyTest {
     @Test
     fun `resolves a Node through the lowered bridge`() {
         val fixture =
-            ExecutionTestFixture.fromResolverDSL(
+            fixtureFromResolverDSL(
                 schemaSDL = NODE_SCHEMA,
                 resolverSchemaSDL = NODE_RESOLVERS,
             )

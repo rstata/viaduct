@@ -22,6 +22,7 @@ import model.testing.selectiveFieldResolverOf
 import viaduct.graphql.schema.ViaductSchema
 import model.testing.TestWorld
 import semantics.resolver26.resolve
+import semantics.resolver26.Resolver26DispatcherResource
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -30,7 +31,7 @@ import kotlin.test.assertTrue
 import semantics.shared.SharedOperationContext
 import semantics.shared.ResolverInvocationObservation
 
-class CorrectResolutionTest {
+class CorrectResolutionTest : Resolver26DispatcherResource {
     @Test
     fun `direct resolve invocation and invocation through correctness replay do not cause invocation observations`() = runBlocking {
         val testWorld = TestWorld.fromDSL("extend type Query { value: Int @resolver(result: 7) }")
@@ -44,7 +45,7 @@ class CorrectResolutionTest {
         val world = testWorld.assumptions
         val operation = SharedOperationContext.create(world, resolverObserver = observer)
         val fragment = world.fragmentFrom("fragment Main on Query { value }")
-        val root = operation.resolve(fragment.subselections)
+        val root = operation.resolveWithTestDispatcher(fragment.subselections)
         assertEquals(1, events.size)
         repeat(2) { assertTrue(root.correctResolution(operation, fragment)) }
         val field = world.schema.requireObjectField("Query", "value")
@@ -108,7 +109,7 @@ class CorrectResolutionTest {
                     }
                     """.trimIndent(),
                 ).subselections
-        val result = operation.resolve(selections)
+        val result = operation.resolveWithTestDispatcher(selections)
         val querySelections = selections.merge(world.schema.requireQueryTypeDef())
 
         assertTrue(result.correctResolution(operation, querySelections))

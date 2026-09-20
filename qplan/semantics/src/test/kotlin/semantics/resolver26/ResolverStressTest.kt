@@ -16,7 +16,7 @@ import semantics.arbitrary.RootFieldReferenceWeight
 import semantics.arbitrary.SometimesPassiveFieldWeight
 import semantics.contract.DeepResolverStressContract
 
-class ResolverStressTest : DeepResolverStressContract {
+class ResolverStressTest : DeepResolverStressContract, Resolver26DispatcherResource {
     override val resolverName: String = "resolver26"
 
     override val objectPathVariablesEnabled: Boolean = true
@@ -41,5 +41,5 @@ class ResolverStressTest : DeepResolverStressContract {
         root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult =
-        operation.resolve(selections)
+        operation.resolveWithTestDispatcher(selections)
 }

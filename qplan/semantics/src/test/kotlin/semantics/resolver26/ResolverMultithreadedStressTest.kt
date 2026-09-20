@@ -2,7 +2,6 @@ package semantics.resolver26
 
 import semantics.shared.ResolverInvocationObservation
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 import model.Assumptions
 import model.ObjectEngineResult
@@ -16,8 +15,6 @@ import semantics.arbitrary.checkResolverTestCases
 import semantics.contract.validateFromFieldBindings
 import semantics.correctresolution.correctResolution
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executors
-import java.util.concurrent.ThreadFactory
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.CoroutineContext
 import kotlin.test.assertEquals
@@ -35,10 +32,7 @@ class ResolverMultithreadedStressTest {
                 configuredRounds().map(Resolver26BroadStressCampaign::round)
             val campaignRuns: List<Resolver26BroadStressCampaignRun> =
                 campaignRounds.flatMap(Resolver26BroadStressCampaignRound::runs)
-            val threadFactory = ResolverThreadFactory(threadCount)
-            val executor = Executors.newFixedThreadPool(threadCount, threadFactory)
-
-            executor.asCoroutineDispatcher().use { executorDispatcher ->
+            ResolutionDispatcherFactory.create(threadCount).use { executorDispatcher ->
                 val dispatcher = RecordingCoroutineDispatcher(executorDispatcher)
                 val completedCases: Int =
                     campaignRuns.sumOf { run ->
@@ -59,7 +53,7 @@ class ResolverMultithreadedStressTest {
                 assertEquals(expectedCases, completedCases)
                 if (threadCount == 1) {
                     assertEquals(1, dispatcher.maximumConcurrentContinuations.get())
-                    assertEquals(1, dispatcher.workerThreads.size)
+                    assertEquals(1, dispatcher.threadNames.size)
                 } else {
                     assertTrue(
                         dispatcher.maximumConcurrentContinuations.get() > 1,
@@ -67,9 +61,9 @@ class ResolverMultithreadedStressTest {
                             dispatcher.maximumConcurrentContinuations.get(),
                     )
                     assertTrue(
-                        dispatcher.workerThreads.size > 1,
-                        "Expected multiple resolver worker threads; observed=" +
-                            dispatcher.workerThreads,
+                        dispatcher.threadNames.size > 1,
+                        "Expected multiple resolver threads; observed=" +
+                            dispatcher.threadNames,
                     )
                 }
                 println(
@@ -79,7 +73,7 @@ class ResolverMultithreadedStressTest {
                         "threads=$threadCount, " +
                         "maximumConcurrentContinuations=" +
                         "${dispatcher.maximumConcurrentContinuations.get()}, " +
-                        "workerThreads=${dispatcher.workerThreads.sorted()}, " +
+                        "threadNames=${dispatcher.threadNames.sorted()}, " +
                         "completedCases=$completedCases",
                 )
             }
@@ -87,7 +81,7 @@ class ResolverMultithreadedStressTest {
 
     // Returns the fixed dispatcher size selected for this run.
     private fun configuredThreadCount(): Int =
-        configuredResolver26ThreadCount()
+        configuredResolutionThreadCount()
 
     // Returns fixed S:R:Q dimensions, or null to retain each campaign profile's dimensions.
     private fun configuredCounts(): TestCaseCount? {
@@ -137,31 +131,15 @@ class ResolverMultithreadedStressTest {
     }
 }
 
-// Names every executor thread so the test can prove that one request used multiple workers.
-private class ResolverThreadFactory(
-    private val threadCount: Int,
-) : ThreadFactory {
-    private val nextThread = AtomicInteger()
-
-    // Creates one daemon worker with a stable pool-specific name.
-    override fun newThread(runnable: Runnable): Thread =
-        Thread(
-            runnable,
-            "resolver26-$threadCount-${nextThread.incrementAndGet()}",
-        ).apply {
-            isDaemon = true
-        }
-}
-
 // Records actual continuation overlap while delegating execution to the fixed thread pool.
 private class RecordingCoroutineDispatcher(
     private val delegate: CoroutineDispatcher,
 ) : CoroutineDispatcher() {
     private val activeContinuations = AtomicInteger()
     val maximumConcurrentContinuations = AtomicInteger()
-    val workerThreads: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    val threadNames: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
-    // Dispatches one continuation and records the worker and overlap during its execution.
+    // Dispatches one continuation and records the thread and overlap during its execution.
     override fun dispatch(
         context: CoroutineContext,
         block: Runnable,
@@ -169,7 +147,7 @@ private class RecordingCoroutineDispatcher(
         delegate.dispatch(context) {
             val active: Int = activeContinuations.incrementAndGet()
             maximumConcurrentContinuations.accumulateAndGet(active, ::maxOf)
-            workerThreads += Thread.currentThread().name
+            threadNames += Thread.currentThread().name
             try {
                 block.run()
             } finally {

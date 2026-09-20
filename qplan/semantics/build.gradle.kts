@@ -386,25 +386,25 @@ fun resolverStressTestClass(resolverName: String): String =
         "semantics.resolvers.$resolverName.ResolverStressTest"
     }
 
-val configuredResolver26ThreadCount =
+val configuredResolutionThreadCount =
     providers
-        .gradleProperty("resolver26ThreadCount")
-        .orElse(providers.systemProperty("resolver26.thread.count"))
-        .orElse(providers.environmentVariable("RESOLVER26_THREAD_COUNT"))
+        .gradleProperty("viaduct.resolution.threadcount")
+        .orElse(providers.systemProperty("viaduct.resolution.threadcount"))
+        .orElse(providers.environmentVariable("viaduct.resolution.threadcount"))
 
 tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
-    val resolver26ThreadCount =
-        configuredResolver26ThreadCount.orElse(
+    val resolutionThreadCount =
+        configuredResolutionThreadCount.orElse(
             if (name == "resolver26MultithreadedStress") "100" else "1",
         )
-    inputs.property("resolver26ThreadCount", resolver26ThreadCount)
+    inputs.property("viaduct.resolution.threadcount", resolutionThreadCount)
 
     doFirst {
-        val configured = resolver26ThreadCount.get()
+        val configured = resolutionThreadCount.get()
         require(configured.toIntOrNull()?.let { threadCount -> threadCount > 0 } == true) {
-            "resolver26ThreadCount must be a positive integer: $configured"
+            "viaduct.resolution.threadcount must be a positive integer: $configured"
         }
-        systemProperty("resolver26.thread.count", configured)
+        systemProperty("viaduct.resolution.threadcount", configured)
     }
 }
 

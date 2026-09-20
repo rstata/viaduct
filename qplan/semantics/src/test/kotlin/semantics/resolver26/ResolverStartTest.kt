@@ -4,7 +4,6 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
@@ -29,7 +28,6 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.test.Test
@@ -41,7 +39,7 @@ import kotlin.test.assertNotSame
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
-class ResolverStartTest {
+class ResolverStartTest : Resolver26DispatcherResource {
     @Test
     fun `nested execution retains observer but only query fragment emits preparation`() {
         val observer = InvocationRecordingObserver()
@@ -62,7 +60,9 @@ class ResolverStartTest {
             },
         )
         val operation = SharedOperationContext.create(testWorld.assumptions, resolverObserver = observer)
-        val root = operation.resolve(operation.world.operationSelectionsFrom("{ outer }"))
+        val root = operation.resolveWithTestDispatcher(
+            operation.world.operationSelectionsFrom("{ outer }"),
+        )
         val byField = observer.events.associateBy { it.field.name }
         assertEquals(setOf("outer", "inner", "dependency"), byField.keys)
         assertEquals(3, observer.events.size)
@@ -105,7 +105,7 @@ class ResolverStartTest {
             val operation = SharedOperationContext.create(testWorld.assumptions, resolverObserver = observer)
             operation.startResolve(
                 operation.world.operationSelectionsFrom("{ consumer }"),
-                CoroutineScope(resolver26CoroutineContext() + job),
+                CoroutineScope(resolverDispatcher + job),
             )
             withTimeout(5000) { entered.await() }
             job.cancelAndJoin()
@@ -184,7 +184,7 @@ class ResolverStartTest {
                 )
             val selections = world.assumptions.operationSelectionsFrom("query { outer }")
             val requestJob = Job()
-            val requestScope = CoroutineScope(resolver26CoroutineContext() + requestJob)
+            val requestScope = CoroutineScope(resolverDispatcher + requestJob)
 
             try {
                 val root =
@@ -211,7 +211,7 @@ class ResolverStartTest {
             val world = delayedWorld(providerStarted, gate)
             val selections = world.assumptions.operationSelectionsFrom("query { fast slow }")
             val requestJob = Job()
-            val requestScope = CoroutineScope(resolver26CoroutineContext() + requestJob)
+            val requestScope = CoroutineScope(resolverDispatcher + requestJob)
 
             try {
                 val root =
@@ -241,7 +241,7 @@ class ResolverStartTest {
             val world = delayedWorld(providerStarted, gate, providerStopped)
             val selections = world.assumptions.operationSelectionsFrom("query { slow }")
             val requestJob = Job()
-            val requestScope = CoroutineScope(resolver26CoroutineContext() + requestJob)
+            val requestScope = CoroutineScope(resolverDispatcher + requestJob)
 
             val root =
                 SharedOperationContext.create(world.assumptions).startResolve(selections, requestScope)
@@ -281,7 +281,7 @@ class ResolverStartTest {
                 )
             val selections = world.assumptions.operationSelectionsFrom("query { slow }")
             val requestJob = Job()
-            val requestScope = CoroutineScope(resolver26CoroutineContext() + requestJob)
+            val requestScope = CoroutineScope(resolverDispatcher + requestJob)
 
             try {
                 val root =
@@ -335,7 +335,7 @@ class ResolverStartTest {
                 )
             val selections = world.assumptions.operationSelectionsFrom("query { dependent }")
             val requestJob = Job()
-            val requestScope = CoroutineScope(resolver26CoroutineContext() + requestJob)
+            val requestScope = CoroutineScope(resolverDispatcher + requestJob)
 
             try {
                 val root =
@@ -379,7 +379,7 @@ class ResolverStartTest {
                 )
             val selections = world.assumptions.operationSelectionsFrom("query { slow }")
             val requestJob = Job()
-            val requestScope = CoroutineScope(resolver26CoroutineContext() + requestJob)
+            val requestScope = CoroutineScope(resolverDispatcher + requestJob)
 
             try {
                 val root =
@@ -404,7 +404,7 @@ class ResolverStartTest {
     @Test
     fun `field exception does not cancel queued sibling producers`() =
         runBlocking {
-            Executors.newSingleThreadExecutor().asCoroutineDispatcher().use { dispatcher ->
+            ResolutionDispatcherFactory.create(1).use { dispatcher ->
                 val siblingStarted = CompletableDeferred<Unit>()
                 val world =
                     TestWorld.fromSDL(
@@ -462,12 +462,11 @@ class ResolverStartTest {
     @Test
     fun `request cancellation terminates field promises before coroutine entry`() =
         runBlocking {
-            val executor = Executors.newSingleThreadExecutor()
-            executor.asCoroutineDispatcher().use { dispatcher ->
+            ResolutionDispatcherFactory.create(1).use { dispatcher ->
                 val blockerStarted = CountDownLatch(1)
                 val releaseBlocker = CountDownLatch(1)
                 val resolverStarted = AtomicBoolean()
-                executor.submit {
+                dispatcher.executor.execute {
                     blockerStarted.countDown()
                     releaseBlocker.await()
                 }

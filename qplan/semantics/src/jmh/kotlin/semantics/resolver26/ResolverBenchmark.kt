@@ -26,6 +26,7 @@ import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 import jdk.jfr.Configuration
 import jdk.jfr.Recording
+import kotlinx.coroutines.ExecutorCoroutineDispatcher
 
 private const val PROFILE_OUTPUT_PROPERTY = "resolver26OverheadProfileOutput"
 private const val PROFILE_RECORDING_NAME = "resolver26-overhead-measurement"
@@ -42,11 +43,22 @@ open class ResolverBenchmark {
     @Param("$DEFAULT_OVERHEAD_LOOP_COUNT")
     var loopCount: Int = DEFAULT_OVERHEAD_LOOP_COUNT
 
-    private val support = CurrentProfileBenchmarkSupport(
-        subject = ResolverBenchmarkSubject { operation, _, selections -> operation.resolve(selections) },
-    )
+    private lateinit var resolverDispatcher: ExecutorCoroutineDispatcher
+
+    private val support =
+        CurrentProfileBenchmarkSupport(
+            subject = ResolverBenchmarkSubject { operation, _, selections ->
+                operation.resolve(selections, resolverDispatcher)
+            },
+        )
 
     private var profileRecording: Recording? = null
+
+    @Setup(Level.Trial)
+    fun prepareTrial() {
+        resolverDispatcher =
+            ResolutionDispatcherFactory.create(configuredResolutionThreadCount())
+    }
 
     @Setup(Level.Invocation)
     fun prepareOverheadInvocation(
@@ -70,8 +82,12 @@ open class ResolverBenchmark {
 
     @TearDown(Level.Trial)
     fun reportOverheadStatistics(parameters: BenchmarkParams) {
-        if (parameters.benchmark.endsWith(".overhead")) {
-            support.reportOverheadStatistics()
+        try {
+            if (parameters.benchmark.endsWith(".overhead")) {
+                support.reportOverheadStatistics()
+            }
+        } finally {
+            resolverDispatcher.close()
         }
     }
 

@@ -11,7 +11,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-class ParentCoverageMetricsTest {
+class ParentCoverageMetricsTest : Resolver26DispatcherResource {
     @Test
     fun `classifies variable sources and diagonal parent demand across a resolver boundary`() {
         val testWorld =
@@ -68,7 +68,7 @@ class ParentCoverageMetricsTest {
                 world = world,
                 resolverObserver = recordingObserver,
             )
-        operation.resolve(
+        operation.resolveWithTestDispatcher(
             world.operationSelectionsFrom(
                 "query { grand { parentNode { child { result } } } }",
             ),

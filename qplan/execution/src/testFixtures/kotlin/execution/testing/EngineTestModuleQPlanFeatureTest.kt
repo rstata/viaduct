@@ -132,7 +132,9 @@ fun EngineTestModule.runQPlanFeatureTest(
                     .variableProviders
             },
         )
-    QPlanFeatureTest(ExecutionTestFixture.fromWorld(executableSchemaSDL, world)).block()
+    ExecutionTestFixture.fromWorld(executableSchemaSDL, world).use { fixture ->
+        QPlanFeatureTest(fixture).block()
+    }
 }
 
 fun MockTenantModuleBootstrapper.runQPlanFeatureTest(

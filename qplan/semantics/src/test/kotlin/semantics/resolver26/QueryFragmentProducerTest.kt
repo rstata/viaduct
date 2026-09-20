@@ -37,7 +37,7 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import semantics.shared.OEROccurrence
 
-class QueryFragmentProducerTest {
+class QueryFragmentProducerTest : Resolver26DispatcherResource {
     @Test
     fun `Query producer failure publishes a field error and terminates its bindings`() =
         runBlocking {
@@ -51,7 +51,7 @@ class QueryFragmentProducerTest {
                     ): Nothing = throw failure
                 }
             val requestJob = Job()
-            val requestScope = CoroutineScope(resolver26CoroutineContext() + requestJob)
+            val requestScope = CoroutineScope(resolverDispatcher + requestJob)
 
             try {
                 val resolution =

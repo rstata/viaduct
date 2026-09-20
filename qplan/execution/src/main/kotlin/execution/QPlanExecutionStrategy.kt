@@ -21,7 +21,6 @@ import model.selectionsFrom
 import org.reactivestreams.Publisher
 import org.reactivestreams.Subscriber
 import org.reactivestreams.Subscription
-import semantics.resolver26.resolver26CoroutineContext
 import semantics.resolver26.startResolve
 import semantics.shared.ResolverObserver
 import semantics.shared.SharedOperationContext
@@ -31,14 +30,16 @@ import semantics.shared.SharedOperationContext
  *
  * Each request decodes its validated operation into qplan selections, starts Resolver26, and
  * delegates GraphQL completion with a live promise-backed OER as the root source.
+ * The embedding service owns [resolverCoroutineContext] for its service lifetime; this strategy
+ * borrows and retains the context across requests without closing it.
  * [QPlanInstrumentation] must be installed on the enclosing `GraphQL` instance so incremental
  * publisher termination owns final request cleanup.
  */
 class QPlanExecutionStrategy(
     private val world: Assumptions,
+    private val resolverCoroutineContext: CoroutineContext,
     dataFetcherExceptionHandler: DataFetcherExceptionHandler =
         SimpleDataFetcherExceptionHandler(),
-    private val resolverCoroutineContext: CoroutineContext = resolver26CoroutineContext(),
 ) : AsyncExecutionStrategy(dataFetcherExceptionHandler) {
     override fun execute(
         executionContext: ExecutionContext,

@@ -30,7 +30,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-class InclusionConditionTest {
+class InclusionConditionTest : Resolver26DispatcherResource {
     @Test
     fun `a failed provider inclusion condition leaves unrelated fields running`() {
         val world = TestWorld.fromDSL(
@@ -63,7 +63,9 @@ class InclusionConditionTest {
             }
         }
         val operation = SharedOperationContext.create(world.assumptions, resolverObserver = recordingObserver)
-        val result = operation.resolve(world.assumptions.fragmentFrom("fragment Test on Query { controller healthy }").subselections)
+        val result = operation.resolveWithTestDispatcher(
+            world.assumptions.fragmentFrom("fragment Test on Query { controller healthy }").subselections,
+        )
 
         for (name in listOf("controller", "outer")) {
             val key = ObjectEngineResult.GroundKey.of(world.schema.requireObjectField("Query", name), emptyMap())
@@ -760,7 +762,7 @@ class InclusionConditionTest {
                 resolverObserver = recordingObserver,
             )
         val result =
-            operation.resolve(fragment.subselections)
+            operation.resolveWithTestDispatcher(fragment.subselections)
         val correct =
             result.correctResolution(
                 operation,

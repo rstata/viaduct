@@ -1,16 +1,16 @@
 package execution
 
-import execution.testing.ExecutionTestFixture
+import execution.testing.ExecutionTestFixtureResource
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-class NullAndErrorCompletionTest {
+class NullAndErrorCompletionTest : ExecutionTestFixtureResource {
     @Test
     fun `completes nullable fields and list elements without errors`() {
         val fixture =
-            ExecutionTestFixture.fromResolverDSL(
+            fixtureFromResolverDSL(
                 schemaSDL = SCHEMA,
                 resolverSchemaSDL = RESOLVERS,
             )
@@ -49,7 +49,7 @@ class NullAndErrorCompletionTest {
     @Test
     fun `reports errors and applies GraphQL null bubbling`() {
         val fixture =
-            ExecutionTestFixture.fromResolverDSL(
+            fixtureFromResolverDSL(
                 schemaSDL = SCHEMA,
                 resolverSchemaSDL = RESOLVERS,
             )

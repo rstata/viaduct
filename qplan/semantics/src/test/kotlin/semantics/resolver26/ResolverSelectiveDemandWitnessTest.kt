@@ -9,11 +9,11 @@ import model.ObjectEngineResult
 import model.SelectionForest
 import semantics.contract.ResolverSelectiveDemandWitnessContract
 
-class ResolverSelectiveDemandWitnessTest : ResolverSelectiveDemandWitnessContract {
+class ResolverSelectiveDemandWitnessTest : ResolverSelectiveDemandWitnessContract, Resolver26DispatcherResource {
     override fun resolve(
         operation: SharedOperationContext<*>,
         root: EngineObjectData.Sync,
         selections: SelectionForest,
     ): ObjectEngineResult =
-        operation.resolve(selections)
+        operation.resolveWithTestDispatcher(selections)
 }

@@ -1,6 +1,6 @@
 package semantics.arbitrary
 
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
 import semantics.shared.ResolverInvocationObservation
 import viaduct.graphql.schema.ViaductSchema
 
@@ -349,7 +349,7 @@ class ArbitraryRegistry internal constructor(
         captureResolutionWitness: Boolean = true,
         captureResolutionApplicationCounts: Boolean = !captureResolutionWitness,
         resolverProgramMutation: ResolverProgramMutation = ResolverProgramMutation.NONE,
-    ): RecordingResolverObserver {
+    ): CorrectnessResolverObserver {
         require(captureResolutionWitness || !captureSuppliedDemand)
         require(!(captureResolutionWitness && captureResolutionApplicationCounts))
         fun recordApplication(
@@ -371,7 +371,7 @@ class ArbitraryRegistry internal constructor(
                 }
             }
         }
-        return object : RecordingResolverObserver() {
+        return object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val coordinate = FieldCoordinate(observation.field.containingDef.name, observation.field.name)

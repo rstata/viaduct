@@ -23,7 +23,7 @@ import kotlin.coroutines.CoroutineContext
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import semantics.shared.SharedOperationContext
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
 
 class ResolverMultithreadedStressTest {
     @Test
@@ -201,7 +201,7 @@ private suspend fun runResolver26MultithreadedStress(
             val appliedResolverOccurrences =
                 ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
 
-            val recordingObserver = object : RecordingResolverObserver() {
+            val recordingObserver = object : CorrectnessResolverObserver() {
                 override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                     super.onResolverInvocation(observation)
                     appliedResolverOccurrences += observation.resolverOccurrenceId

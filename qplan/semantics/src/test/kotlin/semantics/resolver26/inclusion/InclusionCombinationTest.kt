@@ -11,7 +11,7 @@ import model.testing.TestWorld
 import semantics.correctresolution.correctResolution
 import semantics.resolver26.resolve
 import semantics.shared.SharedOperationContext
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -27,7 +27,7 @@ class InclusionCombinationTest {
             val operation =
                 SharedOperationContext.create(
                     world = world,
-                    resolverObserver = RecordingResolverObserver(),
+                    resolverObserver = CorrectnessResolverObserver(),
                 )
             val result = operation.resolve(query.subselections)
             val oracle = T3Oracle(vector)
@@ -72,7 +72,7 @@ class InclusionCombinationTest {
             val operation =
                 SharedOperationContext.create(
                     world = world,
-                    resolverObserver = RecordingResolverObserver(),
+                    resolverObserver = CorrectnessResolverObserver(),
                 )
             val result = operation.resolve(query.subselections)
             val oracle = T2Oracle(vector)
@@ -146,7 +146,7 @@ class InclusionCombinationTest {
             val operation =
                 SharedOperationContext.create(
                     world = world,
-                    resolverObserver = RecordingResolverObserver(),
+                    resolverObserver = CorrectnessResolverObserver(),
                 )
             val result = operation.resolve(query.subselections)
             val oracle = T1Oracle(vector)

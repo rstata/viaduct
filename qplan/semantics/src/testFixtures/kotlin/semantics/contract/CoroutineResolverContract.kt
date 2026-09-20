@@ -1,7 +1,6 @@
 package semantics.contract
 
 import semantics.shared.ResolverInvocationObservation
-import semantics.shared.RecordingResolverObserver
 import model.requireField
 import model.requireObjectField
 import kotlinx.coroutines.runBlocking
@@ -18,7 +17,7 @@ import model.RootFieldReferenceData
 import model.SelectionForest
 import model.operationSelectionsFrom
 import model.requireQueryTypeDef
-import semantics.shared.SharedResolverObserver
+import semantics.shared.ResolverObserver
 import kotlin.test.assertSame
 import model.Assumptions
 import model.EngineResult
@@ -67,9 +66,8 @@ interface CoroutineResolverContract {
     fun `installs every local promise before any local producer starts`() {
         val registeredKeys = linkedSetOf<ObjectEngineResult.GroundKey>()
         var producerStarts = 0
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : ResolverObserver {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
-                super.onResolverInvocation(observation)
                 producerStarts += 1
                 assertEquals(setOf("first", "second"), registeredKeys.map { it.field.name }.toSet())
             }
@@ -351,7 +349,7 @@ interface CoroutineResolverContract {
         for (failure in listOf(IllegalStateException("Query producer failed"), CancellationException("local cancellation"))) {
             var consumerInvoked = false
             val world = queryFailureWorld(selectiveResolvers) { consumerInvoked = true }.assumptions
-            val observer = object : SharedResolverObserver {
+            val observer = object : ResolverObserver {
                 override fun onQueryFragmentPrepared(resolverOccurrenceId: ResolverOccurrenceId, result: ObjectEngineResult): Nothing =
                     throw failure
             }
@@ -377,7 +375,7 @@ interface CoroutineResolverContract {
             var producerEntered = false
             var consumerInvoked = false
             val world = queryFailureWorld(selectiveResolvers) { consumerInvoked = true }.assumptions
-            val observer = object : SharedResolverObserver {
+            val observer = object : ResolverObserver {
                 override fun onQueryFragmentPrepared(resolverOccurrenceId: ResolverOccurrenceId, result: ObjectEngineResult): Nothing {
                     producerEntered = true
                     requestJob.cancel(cancellation)

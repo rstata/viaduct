@@ -1,7 +1,7 @@
 package semantics.contract
 
 import semantics.shared.ResolverInvocationObservation
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 import model.Arguments
@@ -390,7 +390,7 @@ interface DepthFirstRootFieldReferenceOrderingContract : ResolverContract {
     @Test
     fun `executes an embedded root reference before its containing object's sibling resolver`() {
         val applications = CopyOnWriteArrayList<String>()
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field

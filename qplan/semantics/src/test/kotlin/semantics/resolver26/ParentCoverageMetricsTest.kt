@@ -4,7 +4,7 @@ import semantics.shared.ResolverInvocationObservation
 import model.operationSelectionsFrom
 import model.testing.TestWorld
 import semantics.shared.SharedOperationContext
-import semantics.shared.RecordingResolverObserver
+import semantics.shared.ResolverObserver
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -58,9 +58,8 @@ class ParentCoverageMetricsTest {
 
         val coverage = mutableListOf<ParentSelectionSetCoverage>()
 
-        val recordingObserver = object : RecordingResolverObserver() {
+        val recordingObserver = object : ResolverObserver {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
-                super.onResolverInvocation(observation)
                 coverage += ParentCoverageAnalyzer(world).analyze(observation)
             }
         }

@@ -1,7 +1,7 @@
 package semantics.contract
 
 import semantics.shared.ResolverInvocationObservation
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import model.RootFieldReferenceData
@@ -17,7 +17,7 @@ interface DepthFirstQueryFringeOrderingContract : ResolverContract {
     @Test
     fun `reference Query fragment finishes before the enclosing passive fringe runs`() {
         val applications = mutableListOf<String>()
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field

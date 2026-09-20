@@ -42,9 +42,8 @@ class GraphQLExecuteSmokeTest {
               value: Int
             }
             """.trimIndent()
-        val observer = object : semantics.shared.RecordingResolverObserver() {
+        val observer = object : semantics.shared.ResolverObserver {
             override fun onResolverInvocation(observation: semantics.shared.ResolverInvocationObservation) {
-                super.onResolverInvocation(observation)
                 val field = observation.field
                 applications += "${field.containingDef.name}.${field.name}"
             }

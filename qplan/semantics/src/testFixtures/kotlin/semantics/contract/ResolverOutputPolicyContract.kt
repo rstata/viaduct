@@ -1,7 +1,7 @@
 package semantics.contract
 
 import semantics.shared.ResolverInvocationObservation
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
 import model.EngineResult
 import model.ObjectEngineResult
 import model.objectOf
@@ -140,7 +140,7 @@ private data class RecursiveOutputFixtureResult(
 )
 
 private fun ResolverContract.resolveRecursiveOutputFixture(): RecursiveOutputFixtureResult {
-    val invocationObserver = object : RecordingResolverObserver() {
+    val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field

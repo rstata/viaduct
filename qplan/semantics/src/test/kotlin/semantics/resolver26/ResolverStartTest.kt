@@ -22,9 +22,11 @@ import model.requireObjectField
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import semantics.contract.get
-import semantics.shared.RecordingResolverObserver
+import semantics.shared.ResolverObserver
 import semantics.shared.ResolverInvocationObservation
 import semantics.shared.SharedOperationContext
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -558,13 +560,27 @@ class ResolverStartTest {
             failure
         }
 
-    private class InvocationRecordingObserver : RecordingResolverObserver() {
+    private class InvocationRecordingObserver : ResolverObserver {
+        private val invokedOccurrences = ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
+        private val queryResults = ConcurrentHashMap<ResolverOccurrenceId, ConcurrentLinkedQueue<ObjectEngineResult>>()
         val events = CopyOnWriteArrayList<ResolverInvocationObservation>()
 
         override fun onResolverInvocation(observation: ResolverInvocationObservation) {
-            super.onResolverInvocation(observation)
+            invokedOccurrences += observation.resolverOccurrenceId
             events += observation
         }
+
+        override fun onQueryFragmentPrepared(resolverOccurrenceId: ResolverOccurrenceId, result: ObjectEngineResult) {
+            queryResults.computeIfAbsent(resolverOccurrenceId) { ConcurrentLinkedQueue() }.add(result)
+        }
+
+        fun invokedResolverOccurrences(): Set<ResolverOccurrenceId> = invokedOccurrences.toSet()
+
+        fun queryFragmentResults(resolverOccurrenceId: ResolverOccurrenceId): List<ObjectEngineResult> =
+            queryResults[resolverOccurrenceId]?.toList().orEmpty()
+
+        fun allQueryFragmentResults(): Map<ResolverOccurrenceId, List<ObjectEngineResult>> =
+            queryResults.mapValues { (_, results) -> results.toList() }
     }
 
     private companion object {

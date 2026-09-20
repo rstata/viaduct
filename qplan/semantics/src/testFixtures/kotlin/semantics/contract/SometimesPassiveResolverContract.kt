@@ -1,7 +1,7 @@
 package semantics.contract
 
 import semantics.shared.ResolverInvocationObservation
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
 import model.ObjectEngineResult
 import model.emptyFragmentOf
 import model.fragmentFrom
@@ -18,7 +18,7 @@ interface SometimesPassiveResolverContract : ResolverContract {
     @Test
     fun `ancestor output supplies an active field instead of its standard resolver`() {
         val standardApplications = mutableListOf<String>()
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field
@@ -56,7 +56,7 @@ interface SometimesPassiveResolverContract : ResolverContract {
     @Test
     fun `ancestor output supplies active fields at successive descendant fringes`() {
         val standardApplications = mutableListOf<String>()
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field
@@ -108,7 +108,7 @@ interface SometimesPassiveObjectFragmentResolverContract : ResolverContract {
     @Test
     fun `ancestor-supplied active field does not activate its standard resolver demand`() {
         val standardApplications = mutableListOf<String>()
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field
@@ -148,7 +148,7 @@ interface SometimesPassiveObjectFragmentResolverContract : ResolverContract {
     @Test
     fun `omitted active field uses its standard resolver and ancestor-supplied demand`() {
         val standardApplications = mutableListOf<String>()
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field
@@ -191,7 +191,7 @@ interface SometimesPassiveObjectPathResolverContract : ResolverContract {
     @Test
     fun `reads a provider below an ancestor-supplied active field`() {
         val standardApplications = mutableListOf<String>()
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field
@@ -247,7 +247,7 @@ interface SometimesPassiveObjectPathResolverContract : ResolverContract {
     @Test
     fun `does not validate object-path bindings for a source-owned resolver occurrence`() {
         val standardApplications = mutableListOf<String>()
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field
@@ -300,7 +300,7 @@ interface SometimesPassiveSelectiveResolverContract : ResolverContract {
     fun `ancestor is invoked once with standard demand before supplying the active field`() {
         val events = mutableListOf<String>()
         var itemDemand: Set<String>? = null
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field

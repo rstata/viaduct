@@ -1,6 +1,9 @@
 package semantics.shared
 
 import semantics.contract.get
+import semantics.correctresolution.CorrectnessResolverObserver
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
@@ -67,9 +70,8 @@ class ResolverObservationTest {
                     dynamicTest("${subject.name} reference=$reference suspendAfterEntry=$suspendAfterEntry") {
                         var entered = 0
                         val events = CopyOnWriteArrayList<ResolverInvocationObservation>()
-                        val observer = object : RecordingResolverObserver() {
+                        val observer = object : ResolverObserver {
                             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
-                                super.onResolverInvocation(observation)
                                 if (observation.field.name == "value") {
                                     events += observation
                                     // Force interruption between recording and the resolver call.
@@ -121,7 +123,7 @@ class ResolverObservationTest {
     fun `ordinary and reference calls record their exact inputs before entry`() = subjects.map { subject ->
         dynamicTest(subject.name) {
             val events = CopyOnWriteArrayList<ResolverInvocationObservation>()
-            val observer = object : RecordingResolverObserver() {
+            val observer = object : CorrectnessResolverObserver() {
                 override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                     super.onResolverInvocation(observation)
                     events += observation
@@ -165,7 +167,7 @@ class ResolverObservationTest {
             events.forEach {
                 if (subject.selective) assertNotNull(it.suppliedDemand) else assertNull(it.suppliedDemand)
             }
-            // Full event consumers preserve duplicates even though the base recorder stores an ID set.
+            // The full event log preserves duplicates while the base recorder's ID set deduplicates them.
             observer.onResolverInvocation(events.last())
             assertEquals(3, events.size)
             assertEquals(2, observer.invokedResolverOccurrences().size)
@@ -178,11 +180,15 @@ class ResolverObservationTest {
             listOf(false, true).map { cancellation ->
                 dynamicTest("${subject.name} reference=$reference cancellation=$cancellation") {
                     val events = CopyOnWriteArrayList<ResolverInvocationObservation>()
-                    val observer = object : RecordingResolverObserver() {
+                    val observer = object : ResolverObserver {
+                        private val invokedOccurrences = ConcurrentHashMap.newKeySet<ResolverOccurrenceId>()
+
                         override fun onResolverInvocation(observation: ResolverInvocationObservation) {
-                            super.onResolverInvocation(observation)
+                            invokedOccurrences += observation.resolverOccurrenceId
                             events += observation
                         }
+
+                        fun invokedResolverOccurrences(): Set<ResolverOccurrenceId> = invokedOccurrences.toSet()
                     }
                     val failure = if (cancellation) CancellationException("resolver cancelled") else IllegalStateException("resolver failed")
                     val testWorld = TestWorld.fromSDL(
@@ -217,17 +223,24 @@ class ResolverObservationTest {
     fun `declared Query root is recorded before its resolver can start`() = subjects.filter { it.queryFragments }.map { subject ->
         dynamicTest(subject.name) {
             val order = CopyOnWriteArrayList<String>()
-            val observer = object : RecordingResolverObserver() {
+            val observer = object : ResolverObserver {
+                private val queryResults = ConcurrentHashMap<ResolverOccurrenceId, ConcurrentLinkedQueue<ObjectEngineResult>>()
+
                 override fun onQueryFragmentPrepared(resolverOccurrenceId: ResolverOccurrenceId, result: ObjectEngineResult) {
                     assertTrue(order.isEmpty())
-                    super.onQueryFragmentPrepared(resolverOccurrenceId, result)
+                    queryResults.computeIfAbsent(resolverOccurrenceId) { ConcurrentLinkedQueue() }.add(result)
                     order += "prepared"
                 }
 
                 override fun onResolverInvocation(observation: ResolverInvocationObservation) {
-                    super.onResolverInvocation(observation)
                     order += observation.field.name
                 }
+
+                fun queryFragmentResults(resolverOccurrenceId: ResolverOccurrenceId): List<ObjectEngineResult> =
+                    queryResults[resolverOccurrenceId]?.toList().orEmpty()
+
+                fun allQueryFragmentResults(): Map<ResolverOccurrenceId, List<ObjectEngineResult>> =
+                    queryResults.mapValues { (_, results) -> results.toList() }
             }
             val testWorld = TestWorld.fromSDL(
                 selectiveResolvers = subject.selective,
@@ -261,9 +274,8 @@ class ResolverObservationTest {
     fun `invocation demand precedes fixture demand and output transforms`() = subjects.map { subject ->
         dynamicTest(subject.name) {
             val events = CopyOnWriteArrayList<ResolverInvocationObservation>()
-            val observer = object : RecordingResolverObserver() {
+            val observer = object : ResolverObserver {
                 override fun onResolverInvocation(observation: ResolverInvocationObservation) {
-                    super.onResolverInvocation(observation)
                     events += observation
                 }
             }

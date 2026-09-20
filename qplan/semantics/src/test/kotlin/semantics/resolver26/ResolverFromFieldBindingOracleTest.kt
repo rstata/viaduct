@@ -11,7 +11,7 @@ import semantics.contract.validateFromFieldBindings
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import semantics.shared.SharedOperationContext
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
 
 class ResolverFromFieldBindingOracleTest {
     @Test
@@ -54,7 +54,7 @@ class ResolverFromFieldBindingOracleTest {
     fun `object-path bindings in a query-fragment root are validated`() {
         val testWorld = bindingWorld()
         val world = testWorld.assumptions
-        val operation = SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+        val operation = SharedOperationContext.create(world, resolverObserver = CorrectnessResolverObserver())
         val primaryResult = world.engineResultOf("Query")
         val queryResult = completedBindingResult(world)
         val queryFixture = bindingFixture(operation, queryResult)
@@ -100,7 +100,7 @@ private data class BindingFixture(
 private fun bindingFixture(): BindingFixture {
     val world = bindingWorld().assumptions
     return bindingFixture(
-        SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver()),
+        SharedOperationContext.create(world, resolverObserver = CorrectnessResolverObserver()),
         completedBindingResult(world),
     )
 }

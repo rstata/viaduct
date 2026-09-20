@@ -21,7 +21,7 @@ import semantics.correctresolution.ownedRootFieldReferenceInvocations
 import semantics.shared.materializeResult
 import semantics.shared.groundedArguments
 import semantics.shared.SharedOperationContext
-import semantics.shared.ResolverObservations
+import semantics.correctresolution.CorrectnessResolverObserver
 import semantics.shared.RootFieldReferenceInvocationObservation
 
 /**
@@ -268,6 +268,6 @@ private fun FieldResolver.objectFragmentSatisfiedBy(
     }
 }
 
-private fun SharedOperationContext<*>.resolverObservations(): ResolverObservations =
-    resolverObserver as? ResolverObservations
+private fun SharedOperationContext<*>.resolverObservations(): CorrectnessResolverObserver =
+    resolverObserver as? CorrectnessResolverObserver
         ?: error("Resolver observations were not recorded for this operation")

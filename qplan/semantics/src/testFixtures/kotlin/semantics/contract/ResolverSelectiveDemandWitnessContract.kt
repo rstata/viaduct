@@ -20,7 +20,7 @@ interface ResolverSelectiveDemandWitnessContract : ResolverContract {
     @Test
     fun `producer witness captures exact successor demand`() {
         var producerDemand: SelectionForest? = null
-        val invocationObserver = object : semantics.shared.RecordingResolverObserver() {
+        val invocationObserver = object : semantics.correctresolution.CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: semantics.shared.ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 if (observation.field.name == "item") producerDemand = observation.suppliedDemand

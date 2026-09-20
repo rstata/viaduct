@@ -47,7 +47,7 @@ import semantics.arbitrary.resolutionDigest
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
-import semantics.shared.ResolverObservations
+import semantics.correctresolution.CorrectnessResolverObserver
 
 /**
  * Generated contract for user-declared resolvers with empty object fragments and no variables.
@@ -104,7 +104,7 @@ interface RootFieldReferenceGeneratedResolverContract : GeneratedCaseAssertionPo
                             assertions = assertions,
                         )
                     activatedReferences +=
-                        (observation.ordinary.operation.resolverObserver as ResolverObservations)
+                        (observation.ordinary.operation.resolverObserver as CorrectnessResolverObserver)
                             .rootFieldReferenceInvocations()
                             .size
                 }
@@ -507,7 +507,7 @@ interface QueryFragmentGeneratedResolverContract : GeneratedCaseAssertionPolicy 
                         }
                     queryValueWitnesses +=
                         observation.executions.sumOf { execution ->
-                            (execution.operation.resolverObserver as ResolverObservations)
+                            (execution.operation.resolverObserver as CorrectnessResolverObserver)
                                 .allQueryFragmentResults()
                                 .size
                         }

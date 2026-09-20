@@ -20,8 +20,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import semantics.shared.SharedOperationContext
-import semantics.shared.RecordingResolverObserver
-import semantics.shared.ResolverObservations
+import semantics.correctresolution.CorrectnessResolverObserver
 
 class ResolverOccurrenceWitnessTest {
     @Test
@@ -71,7 +70,7 @@ class ResolverOccurrenceWitnessTest {
             )
         val log = ResolutionOccurrenceApplicationLog()
 
-        val recordingObserver = object : RecordingResolverObserver() {
+        val recordingObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 log.record(
@@ -109,7 +108,7 @@ class ResolverOccurrenceWitnessTest {
         )
         assertEquals(
             2,
-            (operation.resolverObserver as ResolverObservations)
+            (operation.resolverObserver as CorrectnessResolverObserver)
                 .allQueryFragmentResults()
                 .size,
         )
@@ -197,7 +196,7 @@ class ResolverOccurrenceWitnessTest {
             )
         val log = ResolutionOccurrenceApplicationLog()
 
-        val recordingObserver = object : RecordingResolverObserver() {
+        val recordingObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 log.record(

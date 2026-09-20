@@ -34,7 +34,7 @@ import semantics.arbitrary.SchemaObjectCount
 import semantics.arbitrary.TestCaseCount
 import semantics.arbitrary.checkResolverTestCases
 import semantics.correctresolution.correctResolution
-import semantics.shared.ResolverObservations
+import semantics.correctresolution.CorrectnessResolverObserver
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -167,7 +167,7 @@ interface DeepResolverStressContract : ResolverContract {
                     val operation = resolution.operation
                     if (rootFieldReferenceCoverageRequired) {
                         val references =
-                            (operation.resolverObserver as ResolverObservations)
+                            (operation.resolverObserver as CorrectnessResolverObserver)
                                 .rootFieldReferenceInvocations()
                         activatedRootFieldReferences += references.size
                         activatedNodeRootFieldReferences +=

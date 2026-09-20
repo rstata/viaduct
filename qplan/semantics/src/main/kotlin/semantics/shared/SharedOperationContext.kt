@@ -10,7 +10,7 @@ import model.Assumptions
 interface SharedOperationContext<out D : SharedTaskDispatcher<Nothing, Nothing>> {
     val world: Assumptions
     val variableBindings: VariableBindingsState
-    val resolverObserver: SharedResolverObserver
+    val resolverObserver: ResolverObserver
     val dispatcher: D
 
     companion object {
@@ -19,7 +19,7 @@ interface SharedOperationContext<out D : SharedTaskDispatcher<Nothing, Nothing>>
         fun create(
             world: Assumptions,
             variableBindings: VariableBindingsState = VariableBindingsState(),
-            resolverObserver: SharedResolverObserver = SharedResolverObserver.createNOP(),
+            resolverObserver: ResolverObserver = ResolverObserver.NOP,
         ): SharedOperationContext<Nothing> = object : SharedOperationContext<Nothing> {
             override val world = world
             override val variableBindings = variableBindings
@@ -34,7 +34,7 @@ interface SharedOperationContext<out D : SharedTaskDispatcher<Nothing, Nothing>>
             world: Assumptions,
             dispatcher: D,
             variableBindings: VariableBindingsState = VariableBindingsState(),
-            resolverObserver: SharedResolverObserver = SharedResolverObserver.createNOP(),
+            resolverObserver: ResolverObserver = ResolverObserver.NOP,
         ): SharedOperationContext<D> = object : SharedOperationContext<D> {
             override val world = world
             override val variableBindings = variableBindings

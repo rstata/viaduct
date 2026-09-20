@@ -1,7 +1,7 @@
 package semantics.contract
 
 import semantics.shared.ResolverInvocationObservation
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
 import java.util.concurrent.atomic.AtomicInteger
 import model.Arguments
 import model.ObjectEngineResult
@@ -19,7 +19,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotSame
 import kotlin.test.assertTrue
-import semantics.shared.ResolverObservations
 
 /** Contract for independently resolved Query-rooted field-resolver fragments. */
 interface QueryFragmentResolverContract : ResolverContract {
@@ -79,7 +78,7 @@ interface QueryFragmentResolverContract : ResolverContract {
     @Test
     fun `query fragments preserve aliases bind arguments and do not share OERs`() {
         val sourceApplications = AtomicInteger()
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field
@@ -150,7 +149,7 @@ interface QueryFragmentResolverContract : ResolverContract {
                 resolverObserver = invocationObserver,
             )
         val result = resolution.result
-        val observations = resolution.operation.resolverObserver as ResolverObservations
+        val observations = resolution.operation.resolverObserver as CorrectnessResolverObserver
 
         assertEquals(2, result.getCell(firstKey).get())
         assertEquals(3, result.getCell(secondKey).get())
@@ -239,7 +238,7 @@ interface QueryFragmentResolverContract : ResolverContract {
 
         val resolution = resolveAndValidateObserved(world, "query { result }")
         val resolved = resolution.result
-        val observations = resolution.operation.resolverObserver as ResolverObservations
+        val observations = resolution.operation.resolverObserver as CorrectnessResolverObserver
 
         assertEquals(4, resolved.getCell(resultKey).get())
         val middleResult =

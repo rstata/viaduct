@@ -23,7 +23,7 @@ import org.reactivestreams.Subscriber
 import org.reactivestreams.Subscription
 import semantics.resolver26.resolver26CoroutineContext
 import semantics.resolver26.startResolve
-import semantics.shared.SharedResolverObserver
+import semantics.shared.ResolverObserver
 import semantics.shared.SharedOperationContext
 
 /**
@@ -76,8 +76,8 @@ class QPlanExecutionStrategy(
                 SharedOperationContext.create(
                     world,
                     resolverObserver = executionContext.graphQLContext.getOrDefault(
-                        SharedResolverObserver::class.java,
-                        SharedResolverObserver.createNOP(),
+                        ResolverObserver::class.java,
+                        ResolverObserver.NOP,
                     ),
                 ).startResolve(selections, requestScope)
             } catch (throwable: Exception) {

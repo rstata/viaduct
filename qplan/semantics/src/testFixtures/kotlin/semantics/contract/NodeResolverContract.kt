@@ -1,7 +1,7 @@
 package semantics.contract
 
 import semantics.shared.ResolverInvocationObservation
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
 import model.requireField
 import model.requireObjectField
 import model.EngineErrorData
@@ -479,7 +479,7 @@ interface NodeResolverContract : ResolverContract {
     @Test
     fun `dispatches every nested node-list reference occurrence`() {
         val observedFields = mutableListOf<String>()
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field

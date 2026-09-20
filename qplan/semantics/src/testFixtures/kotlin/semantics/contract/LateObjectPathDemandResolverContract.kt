@@ -1,7 +1,7 @@
 package semantics.contract
 
 import semantics.shared.ResolverInvocationObservation
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
 import model.requireQueryTypeDef
 import model.requireObjectField
 import model.ObjectEngineResult
@@ -21,7 +21,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
     fun `disjoint successor demand is closed before one selective producer application`() {
         var fooApplications = 0
         var fooDemandFields: Set<String>? = null
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field
@@ -162,7 +162,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
     fun `open resolver template retains output demand through nested resolver inputs`() {
         var nodeApplications = 0
         var nodeDemandFields: Set<String>? = null
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field
@@ -308,7 +308,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
     fun `late variable selection crosses a passive object field`() {
         var holderApplications = 0
         var computedApplications = 0
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field
@@ -361,7 +361,7 @@ interface LateObjectPathDemandResolverContract : ResolverContract {
     fun `late equal child calls retain their symbolic identities`() {
         var parentApplications = 0
         var childApplications = 0
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field

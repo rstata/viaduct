@@ -18,7 +18,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import semantics.shared.SharedOperationContext
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
 
 object PropertyTestBenchmarkCorpusWriter {
     private const val CAMPAIGN_ROUND = 46
@@ -60,7 +60,7 @@ object PropertyTestBenchmarkCorpusWriter {
 
                     val witnessObserver = testCase.registry.resolverObserver()
 
-                    val recordingObserver = object : RecordingResolverObserver() {
+                    val recordingObserver = object : CorrectnessResolverObserver() {
                         override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                             super.onResolverInvocation(observation)
                             witnessObserver.onResolverInvocation(observation)

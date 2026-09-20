@@ -22,7 +22,8 @@ import model.testing.fromQueryField
 import model.testing.fromArgument
 import semantics.correctresolution.correctResolution
 import semantics.shared.SharedOperationContext
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
+import semantics.shared.ResolverObserver
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -56,9 +57,8 @@ class InclusionConditionTest {
 
         val applications = Collections.synchronizedList(mutableListOf<String>())
 
-        val recordingObserver = object : RecordingResolverObserver() {
+        val recordingObserver = object : ResolverObserver {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
-                super.onResolverInvocation(observation)
                 applications += observation.field.name
             }
         }
@@ -748,7 +748,7 @@ class InclusionConditionTest {
         val applications =
             Collections.synchronizedList(mutableListOf<ViaductSchema.ObjectField>())
 
-        val recordingObserver = object : RecordingResolverObserver() {
+        val recordingObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 applications += observation.field

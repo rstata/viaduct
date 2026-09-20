@@ -26,7 +26,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import viaduct.engine.api.EngineObjectData
 import semantics.shared.SharedOperationContext
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
 
 class SymbolicKeyIdentityTest {
     @Test
@@ -95,7 +95,7 @@ class SymbolicKeyIdentityTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+        val operation = SharedOperationContext.create(world, resolverObserver = CorrectnessResolverObserver())
         val resultKey =
             ObjectEngineResult.GroundKey.of(
                 world.schema.requireObjectField("Query", "result"),
@@ -212,7 +212,7 @@ class SymbolicKeyIdentityTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = SharedOperationContext.create(world, resolverObserver = object : RecordingResolverObserver() {
+        val operation = SharedOperationContext.create(world, resolverObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: semantics.shared.ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 if (observation.field.name != "frank") return
@@ -356,7 +356,7 @@ class SymbolicKeyIdentityTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = SharedOperationContext.create(world, resolverObserver = object : RecordingResolverObserver() {
+        val operation = SharedOperationContext.create(world, resolverObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: semantics.shared.ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 if (observation.field.name != "frank") return

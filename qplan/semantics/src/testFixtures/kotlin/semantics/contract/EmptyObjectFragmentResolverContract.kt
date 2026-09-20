@@ -1,7 +1,7 @@
 package semantics.contract
 
 import semantics.shared.ResolverInvocationObservation
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import model.EngineResult
 import model.ListEngineResult
@@ -36,7 +36,7 @@ interface EmptyObjectFragmentResolverContract :
 
     @Test
     fun `accepts position-distinct passive fields in list output`() {
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val input = observation.input
@@ -71,7 +71,7 @@ interface EmptyObjectFragmentResolverContract :
     @Test
     fun `specializes shared list continuation and concrete argument defaults`() {
         val applications = ConcurrentLinkedQueue<String>()
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field
@@ -135,7 +135,7 @@ interface EmptyObjectFragmentResolverContract :
 
     @Test
     fun `applies a concrete implementation default after interface dispatch`() {
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val input = observation.input

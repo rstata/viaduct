@@ -144,9 +144,8 @@ class QPlanDeferTest {
     @Test
     fun `selective producer receives demand for initial and deferred fields`() {
         var suppliedDemand: SelectionForest? = null
-        val observer = object : semantics.shared.RecordingResolverObserver() {
+        val observer = object : semantics.shared.ResolverObserver {
             override fun onResolverInvocation(observation: semantics.shared.ResolverInvocationObservation) {
-                super.onResolverInvocation(observation)
                 val field = observation.field
                 val demand = observation.suppliedDemand
                 if (field.name == "viewer") suppliedDemand = demand

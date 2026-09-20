@@ -1,7 +1,7 @@
 package semantics.contract
 
 import semantics.shared.ResolverInvocationObservation
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
 import model.requireField
 import model.requireObjectField
 import viaduct.engine.api.EngineObjectData
@@ -31,7 +31,7 @@ import kotlin.test.assertTrue
 interface ObjectFragmentResolverContract : ResolverContract {
     @Test
     fun `DSL materializes argumentless and argument-bearing aliases by response key`() {
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field
@@ -86,7 +86,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
     @Test
     fun `DSL collects one alias across non-overlapping concrete types`() {
         val observed = ConcurrentHashMap<String, Int>()
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field
@@ -280,7 +280,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
 
     @Test
     fun `closes and orders transitive sibling resolver demand`() {
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field
@@ -329,7 +329,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
 
     @Test
     fun `resolves descendant demand before its consuming sibling`() {
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field
@@ -486,7 +486,7 @@ interface ObjectFragmentResolverContract : ResolverContract {
     fun `list null and error elements preserve position and skip descendants`() {
         var itemsApplications = 0
         var computedApplications = 0
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field

@@ -7,7 +7,7 @@ import viaduct.graphql.schema.ViaductSchema
 import kotlin.test.assertEquals
 
 /** Records invocation arguments without retaining materialized input graphs. */
-open class ResolverApplicationArguments : semantics.shared.RecordingResolverObserver() {
+open class ResolverApplicationArguments : semantics.correctresolution.CorrectnessResolverObserver() {
     private val argumentsByField = linkedMapOf<ViaductSchema.Field, MutableList<Arguments.Resolved>>()
 
     override fun onResolverInvocation(observation: semantics.shared.ResolverInvocationObservation) {

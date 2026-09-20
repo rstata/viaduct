@@ -1,7 +1,7 @@
 package semantics.contract
 
 import semantics.shared.ResolverInvocationObservation
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
 import model.requireQueryTypeDef
 import model.requireObjectField
 import model.ObjectEngineResult
@@ -25,7 +25,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
     @Test
     fun `equal pre-grounded selections merge in fragments and external queries`() {
         val suppliedDemandFields = ConcurrentLinkedQueue<Set<String>>()
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field
@@ -123,7 +123,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
     @Test
     fun `equal symbolic selections coalesce independently of response aliases`() {
         val suppliedDemandFields = ConcurrentLinkedQueue<Set<String>>()
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field
@@ -203,7 +203,7 @@ interface VariableSelectionIdentityResolverContract : ResolverContract {
     @Test
     fun `a symbolic fromArgument key remains distinct from an equal grounded key`() {
         val suppliedDemandFields = ConcurrentLinkedQueue<Set<String>>()
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field

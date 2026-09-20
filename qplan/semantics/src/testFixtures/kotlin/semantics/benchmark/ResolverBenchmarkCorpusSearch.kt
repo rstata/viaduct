@@ -138,9 +138,8 @@ object ResolverBenchmarkCorpusSearch {
                 mutableListOf<ResolverInvocationObservation>(),
             )
         val witnessObserver = registry.resolverObserver()
-        val observer = object : semantics.shared.RecordingResolverObserver() {
+        val observer = object : semantics.shared.ResolverObserver {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
-                super.onResolverInvocation(observation)
                 witnessObserver.onResolverInvocation(observation)
                 applicationObservations += observation
             }

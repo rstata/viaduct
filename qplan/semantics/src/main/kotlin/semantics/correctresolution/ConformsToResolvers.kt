@@ -27,7 +27,6 @@ import model.registry.VariableDefinition
 import model.merge
 import model.requireQueryTypeDef
 import semantics.shared.SharedOperationContext
-import semantics.shared.ResolverObservations
 
 /**
  * Whether every value agrees with the resolver output that owns its exact occurrence.
@@ -132,7 +131,7 @@ private class ResolverConformanceLogic(
             resolver.instantiateFragmentsAt(resolverApplicationCache.root, path).queryFragment
         if (queryFragment.constructionSelections.isEmpty()) return true
         val queryResults =
-            (operation.resolverObserver as? ResolverObservations)
+            (operation.resolverObserver as? CorrectnessResolverObserver)
                 ?.queryFragmentResults(
                     ResolverOccurrenceId.at(resolverApplicationCache.root, path),
                 ).orEmpty()

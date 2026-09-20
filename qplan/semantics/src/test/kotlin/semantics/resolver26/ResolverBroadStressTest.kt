@@ -61,7 +61,7 @@ import semantics.correctresolution.correctResolution
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import semantics.shared.SharedOperationContext
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
 import viaduct.engine.api.EngineObjectData
 import viaduct.graphql.schema.ViaductSchema
 
@@ -367,7 +367,7 @@ internal suspend fun runResolver26BroadStress(
 
                 val witnessObserver = testCase.registry.resolverObserver()
 
-                val recordingObserver = object : RecordingResolverObserver() {
+                val recordingObserver = object : CorrectnessResolverObserver() {
                     override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                         super.onResolverInvocation(observation)
                         witnessObserver.onResolverInvocation(observation)

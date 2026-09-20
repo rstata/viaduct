@@ -31,7 +31,7 @@ import java.util.Collections
 import java.util.Locale
 import kotlin.math.ceil
 import semantics.shared.SharedOperationContext
-import semantics.shared.RecordingResolverObserver
+import semantics.shared.ResolverObserver
 
 internal const val DEFAULT_OVERHEAD_LOOP_COUNT = 1
 
@@ -121,9 +121,8 @@ internal class CurrentProfileBenchmarkSupport(
                         mutableListOf<ResolverBenchmarkInvocationObservation>(),
                     )
                 val witnessObserver = corpus.registry.resolverObserver()
-                val observer = object : RecordingResolverObserver() {
+                val observer = object : ResolverObserver {
                     override fun onResolverInvocation(observation: semantics.shared.ResolverInvocationObservation) {
-                        super.onResolverInvocation(observation)
                         witnessObserver.onResolverInvocation(observation)
                         applicationObservations += ResolverBenchmarkInvocationObservation(
                             occurrencePath = observation.occurrencePath,

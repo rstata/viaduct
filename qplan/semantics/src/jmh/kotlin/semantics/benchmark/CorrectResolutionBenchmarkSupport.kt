@@ -12,7 +12,7 @@ import semantics.arbitrary.ResolverBenchmarkCorpus
 import semantics.arbitrary.resolverBenchmarkOverheadQueryConfig
 import semantics.correctresolution.correctResolution
 import semantics.shared.SharedOperationContext
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
 
 internal const val DEFAULT_CORRECT_RESOLUTION_INPUT_COUNT = 50
 internal const val DEFAULT_CORRECT_RESOLUTION_LOOP_COUNT = 1
@@ -52,7 +52,7 @@ internal class CorrectResolutionBenchmarkSupport(
                 .map { query ->
                     val world = testWorld.newAssumptions(selectiveResolvers = true)
                     val operation =
-                        SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+                        SharedOperationContext.create(world, resolverObserver = CorrectnessResolverObserver())
                     val fragment = world.fragmentFrom(query.source)
                     val result =
                         subject.resolve(

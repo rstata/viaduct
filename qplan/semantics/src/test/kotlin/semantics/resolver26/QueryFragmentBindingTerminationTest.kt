@@ -29,7 +29,7 @@ import model.testing.fromQueryField
 import org.junit.jupiter.api.DynamicTest
 import org.junit.jupiter.api.TestFactory
 import semantics.shared.SharedOperationContext
-import semantics.shared.SharedResolverObserver
+import semantics.shared.ResolverObserver
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -242,7 +242,7 @@ class QueryFragmentBindingTerminationTest {
             },
         ).assumptions
 
-        val operation = SharedOperationContext.create(world, resolverObserver = object : SharedResolverObserver {
+        val operation = SharedOperationContext.create(world, resolverObserver = object : ResolverObserver {
             override fun onQueryFragmentPrepared(resolverOccurrenceId: ResolverOccurrenceId, result: ObjectEngineResult) {
                 check(queryResult == null) { "Only the consumer has a Query fragment" }
                 queryResult = result

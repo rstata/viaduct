@@ -1,7 +1,7 @@
 package semantics.contract
 
 import semantics.shared.ResolverInvocationObservation
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
 import model.requireObjectField
 import model.ObjectEngineResult
 import model.EngineErrorData
@@ -273,7 +273,7 @@ interface ObjectFragmentFromObjectPathResolverContract :
             var observedResultInput = false
             var consumedKey: String? = null
             var consumedValue: EngineOutputData? = null
-            val invocationObserver = object : RecordingResolverObserver() {
+            val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field

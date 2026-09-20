@@ -190,7 +190,7 @@ fun ResolverContract.observeGeneratedCase(
 
 private fun ResolverContract.observeGeneratedResolution(
     testWorld: TestWorld,
-    resolverObserver: semantics.shared.SharedResolverObserver,
+    resolverObserver: semantics.shared.ResolverObserver,
     querySource: String,
 ): GeneratedResolutionObservation {
     val world = testWorld.newAssumptions(selectiveResolvers)

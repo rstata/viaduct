@@ -2,7 +2,7 @@ package semantics.resolver26
 
 import kotlinx.coroutines.CoroutineScope
 import semantics.shared.CycleCheckState
-import semantics.shared.SharedResolverObserver
+import semantics.shared.ResolverObserver
 import semantics.shared.SharedOperationContext
 
 /**
@@ -21,7 +21,7 @@ internal interface OperationContext : SharedOperationContext<CoroutineTaskDispat
         fun create(
             base: SharedOperationContext<*>,
             requestScope: CoroutineScope,
-            resolverObserver: SharedResolverObserver,
+            resolverObserver: ResolverObserver,
             cycleChecker: CycleCheckState = CycleCheckState.create(),
             bindingsState: BindingDeclarationsState = BindingDeclarationsState(),
         ): OperationContext {

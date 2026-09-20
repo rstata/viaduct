@@ -1,7 +1,7 @@
 package semantics.contract
 
 import semantics.shared.ResolverInvocationObservation
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
 import model.requireObjectField
 import model.Arguments
 import io.kotest.matchers.collections.shouldContainExactly
@@ -105,7 +105,7 @@ interface AcyclicVariableDependencyResolverContract : ResolverContract {
     fun `orders argument-bearing applications through a path-variable dependency`() {
         val argumentApplications =
             ConcurrentLinkedQueue<Pair<String, Arguments.Resolved>>()
-        val invocationObserver = object : RecordingResolverObserver() {
+        val invocationObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 val field = observation.field

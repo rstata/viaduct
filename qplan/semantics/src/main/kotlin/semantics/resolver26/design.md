@@ -159,7 +159,7 @@ After task-local producer setup, `FieldResolutionLogic`:
 3. materializes the resolver's condition-filtered input demand from exact OER cells;
 4. derives invocation successor demand from the key's closed construction demand;
 5. awaits the independently orchestrated Query-rooted input;
-6. emits `SharedResolverObserver.onResolverInvocation` with the occurrence and prepared inputs;
+6. emits `ResolverObserver.onResolverInvocation` with the occurrence and prepared inputs;
 7. invokes the selective resolver once;
 8. builds the passive result shape while synchronously launching one orchestration lifecycle per OER; and
 9. publishes the containing value.

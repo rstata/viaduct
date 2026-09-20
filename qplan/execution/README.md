@@ -165,4 +165,4 @@ After variables, useful incremental steps are structured executor error metadata
 
 ## Resolver Observation
 
-`QPlanExecutionStrategy` accepts an optional `SharedResolverObserver` under the `SharedResolverObserver::class.java` GraphQL-context key and carries it into the operation; the default is a no-op. Execution fixtures expose the same choice through `runQuery` and `runQueryAsync`. This observes resolver invocations and declared Query-fragment preparation through the common semantics API, including resolver work nested under `ctx.query()`, without attaching callbacks to model resolvers.
+`QPlanExecutionStrategy` accepts an optional `ResolverObserver` under the `ResolverObserver::class.java` GraphQL-context key and carries it into the operation; the default is a no-op. Execution fixtures expose the same choice through `runQuery` and `runQueryAsync`. This observes resolver invocations and declared Query-fragment preparation through the common semantics API, including resolver work nested under `ctx.query()`, without attaching callbacks to model resolvers.

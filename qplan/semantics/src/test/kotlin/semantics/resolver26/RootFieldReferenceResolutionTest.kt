@@ -35,7 +35,7 @@ import semantics.contract.contractKey
 import semantics.contract.registeredResolverOccurrenceApplicationIdentityCounts
 import semantics.correctresolution.correctResolution
 import semantics.shared.SharedOperationContext
-import semantics.shared.RecordingResolverObserver
+import semantics.correctresolution.CorrectnessResolverObserver
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -97,7 +97,7 @@ class RootFieldReferenceResolutionTest {
             )
         val world = testWorld.assumptions
         val query = world.fragmentFrom("fragment Result on Query { result }")
-        val observer = RecordingResolverObserver()
+        val observer = CorrectnessResolverObserver()
         val operation = SharedOperationContext.create(world, resolverObserver = observer)
 
         val resolved = operation.resolve(query.subselections)
@@ -379,7 +379,7 @@ class RootFieldReferenceResolutionTest {
         val world = testWorld.assumptions
         val query = world.fragmentFrom("fragment Result on Query { container { product { value } } }")
         val operation =
-            SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+            SharedOperationContext.create(world, resolverObserver = CorrectnessResolverObserver())
         val result = operation.resolve(query.subselections)
         val container =
             assertIs<ObjectEngineResult>(
@@ -480,7 +480,7 @@ class RootFieldReferenceResolutionTest {
         val world = testWorld.assumptions
         val query = world.fragmentFrom("fragment Result on Query { container { product { value } } }")
         val operation =
-            SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+            SharedOperationContext.create(world, resolverObserver = CorrectnessResolverObserver())
         val result = operation.resolve(query.subselections)
         val container =
             assertIs<ObjectEngineResult>(
@@ -577,7 +577,7 @@ class RootFieldReferenceResolutionTest {
 
         val query = world.fragmentFrom("fragment Result on Query { container { product { value } } }")
 
-        val recordingObserver = object : RecordingResolverObserver() {
+        val recordingObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 applications.add(observation)
@@ -661,7 +661,7 @@ class RootFieldReferenceResolutionTest {
 
         val query = world.fragmentFrom("fragment Result on Query { first { value } }")
 
-        val recordingObserver = object : RecordingResolverObserver() {
+        val recordingObserver = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 applications.add(observation)
@@ -820,7 +820,7 @@ class RootFieldReferenceResolutionTest {
         val query =
             world.fragmentFrom("fragment Result on Query { container { products { value } } }")
         val operation =
-            SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+            SharedOperationContext.create(world, resolverObserver = CorrectnessResolverObserver())
         val result = operation.resolve(query.subselections)
         val container =
             assertIs<ObjectEngineResult>(
@@ -1019,7 +1019,7 @@ class RootFieldReferenceResolutionTest {
                     "fragment Result on Query { result(enabled: $enabled) }",
                 )
             val operation =
-                SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+                SharedOperationContext.create(world, resolverObserver = CorrectnessResolverObserver())
             val resolved = operation.resolve(query.subselections)
             val container =
                 assertIs<ObjectEngineResult>(
@@ -1076,10 +1076,10 @@ class RootFieldReferenceResolutionTest {
     fun `application-count oracle rejects an unowned root-reference observation`() {
         val resolution = resolveConditionalPassiveListReference(enabled = true)
         val observation =
-            assertIs<RecordingResolverObserver>(resolution.operation.resolverObserver)
+            assertIs<CorrectnessResolverObserver>(resolution.operation.resolverObserver)
                 .rootFieldReferenceInvocations()
                 .single()
-        val malformedObserver = RecordingResolverObserver()
+        val malformedObserver = CorrectnessResolverObserver()
         malformedObserver.onRootFieldReferenceInvocation(observation)
         malformedObserver.onRootFieldReferenceInvocation(
             observation.copy(
@@ -1153,7 +1153,7 @@ class RootFieldReferenceResolutionTest {
                 },
             )
         val world = testWorld.assumptions
-        val observer = RecordingResolverObserver()
+        val observer = CorrectnessResolverObserver()
         val operation = SharedOperationContext.create(world, resolverObserver = observer)
         val queryFragment = world.fragmentFrom(queryFragmentSource)
         val queryResult = operation.resolve(queryFragment.subselections)
@@ -1198,10 +1198,10 @@ class RootFieldReferenceResolutionTest {
     fun `correctness replays a root reference with canonical rather than observed demand`() {
         val resolution = resolveConditionalPassiveListReference(enabled = true)
         val observation =
-            assertIs<RecordingResolverObserver>(resolution.operation.resolverObserver)
+            assertIs<CorrectnessResolverObserver>(resolution.operation.resolverObserver)
                 .rootFieldReferenceInvocations()
                 .single()
-        val malformedObserver = RecordingResolverObserver()
+        val malformedObserver = CorrectnessResolverObserver()
         malformedObserver.onRootFieldReferenceInvocation(
             observation.copy(suppliedDemand = model.selectionForestOf()),
         )
@@ -1263,11 +1263,11 @@ class RootFieldReferenceResolutionTest {
             )
         val world = testWorld.assumptions
         val query = world.fragmentFrom("fragment Result on Query { container { product { value } } }")
-        val observer = RecordingResolverObserver()
+        val observer = CorrectnessResolverObserver()
         val operation = SharedOperationContext.create(world, resolverObserver = observer)
         val result = operation.resolve(query.subselections)
         val observation = observer.rootFieldReferenceInvocations().single()
-        val malformedObserver = RecordingResolverObserver()
+        val malformedObserver = CorrectnessResolverObserver()
         malformedObserver.onRootFieldReferenceInvocation(
             observation.copy(
                 invocationPath =
@@ -1333,12 +1333,12 @@ class RootFieldReferenceResolutionTest {
             world.fragmentFrom(
                 "fragment Result on Query { container { first { value } second { value } } }",
             )
-        val observer = RecordingResolverObserver()
+        val observer = CorrectnessResolverObserver()
         val operation = SharedOperationContext.create(world, resolverObserver = observer)
         val result = operation.resolve(query.subselections)
         val observations = observer.rootFieldReferenceInvocations()
         assertEquals(2, observations.size)
-        val malformedObserver = RecordingResolverObserver()
+        val malformedObserver = CorrectnessResolverObserver()
         malformedObserver.onRootFieldReferenceInvocation(observations[0])
         malformedObserver.onRootFieldReferenceInvocation(
             observations[1].copy(
@@ -1431,7 +1431,7 @@ class RootFieldReferenceResolutionTest {
             )
         val world = testWorld.assumptions
         val query = world.fragmentFrom("fragment Result on Query { result(enabled: $enabled) }")
-        val operation = SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+        val operation = SharedOperationContext.create(world, resolverObserver = CorrectnessResolverObserver())
         val result = operation.resolve(query.subselections)
         return ConditionalPassiveListResolution(result, operation, targetApplications)
     }

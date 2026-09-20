@@ -26,7 +26,6 @@ import semantics.shared.isContextuallyGrounded
 import model.selectionForestOf
 import semantics.shared.materializeResult
 import semantics.shared.SharedOperationContext
-import semantics.shared.ResolverObservations
 import semantics.shared.RootFieldReferenceInvocationObservation
 import viaduct.engine.api.EngineObjectData
 import java.util.IdentityHashMap
@@ -161,7 +160,7 @@ private fun List<RootFieldReferenceInvocationObservation>.haveDistinctInvocation
 internal fun SharedOperationContext<*>.rootFieldReferenceWitness(
     primaryRoot: ObjectEngineResult,
 ): RootFieldReferenceWitness {
-    val observations = resolverObserver as? ResolverObservations
+    val observations = resolverObserver as? CorrectnessResolverObserver
     return RootFieldReferenceWitness(
         observations = observations?.rootFieldReferenceInvocations().orEmpty(),
         allowedPublicationRoots =
@@ -279,7 +278,7 @@ private class ResolverReplayLogic(
                     engineObjectDataOf(operation.world.schema.requireQueryTypeDef())
                 } else {
                     val queryResult =
-                        (operation.resolverObserver as? ResolverObservations)
+                        (operation.resolverObserver as? CorrectnessResolverObserver)
                             ?.queryFragmentResults(resolverOccurrenceId)
                             ?.singleOrNull()
                             ?: return@getOrPut null
@@ -424,7 +423,7 @@ private class ResolverReplayLogic(
                 engineObjectDataOf(operation.world.schema.requireQueryTypeDef())
             } else {
                 val queryResult =
-                    (operation.resolverObserver as? ResolverObservations)
+                    (operation.resolverObserver as? CorrectnessResolverObserver)
                         ?.queryFragmentResults(resolverOccurrenceId)
                         ?.singleOrNull()
                         ?: return null

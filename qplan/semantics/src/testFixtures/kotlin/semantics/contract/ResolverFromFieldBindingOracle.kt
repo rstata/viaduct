@@ -22,7 +22,7 @@ import viaduct.graphql.schema.ViaductSchema
 import viaduct.utils.collections.BitVector
 import kotlin.test.assertEquals
 import semantics.shared.SharedOperationContext
-import semantics.shared.ResolverObservations
+import semantics.correctresolution.CorrectnessResolverObserver
 
 /**
  * Independently validates from-field bindings across every request-local Query root.
@@ -151,8 +151,8 @@ private fun ObjectEngineResult.readCompletedProvider(
     error("Provider path must be nonempty")
 }
 
-private fun SharedOperationContext<*>.resolverObservations(): ResolverObservations =
-    resolverObserver as? ResolverObservations
+private fun SharedOperationContext<*>.resolverObservations(): CorrectnessResolverObserver =
+    resolverObserver as? CorrectnessResolverObserver
         ?: error("Resolver observations were not recorded for this operation")
 
 private fun EngineResult.toVariableBinding(

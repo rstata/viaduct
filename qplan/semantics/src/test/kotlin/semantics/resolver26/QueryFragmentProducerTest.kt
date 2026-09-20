@@ -29,7 +29,7 @@ import model.testing.fieldResolverOf
 import model.testing.fromQueryField
 import semantics.contract.selectionValues
 import semantics.shared.SharedOperationContext
-import semantics.shared.SharedResolverObserver
+import semantics.shared.ResolverObserver
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
@@ -44,7 +44,7 @@ class QueryFragmentProducerTest {
             val failure = IllegalStateException("Query producer failed")
             val consumerInvoked = AtomicBoolean()
             val observer =
-                object : SharedResolverObserver {
+                object : ResolverObserver {
                     override fun onQueryFragmentPrepared(
                         resolverOccurrenceId: ResolverOccurrenceId,
                         result: ObjectEngineResult,
@@ -91,7 +91,7 @@ class QueryFragmentProducerTest {
                 val requestScope = CoroutineScope(dispatcher + requestJob)
                 val producerStarted = AtomicBoolean()
                 val observer =
-                    object : SharedResolverObserver {
+                    object : ResolverObserver {
                         override fun onQueryFragmentPrepared(
                             resolverOccurrenceId: ResolverOccurrenceId,
                             result: ObjectEngineResult,
@@ -131,7 +131,7 @@ class QueryFragmentProducerTest {
         val requestJob = Job()
         val requestScope = CoroutineScope(dispatcher + requestJob)
         val queryOccurrences = mutableListOf<ResolverOccurrenceId>()
-        val observer = object : SharedResolverObserver {
+        val observer = object : ResolverObserver {
             override fun onQueryFragmentPrepared(resolverOccurrenceId: ResolverOccurrenceId, result: ObjectEngineResult) {
                 queryOccurrences += resolverOccurrenceId
                 requestJob.cancel(CancellationException("cancelled during reference Query production"))
@@ -161,7 +161,7 @@ class QueryFragmentProducerTest {
 
     private fun startQueryFragmentResolution(
         requestScope: CoroutineScope,
-        observer: SharedResolverObserver,
+        observer: ResolverObserver,
         useReference: Boolean = false,
         suspendVariablesProvider: Boolean = false,
         onConsumerInvocation: () -> Unit,

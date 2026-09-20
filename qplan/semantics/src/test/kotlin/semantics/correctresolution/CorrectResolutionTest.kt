@@ -28,7 +28,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import semantics.shared.SharedOperationContext
-import semantics.shared.RecordingResolverObserver
 import semantics.shared.ResolverInvocationObservation
 
 class CorrectResolutionTest {
@@ -36,7 +35,7 @@ class CorrectResolutionTest {
     fun `direct resolve invocation and invocation through correctness replay do not cause invocation observations`() = runBlocking {
         val testWorld = TestWorld.fromDSL("extend type Query { value: Int @resolver(result: 7) }")
         val events = CopyOnWriteArrayList<ResolverInvocationObservation>()
-        val observer = object : RecordingResolverObserver() {
+        val observer = object : CorrectnessResolverObserver() {
             override fun onResolverInvocation(observation: ResolverInvocationObservation) {
                 super.onResolverInvocation(observation)
                 events += observation
@@ -97,7 +96,7 @@ class CorrectResolutionTest {
                 },
             )
         val world = testWorld.assumptions
-        val operation = SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+        val operation = SharedOperationContext.create(world, resolverObserver = CorrectnessResolverObserver())
         val selections =
             world
                 .fragmentFrom(
@@ -197,7 +196,7 @@ class CorrectResolutionTest {
         assertFalse(result.correctResolution(missingObservation, selections))
 
         val incorrectObservation =
-            SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+            SharedOperationContext.create(world, resolverObserver = CorrectnessResolverObserver())
         incorrectObservation.resolverObserver.onQueryFragmentPrepared(
             occurrenceId,
             world.engineResultOf("Query") {
@@ -207,7 +206,7 @@ class CorrectResolutionTest {
         assertFalse(result.correctResolution(incorrectObservation, selections))
 
         val correctObservation =
-            SharedOperationContext.create(world, resolverObserver = RecordingResolverObserver())
+            SharedOperationContext.create(world, resolverObserver = CorrectnessResolverObserver())
         correctObservation.resolverObserver.onQueryFragmentPrepared(
             occurrenceId,
             world.engineResultOf("Query") {

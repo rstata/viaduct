@@ -2,7 +2,7 @@ package semantics.resolvers.resolver01
 
 import model.ObjectEngineResult
 import model.requireField
-import semantics.correctresolution.argumentsContainErrorValue
+import semantics.shared.argumentsContainErrorValue
 import semantics.shared.OEROccurrence
 import semantics.shared.SharedOperationContext
 import semantics.shared.objectFragmentAt

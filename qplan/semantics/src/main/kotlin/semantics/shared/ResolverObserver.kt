@@ -26,6 +26,12 @@ data class RootFieldReferenceInvocationObservation(
  * latency by throwing or blocking.
  * Implementations vary by observation use case, not by resolver family. Each callback defaults
  * to no-op so an observer can handle only the events it needs.
+ *
+ * Callbacks can run concurrently; implementations that retain observations must make their
+ * recording thread-safe. Independent resolver invocations have no guaranteed event order
+ * beyond the lifecycle relationships documented on each callback.
+ * Referenced OERs are live and may be unfinished: immutable observation properties do not
+ * make the referenced result graphs immutable or provide a snapshot of them.
  */
 interface ResolverObserver {
     /**

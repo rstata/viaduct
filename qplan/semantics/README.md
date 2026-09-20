@@ -53,6 +53,8 @@ Reserve `semantics.shared` for code shared by all resolver families, including c
 
 ## Shared Semantic Boundaries
 
+Shared argument classification, including the internal `Arguments.Ground.argumentsContainErrorValue()` helper, belongs in `semantics.shared`. Within main sources, `semantics.correctresolution` imports shared APIs; other semantics packages do not import `correctresolution`.
+
 Open selections are specialized to a concrete object type with `merge(type)`. The resulting `ObjectKey` values may identify OER cells directly. Bindings are instantiated before operations cross through `groundKeys()`, `byGroundKey()`, or `ObjectSelection.groundKey()` when those operations require resolved argument values.
 
 GraphQL `@skip` and `@include` are lowered into symbolic `InclusionCondition` values. Conditions inherited by one occurrence are conjunctive; equal keys merged during demand closure are activated by the disjunction of their occurrence conditions. Resolver26 launches the infrastructure task for every closed active key, awaits the condition's variable bindings inside that task, negatively activates the reserved cell when the condition is false, and invokes tenant resolver code only after positive activation. Resolver-input materialization evaluates conditions before response-key collection, while passive-field publication remains source-presence-driven and does not independently interpret conditions.
@@ -119,6 +121,8 @@ Sometimes-passive active fields make transitive parent demand conservative: a gr
 ## Resolution Observations
 
 All maintained resolver families use the `ResolverObserver` carried by `SharedOperationContext`. Its implementations vary by observation use case, not by resolver family. Every callback defaults to no-op, allowing narrow consumers to implement the interface directly and record only what they need. `ResolverObserver.NOP` is the nested singleton used when no observations are needed. Observation belongs to semantics: neither `FieldResolver` nor model fixtures install an invocation callback. Resolver26 uses the same observer and execution entry points as the other families, without a separate `resolveObserved` path or observer adapter.
+
+Resolver26's operation factory takes its observer from the base operation, and child scopes retain that same observer. Callbacks may run concurrently, so recording must be thread-safe; independent invocations have no guaranteed event order beyond each callback's documented lifecycle relationship. OER references remain live and potentially unfinished even when their observation payloads have immutable properties. Benchmark-only symbolic argument counts and variable-owner identities are derived by extension properties in the `semantics.benchmark` test fixtures, keeping shared event carriers limited to captured facts.
 
 | Recording point | Families | Timing and evidence |
 | --- | --- | --- |

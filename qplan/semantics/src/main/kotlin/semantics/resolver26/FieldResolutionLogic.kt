@@ -26,7 +26,7 @@ import model.registry.ProviderFragment
 import model.registry.VariableDefinition
 import model.requireQueryTypeDef
 import model.selectionForestOf
-import semantics.correctresolution.argumentsContainErrorValue
+import semantics.shared.argumentsContainErrorValue
 import semantics.shared.ResolverInvocationObservation
 import semantics.shared.RootFieldReferenceInvocationObservation
 import semantics.shared.fetchGroundedArguments

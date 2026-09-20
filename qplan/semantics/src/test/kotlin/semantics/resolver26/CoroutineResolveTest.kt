@@ -17,7 +17,7 @@ class CoroutineResolveTest : CoroutineResolverContract {
         cycleChecker: CycleCheckState,
     ): ObjectEngineResult {
         val resolverOperation = OperationContext.create(
-            operation, requestScope, operation.resolverObserver, cycleChecker,
+            operation, requestScope, cycleChecker,
         )
         val source = operation.world.resolverRegistry.createRootQueryInput()
         val root = ObjectEngineResult.of(source.schemaType, mutable = true)

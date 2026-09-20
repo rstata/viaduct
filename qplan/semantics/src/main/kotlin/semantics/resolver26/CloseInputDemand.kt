@@ -20,7 +20,7 @@ import model.registry.VariableInstanceDefinition
 import model.schemaType
 import model.outputValue
 import model.satisfiableAlternatives
-import semantics.correctresolution.argumentsContainErrorValue
+import semantics.shared.argumentsContainErrorValue
 import viaduct.engine.api.EngineObjectData
 import semantics.shared.OEROccurrence
 

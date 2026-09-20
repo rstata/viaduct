@@ -2,7 +2,6 @@ package semantics.resolver26
 
 import kotlinx.coroutines.CoroutineScope
 import semantics.shared.CycleCheckState
-import semantics.shared.ResolverObserver
 import semantics.shared.SharedOperationContext
 
 /**
@@ -15,20 +14,19 @@ internal interface OperationContext : SharedOperationContext<CoroutineTaskDispat
 
     /** Derives nested execution under its calling field task while retaining operation state. */
     fun forChildScope(requestScope: CoroutineScope): OperationContext =
-        create(this, requestScope, resolverObserver, cycleChecker, bindingsState)
+        create(this, requestScope, cycleChecker, bindingsState)
 
     companion object {
         fun create(
             base: SharedOperationContext<*>,
             requestScope: CoroutineScope,
-            resolverObserver: ResolverObserver,
             cycleChecker: CycleCheckState = CycleCheckState.create(),
             bindingsState: BindingDeclarationsState = BindingDeclarationsState(),
         ): OperationContext {
             val operationDelegate = SharedOperationContext.create(
                 world = base.world,
                 variableBindings = base.variableBindings,
-                resolverObserver = resolverObserver,
+                resolverObserver = base.resolverObserver,
                 dispatcher = CoroutineTaskDispatcher<OrchestrationTask, FieldPublicationOccurrence>(
                     requestScope = requestScope,
                     runFieldResolver = FieldResolverTask::execute,

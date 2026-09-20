@@ -271,8 +271,6 @@ class PassiveValueResolutionLogicTest {
                     OperationContext.create(
                         base = baseOperation,
                         requestScope = this,
-                        resolverObserver =
-                            baseOperation.resolverObserver,
                     )
                 value.resolvePassiveValues(
                     operation = operation,

@@ -227,7 +227,6 @@ class QueryFragmentProducerTest {
             OperationContext.create(
                 base = baseOperation,
                 requestScope = requestScope,
-                resolverObserver = observer,
             )
         val source = operation.world.resolverRegistry.createRootQueryInput()
         val root =

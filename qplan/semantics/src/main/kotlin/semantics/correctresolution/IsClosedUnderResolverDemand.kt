@@ -8,6 +8,7 @@ import model.ObjectEngineResult
 import model.Arguments
 import model.PathComponent
 import model.RootFieldReferenceData
+import semantics.shared.argumentsContainErrorValue
 import semantics.shared.groundedArguments
 import semantics.shared.isContextuallyGrounded
 import semantics.shared.objectFragmentAt
@@ -226,6 +227,3 @@ private class ResolverDemandValidationLogic(
             else -> true
         }
 }
-
-internal fun Arguments.Ground.argumentsContainErrorValue(): Boolean =
-    this == Arguments.Error

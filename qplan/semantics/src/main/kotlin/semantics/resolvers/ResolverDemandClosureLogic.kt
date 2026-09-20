@@ -6,7 +6,7 @@ import model.SelectionForest
 import model.flatMapToSelectionForest
 import model.schemaType
 import model.selectionForestOf
-import semantics.correctresolution.argumentsContainErrorValue
+import semantics.shared.argumentsContainErrorValue
 import semantics.shared.OEROccurrence
 import semantics.shared.SharedOperationContext
 import semantics.shared.applicableGroundSelections

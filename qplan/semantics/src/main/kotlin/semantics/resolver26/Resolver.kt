@@ -56,7 +56,6 @@ fun SharedOperationContext<*>.startResolve(
         OperationContext.create(
             base = this@startResolve,
             requestScope = requestScope,
-            resolverObserver = resolverObserver,
         )
     return resolver26Operation.startResolve(selections)
 }

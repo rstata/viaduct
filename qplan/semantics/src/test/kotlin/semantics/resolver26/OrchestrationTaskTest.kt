@@ -34,7 +34,6 @@ class OrchestrationTaskTest {
         val operation = OperationContext.create(
             base = base,
             requestScope = this,
-            resolverObserver = base.resolverObserver,
         )
         val root = ObjectEngineResult.of(world.schema.requireQueryTypeDef(), mutable = true)
         val task = OrchestrationTask.create(
@@ -76,8 +75,6 @@ class OrchestrationTaskTest {
                     OperationContext.create(
                         base = baseOperation,
                         requestScope = this,
-                        resolverObserver =
-                            baseOperation.resolverObserver,
                     )
                 val root =
                     ObjectEngineResult.of(

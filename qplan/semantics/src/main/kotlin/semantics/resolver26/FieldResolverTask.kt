@@ -24,7 +24,7 @@ import model.registry.ResolutionExecutionContext
 import model.registry.VariableDefinition
 import model.requireQueryTypeDef
 import model.schemaType
-import semantics.correctresolution.argumentsContainErrorValue
+import semantics.shared.argumentsContainErrorValue
 import semantics.shared.SharedFieldPublicationOccurrence
 import semantics.shared.OEROccurrence
 import semantics.shared.materializeResult

@@ -76,27 +76,26 @@ internal class DepthFirstFieldResolverTask private constructor(
                 }
                 val queryValue = resolveQueryFragment(fragments.queryFragment, publicationPath)
                 runBlocking {
-                    context(operation.world) {
-                        // Coroutine entry is interruptible; record only after crossing that boundary.
-                        operation.resolverObserver.onResolverInvocation(
-                            ResolverInvocationObservation(
-                                occurrencePath = publicationPath,
-                                field = key.field,
-                                input = input,
-                                inputSelections = fragments.objectFragment.materializeSelections,
-                                arguments = arguments,
-                                suppliedDemand = invocationDemand.takeIf { operation.world.selectiveResolvers },
-                                resolverOccurrenceId = fragments.objectFragment.resolverOccurrenceId,
-                            ),
-                        )
-                        resolver(
+                    // Coroutine entry is interruptible; record only after crossing that boundary.
+                    operation.resolverObserver.onResolverInvocation(
+                        ResolverInvocationObservation(
+                            occurrencePath = publicationPath,
+                            field = key.field,
                             input = input,
-                            queryValue = queryValue,
+                            inputSelections = fragments.objectFragment.materializeSelections,
                             arguments = arguments,
-                            selections = invocationDemand,
-                            executionContext = ResolutionExecutionContext.Unsupported,
-                        )
-                    }
+                            suppliedDemand = invocationDemand.takeIf { operation.world.selectiveResolvers },
+                            resolverOccurrenceId = fragments.objectFragment.resolverOccurrenceId,
+                        ),
+                    )
+                    resolver(
+                        input = input,
+                        queryValue = queryValue,
+                        arguments = arguments,
+                        selections = invocationDemand,
+                        selectiveResolvers = operation.world.selectiveResolvers,
+                        executionContext = ResolutionExecutionContext.Unsupported,
+                    )
                 }
             }
         }
@@ -140,27 +139,26 @@ internal class DepthFirstFieldResolverTask private constructor(
         val input = invocation.emptyObjectInput()
         val output =
             runBlocking {
-                context(operation.world) {
-                    // Reference targets have the same interruptible coroutine-entry boundary.
-                    operation.resolverObserver.onResolverInvocation(
-                        ResolverInvocationObservation(
-                            occurrencePath = invocation.path,
-                            field = invocation.key.field,
-                            input = input,
-                            inputSelections = invocation.fragments.objectFragment.materializeSelections,
-                            arguments = reference.arguments,
-                            suppliedDemand = invocationDemand.takeIf { operation.world.selectiveResolvers },
-                            resolverOccurrenceId = invocation.fragments.objectFragment.resolverOccurrenceId,
-                        ),
-                    )
-                    invocation.resolver(
+                // Reference targets have the same interruptible coroutine-entry boundary.
+                operation.resolverObserver.onResolverInvocation(
+                    ResolverInvocationObservation(
+                        occurrencePath = invocation.path,
+                        field = invocation.key.field,
                         input = input,
-                        queryValue = queryValue,
+                        inputSelections = invocation.fragments.objectFragment.materializeSelections,
                         arguments = reference.arguments,
-                        selections = invocationDemand,
-                        executionContext = ResolutionExecutionContext.Unsupported,
-                    )
-                }
+                        suppliedDemand = invocationDemand.takeIf { operation.world.selectiveResolvers },
+                        resolverOccurrenceId = invocation.fragments.objectFragment.resolverOccurrenceId,
+                    ),
+                )
+                invocation.resolver(
+                    input = input,
+                    queryValue = queryValue,
+                    arguments = reference.arguments,
+                    selections = invocationDemand,
+                    selectiveResolvers = operation.world.selectiveResolvers,
+                    executionContext = ResolutionExecutionContext.Unsupported,
+                )
             }
         operation.resolverObserver.onRootFieldReferenceInvocation(
             RootFieldReferenceInvocationObservation(

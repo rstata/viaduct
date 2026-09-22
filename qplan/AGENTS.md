@@ -7,9 +7,8 @@
 - [`maintainer-guide.md`](./maintainer-guide.md) - Use for validation, replay, failure classification, debugging, documentation conventions, and investigation workflow.
 - [`resolver-versions.md`](./resolver-versions.md) - Use to understand the maintained resolver grid and choose a simpler comparison implementation.
 - [`access-check-semantics.md`](./access-check-semantics.md) - Use for access-check vocabulary, checker demand, enforcement boundaries, type base-cell behavior, fresh checker Query OERs, and bypass semantics.
-- [`context-params.md`](./context-params.md) - Read before changing model context APIs or semantics APIs with explicit `Assumptions` and `SharedOperationContext` dependencies.
-- [`model/guidelines.md`](./model/guidelines.md) - Read before changing semantic carriers, equality, factories, promises, keys, or result structures.
-- [`semantics/README.md`](./semantics/README.md) - Read before changing semantic transformations, resolver implementations, or correctness judgments.
+- [`model/guidelines.md`](./model/guidelines.md) - Read before changing semantic carriers, equality, factories, promises, keys, result structures, or model dependency boundaries involving `Assumptions`.
+- [`semantics/README.md`](./semantics/README.md) - Read before changing semantic transformations, resolver implementations, correctness judgments, semantic context ownership, or operation dependencies involving `SharedOperationContext`.
 - [`semantics/testing-contracts.md`](./semantics/testing-contracts.md) - Read before changing or interpreting resolver tests and generated profiles.
 - [`semantics/property-test-rounds.md`](./semantics/property-test-rounds.md) - Read before changing serialized generator profiles, campaign resources, or standalone property-test campaign execution.
 - [`resolver-test-dsl.md`](./resolver-test-dsl.md) - Read before adding schema-embedded deterministic resolver worlds or counterexamples.

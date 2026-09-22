@@ -9,7 +9,6 @@ import model.requireObjectField
 import model.requireField
 import model.requireType
 import model.Arguments
-import model.Assumptions
 import model.EngineErrorData
 import model.EngineObjectDataEntry
 import model.Fragment
@@ -88,14 +87,13 @@ class ResolverRegistryTest {
             )
 
         val output =
-            context(world.assumptions) {
-                resolver(
-                    input = engineObjectDataOf(query),
-                    arguments = Arguments.Resolved.of(userField, emptyMap()),
-                    selections = demand,
-                    executionContext = ResolutionExecutionContext.Unsupported,
-                )
-            }
+            resolver(
+                input = engineObjectDataOf(query),
+                arguments = Arguments.Resolved.of(userField, emptyMap()),
+                selections = demand,
+                selectiveResolvers = world.assumptions.selectiveResolvers,
+                executionContext = ResolutionExecutionContext.Unsupported,
+            )
 
         assertSame(demand, observedDemand)
         assertSame(ResolutionExecutionContext.Unsupported, observedExecutionContext)
@@ -137,17 +135,16 @@ class ResolverRegistryTest {
             )
 
         val output =
-            context(world.assumptions) {
-                resolver(
-                    input = engineObjectDataOf(query),
-                    arguments = Arguments.Resolved.of(userField, emptyMap()),
-                    selections =
-                        schema.fragmentFrom(
-                            "fragment ignored on User { name }",
-                        ).subselections,
-                    executionContext = ResolutionExecutionContext.Unsupported,
-                )
-            }
+            resolver(
+                input = engineObjectDataOf(query),
+                arguments = Arguments.Resolved.of(userField, emptyMap()),
+                selections =
+                    schema.fragmentFrom(
+                        "fragment ignored on User { name }",
+                    ).subselections,
+                selectiveResolvers = world.assumptions.selectiveResolvers,
+                executionContext = ResolutionExecutionContext.Unsupported,
+            )
 
         assertEquals(setOf("name"), assertIs<EngineObjectData.Sync>(output).getSelections().toSet())
     }
@@ -193,14 +190,13 @@ class ResolverRegistryTest {
             )
 
         val output =
-            context(world.assumptions) {
-                resolver(
-                    input = engineObjectDataOf(query),
-                    arguments = Arguments.Resolved.of(userField, emptyMap()),
-                    selections = demand,
-                    executionContext = ResolutionExecutionContext.Unsupported,
-                )
-            }
+            resolver(
+                input = engineObjectDataOf(query),
+                arguments = Arguments.Resolved.of(userField, emptyMap()),
+                selections = demand,
+                selectiveResolvers = world.assumptions.selectiveResolvers,
+                executionContext = ResolutionExecutionContext.Unsupported,
+            )
 
         assertSame(demand, observedDemand)
         assertEquals(setOf("name"), assertIs<EngineObjectData.Sync>(output).getSelections().toSet())
@@ -264,20 +260,18 @@ class ResolverRegistryTest {
         assertTrue(registry.mayDemandFrom(userField).isEmpty())
         assertTrue(registry.mayDemandFrom(queryNode).isEmpty())
         val reference =
-            context(Assumptions.of(assumptions.schema, assumptions.resolverRegistry, false)) {
-                registry
-                    .resolver(userField)(
-                        input = query,
-                        arguments = Arguments.Resolved.of(userField, emptyMap()),
-                        executionContext = ResolutionExecutionContext.Unsupported,
-                    )
-            }
+            registry
+                .resolver(userField)(
+                    input = query,
+                    arguments = Arguments.Resolved.of(userField, emptyMap()),
+                    selectiveResolvers = false,
+                    executionContext = ResolutionExecutionContext.Unsupported,
+                )
         val nodeReference = assertIs<RootFieldReferenceData>(reference)
         assertEquals("User", nodeReference.nodeReferenceIdentityOrNull()?.type?.name)
         assertEquals("42", nodeReference.nodeReferenceIdentityOrNull()?.id)
         val nodeValue =
             assertIs<EngineObjectData.Sync>(
-                context(assumptions) {
                 registry.resolver(queryNode)(
                     input = query,
                     arguments = nodeReference.arguments,
@@ -290,9 +284,9 @@ class ResolverRegistryTest {
                             }
                             """.trimIndent(),
                         ).subselections,
+                    selectiveResolvers = assumptions.selectiveResolvers,
                     executionContext = ResolutionExecutionContext.Unsupported,
-                )
-                },
+                ),
         )
         assertEquals(user.schemaType, nodeValue.schemaType)
         assertEquals(user.getSelections().toSet(), nodeValue.getSelections().toSet())
@@ -357,14 +351,13 @@ class ResolverRegistryTest {
             )
 
         val result =
-            context(world.assumptions) {
-                resolver(
-                    input = engineObjectDataOf(query),
-                    queryValue = queryValue,
-                    arguments = Arguments.Resolved.of(consumer, emptyMap()),
-                    executionContext = ResolutionExecutionContext.Unsupported,
-                )
-            }
+            resolver(
+                input = engineObjectDataOf(query),
+                queryValue = queryValue,
+                arguments = Arguments.Resolved.of(consumer, emptyMap()),
+                selectiveResolvers = world.assumptions.selectiveResolvers,
+                executionContext = ResolutionExecutionContext.Unsupported,
+            )
 
         assertEquals(7, result)
         assertEquals(
@@ -512,15 +505,14 @@ class ResolverRegistryTest {
         val outputs =
             listOf("scalar", "list", "nullable", "failed").associateWith { fieldName ->
                 val field = schema.requireObjectField("Query", fieldName)
-                context(world.assumptions) {
-                    world.resolverRegistry
-                        .resolver(field)(
-                            input = parent,
-                            arguments = Arguments.Resolved.of(field, emptyMap()),
-                            selections = selectionForestOf(),
-                            executionContext = ResolutionExecutionContext.Unsupported,
-                        )
-                }
+                world.resolverRegistry
+                    .resolver(field)(
+                        input = parent,
+                        arguments = Arguments.Resolved.of(field, emptyMap()),
+                        selections = selectionForestOf(),
+                        selectiveResolvers = world.assumptions.selectiveResolvers,
+                        executionContext = ResolutionExecutionContext.Unsupported,
+                    )
             }
 
         assertEquals("value", outputs.getValue("scalar"))
@@ -701,13 +693,12 @@ class ResolverRegistryTest {
 
         suspend fun resolve(fieldName: String): Any? {
             val field = schema.requireObjectField("Query", fieldName)
-            return context(Assumptions.of(world.schema, world.resolverRegistry, false)) {
-                registry.resolver(field)(
-                    input = query,
-                    arguments = Arguments.Resolved.of(field, emptyMap()),
-                    executionContext = ResolutionExecutionContext.Unsupported,
-                )
-            }
+            return registry.resolver(field)(
+                input = query,
+                arguments = Arguments.Resolved.of(field, emptyMap()),
+                selectiveResolvers = false,
+                executionContext = ResolutionExecutionContext.Unsupported,
+            )
         }
 
         assertEquals(7, resolve("supplied"))
@@ -936,9 +927,7 @@ class ResolverRegistryTest {
 
         val failure =
             assertFailsWith<IllegalArgumentException> {
-                context(fixture.assumptions) {
-                    source.snipToDemand(demand)
-                }
+                source.snipToDemand(demand)
             }
 
         assertEquals(
@@ -992,13 +981,12 @@ class ResolverRegistryTest {
 
         val failure =
             assertFailsWith<IllegalArgumentException> {
-                context(world) {
-                    resolver(
-                        input = world.schema.objectOf("Query"),
-                        arguments = Arguments.Resolved.of(itemField, emptyMap()),
-                        executionContext = ResolutionExecutionContext.Unsupported,
-                    )
-                }
+                resolver(
+                    input = world.schema.objectOf("Query"),
+                    arguments = Arguments.Resolved.of(itemField, emptyMap()),
+                    selectiveResolvers = world.selectiveResolvers,
+                    executionContext = ResolutionExecutionContext.Unsupported,
+                )
             }
 
         assertEquals(
@@ -1063,9 +1051,7 @@ class ResolverRegistryTest {
 
         val result =
             assertIs<EngineObjectData.Sync>(
-                context(world) {
-                    source.snipToDemand(demand)
-                },
+                source.snipToDemand(demand),
             )
 
         assertEquals(emptySet(), result.getSelections().toSet())
@@ -1118,9 +1104,7 @@ class ResolverRegistryTest {
 
         val result =
             assertIs<EngineObjectData.Sync>(
-                context(world) {
-                    source.snipToDemand(demand)
-                },
+                source.snipToDemand(demand),
             )
 
         assertEquals(setOf("value", "nullValue", "errorValue"), result.getSelections().toSet())

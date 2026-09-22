@@ -59,7 +59,7 @@ class TestWorld private constructor(
     val assumptions: Assumptions =
         injector.getInstance(Assumptions::class.java)
 
-    /** Creates independent request-local binding state over this world's schema and registry. */
+    /** Creates another immutable world configuration over this world's schema and registry. */
     fun newAssumptions(
         selectiveResolvers: Boolean = assumptions.selectiveResolvers,
     ): Assumptions =

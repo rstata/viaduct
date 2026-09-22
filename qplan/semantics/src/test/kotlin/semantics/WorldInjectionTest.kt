@@ -73,15 +73,14 @@ class WorldInjectionTest {
         val userField = schema.requireObjectField("Query", "user")
         val nodeReference =
             assertIs<model.RootFieldReferenceData>(
-                context(Assumptions.of(world.schema, world.resolverRegistry, false)) {
-                    registry
-                        .resolver(userField)(
-                            input = world.objectOf("Query"),
-                            queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
-                            arguments = Arguments.Resolved.of(userField, emptyMap()),
-                            executionContext = ResolutionExecutionContext.Unsupported,
-                        )
-                },
+                registry
+                    .resolver(userField)(
+                        input = world.objectOf("Query"),
+                        queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
+                        arguments = Arguments.Resolved.of(userField, emptyMap()),
+                        selectiveResolvers = false,
+                        executionContext = ResolutionExecutionContext.Unsupported,
+                    ),
             )
 
         val queryNode = schema.requireObjectField("Query", "node")
@@ -95,16 +94,15 @@ class WorldInjectionTest {
             ).subselections
         val field =
             assertIs<EngineObjectData.Sync>(
-                context(world) {
-                    registry
-                        .resolver(queryNode)(
-                            input = world.objectOf("Query"),
-                            queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
-                            arguments = nodeReference.arguments,
-                            selections = selections,
-                            executionContext = ResolutionExecutionContext.Unsupported,
-                        )
-                },
+                registry
+                    .resolver(queryNode)(
+                        input = world.objectOf("Query"),
+                        queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
+                        arguments = nodeReference.arguments,
+                        selections = selections,
+                        selectiveResolvers = world.selectiveResolvers,
+                        executionContext = ResolutionExecutionContext.Unsupported,
+                    ),
             )
         assertEquals(
             "field",

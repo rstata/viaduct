@@ -51,14 +51,13 @@ class ResolverCoverageAdversarialTest {
         val world = registry.world(schema).assumptions
         val canonicalField = world.schema.requireObjectField("Query", field.name)
         val value =
-            context(Assumptions.of(world.schema, world.resolverRegistry, false)) {
-                world.resolverRegistry.resolver(canonicalField)(
-                    input = world.schema.objectOf("Query"),
-                    queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
-                    arguments = Arguments.Resolved.of(canonicalField, emptyMap()),
-                    executionContext = ResolutionExecutionContext.Unsupported,
-                )
-            }
+            world.resolverRegistry.resolver(canonicalField)(
+                input = world.schema.objectOf("Query"),
+                queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
+                arguments = Arguments.Resolved.of(canonicalField, emptyMap()),
+                selectiveResolvers = false,
+                executionContext = ResolutionExecutionContext.Unsupported,
+            )
         val outer = assertIs<List<*>>(value)
         val inner = assertIs<List<*>>(outer.single())
         assertIs<EngineObjectData.Sync>(inner.single())

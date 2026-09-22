@@ -94,15 +94,14 @@ internal class FieldResolutionLogic(
                 resolverOccurrenceId = fragments.objectFragment.resolverOccurrenceId,
             ),
         )
-        return context(publication.operation.world) {
-            resolver(
-                input,
-                queryValue,
-                arguments,
-                invocationDemand,
-                ResolutionExecutionContext.Unsupported,
-            )
-        }
+        return resolver(
+            input = input,
+            queryValue = queryValue,
+            arguments = arguments,
+            selections = invocationDemand,
+            selectiveResolvers = publication.operation.world.selectiveResolvers,
+            executionContext = ResolutionExecutionContext.Unsupported,
+        )
     }
 
     private suspend fun invokeRootFieldResolver(
@@ -128,15 +127,15 @@ internal class FieldResolutionLogic(
                 resolverOccurrenceId = invocation.fragments.objectFragment.resolverOccurrenceId,
             ),
         )
-        val output = context(publication.operation.world) {
+        val output =
             invocation.resolver(
                 input = input,
                 queryValue = queryValue,
                 arguments = reference.arguments,
                 selections = invocationDemand,
+                selectiveResolvers = publication.operation.world.selectiveResolvers,
                 executionContext = ResolutionExecutionContext.Unsupported,
             )
-        }
         publication.operation.resolverObserver.onRootFieldReferenceInvocation(
             RootFieldReferenceInvocationObservation(
                 publicationRoot = publication.oerOccurrence.root,

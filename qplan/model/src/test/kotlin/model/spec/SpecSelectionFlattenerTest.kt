@@ -187,7 +187,6 @@ class SpecSelectionFlattenerTest {
 
     private class SchemaFixture {
         private val world = TestWorld.fromSDL(SCHEMA_SDL)
-        val assumptions = world.assumptions
         val schema = world.schema
 
         val query = schema.requireQueryTypeDef()
@@ -226,9 +225,7 @@ class SpecSelectionFlattenerTest {
             typeInScope: ViaductSchema.CompositeTypeDef,
             selectionSet: List<SpecSelection>,
         ): SelectionForest =
-            context(assumptions) {
-                flattenSpecSelections(typeInScope, selectionSet)
-            }
+            flattenSpecSelections(schema, typeInScope, selectionSet)
     }
 
     private companion object {

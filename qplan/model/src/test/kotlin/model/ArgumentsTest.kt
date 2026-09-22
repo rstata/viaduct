@@ -527,17 +527,15 @@ class ArgumentsTest {
         val second = ground(secondOpen)
         val literal = ObjectEngineResult.GroundKey.of(consume, mapOf("value" to 9))
         val reapplied =
-            context(world) {
-                selectionForestOf(
-                    Selection.of(
-                        key = first,
-                        possibleTypes = setOf(world.schema.requireQueryTypeDef()),
-                        subselections = selectionForestOf(),
-                    ),
-                ).merge(world.schema.requireQueryTypeDef())
-                    .groundKeys()
-                    .single()
-            }
+            selectionForestOf(
+                Selection.of(
+                    key = first,
+                    possibleTypes = setOf(world.schema.requireQueryTypeDef()),
+                    subselections = selectionForestOf(),
+                ),
+            ).merge(world.schema.requireQueryTypeDef())
+                .groundKeys()
+                .single()
 
         assertEquals(setOf(firstVariable), firstOpen.instantiatedVariables())
         assertEquals(firstOpen, equalFirstOpen)

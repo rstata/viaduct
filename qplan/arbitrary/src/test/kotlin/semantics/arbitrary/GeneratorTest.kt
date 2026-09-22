@@ -917,22 +917,22 @@ class GeneratorTest {
                 val arguments = Arguments.Resolved.of(field, emptyMap())
                 val resolver = world.resolverRegistry.resolver(field)
 
-                context(Assumptions.of(world.schema, world.resolverRegistry, false)) {
-                    assertEquals(
-                        resolver(
-                            input,
-                            engineObjectDataOf(world.schema.requireQueryTypeDef()),
-                            arguments,
-                            executionContext = ResolutionExecutionContext.Unsupported,
-                        ).outputResolutionFingerprint(),
-                        resolver(
-                            input,
-                            engineObjectDataOf(world.schema.requireQueryTypeDef()),
-                            arguments,
-                            executionContext = ResolutionExecutionContext.Unsupported,
-                        ).outputResolutionFingerprint(),
-                    )
-                }
+                assertEquals(
+                    resolver(
+                        input = input,
+                        queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
+                        arguments = arguments,
+                        selectiveResolvers = false,
+                        executionContext = ResolutionExecutionContext.Unsupported,
+                    ).outputResolutionFingerprint(),
+                    resolver(
+                        input = input,
+                        queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
+                        arguments = arguments,
+                        selectiveResolvers = false,
+                        executionContext = ResolutionExecutionContext.Unsupported,
+                    ).outputResolutionFingerprint(),
+                )
                 checkedResolvers += 1
             }
         }

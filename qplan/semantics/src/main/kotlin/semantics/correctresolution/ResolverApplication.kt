@@ -304,15 +304,14 @@ private class ResolverReplayLogic(
                 }
             ReappliedResolver(
                 runBlocking {
-                    context(operation.world) {
-                        resolver.evaluateRelation(
-                            input = input,
-                            queryValue = queryValue,
-                            arguments = resolverArguments,
-                            selections = getCell(key).getValue().get().completedOutputDemand(),
-                            executionContext = ResolutionExecutionContext.Unsupported,
-                        )
-                    }
+                    resolver.evaluateRelation(
+                        input = input,
+                        queryValue = queryValue,
+                        arguments = resolverArguments,
+                        selections = getCell(key).getValue().get().completedOutputDemand(),
+                        selectiveResolvers = operation.world.selectiveResolvers,
+                        executionContext = ResolutionExecutionContext.Unsupported,
+                    )
                 },
             )
         }
@@ -448,15 +447,14 @@ private class ResolverReplayLogic(
             }
         return ReappliedResolver(
             runBlocking {
-                context(operation.world) {
-                    resolver.evaluateRelation(
-                        input = input,
-                        queryValue = queryValue,
-                        arguments = resolverArguments,
-                        selections = validationDemand,
-                        executionContext = ResolutionExecutionContext.Unsupported,
-                    )
-                }
+                resolver.evaluateRelation(
+                    input = input,
+                    queryValue = queryValue,
+                    arguments = resolverArguments,
+                    selections = validationDemand,
+                    selectiveResolvers = operation.world.selectiveResolvers,
+                    executionContext = ResolutionExecutionContext.Unsupported,
+                )
             },
         )
     }

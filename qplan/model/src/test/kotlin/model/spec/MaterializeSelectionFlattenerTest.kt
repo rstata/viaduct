@@ -337,9 +337,7 @@ class MaterializeSelectionFlattenerTest {
                     "fragment ResolverInput on Query { account: user { id } }",
                 )
         val selections =
-            context(world.assumptions) {
-                flattenForMaterialization(parsed.nominalType, parsed.selections)
-            }
+            flattenForMaterialization(schema, parsed.nominalType, parsed.selections)
 
         val account = selections.collect(schema.requireQueryTypeDef())["account"]
         assertEquals("user", account.key.field.name)
@@ -362,7 +360,6 @@ class MaterializeSelectionFlattenerTest {
 
     private class SchemaFixture {
         private val world = TestWorld.fromSDL(SCHEMA_SDL)
-        val assumptions = world.assumptions
         val schema = world.schema
 
         val query = schema.requireQueryTypeDef()
@@ -398,9 +395,7 @@ class MaterializeSelectionFlattenerTest {
             typeInScope: ViaductSchema.CompositeTypeDef,
             selectionSet: List<SpecSelection>,
         ): MaterializeSelectionForest =
-            context(assumptions) {
-                flattenForMaterialization(typeInScope, selectionSet)
-            }
+            flattenForMaterialization(schema, typeInScope, selectionSet)
     }
 
     private companion object {

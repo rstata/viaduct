@@ -4,7 +4,6 @@ import viaduct.graphql.schema.ViaductSchema
 
 import model.Arguments
 
-import model.Assumptions
 import model.EngineErrorData
 import model.EngineOutputData
 import model.EngineResult
@@ -34,7 +33,6 @@ import viaduct.engine.api.EngineObjectData
  * that field metadata. This relation checks the retained values without reconstructing field
  * identity from response-key strings.
  */
-context(world: Assumptions)
 internal fun EngineObjectData.Sync.conformsToSchema(): Boolean = this.conformsToOutputData()
 
 /**
@@ -42,7 +40,6 @@ internal fun EngineObjectData.Sync.conformsToSchema(): Boolean = this.conformsTo
  *
  * Null conforms exactly at a nullable outer layer.
  */
-context(world: Assumptions)
 internal fun EngineInputData?.conformsToSchema(
     typeExpr: ViaductSchema.TypeExpr<ViaductSchema.InputTypeDef>,
 ): Boolean = conformsToInputSchemaType(typeExpr)
@@ -53,7 +50,6 @@ internal fun EngineInputData?.conformsToSchema(
  * Null conforms exactly at a nullable outer layer and [EngineErrorData] conforms to every output
  * type expression.
  */
-context(world: Assumptions)
 internal fun EngineOutputData?.conformsToOutputSchema(
     typeExpr: ViaductSchema.TypeExpr<ViaductSchema.OutputTypeDef>,
 ): Boolean =
@@ -61,13 +57,11 @@ internal fun EngineOutputData?.conformsToOutputSchema(
         (this !is EngineObjectData.Sync || conformsToOutputData())
 
 /** Whether this argument tuple recursively conforms to [expectedType]. */
-context(world: Assumptions)
 internal fun Arguments.Resolved.conformsToSchema(
     expectedField: ViaductSchema.Field,
 ): Boolean = conformsToArgumentDefinition(expectedField)
 
 /** Whether this key's arguments recursively conform to its output field. */
-context(world: Assumptions)
 internal fun ObjectEngineResult.Key.conformsToSchema(): Boolean {
     val keyArguments = arguments
     return keyArguments.conformsToArgumentDefinition(field)
@@ -77,19 +71,25 @@ internal fun ObjectEngineResult.Key.conformsToSchema(): Boolean {
  * Whether this engine result recursively conforms to the schema definitions carried by its
  * coordinates.
  *
+ * Parent backedges are validated against [parentFieldRelations].
+ *
  * This relation is universally true of engine results constructed by their model factories.
  */
-context(world: Assumptions)
-internal fun EngineResult.conformsToSchema(): Boolean =
-    this.conformsToSchema(ancestors = emptyList())
+internal fun EngineResult.conformsToSchema(
+    parentFieldRelations: Map<ViaductSchema.ObjectField, ViaductSchema.ObjectField>,
+): Boolean =
+    this.conformsToSchema(
+        parentFieldRelations = parentFieldRelations,
+        ancestors = emptyList(),
+    )
 
 private data class StructuralAncestor(
     val result: ObjectEngineResult,
     val producerField: ViaductSchema.ObjectField,
 )
 
-context(world: Assumptions)
 private fun EngineResult.conformsToSchema(
+    parentFieldRelations: Map<ViaductSchema.ObjectField, ViaductSchema.ObjectField>,
     ancestors: List<StructuralAncestor>,
 ): Boolean {
     val result = this
@@ -108,7 +108,7 @@ private fun EngineResult.conformsToSchema(
                 val value = cell.getValue().get()
                 value.conformsToResultSchemaType(key.field.outputType) &&
                     if (key is ObjectEngineResult.ParentKey) {
-                        world.parentFieldRelations[key.field]?.let { producerField ->
+                        parentFieldRelations[key.field]?.let { producerField ->
                             val ancestor = ancestors.lastOrNull()
                             ancestor != null &&
                                 value === ancestor.result &&
@@ -116,6 +116,7 @@ private fun EngineResult.conformsToSchema(
                         } == true
                     } else {
                         value?.conformsToSchema(
+                            parentFieldRelations,
                             ancestors + StructuralAncestor(result, key.field),
                         ) ?: true
                     } &&
@@ -125,7 +126,7 @@ private fun EngineResult.conformsToSchema(
             result.all { cell ->
                 val value = cell.getValue().get()
                 value.conformsToResultSchemaType(result.typeExpr) &&
-                    (value?.conformsToSchema(ancestors) ?: true) &&
+                    (value?.conformsToSchema(parentFieldRelations, ancestors) ?: true) &&
                     cell.hasCompletedCheckerResults()
             }
         is ViaductSchema.EnumValue ->

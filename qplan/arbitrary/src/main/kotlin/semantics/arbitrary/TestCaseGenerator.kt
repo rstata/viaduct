@@ -158,8 +158,8 @@ fun Arb.Companion.resolverTestBatch(
  * Every invocation chooses an explicit seed and returns it in [ResolverTestRun]. A failure inside
  * [property] includes the seed plus one-based `S`, `R`, and `Q` coordinates.
  *
- * A callback that performs more than one independent resolution must use
- * [TestWorld.newAssumptions] for each resolution so request-local bindings are not shared.
+ * A callback that performs more than one independent resolution must create a fresh semantic
+ * operation context for each resolution so request-local bindings are not shared.
  */
 @OptIn(ExperimentalKotest::class)
 suspend fun checkResolverTestCases(

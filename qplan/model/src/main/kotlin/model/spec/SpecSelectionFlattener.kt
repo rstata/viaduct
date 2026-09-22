@@ -3,7 +3,6 @@ package model.spec
 import viaduct.graphql.schema.ViaductSchema
 
 import model.ObjectEngineResult
-import model.Assumptions
 import model.MaterializeSelection
 import model.MaterializeSelectionForest
 import model.InclusionCondition
@@ -23,12 +22,13 @@ import model.requireField
  * one-to-one correspondence is a postcondition of this translation; later normalization with
  * [model.merge] may combine members that produce equal concrete-object keys.
  */
-context(world: Assumptions)
 fun flatten(
+    schema: ViaductSchema,
     typeInScope: ViaductSchema.CompositeTypeDef,
     selectionSet: List<SpecSelection>,
 ): SelectionForest =
     flattenForMaterialization(
+        schema = schema,
         typeInScope = typeInScope,
         selectionSet = selectionSet,
     ).constructionSelections()
@@ -40,29 +40,7 @@ fun flatten(
  * Source occurrences remain uncollected until a concrete parent type is supplied to
  * [MaterializeSelectionForest.collect].
  */
-context(world: Assumptions)
 fun flattenForMaterialization(
-    typeInScope: ViaductSchema.CompositeTypeDef,
-    selectionSet: List<SpecSelection>,
-): MaterializeSelectionForest =
-    flattenForMaterialization(
-        schema = world.schema,
-        typeInScope = typeInScope,
-        selectionSet = selectionSet,
-    )
-
-internal fun flatten(
-    schema: ViaductSchema,
-    typeInScope: ViaductSchema.CompositeTypeDef,
-    selectionSet: List<SpecSelection>,
-): SelectionForest =
-    flattenForMaterialization(
-        schema = schema,
-        typeInScope = typeInScope,
-        selectionSet = selectionSet,
-    ).constructionSelections()
-
-internal fun flattenForMaterialization(
     schema: ViaductSchema,
     typeInScope: ViaductSchema.CompositeTypeDef,
     selectionSet: List<SpecSelection>,

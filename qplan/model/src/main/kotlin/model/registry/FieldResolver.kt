@@ -4,7 +4,6 @@ import viaduct.graphql.schema.ViaductSchema
 
 import model.ObjectEngineResult
 
-import model.Assumptions
 import model.EngineErrorDataReadException
 import model.EngineInputData
 import model.InclusionCondition
@@ -217,11 +216,11 @@ class FieldResolver private constructor(
     }
 
     /** Applies this field resolver to the supplied output demand. */
-    context(world: Assumptions)
     internal suspend operator fun invoke(
         input: EngineObjectData.Sync,
         arguments: Arguments.Resolved,
         selections: SelectionForest = selectionForestOf(),
+        selectiveResolvers: Boolean,
         executionContext: ResolutionExecutionContext,
     ): ResolverOutputData? =
         invoke(
@@ -229,32 +228,42 @@ class FieldResolver private constructor(
             queryValue = engineObjectDataOf(queryType),
             arguments = arguments,
             selections = selections,
+            selectiveResolvers = selectiveResolvers,
             executionContext = executionContext,
         )
 
     /** Applies this field resolver to the supplied output demand. */
-    context(world: Assumptions)
     suspend operator fun invoke(
         input: EngineObjectData.Sync,
         queryValue: EngineObjectData.Sync,
         arguments: Arguments.Resolved,
         selections: SelectionForest = selectionForestOf(),
+        selectiveResolvers: Boolean,
         executionContext: ResolutionExecutionContext,
     ): ResolverOutputData? {
-        return evaluateRelation(input, queryValue, arguments, selections, executionContext)
+        return evaluateRelation(
+            input,
+            queryValue,
+            arguments,
+            selections,
+            selectiveResolvers,
+            executionContext,
+        )
     }
 
     /**
      * Evaluates the deterministic function relation for a semantic judgment.
      *
+     * [selectiveResolvers] controls projection of nonselective resolver output to supplied demand.
+     *
      * This is not an observed resolver application and establishes no execution-count property.
      */
-    context(world: Assumptions)
     suspend fun evaluateRelation(
         input: EngineObjectData.Sync,
         queryValue: EngineObjectData.Sync,
         arguments: Arguments.Resolved,
         selections: SelectionForest,
+        selectiveResolvers: Boolean,
         executionContext: ResolutionExecutionContext,
     ): ResolverOutputData? {
         require(queryValue.schemaType == queryType) {
@@ -268,7 +277,7 @@ class FieldResolver private constructor(
             }
         // output.requireArgumentlessObjectFields()
         val selectedOutput =
-            if (projectNonselectiveOutput && world.selectiveResolvers) {
+            if (projectNonselectiveOutput && selectiveResolvers) {
                 output.snipToDemand(projectionDemand(selections))
             } else {
                 output

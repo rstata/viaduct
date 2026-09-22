@@ -16,7 +16,8 @@ The longer-term `viaduct.engine.runtime.execution2` goal is query execution only
 - [`design-principles.md`](./design-principles.md) states durable modeling and resolver-design principles.
 - [`research-evidence.md`](./research-evidence.md) preserves findings, correctness obligations, hard cases, acceptance cases, prior art, and source provenance behind those principles.
 - [`resolver-versions.md`](./resolver-versions.md) explains why every maintained resolver exists and how earlier versions help simplify or debug Resolver26 work.
-- [`context-params.md`](./context-params.md) defines model `Assumptions` context parameters, explicit semantics dependencies, and the boundary between them.
+- [`model/guidelines.md`](./model/guidelines.md) defines model-world boundaries, including the role of `Assumptions` and the mathematical-signature rules for model dependencies.
+- [`semantics/README.md`](./semantics/README.md) defines semantic contexts, state and task roles, dependency ownership, and the shared resolver boundaries built around `SharedOperationContext`.
 - [`viaduct-execution.md`](./viaduct-execution.md) describes the idealized source-world execution model that qplan represents.
 - [`examples.md`](./examples.md) gives complete GraphQL examples of demand closure, output projection, and the cross-occurrence ordering that prevents the depth-first resolvers from supporting `@parent`.
 - [`resolver-test-dsl.md`](./resolver-test-dsl.md) defines the schema-embedded deterministic resolver-world DSL.

@@ -49,15 +49,14 @@ class CorrectResolutionTest : Resolver26DispatcherResource {
         assertEquals(1, events.size)
         repeat(2) { assertTrue(root.correctResolution(operation, fragment)) }
         val field = world.schema.requireObjectField("Query", "value")
-        context(world) {
-            world.resolverRegistry.resolver(field)(
-                engineObjectDataOf(world.schema.requireQueryTypeDef()),
-                engineObjectDataOf(world.schema.requireQueryTypeDef()),
-                Arguments.Resolved.of(field, emptyMap()),
-                selectionForestOf(),
-                ResolutionExecutionContext.Unsupported,
-            )
-        }
+        world.resolverRegistry.resolver(field)(
+            input = engineObjectDataOf(world.schema.requireQueryTypeDef()),
+            queryValue = engineObjectDataOf(world.schema.requireQueryTypeDef()),
+            arguments = Arguments.Resolved.of(field, emptyMap()),
+            selections = selectionForestOf(),
+            selectiveResolvers = world.selectiveResolvers,
+            executionContext = ResolutionExecutionContext.Unsupported,
+        )
         assertEquals(1, events.size)
     }
 

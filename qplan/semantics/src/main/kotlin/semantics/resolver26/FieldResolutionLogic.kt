@@ -277,15 +277,14 @@ internal class FieldResolutionLogic(
             ),
         )
 
-        return context(publication.operation.world) {
-            fieldResolverOccurrence.resolver(
-                input = input,
-                queryValue = queryValue,
-                arguments = resolverArguments,
-                selections = invocationDemand,
-                executionContext = fieldResolverTask,
-            )
-        }
+        return fieldResolverOccurrence.resolver(
+            input = input,
+            queryValue = queryValue,
+            arguments = resolverArguments,
+            selections = invocationDemand,
+            selectiveResolvers = publication.operation.world.selectiveResolvers,
+            executionContext = fieldResolverTask,
+        )
     }
 
     private fun createRootFieldResolverOccurrence(
@@ -391,15 +390,14 @@ internal class FieldResolutionLogic(
                 resolverOccurrenceId = fieldResolverOccurrence.resolverOccurrenceId,
             ),
         )
-        return context(publication.operation.world) {
-            fieldResolverOccurrence.resolver(
-                input,
-                queryValue,
-                arguments,
-                invocationDemand,
-                fieldResolverTask,
-            )
-        }
+        return fieldResolverOccurrence.resolver(
+            input = input,
+            queryValue = queryValue,
+            arguments = arguments,
+            selections = invocationDemand,
+            selectiveResolvers = publication.operation.world.selectiveResolvers,
+            executionContext = fieldResolverTask,
+        )
     }
 
     // Calls the tenant provider once for this occurrence and publishes its complete binding set.

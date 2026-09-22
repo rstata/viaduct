@@ -63,8 +63,8 @@ class ParentFieldsTest {
 
         val valid = result(wrongParent = false)
         val invalid = result(wrongParent = true)
-        assertTrue(context(assumptions) { valid.conformsToSchema() })
-        assertFalse(context(assumptions) { invalid.conformsToSchema() })
+        assertTrue(valid.conformsToSchema(assumptions.parentFieldRelations))
+        assertFalse(invalid.conformsToSchema(assumptions.parentFieldRelations))
         assertFalse(valid.sameCompletedResultAs(invalid))
     }
 
@@ -112,7 +112,7 @@ class ParentFieldsTest {
         val first = assumptions.parentResult()
         val second = assumptions.parentResult()
 
-        assertTrue(context(assumptions) { first.conformsToSchema() })
+        assertTrue(first.conformsToSchema(assumptions.parentFieldRelations))
         assertTrue(first.sameCompletedResultAs(second))
         assertFailsWith<IllegalArgumentException> { first.union(second) }
     }
@@ -134,7 +134,7 @@ class ParentFieldsTest {
         val unrelatedParent = ObjectEngineResult.of(schema.requireType("Parent") as viaduct.graphql.schema.ViaductSchema.Object)
         val result = assumptions.parentResult(parentOverride = unrelatedParent)
 
-        assertFalse(context(assumptions) { result.conformsToSchema() })
+        assertFalse(result.conformsToSchema(assumptions.parentFieldRelations))
     }
 
     @Test
@@ -165,7 +165,7 @@ class ParentFieldsTest {
             cell.setTypeCheckerResult(null)
         }
 
-        assertFalse(context(assumptions) { parent.conformsToSchema() })
+        assertFalse(parent.conformsToSchema(assumptions.parentFieldRelations))
     }
 
     private fun Assumptions.parentResult(

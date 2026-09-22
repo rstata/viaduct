@@ -28,10 +28,8 @@ class SchemaConformanceTest {
             }
 
         assertTrue(
-            context(world) {
-                value.conformsToSchema() &&
-                    value.conformsToOutputSchema(schema.requireField("Query", "user").outputType)
-            },
+            value.conformsToSchema() &&
+                value.conformsToOutputSchema(schema.requireField("Query", "user").outputType),
         )
     }
 
@@ -43,11 +41,7 @@ class SchemaConformanceTest {
                 "name" resolvesTo "Ada"
             }
 
-        assertTrue(
-            context(world) {
-                result.conformsToSchema()
-            },
-        )
+        assertTrue(result.conformsToSchema(world.parentFieldRelations))
     }
 
     @Test

@@ -37,7 +37,6 @@ dependencies {
 
 kotlin {
     compilerOptions {
-        freeCompilerArgs.add("-Xcontext-parameters")
         freeCompilerArgs.add("-Xjspecify-annotations=ignore")
     }
     jvmToolchain(17)

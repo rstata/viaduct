@@ -1,7 +1,6 @@
 # Semantics Documentation
 
-- [`README.md`](./README.md) - Start here for the module boundary, principal judgment, shared semantic operations, and publication model.
-- [`../context-params.md`](../context-params.md) - Read before changing semantic APIs that use the canonical `SharedOperationContext`, cross into `Assumptions`, or supply explicit state contexts.
+- [`README.md`](./README.md) - Start here for the module boundary, principal judgment, semantic context vocabulary and ownership, shared operation dependencies, and publication model.
 - [`../resolver-versions.md`](../resolver-versions.md) - Use to compare capabilities and execution structures across maintained resolvers.
 - [`testing-contracts.md`](./testing-contracts.md) - Read before changing or interpreting feature contracts, policies, generated profiles, or replay behavior.
 - [`property-test-rounds.md`](./property-test-rounds.md) - Read before changing serialized generator profiles, campaign resources, the standalone launcher, or broad-campaign execution.

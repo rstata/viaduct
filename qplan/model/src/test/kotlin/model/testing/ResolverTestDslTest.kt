@@ -5,7 +5,6 @@ import kotlinx.coroutines.runBlocking
 import viaduct.graphql.schema.ViaductSchema
 
 import model.requireObjectField
-import model.Assumptions
 import model.ArgumentResolutionError
 import model.EngineErrorData
 import model.EngineOutputData
@@ -422,14 +421,13 @@ private fun TestWorld.apply(
         Arguments.Error -> EngineErrorData.of()
         is Arguments.Resolved ->
             runBlocking {
-                context(Assumptions.of(assumptions.schema, assumptions.resolverRegistry, false)) {
-                    resolverRegistry.resolver(field)(
-                        input,
-                        grounded,
-                        selections = selections,
-                        executionContext = ResolutionExecutionContext.Unsupported,
-                    )
-                }
+                resolverRegistry.resolver(field)(
+                    input = input,
+                    arguments = grounded,
+                    selections = selections,
+                    selectiveResolvers = false,
+                    executionContext = ResolutionExecutionContext.Unsupported,
+                )
             }
         else -> error("Direct resolver application requires ground arguments")
     }

@@ -23,7 +23,7 @@ internal class OrchestrationTask private constructor(
     occurrence: OEROccurrence,
     source: EngineObjectData.Sync,
 ) : CoroutineOrchestrationTask<OperationContext>(operation, occurrence, source) {
-    private lateinit var closed: ClosedInputDemandContext
+    private lateinit var closed: ClosedConstructionDemandContext
     private var bindingDeclarationStarted = false
     override val closedDemand: ObjectSelectionForest get() = closed.demand
 
@@ -48,7 +48,7 @@ internal class OrchestrationTask private constructor(
             initialDemand: SelectionForest,
         ): OrchestrationTask =
             OrchestrationTask(operation, occurrence, source).apply {
-                closed = source.closeInputDemand(operation.world, occurrence, initialDemand)
+                closed = source.closeConstructionDemand(operation.world, occurrence, initialDemand)
                 declareBindings()
                 occurrence.installParentBackedgeFields(operation, closed.demand.byKey().keys.filterIsInstance<ObjectEngineResult.ParentKey>())
                 operation.bindingsState.markBindingsDeclared(occurrence.target)

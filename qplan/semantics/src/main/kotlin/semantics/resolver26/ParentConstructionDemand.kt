@@ -12,10 +12,11 @@ import model.selectionForestOf
 import viaduct.graphql.schema.ViaductSchema
 
 /**
- * Returns construction demand induced by parent selections in requested descendants and in the
- * fixed inputs of resolver boundaries reached from those descendants.
+ * Returns additional construction demand induced by parent selections in requested descendants
+ * and in the fixed inputs of resolver boundaries reached from those descendants. The caller adds
+ * this contribution to its original demand; the two may overlap.
  */
-internal fun SelectionForest.inputParentDemand(world: Assumptions): SelectionForest =
+internal fun SelectionForest.liftParentConstructionDemand(world: Assumptions): SelectionForest =
     if (world.parentFieldRelations.isEmpty()) {
         selectionForestOf()
     } else {
@@ -24,18 +25,18 @@ internal fun SelectionForest.inputParentDemand(world: Assumptions): SelectionFor
 
 private fun SelectionForest.computeDemandFromParentFields(
     world: Assumptions,
-    parentDemandByResolverField: MutableMap<ViaductSchema.ObjectField, InputParentDemandAnalysis>,
-): InputParentDemandAnalysis =
-    foldInputParentDemand { selection ->
+    parentDemandByResolverField: MutableMap<ViaductSchema.ObjectField, ParentDemandAnalysis>,
+): ParentDemandAnalysis =
+    foldParentDemand { selection ->
         val parentFields =
             selection.possibleTypes.mapNotNullTo(linkedSetOf()) { possibleType ->
                 (selection.objectKey(possibleType) as? ObjectEngineResult.ParentKey)?.field
             }
         if (parentFields.isNotEmpty()) {
-            InputParentDemandAnalysis(
+            ParentDemandAnalysis(
                 parentRequests =
                     parentFields.map { parentField ->
-                        ParentInputRequest(
+                        ParentRequest(
                             parentField,
                             selection.subselections.guardedBy(selection.inclusionCondition),
                         )
@@ -57,10 +58,10 @@ private fun SelectionForest.computeDemandFromParentFields(
                         ),
                     )
                 }
-            val parentRequests = mutableListOf<ParentInputRequest>()
+            val parentRequests = mutableListOf<ParentRequest>()
             nested.parentRequests.forEach { unguardedRequest ->
                 val request =
-                    ParentInputRequest(
+                    ParentRequest(
                         parentField = unguardedRequest.parentField,
                         demand =
                             unguardedRequest.demand.guardedBy(
@@ -83,21 +84,21 @@ private fun SelectionForest.computeDemandFromParentFields(
                 val field = selection.objectKey(possibleType).field
                 if (field in world.resolverRegistry) {
                     val resolverInput =
-                        field.fixedInputParentDemand(world, parentDemandByResolverField)
+                        field.fixedParentDemand(world, parentDemandByResolverField)
                     val guardedResolverInput =
                         resolverInput.guardedBy(selection.inclusionCondition)
                     localDemand += guardedResolverInput.localDemand
                     parentRequests += guardedResolverInput.parentRequests
                 }
             }
-            InputParentDemandAnalysis(localDemand, parentRequests)
+            ParentDemandAnalysis(localDemand, parentRequests)
         }
     }
 
-private fun ViaductSchema.ObjectField.fixedInputParentDemand(
+private fun ViaductSchema.ObjectField.fixedParentDemand(
     world: Assumptions,
-    parentDemandByResolverField: MutableMap<ViaductSchema.ObjectField, InputParentDemandAnalysis>,
-): InputParentDemandAnalysis =
+    parentDemandByResolverField: MutableMap<ViaductSchema.ObjectField, ParentDemandAnalysis>,
+): ParentDemandAnalysis =
     parentDemandByResolverField[this]
         ?: world.resolverRegistry
             .resolver(this)
@@ -106,40 +107,40 @@ private fun ViaductSchema.ObjectField.fixedInputParentDemand(
             .computeDemandFromParentFields(world, parentDemandByResolverField)
             .also { demand -> parentDemandByResolverField[this] = demand }
 
-private data class ParentInputRequest(
+private data class ParentRequest(
     val parentField: ViaductSchema.ObjectField,
     val demand: SelectionForest,
 )
 
-private data class InputParentDemandAnalysis(
+private data class ParentDemandAnalysis(
     val localDemand: SelectionForest = selectionForestOf(),
-    val parentRequests: List<ParentInputRequest> = emptyList(),
+    val parentRequests: List<ParentRequest> = emptyList(),
 ) {
-    operator fun plus(other: InputParentDemandAnalysis): InputParentDemandAnalysis =
-        InputParentDemandAnalysis(
+    operator fun plus(other: ParentDemandAnalysis): ParentDemandAnalysis =
+        ParentDemandAnalysis(
             localDemand = localDemand + other.localDemand,
             parentRequests = parentRequests + other.parentRequests,
         )
 }
 
-private fun InputParentDemandAnalysis.guardedBy(
+private fun ParentDemandAnalysis.guardedBy(
     condition: InclusionCondition,
-): InputParentDemandAnalysis =
-    InputParentDemandAnalysis(
+): ParentDemandAnalysis =
+    ParentDemandAnalysis(
         localDemand = localDemand.guardedBy(condition),
         parentRequests =
             parentRequests.map { request ->
-                ParentInputRequest(
+                ParentRequest(
                     parentField = request.parentField,
                     demand = request.demand.guardedBy(condition),
                 )
             },
     )
 
-private fun SelectionForest.foldInputParentDemand(
-    transform: (Selection) -> InputParentDemandAnalysis,
-): InputParentDemandAnalysis {
-    var result = InputParentDemandAnalysis()
+private fun SelectionForest.foldParentDemand(
+    transform: (Selection) -> ParentDemandAnalysis,
+): ParentDemandAnalysis {
+    var result = ParentDemandAnalysis()
     forEach { selection -> result += transform(selection) }
     return result
 }

@@ -7,7 +7,7 @@ import model.RootFieldReferenceData
 import model.SelectionForest
 import model.outputValue
 import model.schemaType
-import semantics.resolvers.ResolverDemandClosureLogic
+import semantics.resolvers.closeConstructionDemand
 import semantics.resolvers.GroundedFieldPublicationOccurrence
 import semantics.shared.OEROccurrence
 import semantics.shared.SharedOrchestrationTask
@@ -70,7 +70,7 @@ internal class DepthFirstOrchestrationTask private constructor(
             require(source.schemaType == occurrence.target.type) {
                 "Source type ${source.schemaType.name} does not match result type ${occurrence.target.type.name}"
             }
-            val closed = ResolverDemandClosureLogic(operation, occurrence, source).close(constructionDemand)
+            val closed = source.closeConstructionDemand(operation, occurrence, constructionDemand)
             require(closed.groundKeys().none { it is ObjectEngineResult.ParentKey }) {
                 "Resolver01-03 and Resolver06-08 do not support @parent fields"
             }

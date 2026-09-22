@@ -21,7 +21,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-class ResolverDemandLogicTest {
+class ConstructionDemandClosureTest {
     @Test
     fun `closure and order keep accumulators local to each invocation`() {
         val world = fixture().assumptions
@@ -29,7 +29,7 @@ class ResolverDemandLogicTest {
         val root = ObjectEngineResult.of(schema.requireQueryTypeDef(), emptyMap())
         val occurrence = OEROccurrence(root, emptyList(), root)
         val operation = SharedOperationContext.create(world)
-        val closure = ResolverDemandClosureLogic(operation, occurrence, schema.objectOf("Query"))
+        val source = schema.objectOf("Query")
         val ordering = SiblingDependencyLogic(operation, occurrence)
         val a = key(world, "Query", "a")
         val b = key(world, "Query", "b")
@@ -37,9 +37,9 @@ class ResolverDemandLogicTest {
         val demand = schema.fragmentFrom("fragment F on Query { a }").subselections
 
         repeat(2) {
-            assertEquals(setOf(a, b, leaf), closure.close(demand).groundKeys())
+            assertEquals(setOf(a, b, leaf), source.closeConstructionDemand(operation, occurrence, demand).groundKeys())
             assertEquals(listOf(leaf, b, a), ordering.order(linkedSetOf(a, b, leaf)))
-            assertEquals(emptySet(), closure.close(selectionForestOf()).groundKeys())
+            assertEquals(emptySet(), source.closeConstructionDemand(operation, occurrence, selectionForestOf()).groundKeys())
             assertEquals(emptyList(), ordering.order(emptySet()))
             assertEquals(listOf(leaf), ordering.order(setOf(leaf)))
         }
@@ -64,11 +64,11 @@ class ResolverDemandLogicTest {
                 val target = ObjectEngineResult.of(boxType, emptyMap())
                 val occurrence = OEROccurrence(root, path, target)
                 val closed =
-                    ResolverDemandClosureLogic(
+                    schema.objectOf("Box").closeConstructionDemand(
                         operation,
                         occurrence,
-                        schema.objectOf("Box"),
-                    ).close(demand)
+                        demand,
+                    )
                 assertEquals(setOf(consumer, sibling), closed.groundKeys())
                 val variable =
                     Arguments.Variable
@@ -93,15 +93,11 @@ class ResolverDemandLogicTest {
         val schema = world.schema
         val root = ObjectEngineResult.of(schema.requireQueryTypeDef(), emptyMap())
         val source = schema.objectOf("Query") { "a" setTo 99 }
-        val logic =
-            ResolverDemandClosureLogic(
-                SharedOperationContext.create(world),
-                OEROccurrence(root, emptyList(), root),
-                source,
-            )
+        val operation = SharedOperationContext.create(world)
+        val occurrence = OEROccurrence(root, emptyList(), root)
         val demand = schema.fragmentFrom("fragment F on Query { a }").subselections
 
-        assertEquals(setOf(key(world, "Query", "a")), logic.close(demand).groundKeys())
+        assertEquals(setOf(key(world, "Query", "a")), source.closeConstructionDemand(operation, occurrence, demand).groundKeys())
     }
 
     @Test
@@ -121,19 +117,19 @@ class ResolverDemandLogicTest {
                 field.containingDef,
                 listOf(EngineObjectDataEntry.of("consumer", field, 1)),
             )
-        val logic = ResolverDemandClosureLogic(SharedOperationContext.create(world), occurrence, source)
+        val operation = SharedOperationContext.create(world)
         val errored = ObjectEngineResult.GroundKey.of(field, Arguments.Error)
         val errorDemand =
             selectionForestOf(
                 Selection.of(errored, setOf(field.containingDef), selectionForestOf()),
             )
-        assertEquals(setOf(errored), logic.close(errorDemand).groundKeys())
+        assertEquals(setOf(errored), source.closeConstructionDemand(operation, occurrence, errorDemand).groundKeys())
 
         val ordinaryDemand =
             schema.fragmentFrom("fragment F on Box { consumer(seed: 7) }").subselections
         val failure =
             assertFailsWith<IllegalArgumentException> {
-                logic.close(ordinaryDemand)
+                source.closeConstructionDemand(operation, occurrence, ordinaryDemand)
             }
         assertEquals(
             "Resolver output must not supply argument-bearing field Box/consumer",
@@ -172,8 +168,8 @@ class ResolverDemandLogicTest {
             )
         assertEquals(
             setOf(errored),
-            ResolverDemandClosureLogic(operation, occurrence, schema.objectOf("Box"))
-                .close(demand)
+            schema.objectOf("Box")
+                .closeConstructionDemand(operation, occurrence, demand)
                 .groundKeys(),
         )
     }
@@ -190,18 +186,14 @@ class ResolverDemandLogicTest {
                 listOf(key(world, "Query", "boxes"), ListEngineResult.Index.of(0)),
                 ObjectEngineResult.of(boxType, emptyMap()),
             )
-        val logic =
-            ResolverDemandClosureLogic(
-                SharedOperationContext.create(world),
-                occurrence,
-                schema.objectOf("Box"),
-            )
+        val operation = SharedOperationContext.create(world)
+        val source = schema.objectOf("Box")
         val demand =
             schema.fragmentFrom("fragment F on Box { consumer(seed: 7) }").subselections
-        logic.close(demand)
+        source.closeConstructionDemand(operation, occurrence, demand)
 
         assertFailsWith<IllegalStateException> {
-            logic.close(demand)
+            source.closeConstructionDemand(operation, occurrence, demand)
         }
     }
 

@@ -18,7 +18,7 @@ Compilation, examples, generated tests, stress campaigns, and cross-resolver agr
 
 Selections may contain open `ObjectEngineResult.Key` values. An `ObjectEngineResult.ObjectKey` has a concrete object field and is therefore eligible for exact OER cells and result paths even when its arguments contain instantiated variables. `ObjectEngineResult.GroundKey` is the refinement whose arguments have resolved; operations such as resolver invocation that require input values must cross that checked boundary explicitly. EOD selections are strings and never contain OER keys.
 
-Resolver input demand, client demand, output projection demand, symbolic or potential demand, and supplied demand serve different purposes. Resolver-owned output, internal selection forests, tenant-visible GraphQL fragments, and completed result coverage are likewise related but not interchangeable representations.
+Construction demand describes the selections needed to construct an object result; resolver input demand contributes an individual resolver's required selections to that construction. Successor demand describes the output requested from a producer to satisfy downstream needs. Client demand, symbolic or potential demand, and supplied demand likewise serve distinct purposes. Resolver-owned output, internal selection forests, tenant-visible GraphQL fragments, and completed result coverage are likewise related but not interchangeable representations.
 
 Cross each boundary through an explicit checked operation. Do not make exact operations tolerate open values or reuse one demand representation merely because two values happen to coincide in one example.
 

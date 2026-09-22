@@ -9,57 +9,16 @@ import model.Selection
 import model.SelectionForest
 import model.containsErrorValue
 import model.flatMapToSelectionForest
-import model.guardedBy
 import model.objectKey
-import model.merge
-import model.requireField
 import model.selectionForestOf
+import semantics.shared.liftParentSuccessorDemand
 
 // Returns ground output demand, crossing open resolver boundaries without binding their arguments.
-internal fun SelectionForest.successorDemand(world: Assumptions): SelectionForest =
-    liftParentDemand(world)
-        .successorDemandWithMemo(world, mutableMapOf())
-        .liftParentDemand(world)
-
-// Conservatively transposes parent-selected demand to each containing producer occurrence.
-private fun SelectionForest.liftParentDemand(world: Assumptions): SelectionForest =
-    flatMap { selection ->
-        val nested = selection.subselections.liftParentDemand(world)
-        val requested =
-            Selection.of(
-                key = selection.key,
-                possibleTypes = selection.possibleTypes,
-                subselections = nested,
-                inclusionCondition = selection.inclusionCondition,
-            )
-        val lifted =
-            selection
-                .liftedParentDemand(world, nested)
-                .guardedBy(selection.inclusionCondition)
-        selectionForestOf(requested) + lifted
-    }
-
-private fun Selection.liftedParentDemand(
-    world: Assumptions,
-    nestedDemand: SelectionForest,
-): SelectionForest =
-    possibleTypes.flatMapToSelectionForest { possibleType ->
-        val producer = possibleType.requireField(key.field.name)
-        val childType = producer.type.baseTypeDef as? ViaductSchema.Object
-            ?: return@flatMapToSelectionForest selectionForestOf()
-        nestedDemand
-            .merge(childType)
-            .byKey()
-            .values
-            .filter { childSelection ->
-                val parentKey = childSelection.key as? ObjectEngineResult.ParentKey
-                parentKey != null &&
-                    world.parentFieldRelations[parentKey.field] == producer
-            }
-            .fold(selectionForestOf()) { demand, parentSelection ->
-                demand + parentSelection.subselections
-            }
-    }
+internal fun SelectionForest.successorDemand(world: Assumptions): SelectionForest {
+    val initialDemand = this + liftParentSuccessorDemand(world)
+    val expandedDemand = initialDemand.successorDemandWithMemo(world, mutableMapOf())
+    return expandedDemand + expandedDemand.liftParentSuccessorDemand(world)
+}
 
 // Retains requested ground boundaries and adds each resolver-bearing boundary's fixed passive demand.
 private fun SelectionForest.successorDemandWithMemo(

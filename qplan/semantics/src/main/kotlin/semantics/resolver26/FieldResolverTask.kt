@@ -56,7 +56,7 @@ internal class FieldResolverTask private constructor(
         /** Installs and launches every local field task owned by one object orchestration. */
         fun launchAll(
             orchestrationTask: OrchestrationTask,
-            closed: ClosedInputDemandContext,
+            closed: ClosedConstructionDemandContext,
         ) {
             val operation = orchestrationTask.operation
             closed.fieldResolverOccurrences.forEach { (objectKey, fieldResolverOccurrence) ->

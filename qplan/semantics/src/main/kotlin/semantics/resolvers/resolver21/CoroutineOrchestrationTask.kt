@@ -6,7 +6,7 @@ import model.RootFieldReferenceData
 import model.SelectionForest
 import model.outputValue
 import model.schemaType
-import semantics.resolvers.ResolverDemandClosureLogic
+import semantics.resolvers.closeConstructionDemand
 import semantics.shared.OEROccurrence
 import semantics.resolver26.installParentBackedgeFields
 import viaduct.engine.api.EngineObjectData
@@ -30,12 +30,12 @@ internal class CoroutineOrchestrationTask private constructor(
                 "Source type ${source.schemaType.name} does not match result type ${occurrence.target.type.name}"
             }
             val closed =
-                ResolverDemandClosureLogic(
+                source.closeConstructionDemand(
                     operation = operation,
-                    oerOccurrence = occurrence,
-                    source = source,
-                    includeParentInputDemand = operation.supportsParentFields,
-                ).close(initialDemand)
+                    occurrence = occurrence,
+                    initialDemand = initialDemand,
+                    includeParentDemand = operation.supportsParentFields,
+                )
             val parentKeys = closed.groundKeys().filterIsInstance<ObjectEngineResult.ParentKey>()
             require(operation.supportsParentFields || parentKeys.isEmpty()) {
                 "Resolver21 does not support @parent fields"

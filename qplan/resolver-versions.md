@@ -55,7 +55,7 @@ Resolver26 retains variable-bearing resolver-fragment selections as symbolic OER
 
 Resolver26 now uses the shared passive traversal and task-context interfaces. Its orchestration factory returns closed demand and fully initialized task state, while its `SharedTaskDispatcher` implements the two dispatch operations with request-root coroutines. Resolver01-03 and Resolver06-08 use the same protocol and grounded task implementations, with synchronous and queued dispatch respectively. Both resolve independent Query fragments through a fresh recursive dispatcher. Resolver21-23 also use the shared traversal and prepared-task protocol, with grounded demand and request-root coroutine dispatch. All coroutine implementations close ancestor demand before passive descent and freeze each OER after field installation; ancestor re-orchestration and passive-child rediscovery are unnecessary.
 
-Resolver26 supports `@parent` by extending both input-demand closure and successor-demand closure to lift parent-induced demand before each OER is frozen.
+Resolver26 supports `@parent` by extending both construction-demand closure and successor-demand closure to lift parent-induced demand before each OER is frozen.
 
 Resolver26 implements the same root-field-reference contract as the comparison grid through its
 sealed occurrence and field-task protocol. That implementation adds conditioned passive

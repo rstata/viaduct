@@ -28,13 +28,13 @@ import semantics.shared.OEROccurrence
 // the object's demand. A previously expanded key can gain a late disjunct through another resolver,
 // so each new satisfiable alternative must propagate independently into that key's prerequisites.
 // Returns the merged demand together with the resolver and binding metadata used by later phases.
-internal fun EngineObjectData.Sync.closeInputDemand(
+internal fun EngineObjectData.Sync.closeConstructionDemand(
     world: Assumptions,
     occurrence: OEROccurrence,
     initialDemand: SelectionForest,
-): ClosedInputDemandContext {
+): ClosedConstructionDemandContext {
     var accumulatedDemand: SelectionForest =
-        initialDemand + initialDemand.inputParentDemand(world)
+        initialDemand + initialDemand.liftParentConstructionDemand(world)
     val expansionAccumulators:
         MutableMap<ObjectEngineResult.ObjectKey, ResolverExpansionAccumulator> =
         linkedMapOf()
@@ -81,7 +81,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
                     objectFragment.constructionSelections.guardedBy(alternative)
                 accumulatedDemand +=
                     guardedObjectFragment +
-                        guardedObjectFragment.inputParentDemand(world) +
+                        guardedObjectFragment.liftParentConstructionDemand(world) +
                         objectFragment.constructionSelections.providerDemand(
                             definitions = objectFragment.pathVariableDefinitions,
                             inclusionCondition = alternative,
@@ -105,7 +105,7 @@ internal fun EngineObjectData.Sync.closeInputDemand(
             check(fieldResolverOccurrences.keys.intersect(referenceOccurrences.keys).isEmpty()) {
                 "Resolver26 classified one field as both an ordinary resolver and a root reference"
             }
-            return ClosedInputDemandContext(
+            return ClosedConstructionDemandContext(
                 demand = mergedDemand,
                 fieldResolverOccurrences = fieldResolverOccurrences,
                 rootFieldReferenceOccurrences = referenceOccurrences,
@@ -257,11 +257,11 @@ private data class ResolverExpansionAccumulator(
 }
 
 /**
- * Immutable inputs established by demand closure for one object orchestration.
+ * Immutable inputs established by construction-demand closure for one object orchestration.
  * Retained across binding declaration, dispatch validation, and field installation; bundles
  * closed demand, value-source occurrences, and the variable-provider reads they require.
  */
-internal class ClosedInputDemandContext(
+internal class ClosedConstructionDemandContext(
     val demand: ObjectSelectionForest,
     val fieldResolverOccurrences:
         Map<ObjectEngineResult.ObjectKey, FieldResolverOccurrence>,

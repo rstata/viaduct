@@ -7,14 +7,13 @@ import model.ListEngineResult
 import model.ObjectEngineResult
 import model.PathComponent
 import model.ResolverOccurrenceId
-import model.Selection
+import model.MaterializeSelectionForest
 import model.VariableBinding
-import model.objectKey
 import model.outputType
 import model.registry.FieldResolver
 import model.registry.InstantiatedFieldPathDefinition
+import model.registry.VariableDefinition
 import model.registry.ProviderFragment
-import model.selectionForestOf
 import model.toEngineInputListData
 import model.toEngineSimpleData
 import semantics.shared.findStoredKey
@@ -45,6 +44,7 @@ fun ObjectEngineResult.validateFromFieldBindings(
         if (definitions.isEmpty()) return
 
         val occurrenceId = ResolverOccurrenceId.at(root, path)
+        val fragments = resolver.instantiateFragments(occurrenceId)
         val requiredBindingIds =
             definitions.mapTo(linkedSetOf()) { definition ->
                 requireNotNull(definition.variable.instanceId)
@@ -81,7 +81,18 @@ fun ObjectEngineResult.validateFromFieldBindings(
                             .queryFragmentResults(occurrenceId)
                             .single()
                 }
-            val expected = providerRoot.readCompletedProvider(operation = operation, path = definition.path)
+            val sourceDefinition = resolver.variables.entries.single {
+                it.key.variableName == definition.variable.variableName
+            }.value as VariableDefinition.FromField
+            val localFragment = when (definition.providerFragment) {
+                ProviderFragment.OBJECT -> fragments.objectFragment
+                ProviderFragment.QUERY -> fragments.queryFragment
+            }
+            val expected = providerRoot.readCompletedProvider(
+                operation = operation,
+                responsePath = sourceDefinition.responsePath,
+                selections = localFragment.materializeSelections,
+            )
             assertEquals(
                 expected,
                 operation.variableBindings.getBinding(
@@ -125,31 +136,47 @@ private fun ObjectEngineResult.requestQueryRoots(operation: SharedOperationConte
 
 private fun ObjectEngineResult.readCompletedProvider(
     operation: SharedOperationContext<*>,
-    path: List<ObjectEngineResult.Key>,
+    responsePath: List<String>,
+    selections: MaterializeSelectionForest,
 ): VariableBinding {
     var current = this
-    path.forEachIndexed { index, openKey ->
-        val specialized =
-            Selection.of(
-                key = openKey,
-                possibleTypes = setOf(current.type),
-                subselections = selectionForestOf(),
-            ).objectKey(current.type)
+    var localSelections = selections
+    responsePath.forEachIndexed { index, responseKey ->
+        // Collect the defining fragment independently of compiled provider-path conditions.
+        val included = try {
+            localSelections.filter { selection ->
+                selection.responseKey == responseKey && current.type in selection.possibleTypes &&
+                    selection.inclusionCondition.includeWith { variable ->
+                        when (val binding = operation.variableBindings.getBinding(requireNotNull(variable.instanceId))) {
+                            VariableBinding.Error -> throw ProviderConditionFailure()
+                            is VariableBinding.Input -> binding.value as? Boolean ?: throw ProviderConditionFailure()
+                        }
+                    }
+            }
+        } catch (_: ProviderConditionFailure) {
+            return VariableBinding.Error
+        }
+        if (included.isEmpty()) return VariableBinding.of(null)
+        val selection = included.collect(current.type)[responseKey]
+        val specialized = selection.key
         val key =
             current.findStoredKey(operation, specialized)
                 ?: error("Completed provider key is absent from result: $specialized")
         val value = current.getCell(key).get()
         if (value == null) return VariableBinding.of(null)
         if (value is ErrorEngineResult) return VariableBinding.Error
-        if (index == path.lastIndex) {
+        if (index == responsePath.lastIndex) {
             return value.toVariableBinding(key.field.outputType)
         }
         current =
             value as? ObjectEngineResult
                 ?: error("Completed provider path crossed a non-object at $key")
+        localSelections = selection.subselections
     }
     error("Provider path must be nonempty")
 }
+
+private class ProviderConditionFailure : RuntimeException()
 
 private fun SharedOperationContext<*>.resolverObservations(): CorrectnessResolverObserver =
     resolverObserver as? CorrectnessResolverObserver

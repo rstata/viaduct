@@ -18,6 +18,7 @@ import semantics.shared.fetchIncluded
 import model.objectKey
 import model.outputType
 import model.registry.InstantiatedFieldPathDefinition
+import model.registry.InstantiatedFieldPathElement
 import model.selectionForestOf
 import model.toEngineSimpleData
 import viaduct.graphql.schema.ViaductSchema
@@ -58,11 +59,13 @@ internal suspend fun ObjectEngineResult.completeProviderBindings(
 
 private suspend fun ObjectEngineResult.readProvider(
     operation: OperationContext,
-    path: List<ObjectEngineResult.Key>,
+    path: List<InstantiatedFieldPathElement>,
     reader: List<PathComponent>,
 ): VariableBinding {
     var current = this
-    path.forEachIndexed { index, openKey ->
+    path.forEachIndexed { index, element ->
+        if (!element.inclusionCondition.fetchIncluded(operation)) return VariableBinding.of(null)
+        val openKey = element.key
         operation.bindingsState.awaitBindingsDeclared(current)
         val specializedKey =
             Selection.of(

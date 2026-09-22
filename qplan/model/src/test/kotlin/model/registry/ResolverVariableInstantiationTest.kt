@@ -179,17 +179,15 @@ class ResolverVariableInstantiationTest {
 
         assertEquals(
             setOf(seed),
-            definition.path.single().instantiatedVariables(),
+            definition.path.single().key.instantiatedVariables(),
         )
         assertEquals(
             setOf(seed, definition.variable),
             objectFragment.constructionSelections.instantiatedVariables(),
         )
-        assertEquals(
-            objectFragment.pathVariableDefinitions,
-            resolver
-                .instantiatedFieldPathVariableDefinitions(resolverOccurrenceId)
-                .filter { definition -> definition.providerFragment == ProviderFragment.OBJECT },
-        )
+        val reconstructed = resolver.instantiatedFieldPathVariableDefinitions(resolverOccurrenceId)
+            .single { it.providerFragment == ProviderFragment.OBJECT }
+        assertEquals(definition.variable, reconstructed.variable)
+        assertEquals(definition.path.map { it.key }, reconstructed.path.map { it.key })
     }
 }

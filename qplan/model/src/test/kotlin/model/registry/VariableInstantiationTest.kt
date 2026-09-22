@@ -110,7 +110,7 @@ class VariableInstantiationTest {
     }
 
     @Test
-    fun `variable definition values are structural and require instances`() {
+    fun `variable definitions preserve their components and require instances`() {
         val result = world.schema.requireObjectField("Query", "result")
         val consume = world.schema.requireObjectField("Query", "consume")
         val template = Arguments.Variable.of(result, "seed")
@@ -119,14 +119,18 @@ class VariableInstantiationTest {
                 ResolverOccurrenceId.at(world.schema.testRoot(), emptyList()),
             )
         val providerPath =
-            listOf(ObjectEngineResult.Key.of(consume, mapOf("value" to 1)))
+            listOf(InstantiatedFieldPathElement.of(
+                ObjectEngineResult.Key.of(consume, mapOf("value" to 1)),
+                model.InclusionCondition.Always,
+            ))
         val argumentDefinition =
             VariableDefinition.FromArgument.of(result.requireArg("seed"))
 
-        assertEquals(
-            InstantiatedFieldPathDefinition.of(variable, ProviderFragment.OBJECT, providerPath),
-            InstantiatedFieldPathDefinition.of(variable, ProviderFragment.OBJECT, providerPath.toList()),
-        )
+        val definition = InstantiatedFieldPathDefinition.of(variable, ProviderFragment.OBJECT, providerPath)
+        assertEquals(variable, definition.variable)
+        assertEquals(ProviderFragment.OBJECT, definition.providerFragment)
+        assertEquals(providerPath.single().key, definition.path.single().key)
+        assertEquals(true, definition.path.single().inclusionCondition.include(emptyMap()))
         assertEquals(
             VariableInstanceDefinition.of(variable, argumentDefinition),
             VariableInstanceDefinition.of(variable, argumentDefinition),

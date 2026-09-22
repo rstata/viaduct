@@ -83,7 +83,7 @@ private data class BindingFixture(
     val definitions: List<InstantiatedFieldPathDefinition>,
 ) {
     fun bind(definition: InstantiatedFieldPathDefinition) {
-        val providerField = definition.path.single().field.name
+        val providerField = definition.path.single().key.field.name
         val value =
             when (providerField) {
                 "first" -> 11

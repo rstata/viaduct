@@ -472,6 +472,7 @@ private class TestResolverRegistry(
                     VariableDefinition.FromField.of(
                         providerFragment = declaration.providerFragment,
                         path = declaration.keyPath,
+                        responsePath = declaration.responsePath,
                     )
             }
         } + variablesProviderTemplates.associateWith { VariableDefinition.FromProvider }
@@ -600,6 +601,12 @@ private class TestResolverRegistry(
                             VariableDefinition.FromProvider -> emptySet<DependencyVertex>()
                             is VariableDefinition.FromArgument -> emptySet<DependencyVertex>()
                             is VariableDefinition.FromField -> {
+                                val resolver = fieldResolverDefinitions.getValue(variable.field)
+                                val providerFragment = when (definition.providerFragment) {
+                                    ProviderFragment.OBJECT -> resolver.objectFragment
+                                    ProviderFragment.QUERY -> requireNotNull(resolver.queryFragment)
+                                }
+                                val conditions = definition.inclusionConditions(providerFragment.materializeSelections)
                                 val providerType =
                                     when (definition.providerFragment) {
                                         ProviderFragment.OBJECT -> variable.field.containingDef
@@ -611,6 +618,7 @@ private class TestResolverRegistry(
                                         selectionForestOf(
                                             definition.path.toSelection(
                                                 setOf(providerType),
+                                                conditions,
                                             ),
                                         ),
                                     ),
@@ -797,6 +805,7 @@ private class TestResolverRegistry(
 
     private fun List<ObjectEngineResult.Key>.toSelection(
         possibleTypes: Set<ViaductSchema.Object>,
+        conditions: List<InclusionCondition>,
     ): Selection {
         val key = first()
         val remaining = drop(1)
@@ -804,12 +813,13 @@ private class TestResolverRegistry(
         return Selection.of(
             key = key,
             possibleTypes = possibleTypes,
+            inclusionCondition = conditions.first(),
             subselections =
                 if (remaining.isEmpty()) {
                     selectionForestOf()
                 } else {
                     require(outputType is ViaductSchema.CompositeTypeDef)
-                    selectionForestOf(remaining.toSelection(outputType.possibleObjectTypes))
+                    selectionForestOf(remaining.toSelection(outputType.possibleObjectTypes, conditions.drop(1)))
                 },
         )
     }

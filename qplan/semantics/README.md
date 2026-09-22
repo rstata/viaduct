@@ -118,6 +118,8 @@ A variable recipe determines where one resolver-occurrence binding is produced. 
 
 Producer/consumer legality is distinct from current implementation support. `FromArgument` is implemented by every maintained resolver, while Resolver26 implements `FromObjectField`, `FromQueryField`, and `FromProvider`. Resolver26 invokes a provider once per active resolver occurrence after grounding that occurrence's arguments; every provider binding may be consumed by the object fragment, Query fragment, or both.
 
+From-field reads use the defining object or Query fragment's local inclusion conditions. An excluded path step binds null before reserving or awaiting its OER value, even if another fragment or alias requests the same physical field. Selected intermediate and terminal null values also bind null; included field errors and failed condition bindings remain errors. The original conditioned fragments supply all construction demand: variable production does not add unconditional provider-path demand. Circular inclusion dependencies and statically excluded provider paths are rejected during registry assembly.
+
 ## Publication
 
 A `FieldPublicationOccurrence` retains its destination cell and initial `ValueSourceOccurrence`. In the case of references, resolution may transitively reach additional value sources before completing that cell's value slot.

@@ -4,7 +4,10 @@ import viaduct.graphql.schema.ViaductSchema
 
 import model.Arguments
 import model.EngineInputData
+import model.InclusionCondition
+import model.MaterializeSelectionForest
 import model.ObjectEngineResult
+import model.guardedBy
 import model.inputType
 
 /** The resolver input fragment that supplies a from-field variable. */
@@ -18,7 +21,7 @@ enum class ProviderFragment {
  *
  * Equality is structural: two definitions are equal exactly when they have the same variant and
  * equal [FromArgument.argument] and [FromArgument.inputPath], or equal [FromField.providerFragment]
- * and [FromField.path], respectively.
+ * and [FromField.path] and [FromField.responsePath], respectively.
  */
 sealed interface VariableDefinition {
     /** A variable whose value is returned by its field resolver's one-shot variables provider. */
@@ -70,6 +73,31 @@ sealed interface VariableDefinition {
     sealed interface FromField : VariableDefinition {
         val providerFragment: ProviderFragment
         val path: List<ObjectEngineResult.Key>
+        val responsePath: List<String>
+
+        /**
+         * Compiles local guards for each path step, checking response-key containment and rejecting
+         * statically excluded paths. Runtime exclusion is represented by a false evaluated guard.
+         * Each occurrence's guard is carried into its own descendants before alternatives are
+         * disjoined; unrelated aliases and other fragments cannot make this path included.
+         */
+        fun inclusionConditions(fragment: MaterializeSelectionForest): List<InclusionCondition> {
+            var selections = fragment
+            return path.mapIndexed { index, key ->
+                val matches = selections.filter { it.responseKey == responsePath[index] }
+                require(!matches.isEmpty() && matches.all { it.key == key }) {
+                    "From-field response path must select its canonical key at every step"
+                }
+                val conditions = mutableListOf<InclusionCondition>()
+                matches.forEach { conditions += it.inclusionCondition }
+                val condition = InclusionCondition.anyOf(conditions)
+                require(condition !== InclusionCondition.Never) {
+                    "A from-field path cannot traverse a statically excluded selection"
+                }
+                selections = matches.flatMap { it.subselections.guardedBy(it.inclusionCondition) }
+                condition
+            }
+        }
 
         companion object {
             /**
@@ -83,9 +111,13 @@ sealed interface VariableDefinition {
             fun of(
                 providerFragment: ProviderFragment,
                 path: List<ObjectEngineResult.Key>,
+                responsePath: List<String>,
             ): FromField {
                 validateFieldPath(path, providerFragment)
-                return FromFieldImpl(providerFragment, path.toList())
+                require(responsePath.size == path.size && responsePath.none(String::isBlank)) {
+                    "A from-field response path must name every canonical path step"
+                }
+                return FromFieldImpl(providerFragment, path.toList(), responsePath.toList())
             }
         }
     }
@@ -110,6 +142,7 @@ private data class FromArgumentImpl(
 private data class FromFieldImpl(
     override val providerFragment: ProviderFragment,
     override val path: List<ObjectEngineResult.Key>,
+    override val responsePath: List<String>,
 ) : VariableDefinition.FromField
 
 private fun validateFieldPath(

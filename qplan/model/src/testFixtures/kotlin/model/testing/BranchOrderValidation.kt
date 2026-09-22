@@ -239,7 +239,7 @@ private fun Selection.pathsContaining(
     if (inclusionCondition === InclusionCondition.Never) return emptySet()
     val path = prefix + key.field.name
     val result = linkedSetOf<String>()
-    if (variable in key.arguments.variables()) {
+    if (variable in key.arguments.variables() || variable in inclusionCondition.usedVariables()) {
         result += path.joinToString("/")
     }
     subselections.forEach { selection ->

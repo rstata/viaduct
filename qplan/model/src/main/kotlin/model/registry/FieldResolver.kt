@@ -55,7 +55,7 @@ typealias SelectiveFieldResolverFunction =
 typealias VariablesProviderFunction =
     suspend (Arguments.Resolved) -> Map<String, EngineInputData?>
 
-/** Paired materialization and construction views of one instantiated resolver input fragment. */
+/** Paired materialization and construction views of one instantiated resolver input fragment. Equality is undefined. */
 sealed interface ResolverFragment {
     val resolverOccurrenceId: ResolverOccurrenceId
     val materializeSelections: MaterializeSelectionForest
@@ -64,7 +64,7 @@ sealed interface ResolverFragment {
     val pathVariableDefinitions: List<InstantiatedFieldPathDefinition>
 }
 
-data class ResolverFragments(
+class ResolverFragments(
     val objectFragment: ResolverFragment,
     val queryFragment: ResolverFragment,
 )
@@ -166,18 +166,24 @@ class FieldResolver private constructor(
     ): List<InstantiatedFieldPathDefinition> =
         variables.mapNotNull { (variable, definition) ->
             (definition as? VariableDefinition.FromField)?.let {
+                val fragment = when (it.providerFragment) {
+                    ProviderFragment.OBJECT -> objectFragmentTemplate
+                    ProviderFragment.QUERY -> queryFragmentTemplate
+                }
+                val conditions = it.inclusionConditions(fragment)
                 InstantiatedFieldPathDefinition.of(
                     variable = variable.instantiate(resolverOccurrenceId),
                     providerFragment = it.providerFragment,
                     path =
-                        it.path.map { key ->
-                            ObjectEngineResult.Key.of(
-                                field = key.field,
-                                arguments =
-                                    key.arguments.instantiateVariables(
-                                        key.field,
-                                        resolverOccurrenceId,
-                                    ),
+                        it.path.mapIndexed { index, key ->
+                            InstantiatedFieldPathElement.of(
+                                key = ObjectEngineResult.Key.of(
+                                    field = key.field,
+                                    arguments = key.arguments.instantiateVariables(key.field, resolverOccurrenceId),
+                                ),
+                                inclusionCondition = conditions[index].mapVariables { template ->
+                                    template.instantiate(resolverOccurrenceId)
+                                },
                             )
                         },
                 )
@@ -504,13 +510,7 @@ class FieldResolver private constructor(
                                 ProviderFragment.OBJECT -> objectFragment
                                 ProviderFragment.QUERY -> queryFragment
                             }
-                        require(fragment.constructionSelections().containsPath(definition.path)) {
-                            "Variable ${variable.variableName} " +
-                                "${definition.providerFragment.name.lowercase()}-field path is not " +
-                                "contained by ${variable.field.containingDef.name}/" +
-                                "${variable.field.name} " +
-                                "${definition.providerFragment.name.lowercase()} fragment"
-                        }
+                        definition.inclusionConditions(fragment)
                     }
                 }
             }
@@ -582,7 +582,7 @@ private fun ResolverOutputData?.requireArgumentlessObjectFields() {
     }
 }
 
-private data class ResolverFragmentImpl(
+private class ResolverFragmentImpl(
     override val resolverOccurrenceId: ResolverOccurrenceId,
     override val materializeSelections: MaterializeSelectionForest,
     override val constructionSelections: SelectionForest,
@@ -618,13 +618,3 @@ private fun MaterializeSelectionForest.instantiateVariables(
             ),
         )
     }
-
-private fun SelectionForest.containsPath(path: List<ObjectEngineResult.Key>): Boolean {
-    if (path.isEmpty()) return false
-    val key = path.first()
-    val remaining = path.drop(1)
-    return !filter { selection ->
-        selection.key == key &&
-            (remaining.isEmpty() || selection.subselections.containsPath(remaining))
-    }.isEmpty()
-}

@@ -81,11 +81,7 @@ internal fun EngineObjectData.Sync.closeConstructionDemand(
                     objectFragment.constructionSelections.guardedBy(alternative)
                 accumulatedDemand +=
                     guardedObjectFragment +
-                        guardedObjectFragment.liftParentConstructionDemand(world) +
-                        objectFragment.constructionSelections.providerDemand(
-                            definitions = objectFragment.pathVariableDefinitions,
-                            inclusionCondition = alternative,
-                        )
+                        guardedObjectFragment.liftParentConstructionDemand(world)
             }
         }
 
@@ -278,7 +274,7 @@ internal class ClosedConstructionDemandContext(
  * execution, and the reader path identifies the consumer for cycle checking. The containing
  * object or Query result supplies the root from which the provider path is read.
  */
-internal data class VariableProviderReadOccurrence(
+internal class VariableProviderReadOccurrence(
     val definition: InstantiatedFieldPathDefinition,
     val readerPath: List<PathComponent>,
     val inclusionCondition: InclusionCondition,

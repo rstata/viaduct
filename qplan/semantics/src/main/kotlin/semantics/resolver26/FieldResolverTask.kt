@@ -308,11 +308,6 @@ private suspend fun ResolverFragment.resolveQueryFragment(
     }
 
     val symbolicSelections = materializeSelections.guardedBy(inclusionCondition)
-    val providerDemand =
-        constructionSelections.providerDemand(
-            definitions = pathVariableDefinitions,
-            inclusionCondition = inclusionCondition,
-        )
     val source = operation.world.resolverRegistry.createRootQueryInput()
     val queryResult =
         ObjectEngineResult.of(
@@ -329,7 +324,7 @@ private suspend fun ResolverFragment.resolveQueryFragment(
                     target = queryResult,
                 ),
             source = source,
-            initialDemand = symbolicSelections.constructionSelections() + providerDemand,
+            initialDemand = symbolicSelections.constructionSelections(),
         )
     operation.resolverObserver.onQueryFragmentPrepared(resolverOccurrenceId, queryResult)
     operation.dispatcher.dispatchOrchestrator(orchestration)

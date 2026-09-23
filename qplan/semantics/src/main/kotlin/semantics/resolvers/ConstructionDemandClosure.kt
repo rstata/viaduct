@@ -5,7 +5,6 @@ import model.ObjectSelectionForest
 import model.SelectionForest
 import model.flatMapToSelectionForest
 import model.schemaType
-import model.selectionForestOf
 import semantics.shared.argumentsContainErrorValue
 import semantics.shared.OEROccurrence
 import semantics.shared.SharedOperationContext
@@ -14,7 +13,7 @@ import semantics.resolver26.liftParentConstructionDemand
 import viaduct.engine.api.EngineObjectData
 
 /**
- * Closes construction demand for one object occurrence against its fixed source and parent policy.
+ * Closes construction demand for one object occurrence against its fixed source.
  *
  * Each step grounds selections under existing bindings, binds variables for newly discovered
  * standard resolvers, and adds their direct object-fragment demand at this occurrence. Fields
@@ -24,18 +23,12 @@ internal fun EngineObjectData.Sync.closeConstructionDemand(
     operation: SharedOperationContext<*>,
     occurrence: OEROccurrence,
     initialDemand: SelectionForest,
-    includeParentDemand: Boolean = false,
 ): ObjectSelectionForest {
     fun close(
         selections: SelectionForest,
         expanded: Set<ObjectEngineResult.GroundKey>,
     ): ObjectSelectionForest {
-        val ancestorDemand =
-            if (includeParentDemand) {
-                selections.liftParentConstructionDemand(operation.world)
-            } else {
-                selectionForestOf()
-            }
+        val ancestorDemand = selections.liftParentConstructionDemand(operation.world)
         val applicableSelections =
             (selections + ancestorDemand).applicableGroundSelections(operation, schemaType)
         val unexpandedResolverKeys =

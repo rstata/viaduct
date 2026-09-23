@@ -1,11 +1,9 @@
 package semantics.contract
 
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotSame
 import kotlin.test.assertSame
-import kotlin.test.assertTrue
 import model.ListEngineResult
 import model.ObjectEngineResult
 import model.emptyFragmentOf
@@ -571,51 +569,6 @@ interface ParentFieldResolverContract : ResolverContract {
         assertSame(
             organization,
             company.getCell(world.schema.contractKey("Company", "parent")).get(),
-        )
-    }
-}
-
-/** Contract for resolver versions that deliberately exclude parent backedges. */
-interface UnsupportedParentFieldResolverContract : ResolverContract {
-    /** Extracts the rejection according to the implementation's request- or field-error policy. */
-    fun unsupportedParentFailure(resolve: () -> ObjectEngineResult): IllegalArgumentException =
-        assertFailsWith<IllegalArgumentException> { resolve() }
-
-    @Test
-    fun `parent demand is rejected`() {
-        val world =
-            TestWorld.fromSDL(
-                selectiveResolvers = selectiveResolvers,
-                schemaSDL =
-                    """
-                    directive @parent on FIELD_DEFINITION
-                    type Query { root: Root }
-                    type Root { child: Child }
-                    type Child { parent: Root @parent }
-                    """.trimIndent(),
-                fieldResolvers = { schema ->
-                    mapOf(
-                        schema.requireObjectField("Query", "root") to
-                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ ->
-                                schema.objectOf("Root") {
-                                    "child" setTo schema.objectOf("Child")
-                                }
-                            },
-                    )
-                },
-            ).assumptions
-
-        val failure =
-            unsupportedParentFailure {
-                resolve(
-                    SharedOperationContext.create(world),
-                    world.resolverRegistry.createRootQueryInput(),
-                    world.operationSelectionsFrom("query { root { child { parent { __typename } } } }"),
-                )
-            }
-        assertTrue(
-            failure.message!!.contains("support @parent fields"),
-            "Expected an explicit unsupported-parent failure, got: ${failure.message}",
         )
     }
 }

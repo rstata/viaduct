@@ -10,6 +10,8 @@ import semantics.shared.SharedOperationContext
 /**
  * Resolves [selections] through a depth-first work queue with non-selective resolver applications.
  * Results may contain more OER nodes than are strictly necessary to resolve the query.
+ *
+ * Precondition: `world.schema` has no `@parent` fields.
  */
 fun SharedOperationContext<*>.resolve(selections: SelectionForest): ObjectEngineResult =
     resolve(selections, onTaskStarted = {})

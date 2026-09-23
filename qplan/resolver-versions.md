@@ -18,6 +18,8 @@ Shared contracts can therefore be valuable solely for enforcing architectural co
 
 Each row changes semantic capability while holding the execution family roughly constant. Each column changes execution structure while holding capability roughly constant.
 
+Resolver01–03, Resolver06–08, and Resolver21 have an input precondition that the schema contains no `@parent` fields, equivalently `world.parentFieldRelations.isEmpty()`. This applies to the whole schema, including fields the operation does not select. These versions do not validate or define rejection behavior for schemas outside that domain. Shared demand closure always includes parent lifting; an empty parent relation contributes no demand without a resolver-capability flag.
+
 Every row also supports symbolic root-field references in resolver output. A demanded reference
 invokes its registered target with grounded arguments and an empty object input, follows direct
 reference tails, and publishes the eventual scalar, enum, object, or list-position value at the
@@ -33,19 +35,19 @@ Resolver01 is the smallest result-tree constructor. Resolver02 adds object-fragm
 
 Resolver03 is the principal compact semantic reference. Start there when reasoning about demand closure, exact-key publication, passive deepening, argument grounding, or completed-result correctness that does not require runtime object-field variables.
 
-Resolver01-03 intentionally do not support `@parent`. Parent backedges can require an ancestor resolver to re-enter the same still-open child occurrence, which is not representable by their per-OER sibling dependency order without adding graph re-entry machinery. [`examples.md`](./examples.md#why-the-depth-first-resolvers-do-not-support-parent) gives a concrete world.
+Resolver01-03 require a schema with no `@parent` fields. Parent backedges can require an ancestor resolver to re-enter the same still-open child occurrence, which is not representable by their per-OER sibling dependency order without adding graph re-entry machinery. [`examples.md`](./examples.md#why-the-depth-first-resolvers-do-not-support-parent) gives a concrete world.
 
 ### Explicit Work: Resolver06-08
 
 Resolver06-08 run the same `DepthFirstOrchestrationTask` and `DepthFirstFieldResolverTask` implementations as Resolver01-03 through the `DepthFirstReactor` queue. Resolver08 is especially useful after Resolver03 passes: it exposes task identity, queue ordering, and publication as explicit mechanics without adding `FromObjectField`.
 
-Resolver06-08 also intentionally do not support `@parent`; making their task queue occurrence-aware enough to suspend, revisit an ancestor, and safely re-enter an open descendant would erase the simplicity that makes this family useful.
+Resolver06-08 have the same parent-free schema precondition; making their task queue occurrence-aware enough to suspend, revisit an ancestor, and safely re-enter an open descendant would erase the simplicity that makes this family useful.
 
 ### Structured Suspension: Resolver21-23
 
 Resolver21-23 use the same task roles and phase boundaries as Resolver26: a prepared `CoroutineOrchestrationTask`, a `GroundedFieldPublicationOccurrence<CoroutineOperationContext>` passed to the dispatcher, a running `CoroutineFieldResolverTask` owning helper coroutines, and `FieldResolutionLogic` for invocation and publication. Orchestration and field tasks run on the request root; Query-fragment producers run under their owning field task. Both coroutine families use `resolver26.CoroutineTaskDispatcher` and extend `resolver26.CoroutineOrchestrationTask` and `resolver26.CoroutineFieldResolverTask`, sharing scheduling, the orchestration dispatch/install/freeze lifecycle, and the field-error boundary. Their concrete tasks retain specialized demand preparation, field installation, and resolution logic. Resolver23 is the grounded coroutine baseline and initial landing zone for access checks before transferring them to Resolver26.
 
-Resolver22/23 support `@parent`. Their structured suspension and exact promises allow demand to cross to an ancestor and return through an already-started descendant without forcing a depth-first re-entry protocol into local dependency ordering. Resolver21 retains its empty-fragment capability boundary and does not claim parent support.
+Resolver22/23 support `@parent`. Their structured suspension and exact promises allow demand to cross to an ancestor and return through an already-started descendant without forcing a depth-first re-entry protocol into local dependency ordering. Resolver21 retains its empty-fragment capability boundary and parent-free schema precondition.
 
 ## Advanced Resolvers
 

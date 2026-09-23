@@ -27,7 +27,6 @@ class CoroutineOrchestrationTaskTest {
                     base = SharedOperationContext.create(world),
                     requestScope = this,
                     complete = { it },
-                    supportsParentFields = false,
                     cycleChecker = CycleCheckState.create(),
                 )
             val root =

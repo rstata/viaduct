@@ -24,7 +24,6 @@ import semantics.contract.RootFieldReferenceResolverContract
 import semantics.contract.ObjectFragmentRootFieldReferenceResolverContract
 import semantics.contract.SometimesPassiveResolverContract
 import semantics.contract.SometimesPassiveObjectFragmentResolverContract
-import semantics.contract.UnsupportedParentFieldResolverContract
 
 class ResolverContractTest :
     EmptyObjectFragmentResolverContract,
@@ -37,7 +36,6 @@ class ResolverContractTest :
     DepthFirstQueryFringeOrderingContract,
     QueryFragmentRootFieldReferenceResolverContract,
     ObjectFragmentResolverContract,
-    UnsupportedParentFieldResolverContract,
     ObjectFragmentFromArgumentResolverContract,
     QueryFragmentResolverContract,
     SometimesPassiveResolverContract,

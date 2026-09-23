@@ -19,7 +19,6 @@ class CoroutineResolveTest : CoroutineResolverContract {
         cycleChecker: CycleCheckState,
     ): ObjectEngineResult = startCoroutineResolution(
         operation, requestScope, selections, cycleChecker,
-        supportsParentFields = true,
         complete = { demand -> demand.successorBoundaryDemand(operation) },
     )
 }

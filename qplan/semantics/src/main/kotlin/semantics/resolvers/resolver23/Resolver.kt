@@ -20,7 +20,6 @@ fun SharedOperationContext<*>.resolve(selections: SelectionForest): ObjectEngine
     val resolver =
         CoroutineResolve(
             operation = this@resolve,
-            supportsParentFields = true,
             complete = { completedSelections ->
                 completedSelections.successorDemand(this@resolve)
             },

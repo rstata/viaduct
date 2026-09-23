@@ -34,12 +34,8 @@ internal class CoroutineOrchestrationTask private constructor(
                     operation = operation,
                     occurrence = occurrence,
                     initialDemand = initialDemand,
-                    includeParentDemand = operation.supportsParentFields,
                 )
             val parentKeys = closed.groundKeys().filterIsInstance<ObjectEngineResult.ParentKey>()
-            require(operation.supportsParentFields || parentKeys.isEmpty()) {
-                "Resolver21 does not support @parent fields"
-            }
             occurrence.installParentBackedgeFields(operation, parentKeys)
             return CoroutineOrchestrationTask(operation, occurrence, source, closed)
         }

@@ -12,7 +12,6 @@ internal class CoroutineOperationContext(
     base: SharedOperationContext<*>,
     requestScope: CoroutineScope,
     val complete: (SelectionForest) -> SelectionForest,
-    val supportsParentFields: Boolean,
     val cycleChecker: CycleCheckState,
 ) : SharedOperationContext<CoroutineTaskDispatcher<CoroutineOrchestrationTask, GroundedFieldPublicationOccurrence<CoroutineOperationContext>>> by
     SharedOperationContext.create(

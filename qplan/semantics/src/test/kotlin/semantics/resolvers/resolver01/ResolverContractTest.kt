@@ -16,7 +16,6 @@ import semantics.contract.EmptyObjectFragmentResolverContract
 import semantics.contract.NodeResolverContract
 import semantics.contract.RootFieldReferenceResolverContract
 import semantics.contract.SometimesPassiveResolverContract
-import semantics.contract.UnsupportedParentFieldResolverContract
 
 class ResolverContractTest :
     EmptyObjectFragmentResolverContract,
@@ -25,7 +24,6 @@ class ResolverContractTest :
     RootFieldReferenceResolverContract,
     CompleteOutputRootFieldReferenceResolverContract,
     DepthFirstRootFieldReferenceOrderingContract,
-    UnsupportedParentFieldResolverContract,
     SometimesPassiveResolverContract,
     CompleteResolverOutputPolicyContract,
     CorrectResolutionPostTestPolicy {

@@ -8,6 +8,8 @@ import semantics.shared.SharedOperationContext
 
 /**
  * Resolves [selections] with structured coroutines when resolver object fragments are empty.
+ *
+ * Precondition: `world.schema` has no `@parent` fields.
  */
 fun SharedOperationContext<*>.resolve(selections: SelectionForest): ObjectEngineResult {
     require(!world.selectiveResolvers) {

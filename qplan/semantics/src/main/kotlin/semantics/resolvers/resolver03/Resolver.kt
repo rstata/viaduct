@@ -9,6 +9,8 @@ import semantics.shared.SharedOperationContext
 /**
  * Resolves [selections] with selective resolver applications. Whether the results contain only the
  * necessary OER nodes has not been proved.
+ *
+ * Precondition: `world.schema` has no `@parent` fields.
  */
 fun SharedOperationContext<*>.resolve(selections: SelectionForest): ObjectEngineResult {
     require(world.selectiveResolvers) {

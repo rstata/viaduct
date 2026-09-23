@@ -71,9 +71,6 @@ internal class DepthFirstOrchestrationTask private constructor(
                 "Source type ${source.schemaType.name} does not match result type ${occurrence.target.type.name}"
             }
             val closed = source.closeConstructionDemand(operation, occurrence, constructionDemand)
-            require(closed.groundKeys().none { it is ObjectEngineResult.ParentKey }) {
-                "Resolver01-03 and Resolver06-08 do not support @parent fields"
-            }
             return DepthFirstOrchestrationTask(operation, occurrence, source, closed)
         }
     }

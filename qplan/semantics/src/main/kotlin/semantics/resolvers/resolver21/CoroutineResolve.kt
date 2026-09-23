@@ -14,12 +14,11 @@ import viaduct.engine.api.EngineObjectData
 internal class CoroutineResolve(
     private val operation: SharedOperationContext<*>,
     private val complete: (SelectionForest) -> SelectionForest,
-    private val supportsParentFields: Boolean = false,
     private val cycleChecker: CycleCheckState = CycleCheckState.create(),
 ) {
     suspend fun resolve(source: EngineObjectData.Sync, selections: SelectionForest): ObjectEngineResult =
         coroutineScope {
-            CoroutineOperationContext(operation, this, complete, supportsParentFields, cycleChecker).startResolve(
+            CoroutineOperationContext(operation, this, complete, cycleChecker).startResolve(
                 source = source,
                 selections = selections,
             )

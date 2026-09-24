@@ -24,117 +24,197 @@ import semantics.shared.argumentsContainErrorValue
 import viaduct.engine.api.EngineObjectData
 import semantics.shared.OEROccurrence
 
-// Expands resolver object fragments until no new resolver keys or activation alternatives enter
-// the object's demand. A previously expanded key can gain a late disjunct through another resolver,
-// so each new satisfiable alternative must propagate independently into that key's prerequisites.
-// Returns the merged demand together with the resolver and binding metadata used by later phases.
+/**
+ * The result of construction-demand closure for one object orchestration.
+ * Bundles closed demand, value-source occurrences, and the variable-provider
+ * reads they require.  Retained across binding declaration, dispatch
+ * validation, and field installation.
+ */
+internal class ClosedConstructionDemandContext(
+    val demand: ObjectSelectionForest,
+    val fieldResolverOccurrences:
+        Map<ObjectEngineResult.ObjectKey, FieldResolverOccurrence>,
+    val rootFieldReferenceOccurrences:
+        Map<ObjectEngineResult.ObjectKey, RootFieldReferenceOccurrence>,
+    /** Object-fragment reads; Query-fragment reads are prepared by their owning field task. */
+    val variableProviderReadsByResolverOccurrence:
+        Map<ResolverOccurrenceId, List<VariableProviderReadOccurrence>>,
+)
+
+/**
+ * One planned provider-path read that produces an instantiated variable binding.
+ * The definition identifies the provider path and destination variable; the condition controls
+ * execution, and the reader path identifies the consumer for cycle checking. The containing
+ * object or Query result supplies the root from which the provider path is read.
+ */
+internal class VariableProviderReadOccurrence(
+    val definition: InstantiatedFieldPathDefinition,
+    val readerPath: List<PathComponent>,
+    val inclusionCondition: InclusionCondition,
+)
+
+/**
+ * Closes demand for one object orchestration and returns the closed construction demand,
+ * the field resolver and root field reference occurrences that satisfy it, and the object-fragment
+ * variable-provider reads required by those resolver occurrences.
+ */
 internal fun EngineObjectData.Sync.closeConstructionDemand(
     world: Assumptions,
     occurrence: OEROccurrence,
     initialDemand: SelectionForest,
 ): ClosedConstructionDemandContext {
+    // `accumulatedDemand` will become all construction demand rooted at this OER,
+    // expressed through possibly abstract or concrete field coordinates.
     var accumulatedDemand: SelectionForest =
         initialDemand + initialDemand.liftParentConstructionDemand(world)
-    val expansionAccumulators:
-        MutableMap<ObjectEngineResult.ObjectKey, ResolverExpansionAccumulator> =
+
+    // `requiredResolvers` will eventually contain the concrete top-level keys handled by
+    // this OER's standard-resolution machinery.
+    val requiredResolvers:
+        MutableMap<ObjectEngineResult.ObjectKey, ResolverContext> =
         linkedMapOf()
 
-    while (true) {
-        val mergedDemand: ObjectSelectionForest =
-            accumulatedDemand.merge(schemaType)
+    var demandNotClosed: Boolean
+    do {
+        // Assume optimistically that we've closed demand.  We might discover in the logic
+        // below that we haven't, in which case we'll flip this flag
+        demandNotClosed = false
+
+        val mergedDemand: ObjectSelectionForest = accumulatedDemand.merge(schemaType)
+
+        // Find the top-level selections in this concrete `mergedDemand` whose registered
+        // resolvers are not superseded by values in this object's source EOD, i.e., existing
+        // or potential members of `requiredResolvers`.
         val resolverSelections: Map<ObjectEngineResult.ObjectKey, ObjectSelection> =
             mergedDemand
                 .byKey()
                 .filter { (objectKey, _) ->
                     requiresStandardResolution(world, objectKey)
                 }
-        var propagatedNewAlternative = false
 
         resolverSelections.forEach { (objectKey, resolverSelection) ->
-            val expansion =
-                expansionAccumulators[objectKey]
-                    ?: createResolverExpansion(
+            // This selection belongs in `requiredResolvers` - it might already
+            // be there, but if not create an entry for it
+            val resolverContext =
+                requiredResolvers.getOrPut(objectKey) {
+                    createResolverContext(
                         world = world,
                         occurrence = occurrence,
                         objectKey = objectKey,
-                    ).also { created ->
-                        check(expansionAccumulators.put(objectKey, created) == null) {
-                            "Resolver26 expanded object key twice: $objectKey"
-                        }
-                    }
-            val newAlternatives =
-                resolverSelection.inclusionCondition
-                    .satisfiableAlternatives()
-                    .filter(expansion.propagatedAlternatives::add)
-            if (newAlternatives.isEmpty()) return@forEach
-            propagatedNewAlternative = true
+                    )
+                }
 
             if (
                 objectKey is ObjectEngineResult.GroundKey &&
                 objectKey.arguments.argumentsContainErrorValue()
             ) {
+                // An occurrence with argument errors requires a `resolverContext` so that
+                // the error gets published, but it cannot invoke the resolver or contribute
+                // resolver-input demand, so we can stop processing it further
                 return@forEach
             }
-            val objectFragment = expansion.fragments.objectFragment
-            newAlternatives.forEach { alternative ->
+
+            // Whether or not this selection was in `requiredResolvers`, we may have discovered
+            // new conditions under which its key is included. If so, demand has not closed.
+            val newKeyInclusions =
+                resolverSelection.inclusionCondition
+                    .satisfiableAlternatives()
+                    .filter(resolverContext.accumulatedKeyInclusions::add)
+            if (newKeyInclusions.isEmpty()) return@forEach
+            demandNotClosed = true
+
+            // For each newly discovered condition under which `objectKey` may be included,
+            // add the resolver's object-fragment construction demand, and any parent-induced
+            // demand, guarded by the same condition.
+            val objectFragment = resolverContext.fragments.objectFragment
+            newKeyInclusions.forEach { keyInclusion ->
                 val guardedObjectFragment =
-                    objectFragment.constructionSelections.guardedBy(alternative)
+                    objectFragment.constructionSelections.guardedBy(keyInclusion)
                 accumulatedDemand +=
                     guardedObjectFragment +
                         guardedObjectFragment.liftParentConstructionDemand(world)
             }
         }
+    } while (demandNotClosed)
 
-        if (!propagatedNewAlternative) {
-            check(
-                resolverSelections.keys == expansionAccumulators.keys,
-            ) {
-                "Resolver26 closed demand and resolver expansions are misaligned"
+    val closedDemand = accumulatedDemand.merge(schemaType)
+    val requiredResolverSelections =
+        closedDemand
+            .byKey()
+            .filter { (objectKey, _) ->
+                requiresStandardResolution(world, objectKey)
             }
-            val fieldResolverOccurrences =
-                expansionAccumulators.mapValues { (objectKey, accumulator) ->
-                    accumulator.toFieldResolverOccurrence(
-                        selection = mergedDemand.byKey().getValue(objectKey),
-                    )
-                }
-            val referenceOccurrences = discoverRootFieldReferences(world, occurrence, mergedDemand)
-            check(fieldResolverOccurrences.keys.intersect(referenceOccurrences.keys).isEmpty()) {
-                "Resolver26 classified one field as both an ordinary resolver and a root reference"
-            }
-            return ClosedConstructionDemandContext(
-                demand = mergedDemand,
-                fieldResolverOccurrences = fieldResolverOccurrences,
-                rootFieldReferenceOccurrences = referenceOccurrences,
-                variableProviderReadsByResolverOccurrence =
-                    expansionAccumulators.map { (objectKey, expansion) ->
-                        val resolverOccurrenceId =
-                            fieldResolverOccurrences.getValue(objectKey).resolverOccurrenceId
-                        val providerReads =
-                            if (
-                                objectKey is ObjectEngineResult.GroundKey &&
-                                objectKey.arguments.argumentsContainErrorValue()
-                            ) {
-                                emptyList()
-                            } else {
-                                expansion.fragments.objectFragment.pathVariableDefinitions.map {
-                                        definition ->
-                                    VariableProviderReadOccurrence(
-                                        definition = definition,
-                                        readerPath = occurrence.coordinate(objectKey),
-                                        inclusionCondition =
-                                            mergedDemand
-                                                .byKey()
-                                                .getValue(objectKey)
-                                                .inclusionCondition,
-                                    )
-                                }
-                            }
-                        resolverOccurrenceId to providerReads
-                    }.toMap(),
+    check(requiredResolverSelections.keys == requiredResolvers.keys) {
+        "Resolver26 closed demand and required resolvers are misaligned"
+    }
+    val fieldResolverOccurrences =
+        requiredResolvers.mapValues { (objectKey, resolverContext) ->
+            resolverContext.toFieldResolverOccurrence(
+                selection = closedDemand.byKey().getValue(objectKey),
             )
         }
+    val referenceOccurrences = discoverRootFieldReferences(world, occurrence, closedDemand)
+    check(fieldResolverOccurrences.keys.intersect(referenceOccurrences.keys).isEmpty()) {
+        "Resolver26 classified one field as both an ordinary resolver and a root reference"
     }
-    error("Resolver26 demand closure terminated unexpectedly")
+    return ClosedConstructionDemandContext(
+        demand = closedDemand,
+        fieldResolverOccurrences = fieldResolverOccurrences,
+        rootFieldReferenceOccurrences = referenceOccurrences,
+        variableProviderReadsByResolverOccurrence =
+            requiredResolvers.map { (objectKey, resolverContext) ->
+                val resolverOccurrenceId =
+                    fieldResolverOccurrences.getValue(objectKey).resolverOccurrenceId
+                val providerReads =
+                    if (
+                        objectKey is ObjectEngineResult.GroundKey &&
+                        objectKey.arguments.argumentsContainErrorValue()
+                    ) {
+                        emptyList()
+                    } else {
+                        resolverContext.fragments.objectFragment.pathVariableDefinitions.map {
+                                definition ->
+                            VariableProviderReadOccurrence(
+                                definition = definition,
+                                readerPath = occurrence.coordinate(objectKey),
+                                inclusionCondition =
+                                    closedDemand
+                                        .byKey()
+                                        .getValue(objectKey)
+                                        .inclusionCondition,
+                            )
+                        }
+                    }
+                resolverOccurrenceId to providerReads
+            }.toMap(),
+    )
+}
+
+// Closure inputs and bookkeeping for one required standard resolver occurrence.
+private data class ResolverContext(
+    val invocationRoot: ObjectEngineResult,
+    val invocationPath: List<PathComponent>,
+    val resolverOccurrenceId: ResolverOccurrenceId,
+    val resolver: FieldResolver,
+    val inputMaterializeSelections: MaterializeSelectionForest,
+    val variableDefinitions: List<VariableInstanceDefinition>,
+    val fragments: ResolverFragments,
+) {
+    val accumulatedKeyInclusions: MutableSet<InclusionCondition> = linkedSetOf()
+
+    fun toFieldResolverOccurrence(
+        selection: ObjectSelection,
+    ): FieldResolverOccurrence =
+        FieldResolverOccurrence(
+            selection = selection,
+            invocationRoot = invocationRoot,
+            invocationPath = invocationPath,
+            resolverOccurrenceId = resolverOccurrenceId,
+            resolver = resolver,
+            inputMaterializeSelections = inputMaterializeSelections,
+            variableDefinitions = variableDefinitions,
+            fragments = fragments,
+        )
 }
 
 private fun EngineObjectData.Sync.discoverRootFieldReferences(
@@ -174,11 +254,11 @@ private fun EngineObjectData.Sync.discoverRootFieldReferences(
         }
     }
 
-private fun createResolverExpansion(
+private fun createResolverContext(
     world: Assumptions,
     occurrence: OEROccurrence,
     objectKey: ObjectEngineResult.ObjectKey,
-): ResolverExpansionAccumulator {
+): ResolverContext {
     val resolver: FieldResolver = world.resolverRegistry.resolver(objectKey.field)
     val resolverOccurrenceId =
         ResolverOccurrenceId.at(
@@ -190,7 +270,7 @@ private fun createResolverExpansion(
         objectKey is ObjectEngineResult.GroundKey &&
         objectKey.arguments.argumentsContainErrorValue()
     ) {
-        return ResolverExpansionAccumulator(
+        return ResolverContext(
             invocationRoot = occurrence.root,
             invocationPath = occurrence.coordinate(objectKey),
             resolverOccurrenceId = resolverOccurrenceId,
@@ -200,7 +280,7 @@ private fun createResolverExpansion(
             fragments = fragments,
         )
     }
-    return ResolverExpansionAccumulator(
+    return ResolverContext(
         invocationRoot = occurrence.root,
         invocationPath = occurrence.coordinate(objectKey),
         resolverOccurrenceId = resolverOccurrenceId,
@@ -225,57 +305,3 @@ private fun EngineObjectData.Sync.requiresStandardResolution(
     }
     return false
 }
-
-private data class ResolverExpansionAccumulator(
-    val invocationRoot: ObjectEngineResult,
-    val invocationPath: List<PathComponent>,
-    val resolverOccurrenceId: ResolverOccurrenceId,
-    val resolver: FieldResolver,
-    val inputMaterializeSelections: MaterializeSelectionForest,
-    val variableDefinitions: List<VariableInstanceDefinition>,
-    val fragments: ResolverFragments,
-) {
-    val propagatedAlternatives: MutableSet<InclusionCondition> = linkedSetOf()
-
-    fun toFieldResolverOccurrence(
-        selection: ObjectSelection,
-    ): FieldResolverOccurrence =
-        FieldResolverOccurrence(
-            selection = selection,
-            invocationRoot = invocationRoot,
-            invocationPath = invocationPath,
-            resolverOccurrenceId = resolverOccurrenceId,
-            resolver = resolver,
-            inputMaterializeSelections = inputMaterializeSelections,
-            variableDefinitions = variableDefinitions,
-            fragments = fragments,
-        )
-}
-
-/**
- * Immutable inputs established by construction-demand closure for one object orchestration.
- * Retained across binding declaration, dispatch validation, and field installation; bundles
- * closed demand, value-source occurrences, and the variable-provider reads they require.
- */
-internal class ClosedConstructionDemandContext(
-    val demand: ObjectSelectionForest,
-    val fieldResolverOccurrences:
-        Map<ObjectEngineResult.ObjectKey, FieldResolverOccurrence>,
-    val rootFieldReferenceOccurrences:
-        Map<ObjectEngineResult.ObjectKey, RootFieldReferenceOccurrence>,
-    /** Object-fragment reads; Query-fragment reads are prepared by their owning field task. */
-    val variableProviderReadsByResolverOccurrence:
-        Map<ResolverOccurrenceId, List<VariableProviderReadOccurrence>>,
-)
-
-/**
- * One planned provider-path read that produces an instantiated variable binding.
- * The definition identifies the provider path and destination variable; the condition controls
- * execution, and the reader path identifies the consumer for cycle checking. The containing
- * object or Query result supplies the root from which the provider path is read.
- */
-internal class VariableProviderReadOccurrence(
-    val definition: InstantiatedFieldPathDefinition,
-    val readerPath: List<PathComponent>,
-    val inclusionCondition: InclusionCondition,
-)

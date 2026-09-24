@@ -24,39 +24,52 @@ internal fun EngineObjectData.Sync.closeConstructionDemand(
     occurrence: OEROccurrence,
     initialDemand: SelectionForest,
 ): ObjectSelectionForest {
-    fun close(
-        selections: SelectionForest,
-        expanded: Set<ObjectEngineResult.GroundKey>,
-    ): ObjectSelectionForest {
-        val ancestorDemand = selections.liftParentConstructionDemand(operation.world)
-        val applicableSelections =
-            (selections + ancestorDemand).applicableGroundSelections(operation, schemaType)
-        val unexpandedResolverKeys =
-            applicableSelections.groundKeys().filter { key ->
-                key !in expanded &&
+    // `accumulatedDemand` will become all construction demand rooted at this OER.
+    var accumulatedDemand: SelectionForest = initialDemand
+
+    // Unlike Resolver26, these resolvers ground each key before expanding its fixed input.
+    val expandedResolverKeys = linkedSetOf<ObjectEngineResult.GroundKey>()
+
+    var demandNotClosed: Boolean
+    do {
+        // Assume optimistically that demand is closed. Discovering another resolver key below
+        // adds its fixed input demand and requires another pass.
+        demandNotClosed = false
+
+        val liftedParentDemand =
+            accumulatedDemand.liftParentConstructionDemand(operation.world)
+        val mergedDemand =
+            (accumulatedDemand + liftedParentDemand)
+                .applicableGroundSelections(operation, schemaType)
+
+        val newResolverKeys =
+            mergedDemand.groundKeys().filter { key ->
+                key !in expandedResolverKeys &&
                     !key.arguments.argumentsContainErrorValue() &&
                     key.field in operation.world.resolverRegistry &&
                     requiresStandardResolution(key)
             }.toSet()
 
-        if (unexpandedResolverKeys.isEmpty()) return applicableSelections
+        if (newResolverKeys.isNotEmpty()) {
+            demandNotClosed = true
+            newResolverKeys.bindFromArguments(operation, occurrence.root, occurrence.path)
+            val resolverInputDemand =
+                newResolverKeys.flatMapToSelectionForest { key ->
+                    operation.world.resolverRegistry
+                        .resolver(key.field)
+                        .instantiateFragmentsAt(occurrence.root, occurrence.coordinate(key))
+                        .objectFragment
+                        .constructionSelections
+                }
+            accumulatedDemand = mergedDemand + resolverInputDemand
+            expandedResolverKeys += newResolverKeys
+        }
+    } while (demandNotClosed)
 
-        unexpandedResolverKeys.bindFromArguments(operation, occurrence.root, occurrence.path)
-        val resolverDemand =
-            unexpandedResolverKeys.flatMapToSelectionForest { key ->
-                operation.world.resolverRegistry
-                    .resolver(key.field)
-                    .instantiateFragmentsAt(occurrence.root, occurrence.coordinate(key))
-                    .objectFragment
-                    .constructionSelections
-            }
-        return close(
-            selections = applicableSelections + resolverDemand,
-            expanded = expanded + unexpandedResolverKeys,
-        )
-    }
-
-    return close(initialDemand, emptySet())
+    val closedDemand =
+        (accumulatedDemand + accumulatedDemand.liftParentConstructionDemand(operation.world))
+            .applicableGroundSelections(operation, schemaType)
+    return closedDemand
 }
 
 private fun EngineObjectData.Sync.requiresStandardResolution(key: ObjectEngineResult.GroundKey): Boolean {

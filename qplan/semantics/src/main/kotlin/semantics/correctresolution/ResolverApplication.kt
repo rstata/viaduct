@@ -262,7 +262,10 @@ private class ResolverReplayLogic(
                 runBlocking {
                     materializeResult(
                         operation = operation,
-                        selections = objectFragment.materializeSelections,
+                        selections =
+                            resolver.instantiateObjectMaterializationSelections(
+                                objectFragment.resolverOccurrenceId,
+                            ),
                         reader = coordinate,
                     )
                 }
@@ -297,7 +300,10 @@ private class ResolverReplayLogic(
                     runBlocking {
                         queryResult.materializeResult(
                             operation = operation,
-                            selections = queryFragment.materializeSelections,
+                            selections =
+                                resolver.instantiateQueryMaterializationSelections(
+                                    queryFragment.resolverOccurrenceId,
+                                ),
                             reader = coordinate,
                         )
                     }
@@ -395,7 +401,9 @@ private class ResolverReplayLogic(
         val arguments = invocationKey.groundedArguments(operation) as? Arguments.Resolved ?: return null
         val resolver = operation.world.resolverRegistry.resolver(invocationKey.field)
         val fragments = resolver.instantiateFragmentsAt(invocationRoot, invocationPath)
-        if (!fragments.objectFragment.materializeSelections.isEmpty()) return null
+        if (!fragments.objectFragment.constructionSelections.isEmpty()) {
+            return null
+        }
         val input = engineObjectDataOf(invocationKey.field.containingDef)
         val resolverArguments =
             Arguments.Resolved.of(
@@ -440,7 +448,10 @@ private class ResolverReplayLogic(
                 runBlocking {
                     queryResult.materializeResult(
                         operation = operation,
-                        selections = queryFragment.materializeSelections,
+                        selections =
+                            resolver.instantiateQueryMaterializationSelections(
+                                queryFragment.resolverOccurrenceId,
+                            ),
                         reader = publicationPath,
                     )
                 }

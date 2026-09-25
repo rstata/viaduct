@@ -20,6 +20,7 @@ import model.SelectionForest
 import model.VariableBinding
 import model.engineObjectDataOf
 import model.invariants.conformsToResolverOutputSchemaType
+import model.materializeSelectionForestOf
 import model.merge
 import model.nodeReferenceIdentityOrNull
 import model.registry.ProviderFragment
@@ -252,11 +253,15 @@ internal class FieldResolutionLogic(
             )
         if (providerError != null) return providerError
 
+        val objectMaterializationSelections =
+            fieldResolverOccurrence.resolver.instantiateObjectMaterializationSelections(
+                fieldResolverOccurrence.resolverOccurrenceId,
+            )
         val input: EngineObjectData.Sync =
             publication.oerOccurrence.target.materializeResolverInput(
                 operation = publication.operation,
                 cycleChecker = publication.operation.cycleChecker,
-                selections = fieldResolverOccurrence.inputMaterializeSelections,
+                selections = objectMaterializationSelections,
                 reader = fieldResolverOccurrence.publicationPath,
                 resultPath = publication.oerOccurrence.path,
             )
@@ -270,7 +275,7 @@ internal class FieldResolutionLogic(
                 occurrencePath = fieldResolverOccurrence.publicationPath,
                 field = selection.key.field,
                 input = input,
-                inputSelections = fieldResolverOccurrence.inputMaterializeSelections,
+                inputSelections = objectMaterializationSelections,
                 arguments = resolverArguments,
                 suppliedDemand = invocationDemand,
                 resolverOccurrenceId = fieldResolverOccurrence.resolverOccurrenceId,
@@ -303,7 +308,7 @@ internal class FieldResolutionLogic(
         val resolverOccurrenceId = ResolverOccurrenceId.at(queryRoot, invocationPath)
         val resolver = publication.operation.world.resolverRegistry.resolver(reference.targetField)
         val fragments = resolver.instantiateFragments(resolverOccurrenceId)
-        require(fragments.objectFragment.materializeSelections.isEmpty()) {
+        require(fragments.objectFragment.constructionSelections.isEmpty()) {
             "Root-field-reference target ${reference.targetField.containingDef.name}/" +
                 "${reference.targetField.name} must not declare an object fragment"
         }
@@ -330,7 +335,6 @@ internal class FieldResolutionLogic(
                 invocationPath = invocationPath,
                 resolverOccurrenceId = resolverOccurrenceId,
                 resolver = resolver,
-                inputMaterializeSelections = fragments.objectFragment.materializeSelections,
                 variableDefinitions =
                     resolver.instantiatedVariableDefinitions(resolverOccurrenceId),
                 fragments = fragments,
@@ -384,7 +388,7 @@ internal class FieldResolutionLogic(
                 occurrencePath = fieldResolverOccurrence.invocationPath,
                 field = fieldResolverOccurrence.selection.key.field,
                 input = input,
-                inputSelections = fieldResolverOccurrence.inputMaterializeSelections,
+                inputSelections = materializeSelectionForestOf(),
                 arguments = arguments,
                 suppliedDemand = invocationDemand,
                 resolverOccurrenceId = fieldResolverOccurrence.resolverOccurrenceId,

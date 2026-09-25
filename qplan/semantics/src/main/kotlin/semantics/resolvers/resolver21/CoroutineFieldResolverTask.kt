@@ -13,6 +13,7 @@ import model.PathComponent
 import model.RootFieldReferenceData
 import model.engineObjectDataOf
 import model.outputValue
+import model.registry.FieldResolver
 import model.registry.ResolverFragment
 import model.requireQueryTypeDef
 import semantics.resolvers.GroundedFieldPublicationOccurrence
@@ -74,6 +75,7 @@ internal class CoroutineFieldResolverTask private constructor(
      * Failures are returned to the owning field without cancelling its scope.
      */
     fun launchQueryFragmentProducer(
+        resolver: FieldResolver,
         queryFragment: ResolverFragment,
         coordinate: List<PathComponent>,
     ): Deferred<EngineObjectOrErrorData> = fieldTaskScope.async {
@@ -88,7 +90,10 @@ internal class CoroutineFieldResolverTask private constructor(
                 queryResult.materializeResolverInput(
                     operation = publication.operation,
                     cycleChecker = publication.operation.cycleChecker,
-                    selections = queryFragment.materializeSelections,
+                    selections =
+                        resolver.instantiateQueryMaterializationSelections(
+                            queryFragment.resolverOccurrenceId,
+                        ),
                     reader = coordinate,
                 )
             }

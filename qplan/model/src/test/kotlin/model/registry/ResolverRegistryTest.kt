@@ -13,6 +13,7 @@ import model.EngineErrorData
 import model.EngineObjectDataEntry
 import model.Fragment
 import model.ObjectEngineResult
+import model.ResolverOccurrenceId
 import model.Selection
 import model.SelectionForest
 import model.RootFieldReferenceData
@@ -72,10 +73,12 @@ class ResolverRegistryTest {
         val resolver =
             FieldResolver.ofSelective(
                 field = userField,
-                objectFragment = selectionForestOf(),
-                queryFragment = selectionForestOf(),
+                fragmentTemplates =
+                    ResolverFragmentTemplates(
+                        objectFragmentTemplate = materializeSelectionForestOf(),
+                        queryFragmentTemplate = materializeSelectionForestOf(),
+                    ),
                 queryType = query,
-                variables = emptyMap(),
                 function = { _, _, _, selections, executionContext ->
                     observedDemand = selections
                     observedExecutionContext = executionContext
@@ -122,10 +125,12 @@ class ResolverRegistryTest {
         val resolver =
             FieldResolver.of(
                 field = userField,
-                objectFragment = selectionForestOf(),
-                queryFragment = selectionForestOf(),
+                fragmentTemplates =
+                    ResolverFragmentTemplates(
+                        objectFragmentTemplate = materializeSelectionForestOf(),
+                        queryFragmentTemplate = materializeSelectionForestOf(),
+                    ),
                 queryType = query,
-                variables = emptyMap(),
                 function = { _, _, _, _ ->
                     schema.objectOf("User") {
                         "name" setTo "Ada"
@@ -176,10 +181,12 @@ class ResolverRegistryTest {
         val resolver =
             FieldResolver.ofSelectionAwareNonselective(
                 field = userField,
-                objectFragment = materializeSelectionForestOf(),
-                queryFragment = materializeSelectionForestOf(),
+                fragmentTemplates =
+                    ResolverFragmentTemplates(
+                        objectFragmentTemplate = materializeSelectionForestOf(),
+                        queryFragmentTemplate = materializeSelectionForestOf(),
+                    ),
                 queryType = query,
-                variables = emptyMap(),
                 function = { _, _, _, selections, _ ->
                     observedDemand = selections
                     schema.objectOf("User") {
@@ -360,12 +367,11 @@ class ResolverRegistryTest {
             )
 
         assertEquals(7, result)
+        val resolverOccurrenceId = ResolverOccurrenceId.at(schema.testRoot(), emptyList())
         assertEquals(
             "aliased",
             resolver
-                .instantiateFragmentsAt(schema.testRoot(), emptyList())
-                .queryFragment
-                .materializeSelections
+                .instantiateQueryMaterializationSelections(resolverOccurrenceId)
                 .single()
                 .responseKey,
         )

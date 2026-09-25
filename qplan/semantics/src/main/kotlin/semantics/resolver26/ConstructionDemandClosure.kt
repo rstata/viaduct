@@ -2,7 +2,6 @@ package semantics.resolver26
 
 import model.Assumptions
 import model.InclusionCondition
-import model.MaterializeSelectionForest
 import model.ObjectEngineResult
 import model.ObjectSelection
 import model.ObjectSelectionForest
@@ -10,7 +9,6 @@ import model.PathComponent
 import model.ResolverOccurrenceId
 import model.RootFieldReferenceData
 import model.SelectionForest
-import model.materializeSelectionForestOf
 import model.merge
 import model.guardedBy
 import model.registry.FieldResolver
@@ -196,7 +194,6 @@ private data class ResolverContext(
     val invocationPath: List<PathComponent>,
     val resolverOccurrenceId: ResolverOccurrenceId,
     val resolver: FieldResolver,
-    val inputMaterializeSelections: MaterializeSelectionForest,
     val variableDefinitions: List<VariableInstanceDefinition>,
     val fragments: ResolverFragments,
 ) {
@@ -211,7 +208,6 @@ private data class ResolverContext(
             invocationPath = invocationPath,
             resolverOccurrenceId = resolverOccurrenceId,
             resolver = resolver,
-            inputMaterializeSelections = inputMaterializeSelections,
             variableDefinitions = variableDefinitions,
             fragments = fragments,
         )
@@ -275,7 +271,6 @@ private fun createResolverContext(
             invocationPath = occurrence.coordinate(objectKey),
             resolverOccurrenceId = resolverOccurrenceId,
             resolver = resolver,
-            inputMaterializeSelections = materializeSelectionForestOf(),
             variableDefinitions = fragments.queryFragment.variableDefinitions,
             fragments = fragments,
         )
@@ -285,7 +280,6 @@ private fun createResolverContext(
         invocationPath = occurrence.coordinate(objectKey),
         resolverOccurrenceId = resolverOccurrenceId,
         resolver = resolver,
-        inputMaterializeSelections = fragments.objectFragment.materializeSelections,
         variableDefinitions = resolver.instantiatedVariableDefinitions(resolverOccurrenceId),
         fragments = fragments,
     )

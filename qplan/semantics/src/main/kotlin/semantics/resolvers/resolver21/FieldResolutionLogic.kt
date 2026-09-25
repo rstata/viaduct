@@ -10,6 +10,7 @@ import model.RootFieldReferenceData
 import model.SelectionForest
 import model.groundKey
 import model.invariants.conformsToResolverOutputSchemaType
+import model.materializeSelectionForestOf
 import model.nodeReferenceIdentityOrNull
 import model.registry.ResolutionExecutionContext
 import semantics.resolvers.emptyObjectInput
@@ -72,11 +73,20 @@ internal class FieldResolutionLogic(
         val publication = fieldResolverTask.publication
         val resolver = publication.operation.world.resolverRegistry.resolver(publication.selection.key.field)
         val fragments = resolver.instantiateFragmentsAt(publication.oerOccurrence.root, publication.publicationPath)
-        val queryProducer = fieldResolverTask.launchQueryFragmentProducer(fragments.queryFragment, publication.publicationPath)
+        val queryProducer =
+            fieldResolverTask.launchQueryFragmentProducer(
+                resolver,
+                fragments.queryFragment,
+                publication.publicationPath,
+            )
+        val objectMaterializationSelections =
+            resolver.instantiateObjectMaterializationSelections(
+                fragments.objectFragment.resolverOccurrenceId,
+            )
         val input = publication.oerOccurrence.target.materializeResolverInput(
             operation = publication.operation,
             cycleChecker = publication.operation.cycleChecker,
-            selections = fragments.objectFragment.materializeSelections,
+            selections = objectMaterializationSelections,
             reader = publication.publicationPath,
         )
         val queryValue = when (val value = queryProducer.await()) {
@@ -88,7 +98,7 @@ internal class FieldResolutionLogic(
                 occurrencePath = publication.publicationPath,
                 field = publication.selection.key.field,
                 input = input,
-                inputSelections = fragments.objectFragment.materializeSelections,
+                inputSelections = objectMaterializationSelections,
                 arguments = arguments,
                 suppliedDemand = invocationDemand.takeIf { publication.operation.world.selectiveResolvers },
                 resolverOccurrenceId = fragments.objectFragment.resolverOccurrenceId,
@@ -110,7 +120,12 @@ internal class FieldResolutionLogic(
     ): ResolverOutputData? {
         val publication = fieldResolverTask.publication
         val invocation = reference.prepareInvocation(publication.operation)
-        val queryProducer = fieldResolverTask.launchQueryFragmentProducer(invocation.fragments.queryFragment, invocation.path)
+        val queryProducer =
+            fieldResolverTask.launchQueryFragmentProducer(
+                invocation.resolver,
+                invocation.fragments.queryFragment,
+                invocation.path,
+            )
         val queryValue = when (val value = queryProducer.await()) {
             is EngineObjectOrErrorData.Success -> value.value
             is EngineObjectOrErrorData.Error -> return value.error
@@ -121,7 +136,7 @@ internal class FieldResolutionLogic(
                 occurrencePath = invocation.path,
                 field = invocation.key.field,
                 input = input,
-                inputSelections = invocation.fragments.objectFragment.materializeSelections,
+                inputSelections = materializeSelectionForestOf(),
                 arguments = reference.arguments,
                 suppliedDemand = invocationDemand.takeIf { publication.operation.world.selectiveResolvers },
                 resolverOccurrenceId = invocation.fragments.objectFragment.resolverOccurrenceId,

@@ -55,7 +55,10 @@ fun EngineResult?.registeredResolverApplicationIdentityCounts(operation: SharedO
                         cell.containingObject
                             .materializeResult(
                                 operation = operation,
-                                selections = fragment.materializeSelections,
+                                selections =
+                                    resolver.instantiateObjectMaterializationSelections(
+                                        fragment.resolverOccurrenceId,
+                                    ),
                                 reader = cell.occurrencePath,
                             ).resolutionFingerprint()
                     },
@@ -127,7 +130,10 @@ private fun EngineResult?.reconstructResolverOccurrenceApplicationIdentityCounts
                                 cell.containingObject
                                     .materializeResult(
                                         operation = operation,
-                                        selections = fragment.materializeSelections,
+                                        selections =
+                                            resolver.instantiateObjectMaterializationSelections(
+                                                fragment.resolverOccurrenceId,
+                                            ),
                                         reader = cell.occurrencePath,
                                     ).resolutionFingerprint()
                             },

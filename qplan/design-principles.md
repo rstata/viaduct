@@ -64,6 +64,12 @@ Demand must be projected through the producer that owns the requested output. Tr
 
 Resolver object and Query fragments determine input requirements. Resolver arguments identify an eventual resolver instance but do not choose the resolver template or its fixed fragments. This distinction lets symbolic closure discover fixed input requirements before variable values are available.
 
+## Keep Field Resolvers And Checkers Structurally Aligned
+
+`FieldChecker` should follow `FieldResolver`'s representation, terminology, validation, and variable model wherever their semantics do not require a difference. Do not introduce checker-specific wrappers or lifecycle concepts for facts already modeled by field resolvers.
+
+`ResolverFragmentTemplates` groups one object template, one Query template, and the variable definitions and optional provider shared by both. A field resolver owns one such pair. A checker owns a named map of pairs and receives both materialized values for each name. For resolution, both expose exactly one object fragment and one Query fragment; the checker combines its pairs independently per root after prefixing variables with the pair name. `ResolverFragment` contains only occurrence-specific resolution facts, while response-key-preserving materialization templates remain on the registry entry until input materialization begins. Their result relations also differ: a resolver produces the field value and may consume output demand, while a checker produces a checker result. Other differences require a concrete semantic justification rather than implementation history.
+
 ## Progress Is Monotonic And Strict
 
 Mutable semantic state is limited to documented monotonic stores. An OER or LER cell value, each of a cell's field- and type-checker results, and a request-local variable binding move from absent to one immediate or deferred promise; a deferred promise completes once.

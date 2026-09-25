@@ -160,17 +160,17 @@ class ResolverVariableInstantiationTest {
                 mapOf("seed" to 3),
             )
         val sitePath = listOf(resultKey)
-        val objectFragment =
-            resolver.instantiateFragmentsAt(testWorld.schema.testRoot(), sitePath).objectFragment
+        val root = testWorld.schema.testRoot()
+        val resolverOccurrenceId = ResolverOccurrenceId.at(root, sitePath)
+        val objectFragment = resolver.instantiateFragments(resolverOccurrenceId).objectFragment
         assertEquals(
             setOf("source", "consume"),
-            objectFragment.materializeSelections
+            resolver
+                .instantiateObjectMaterializationSelections(resolverOccurrenceId)
                 .collect(testWorld.schema.requireQueryTypeDef())
                 .responseKeys(),
         )
         val definition = objectFragment.pathVariableDefinitions.single()
-        val resolverOccurrenceId =
-            ResolverOccurrenceId.at(testWorld.schema.testRoot(), sitePath)
         val seed =
             Arguments.Variable.of(
                 testWorld.schema.requireObjectField("Query", "result"),

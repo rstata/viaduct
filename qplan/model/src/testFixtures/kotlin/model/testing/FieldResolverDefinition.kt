@@ -13,6 +13,7 @@ import model.materializeSelectionForestOf
 import model.objectKey
 import model.registry.FieldResolver
 import model.registry.NonselectiveFieldResolverFunction
+import model.registry.ResolverFragmentTemplates
 import model.registry.ResolutionExecutionContext
 import model.registry.SelectiveFieldResolverFunction
 import model.registry.VariableDefinition
@@ -180,13 +181,18 @@ class FieldResolverDefinition private constructor(
             } ?: materializeSelectionForestOf()
 
         val normalizedObjectFragment = normalize(objectFragment, objectType, "Object fragment")
+        val fragmentTemplates =
+            ResolverFragmentTemplates(
+                objectFragmentTemplate = normalizedObjectFragment,
+                queryFragmentTemplate = normalizedQueryFragment,
+                variables = variables,
+                variablesProvider = variablesProvider,
+            )
         return if (selective) {
             FieldResolver.ofSelective(
                 field = field,
-                objectFragment = normalizedObjectFragment,
-                queryFragment = normalizedQueryFragment,
+                fragmentTemplates = fragmentTemplates,
                 queryType = queryType,
-                variables = variables,
                 function = { input, queryValue, arguments, selections, executionContext ->
                     function(
                         input,
@@ -196,15 +202,12 @@ class FieldResolverDefinition private constructor(
                         executionContext,
                     )
                 },
-                variablesProvider = variablesProvider,
             )
         } else if (passesDemand) {
             FieldResolver.ofSelectionAwareNonselective(
                 field = field,
-                objectFragment = normalizedObjectFragment,
-                queryFragment = normalizedQueryFragment,
+                fragmentTemplates = fragmentTemplates,
                 queryType = queryType,
-                variables = variables,
                 function = { input, queryValue, arguments, selections, executionContext ->
                     function(
                         input,
@@ -214,15 +217,12 @@ class FieldResolverDefinition private constructor(
                         executionContext,
                     )
                 },
-                variablesProvider = variablesProvider,
             )
         } else {
             FieldResolver.of(
                 field = field,
-                objectFragment = normalizedObjectFragment,
-                queryFragment = normalizedQueryFragment,
+                fragmentTemplates = fragmentTemplates,
                 queryType = queryType,
-                variables = variables,
                 function = { input, queryValue, arguments, executionContext ->
                     function(
                         input,
@@ -233,7 +233,6 @@ class FieldResolverDefinition private constructor(
                     )
                 },
                 projectionDemand = projectionDemand,
-                variablesProvider = variablesProvider,
             )
         }
     }

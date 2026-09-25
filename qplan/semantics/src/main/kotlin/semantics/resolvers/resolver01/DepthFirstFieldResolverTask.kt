@@ -13,7 +13,9 @@ import model.SelectionForest
 import model.engineObjectDataOf
 import model.groundKey
 import model.invariants.conformsToResolverOutputSchemaType
+import model.materializeSelectionForestOf
 import model.nodeReferenceIdentityOrNull
+import model.registry.FieldResolver
 import model.registry.ResolverFragment
 import model.registry.ResolutionExecutionContext
 import model.requireQueryTypeDef
@@ -65,16 +67,21 @@ internal class DepthFirstFieldResolverTask private constructor(
             is Arguments.Resolved -> {
                 val resolver = operation.world.resolverRegistry.resolver(key.field)
                 val fragments = resolver.instantiateFragmentsAt(oerOccurrence.root, publicationPath)
+                val objectMaterializationSelections =
+                    resolver.instantiateObjectMaterializationSelections(
+                        fragments.objectFragment.resolverOccurrenceId,
+                    )
                 val input = runBlocking {
                     // Sibling dependency order and depth-first dispatch make this input ready.
                     oerOccurrence.target.materializeResolverInput(
                         operation = operation,
                         cycleChecker = CycleCheckState.createNOP(),
-                        selections = fragments.objectFragment.materializeSelections,
+                        selections = objectMaterializationSelections,
                         reader = publicationPath,
                     )
                 }
-                val queryValue = resolveQueryFragment(fragments.queryFragment, publicationPath)
+                val queryValue =
+                    resolveQueryFragment(resolver, fragments.queryFragment, publicationPath)
                 runBlocking {
                     // Coroutine entry is interruptible; record only after crossing that boundary.
                     operation.resolverObserver.onResolverInvocation(
@@ -82,7 +89,7 @@ internal class DepthFirstFieldResolverTask private constructor(
                             occurrencePath = publicationPath,
                             field = key.field,
                             input = input,
-                            inputSelections = fragments.objectFragment.materializeSelections,
+                            inputSelections = objectMaterializationSelections,
                             arguments = arguments,
                             suppliedDemand = invocationDemand.takeIf { operation.world.selectiveResolvers },
                             resolverOccurrenceId = fragments.objectFragment.resolverOccurrenceId,
@@ -133,6 +140,7 @@ internal class DepthFirstFieldResolverTask private constructor(
         val invocation = reference.prepareInvocation(operation)
         val queryValue =
             resolveQueryFragment(
+                resolver = invocation.resolver,
                 queryFragment = invocation.fragments.queryFragment,
                 coordinate = invocation.path,
             )
@@ -145,7 +153,7 @@ internal class DepthFirstFieldResolverTask private constructor(
                         occurrencePath = invocation.path,
                         field = invocation.key.field,
                         input = input,
-                        inputSelections = invocation.fragments.objectFragment.materializeSelections,
+                        inputSelections = materializeSelectionForestOf(),
                         arguments = reference.arguments,
                         suppliedDemand = invocationDemand.takeIf { operation.world.selectiveResolvers },
                         resolverOccurrenceId = invocation.fragments.objectFragment.resolverOccurrenceId,
@@ -179,6 +187,7 @@ internal class DepthFirstFieldResolverTask private constructor(
      * Its work cannot consume the enclosing passive traversal's accumulated fringe or reactor queue.
      */
     private fun resolveQueryFragment(
+        resolver: FieldResolver,
         queryFragment: ResolverFragment,
         coordinate: List<PathComponent>,
     ): EngineObjectData.Sync {
@@ -192,7 +201,10 @@ internal class DepthFirstFieldResolverTask private constructor(
             queryResult.materializeResolverInput(
                 operation = operation,
                 cycleChecker = CycleCheckState.createNOP(),
-                selections = queryFragment.materializeSelections,
+                selections =
+                    resolver.instantiateQueryMaterializationSelections(
+                        queryFragment.resolverOccurrenceId,
+                    ),
                 reader = coordinate,
             )
         }

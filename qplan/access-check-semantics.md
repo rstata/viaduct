@@ -74,9 +74,11 @@ This per-base-cell behavior is why type checks are first-class results rather th
 
 ## Checker Required Selections
 
-A field or type checker declares its named required selection sets in two maps: one rooted at the checked field's containing object and one rooted at `Query`. The names in both maps share the single namespace exposed to the checker, so an object-rooted entry and a Query-rooted entry cannot use the same name. An object-rooted entry may be null, which requests an empty containing-object value; Query-rooted entries are non-null because production uses null specifically for that containing-object case.
+A field or type checker declares a named map of input-fragment pairs. Each named input contains one materialization template rooted at the checked field's containing object, one rooted at `Query`, and the variable definitions and optional variables provider shared by those two templates. Either template may be empty. The checker receives both materialized values for every name, matching the object/Query input pair supplied to a field resolver. Variables derived from either root are therefore available to selections in either member of the pair.
 
-Construction unions the selections independently within each root: the containing occurrence is extended with the union of all object-rooted selections, and one fresh Query OER is extended with the union of all Query-rooted selections. Materialization does not lose the original map boundaries. Each named selection set is materialized independently, and the checker receives one combined name-to-object map containing those separate values. If the Query-rooted map is nonempty, the checker occurrence owns a fresh Query OER even when every Query-rooted selection set is empty.
+Construction unions the selections independently within each root: the containing occurrence is extended with the union of every named pair's object-rooted selections, and one fresh Query OER is extended with the union of every named pair's nonempty Query-rooted selections. Materialization does not lose the named-pair boundaries. Each pair is materialized independently, and the checker receives a name-to-pair map containing its separate object and Query values. An empty Query template produces an empty Query-rooted value without requiring Query work.
+
+This paired contract is intentionally different from the existing production `CheckerExecutor` SPI, whose named values are singular required selection sets. That SPI is a legacy integration boundary, not the qplan semantic model. Its Airbnb implementations currently nest a variable RSS at most once in practice, so an adapter can translate each singular outer RSS and its optional nested dependency into one pair, remember whether the object or Query member was the legacy outer RSS, and pass only that materialized member to the legacy checker. A replacement checker API will consume the pair directly. Qplan's registry, demand closure, scheduling, and materialization should use the paired model rather than preserve the legacy outer-RSS distinction.
 
 The fresh Query OER is a logical occurrence boundary. It does not require an implementation to forgo safe physical batching, but work from the primary operation's Query OER or another checker occurrence must not be substituted as though it had the same occurrence identity.
 
@@ -94,7 +96,7 @@ type Record {
 }
 ```
 
-The registered `Query.viewerId` resolver has no required selections and returns `"viewer"`. The registered `Query.records` resolver has no required selections and returns two passive records, `Record { ownerId: "viewer", secret: "first" }` and `Record { ownerId: "other", secret: "second" }`. A field checker is registered for `Record.secret`. Its object-rooted map contains the named entry `record = { ownerId }`; its Query-rooted map contains the named entry `viewer = { viewerId }`. It grants access exactly when `record.ownerId` equals `viewer.viewerId`.
+The registered `Query.viewerId` resolver has no required selections and returns `"viewer"`. The registered `Query.records` resolver has no required selections and returns two passive records, `Record { ownerId: "viewer", secret: "first" }` and `Record { ownerId: "other", secret: "second" }`. A field checker is registered for `Record.secret`. Its named `accessInputs` pair contains the object-rooted selection `{ ownerId }` and the Query-rooted selection `{ viewerId }`. It grants access exactly when `accessInputs.object.ownerId` equals `accessInputs.query.viewerId`.
 
 The client asks for:
 

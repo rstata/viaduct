@@ -44,7 +44,6 @@ fun ObjectEngineResult.validateFromFieldBindings(
         if (definitions.isEmpty()) return
 
         val occurrenceId = ResolverOccurrenceId.at(root, path)
-        val fragments = resolver.instantiateFragments(occurrenceId)
         val requiredBindingIds =
             definitions.mapTo(linkedSetOf()) { definition ->
                 requireNotNull(definition.variable.instanceId)
@@ -84,14 +83,16 @@ fun ObjectEngineResult.validateFromFieldBindings(
             val sourceDefinition = resolver.variables.entries.single {
                 it.key.variableName == definition.variable.variableName
             }.value as VariableDefinition.FromField
-            val localFragment = when (definition.providerFragment) {
-                ProviderFragment.OBJECT -> fragments.objectFragment
-                ProviderFragment.QUERY -> fragments.queryFragment
+            val materializationSelections = when (definition.providerFragment) {
+                ProviderFragment.OBJECT ->
+                    resolver.instantiateObjectMaterializationSelections(occurrenceId)
+                ProviderFragment.QUERY ->
+                    resolver.instantiateQueryMaterializationSelections(occurrenceId)
             }
             val expected = providerRoot.readCompletedProvider(
                 operation = operation,
                 responsePath = sourceDefinition.responsePath,
-                selections = localFragment.materializeSelections,
+                selections = materializationSelections,
             )
             assertEquals(
                 expected,

@@ -19,6 +19,7 @@ import model.VariableBinding
 import model.engineObjectDataOf
 import model.guardedBy
 import model.outputValue
+import model.registry.FieldResolver
 import model.registry.ResolverFragment
 import model.registry.ResolutionExecutionContext
 import model.registry.VariableDefinition
@@ -270,7 +271,8 @@ internal class FieldResolverTask private constructor(
                         ) {
                             engineObjectDataOf(publication.operation.world.schema.requireQueryTypeDef())
                         } else {
-                            fieldResolverOccurrence.fragments.queryFragment.resolveQueryFragment(
+                            fieldResolverOccurrence.resolver.resolveQueryFragment(
+                                queryFragment = fieldResolverOccurrence.fragments.queryFragment,
                                 operation = publication.operation,
                                 coordinate = fieldResolverOccurrence.invocationPath,
                                 inclusionCondition =
@@ -298,16 +300,18 @@ internal class FieldResolverTask private constructor(
     }
 }
 
-private suspend fun ResolverFragment.resolveQueryFragment(
+private suspend fun FieldResolver.resolveQueryFragment(
+    queryFragment: ResolverFragment,
     operation: OperationContext,
     coordinate: List<PathComponent>,
     inclusionCondition: InclusionCondition,
 ): EngineObjectData.Sync {
-    if (constructionSelections.isEmpty()) {
+    if (queryFragment.constructionSelections.isEmpty()) {
         return engineObjectDataOf(operation.world.schema.requireQueryTypeDef())
     }
 
-    val symbolicSelections = materializeSelections.guardedBy(inclusionCondition)
+    val constructionSelections =
+        queryFragment.constructionSelections.guardedBy(inclusionCondition)
     val source = operation.world.resolverRegistry.createRootQueryInput()
     val queryResult =
         ObjectEngineResult.of(
@@ -324,14 +328,17 @@ private suspend fun ResolverFragment.resolveQueryFragment(
                     target = queryResult,
                 ),
             source = source,
-            initialDemand = symbolicSelections.constructionSelections(),
+            initialDemand = constructionSelections,
         )
-    operation.resolverObserver.onQueryFragmentPrepared(resolverOccurrenceId, queryResult)
+    operation.resolverObserver.onQueryFragmentPrepared(
+        queryFragment.resolverOccurrenceId,
+        queryResult,
+    )
     operation.dispatcher.dispatchOrchestrator(orchestration)
     queryResult.completeProviderBindings(
         operation = operation,
         providerReads =
-            pathVariableDefinitions.map { definition ->
+            queryFragment.pathVariableDefinitions.map { definition ->
                 VariableProviderReadOccurrence(
                     definition = definition,
                     readerPath = coordinate,
@@ -339,10 +346,13 @@ private suspend fun ResolverFragment.resolveQueryFragment(
                 )
             },
     )
+    val materializeSelections =
+        instantiateQueryMaterializationSelections(queryFragment.resolverOccurrenceId)
+            .guardedBy(inclusionCondition)
     return queryResult.materializeResolverInput(
         operation = operation,
         cycleChecker = operation.cycleChecker,
-        selections = symbolicSelections,
+        selections = materializeSelections,
         reader = coordinate,
         resultPath = emptyList(),
     )

@@ -33,8 +33,10 @@ import model.fragmentFrom
 import model.objectOf
 import model.outputValue
 import model.registry.FieldResolver
+import model.registry.ResolverFragmentTemplates
 import model.registry.ResolverRegistry
 import model.sameCompletedResultAs
+import model.toCanonicalMaterializeSelectionForest
 import model.testing.TestWorld
 import model.testing.fieldResolverOf
 import semantics.shared.CycleCheckState
@@ -214,10 +216,20 @@ interface CoroutineResolverContract {
         // Bypass registry cycle validation, while keeping each resolver's field identity valid.
         val cyclicResolver = FieldResolver.of(
             field = second,
-            objectFragment = testWorld.resolverRegistry.resolver(first).objectFragment,
-            queryFragment = testWorld.resolverRegistry.resolver(second).queryFragment,
+            fragmentTemplates =
+                ResolverFragmentTemplates(
+                    objectFragmentTemplate =
+                        testWorld.resolverRegistry
+                            .resolver(first)
+                            .objectFragment
+                            .toCanonicalMaterializeSelectionForest(),
+                    queryFragmentTemplate =
+                        testWorld.resolverRegistry
+                            .resolver(second)
+                            .queryFragment
+                            .toCanonicalMaterializeSelectionForest(),
+                ),
             queryType = testWorld.schema.requireQueryTypeDef(),
-            variables = emptyMap(),
             function = { _, _, _, _ -> 2 },
         )
         val malformedRegistry =

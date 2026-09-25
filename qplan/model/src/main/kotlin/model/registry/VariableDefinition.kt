@@ -10,21 +10,21 @@ import model.ObjectEngineResult
 import model.guardedBy
 import model.inputType
 
-/** The resolver input fragment that supplies a from-field variable. */
+/** The object- or Query-rooted input fragment that supplies a from-field variable. */
 enum class ProviderFragment {
     OBJECT,
     QUERY,
 }
 
 /**
- * The source of one field-relative variable defined by a field resolver.
+ * The source of one field-relative variable defined by a field resolver or checker fragment.
  *
  * Equality is structural: two definitions are equal exactly when they have the same variant and
  * equal [FromArgument.argument] and [FromArgument.inputPath], or equal [FromField.providerFragment]
  * and [FromField.path] and [FromField.responsePath], respectively.
  */
 sealed interface VariableDefinition {
-    /** A variable whose value is returned by its field resolver's one-shot variables provider. */
+    /** A variable whose value is returned by its field function's one-shot variables provider. */
     data object FromProvider : VariableDefinition
 
     /** A variable whose value is read from an input path rooted at one resolver argument. */
@@ -69,7 +69,7 @@ sealed interface VariableDefinition {
         fun read(arguments: Arguments.Resolved): EngineInputData?
     }
 
-    /** A variable whose value is read from one path in one defining resolver fragment. */
+    /** A variable whose value is read from one path in one defining input fragment. */
     sealed interface FromField : VariableDefinition {
         val providerFragment: ProviderFragment
         val path: List<ObjectEngineResult.Key>

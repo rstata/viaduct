@@ -1,6 +1,5 @@
 package semantics.resolver26
 
-import model.MaterializeSelectionForest
 import model.ObjectEngineResult
 import model.ObjectSelection
 import model.PathComponent
@@ -37,7 +36,6 @@ internal data class FieldResolverOccurrence(
     val invocationPath: List<PathComponent>,
     val resolverOccurrenceId: ResolverOccurrenceId,
     val resolver: FieldResolver,
-    val inputMaterializeSelections: MaterializeSelectionForest,
     val variableDefinitions: List<VariableInstanceDefinition>,
     val fragments: ResolverFragments,
 ) : ValueSourceOccurrence {

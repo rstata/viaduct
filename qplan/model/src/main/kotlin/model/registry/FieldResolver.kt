@@ -13,6 +13,7 @@ import model.MaterializeSelectionForest
 import model.Arguments
 import model.PathComponent
 import model.ResolverOccurrenceId
+import model.Selection
 import model.SelectionForest
 import model.arg
 import model.engineObjectDataOf
@@ -22,7 +23,6 @@ import model.objectKey
 import model.outputValue
 import model.schemaType
 import model.selectionForestOf
-import model.toCanonicalMaterializeSelectionForest
 import model.usedVariables
 import viaduct.engine.api.EngineObjectData
 
@@ -51,18 +51,41 @@ typealias SelectiveFieldResolverFunction =
         ResolutionExecutionContext,
     ) -> ResolverOutputData?
 
-/** Computes all tenant-provided variables once for one field-resolver occurrence. */
+/** Computes all tenant-provided variables once for one field-function occurrence. */
 typealias VariablesProviderFunction =
     suspend (Arguments.Resolved) -> Map<String, EngineInputData?>
 
-/** Paired materialization and construction views of one instantiated resolver input fragment. Equality is undefined. */
-sealed interface ResolverFragment {
-    val resolverOccurrenceId: ResolverOccurrenceId
-    val materializeSelections: MaterializeSelectionForest
-    val constructionSelections: SelectionForest
-    val variableDefinitions: List<VariableInstanceDefinition>
-    val pathVariableDefinitions: List<InstantiatedFieldPathDefinition>
+/**
+ * The object- and Query-rooted input templates for one resolver function.
+ *
+ * [variables] and [variablesProvider] are shared by both templates. Equality is undefined.
+ */
+class ResolverFragmentTemplates(
+    val objectFragmentTemplate: MaterializeSelectionForest,
+    val queryFragmentTemplate: MaterializeSelectionForest,
+    variables: Map<Arguments.Variable, VariableDefinition> = emptyMap(),
+    val variablesProvider: VariablesProviderFunction? = null,
+) {
+    val variables: Map<Arguments.Variable, VariableDefinition> = variables.toMap()
+
+    init {
+        val providerVariables =
+            variables.filterValues { definition ->
+                definition == VariableDefinition.FromProvider
+            }
+        require((variablesProvider != null) == providerVariables.isNotEmpty()) {
+            "A variables provider and its declared variables must be supplied together"
+        }
+    }
 }
+
+/** One instantiated field-resolution input fragment. Equality is undefined. */
+class ResolverFragment internal constructor(
+    val resolverOccurrenceId: ResolverOccurrenceId,
+    val constructionSelections: SelectionForest,
+    val variableDefinitions: List<VariableInstanceDefinition>,
+    val pathVariableDefinitions: List<InstantiatedFieldPathDefinition>,
+)
 
 class ResolverFragments(
     val objectFragment: ResolverFragment,
@@ -75,8 +98,11 @@ class ResolverFragments(
  * Equality is undefined. Resolver-demand identity is expressed with canonical object fields
  * instead.
  *
- * [objectFragment] is the direct parent-object input requirement. [queryFragment] is the
- * independently resolved Query-rooted input requirement. In a canonical registry entry,
+ * [objectFragment] is the direct parent-object resolution requirement. [queryFragment] is the
+ * independently resolved Query-rooted requirement. Their response-key-preserving
+ * [fragmentTemplates] are instantiated by [instantiateObjectMaterializationSelections] and
+ * [instantiateQueryMaterializationSelections] only when their inputs are materialized. In a
+ * canonical registry entry,
  * [variables] maps every variable template defined by this resolver and used by either fragment
  * to its argument, nonempty alias-free object- or Query-field path, or the resolver's single
  * [variablesProvider].
@@ -103,20 +129,47 @@ class ResolverFragments(
  */
 class FieldResolver private constructor(
     val field: ViaductSchema.ObjectField,
-    private val objectFragmentTemplate: MaterializeSelectionForest,
-    private val queryFragmentTemplate: MaterializeSelectionForest,
+    private val fragmentTemplates: ResolverFragmentTemplates,
     private val queryType: ViaductSchema.Object,
-    val variables: Map<Arguments.Variable, VariableDefinition>,
-    val variablesProvider: VariablesProviderFunction?,
     private val function: SelectiveFieldResolverFunction,
     private val projectNonselectiveOutput: Boolean,
     private val projectionDemand: (SelectionForest) -> SelectionForest,
 ) {
+    val variables: Map<Arguments.Variable, VariableDefinition>
+        get() = fragmentTemplates.variables
+
+    val variablesProvider: VariablesProviderFunction?
+        get() = fragmentTemplates.variablesProvider
+
     val objectFragment: SelectionForest =
-        objectFragmentTemplate.constructionSelections()
+        fragmentTemplates.objectFragmentTemplate.constructionSelections()
 
     val queryFragment: SelectionForest =
-        queryFragmentTemplate.constructionSelections()
+        fragmentTemplates.queryFragmentTemplate.constructionSelections()
+
+    private val objectFieldPathInclusionConditions =
+        variables.fieldPathInclusionConditions(
+            ProviderFragment.OBJECT,
+            fragmentTemplates.objectFragmentTemplate,
+        )
+
+    private val queryFieldPathInclusionConditions =
+        variables.fieldPathInclusionConditions(
+            ProviderFragment.QUERY,
+            fragmentTemplates.queryFragmentTemplate,
+        )
+
+    /** Instantiates the object-fragment template when its input is ready to be materialized. */
+    fun instantiateObjectMaterializationSelections(
+        resolverOccurrenceId: ResolverOccurrenceId,
+    ): MaterializeSelectionForest =
+        fragmentTemplates.objectFragmentTemplate.instantiateVariables(resolverOccurrenceId)
+
+    /** Instantiates the Query-fragment template when its input is ready to be materialized. */
+    fun instantiateQueryMaterializationSelections(
+        resolverOccurrenceId: ResolverOccurrenceId,
+    ): MaterializeSelectionForest =
+        fragmentTemplates.queryFragmentTemplate.instantiateVariables(resolverOccurrenceId)
 
     /** Instantiates both resolver input fragments at one exact resolver path. */
     fun instantiateFragmentsAt(
@@ -127,27 +180,23 @@ class FieldResolver private constructor(
     /** Instantiates both resolver input fragments from one shared occurrence-variable set. */
     fun instantiateFragments(
         resolverOccurrenceId: ResolverOccurrenceId,
-    ): ResolverFragments {
-        val variableDefinitions = instantiatedVariableDefinitions(resolverOccurrenceId)
-        val pathVariableDefinitions =
-            instantiatedFieldPathVariableDefinitions(resolverOccurrenceId)
-        return ResolverFragments(
+    ): ResolverFragments =
+        ResolverFragments(
             objectFragment =
-                instantiateFragment(
+                instantiateResolverFragment(
                     resolverOccurrenceId = resolverOccurrenceId,
-                    providerFragment = ProviderFragment.OBJECT,
-                    variableDefinitions = variableDefinitions,
-                    pathVariableDefinitions = pathVariableDefinitions,
+                    constructionSelections = objectFragment,
+                    variables = variables,
+                    fieldPathInclusionConditions = objectFieldPathInclusionConditions,
                 ),
             queryFragment =
-                instantiateFragment(
+                instantiateResolverFragment(
                     resolverOccurrenceId = resolverOccurrenceId,
-                    providerFragment = ProviderFragment.QUERY,
-                    variableDefinitions = variableDefinitions,
-                    pathVariableDefinitions = pathVariableDefinitions,
+                    constructionSelections = queryFragment,
+                    variables = variables,
+                    fieldPathInclusionConditions = queryFieldPathInclusionConditions,
                 ),
         )
-    }
 
     /** Returns each resolver variable definition instantiated once for this application. */
     fun instantiatedVariableDefinitions(
@@ -167,8 +216,8 @@ class FieldResolver private constructor(
         variables.mapNotNull { (variable, definition) ->
             (definition as? VariableDefinition.FromField)?.let {
                 val fragment = when (it.providerFragment) {
-                    ProviderFragment.OBJECT -> objectFragmentTemplate
-                    ProviderFragment.QUERY -> queryFragmentTemplate
+                    ProviderFragment.OBJECT -> fragmentTemplates.objectFragmentTemplate
+                    ProviderFragment.QUERY -> fragmentTemplates.queryFragmentTemplate
                 }
                 val conditions = it.inclusionConditions(fragment)
                 InstantiatedFieldPathDefinition.of(
@@ -189,37 +238,6 @@ class FieldResolver private constructor(
                 )
             }
         }
-
-    private fun instantiateFragment(
-        resolverOccurrenceId: ResolverOccurrenceId,
-        providerFragment: ProviderFragment,
-        variableDefinitions: List<VariableInstanceDefinition>,
-        pathVariableDefinitions: List<InstantiatedFieldPathDefinition>,
-    ): ResolverFragment {
-        val template =
-            when (providerFragment) {
-                ProviderFragment.OBJECT -> objectFragmentTemplate
-                ProviderFragment.QUERY -> queryFragmentTemplate
-            }
-        val materializeSelections = template.instantiateVariables(resolverOccurrenceId)
-        val instantiatedFragment = materializeSelections.constructionSelections()
-        val fragmentPathDefinitions =
-            pathVariableDefinitions.filter { definition ->
-                definition.providerFragment == providerFragment
-            }
-        val constructionSelections = instantiatedFragment
-        val usedVariables = constructionSelections.usedVariables()
-        return ResolverFragmentImpl(
-            resolverOccurrenceId = resolverOccurrenceId,
-            materializeSelections = materializeSelections,
-            constructionSelections = constructionSelections,
-            variableDefinitions =
-                variableDefinitions.filter { definition ->
-                    definition.variable in usedVariables
-                },
-            pathVariableDefinitions = fragmentPathDefinitions,
-        )
-    }
 
     /** Applies this field resolver to the supplied output demand. */
     internal suspend operator fun invoke(
@@ -300,29 +318,20 @@ class FieldResolver private constructor(
          */
         fun of(
             field: ViaductSchema.ObjectField,
-            objectFragment: MaterializeSelectionForest,
-            queryFragment: MaterializeSelectionForest,
+            fragmentTemplates: ResolverFragmentTemplates,
             queryType: ViaductSchema.Object,
-            variables: Map<Arguments.Variable, VariableDefinition>,
             function: NonselectiveFieldResolverFunction,
             projectionDemand: (SelectionForest) -> SelectionForest = { it },
-            variablesProvider: VariablesProviderFunction? = null,
         ): FieldResolver {
             validateFactoryArguments(
                 field = field,
-                objectFragment = objectFragment,
-                queryFragment = queryFragment,
+                fragmentTemplates = fragmentTemplates,
                 queryType = queryType,
-                variables = variables,
-                variablesProvider = variablesProvider,
             )
             return FieldResolver(
                 field = field,
-                objectFragmentTemplate = objectFragment,
-                queryFragmentTemplate = queryFragment,
+                fragmentTemplates = fragmentTemplates,
                 queryType = queryType,
-                variables = variables,
-                variablesProvider = variablesProvider,
                 function = { input, queryValue, arguments, _, executionContext ->
                     function(input, queryValue, arguments, executionContext)
                 },
@@ -339,28 +348,19 @@ class FieldResolver private constructor(
          */
         fun ofSelective(
             field: ViaductSchema.ObjectField,
-            objectFragment: MaterializeSelectionForest,
-            queryFragment: MaterializeSelectionForest,
+            fragmentTemplates: ResolverFragmentTemplates,
             queryType: ViaductSchema.Object,
-            variables: Map<Arguments.Variable, VariableDefinition>,
             function: SelectiveFieldResolverFunction,
-            variablesProvider: VariablesProviderFunction? = null,
         ): FieldResolver {
             validateFactoryArguments(
                 field = field,
-                objectFragment = objectFragment,
-                queryFragment = queryFragment,
+                fragmentTemplates = fragmentTemplates,
                 queryType = queryType,
-                variables = variables,
-                variablesProvider = variablesProvider,
             )
             return FieldResolver(
                 field = field,
-                objectFragmentTemplate = objectFragment,
-                queryFragmentTemplate = queryFragment,
+                fragmentTemplates = fragmentTemplates,
                 queryType = queryType,
-                variables = variables,
-                variablesProvider = variablesProvider,
                 function = function,
                 projectNonselectiveOutput = false,
                 projectionDemand = { it },
@@ -376,83 +376,33 @@ class FieldResolver private constructor(
          */
         fun ofSelectionAwareNonselective(
             field: ViaductSchema.ObjectField,
-            objectFragment: MaterializeSelectionForest,
-            queryFragment: MaterializeSelectionForest,
+            fragmentTemplates: ResolverFragmentTemplates,
             queryType: ViaductSchema.Object,
-            variables: Map<Arguments.Variable, VariableDefinition>,
             function: SelectiveFieldResolverFunction,
             projectionDemand: (SelectionForest) -> SelectionForest = { it },
-            variablesProvider: VariablesProviderFunction? = null,
         ): FieldResolver {
             validateFactoryArguments(
                 field = field,
-                objectFragment = objectFragment,
-                queryFragment = queryFragment,
+                fragmentTemplates = fragmentTemplates,
                 queryType = queryType,
-                variables = variables,
-                variablesProvider = variablesProvider,
             )
             return FieldResolver(
                 field = field,
-                objectFragmentTemplate = objectFragment,
-                queryFragmentTemplate = queryFragment,
+                fragmentTemplates = fragmentTemplates,
                 queryType = queryType,
-                variables = variables,
-                variablesProvider = variablesProvider,
                 function = function,
                 projectNonselectiveOutput = true,
                 projectionDemand = projectionDemand,
             )
         }
 
-        fun of(
-            field: ViaductSchema.ObjectField,
-            objectFragment: SelectionForest,
-            queryFragment: SelectionForest,
-            queryType: ViaductSchema.Object,
-            variables: Map<Arguments.Variable, VariableDefinition>,
-            function: NonselectiveFieldResolverFunction,
-            projectionDemand: (SelectionForest) -> SelectionForest = { it },
-            variablesProvider: VariablesProviderFunction? = null,
-        ): FieldResolver =
-            of(
-                field = field,
-                objectFragment = objectFragment.toCanonicalMaterializeSelectionForest(),
-                queryFragment = queryFragment.toCanonicalMaterializeSelectionForest(),
-                queryType = queryType,
-                variables = variables,
-                function = function,
-                projectionDemand = projectionDemand,
-                variablesProvider = variablesProvider,
-            )
-
-        fun ofSelective(
-            field: ViaductSchema.ObjectField,
-            objectFragment: SelectionForest,
-            queryFragment: SelectionForest,
-            queryType: ViaductSchema.Object,
-            variables: Map<Arguments.Variable, VariableDefinition>,
-            function: SelectiveFieldResolverFunction,
-            variablesProvider: VariablesProviderFunction? = null,
-        ): FieldResolver =
-            ofSelective(
-                field = field,
-                objectFragment = objectFragment.toCanonicalMaterializeSelectionForest(),
-                queryFragment = queryFragment.toCanonicalMaterializeSelectionForest(),
-                queryType = queryType,
-                variables = variables,
-                function = function,
-                variablesProvider = variablesProvider,
-            )
-
         private fun validateFactoryArguments(
             field: ViaductSchema.ObjectField,
-            objectFragment: MaterializeSelectionForest,
-            queryFragment: MaterializeSelectionForest,
+            fragmentTemplates: ResolverFragmentTemplates,
             queryType: ViaductSchema.Object,
-            variables: Map<Arguments.Variable, VariableDefinition>,
-            variablesProvider: VariablesProviderFunction?,
         ) {
+            val objectFragment = fragmentTemplates.objectFragmentTemplate
+            val queryFragment = fragmentTemplates.queryFragmentTemplate
             require(
                 objectFragment.all { selection ->
                     selection.key.field.containingDef == field.containingDef &&
@@ -472,18 +422,11 @@ class FieldResolver private constructor(
             require(queryType.name == "Query") {
                 "Query fragment type must be Query"
             }
-            val providerVariables =
-                variables.filterValues { definition ->
-                    definition == VariableDefinition.FromProvider
-                }
-            require((variablesProvider != null) == providerVariables.isNotEmpty()) {
-                "A variables provider and its declared variables must be supplied together"
-            }
             objectFragment.requireNoVariablesBeneathParent(field)
             queryFragment.requireNoVariablesBeneathParent(field)
             objectFragment.collect(field.containingDef)
             queryFragment.collect(queryType)
-            variables.forEach { (variable, definition) ->
+            fragmentTemplates.variables.forEach { (variable, definition) ->
                 require(variable.isTemplate) {
                     "Resolver registry variables must be templates"
                 }
@@ -517,6 +460,66 @@ class FieldResolver private constructor(
         }
     }
 }
+
+/** Instantiates one object- or Query-rooted fragment for field-resolution processing. */
+internal fun instantiateResolverFragment(
+    resolverOccurrenceId: ResolverOccurrenceId,
+    constructionSelections: SelectionForest,
+    variables: Map<Arguments.Variable, VariableDefinition>,
+    fieldPathInclusionConditions: Map<Arguments.Variable, List<InclusionCondition>>,
+): ResolverFragment {
+    val instantiatedSelections = constructionSelections.instantiateVariables(resolverOccurrenceId)
+    val usedVariables = instantiatedSelections.usedVariables()
+    val variableDefinitions =
+        variables.mapNotNull { (variable, definition) ->
+            VariableInstanceDefinition.of(
+                variable = variable.instantiate(resolverOccurrenceId),
+                definition = definition,
+            ).takeIf { it.variable in usedVariables }
+        }
+    val pathVariableDefinitions =
+        fieldPathInclusionConditions.map { (variable, conditions) ->
+            val definition = variables.getValue(variable) as VariableDefinition.FromField
+            InstantiatedFieldPathDefinition.of(
+                variable = variable.instantiate(resolverOccurrenceId),
+                providerFragment = definition.providerFragment,
+                path =
+                    definition.path.mapIndexed { index, key ->
+                        InstantiatedFieldPathElement.of(
+                            key =
+                                ObjectEngineResult.Key.of(
+                                    field = key.field,
+                                    arguments =
+                                        key.arguments.instantiateVariables(
+                                            key.field,
+                                            resolverOccurrenceId,
+                                        ),
+                                ),
+                            inclusionCondition =
+                                conditions[index].mapVariables { template ->
+                                    template.instantiate(resolverOccurrenceId)
+                                },
+                        )
+                    },
+            )
+        }
+    return ResolverFragment(
+        resolverOccurrenceId = resolverOccurrenceId,
+        constructionSelections = instantiatedSelections,
+        variableDefinitions = variableDefinitions,
+        pathVariableDefinitions = pathVariableDefinitions,
+    )
+}
+
+private fun Map<Arguments.Variable, VariableDefinition>.fieldPathInclusionConditions(
+    providerFragment: ProviderFragment,
+    materializeSelections: MaterializeSelectionForest,
+): Map<Arguments.Variable, List<InclusionCondition>> =
+    mapNotNull { (variable, definition) ->
+        (definition as? VariableDefinition.FromField)
+            ?.takeIf { it.providerFragment == providerFragment }
+            ?.let { variable to it.inclusionConditions(materializeSelections) }
+    }.toMap()
 
 private fun MaterializeSelectionForest.requireNoVariablesBeneathParent(
     resolverField: ViaductSchema.ObjectField,
@@ -582,13 +585,33 @@ private fun ResolverOutputData?.requireArgumentlessObjectFields() {
     }
 }
 
-private class ResolverFragmentImpl(
-    override val resolverOccurrenceId: ResolverOccurrenceId,
-    override val materializeSelections: MaterializeSelectionForest,
-    override val constructionSelections: SelectionForest,
-    override val variableDefinitions: List<VariableInstanceDefinition>,
-    override val pathVariableDefinitions: List<InstantiatedFieldPathDefinition>,
-) : ResolverFragment
+private fun SelectionForest.instantiateVariables(
+    resolverOccurrenceId: ResolverOccurrenceId,
+): SelectionForest =
+    flatMap { selection ->
+        selectionForestOf(
+            Selection.of(
+                key =
+                    ObjectEngineResult.Key.of(
+                        field = selection.key.field,
+                        arguments =
+                            selection.key.arguments.instantiateVariables(
+                                selection.key.field,
+                                resolverOccurrenceId,
+                            ),
+                    ),
+                possibleTypes = selection.possibleTypes,
+                inclusionCondition =
+                    selection.inclusionCondition.mapVariables { variable ->
+                        variable.instantiate(resolverOccurrenceId)
+                    },
+                subselections =
+                    selection.subselections.instantiateVariables(
+                        resolverOccurrenceId,
+                    ),
+            ),
+        )
+    }
 
 private fun MaterializeSelectionForest.instantiateVariables(
     resolverOccurrenceId: ResolverOccurrenceId,

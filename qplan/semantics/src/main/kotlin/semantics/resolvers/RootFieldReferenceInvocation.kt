@@ -42,7 +42,7 @@ internal fun RootFieldReferenceData.prepareInvocation(operation: SharedOperation
     val resolverOccurrenceId = ResolverOccurrenceId.at(root, invocationPath)
     val resolver = operation.world.resolverRegistry.resolver(targetField)
     val fragments = resolver.instantiateFragments(resolverOccurrenceId)
-    require(fragments.objectFragment.materializeSelections.isEmpty()) {
+    require(fragments.objectFragment.constructionSelections.isEmpty()) {
         "Root-field-reference target ${targetField.containingDef.name}/${targetField.name} " +
             "must not declare an object fragment"
     }

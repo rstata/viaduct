@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import viaduct.engine.api.spi.VariableFromArgumentDefinitions
+import viaduct.engine.api.spi.VariableFromFieldDefinitions
 import viaduct.engine.api.FromArgumentVariable
 import viaduct.engine.api.FromObjectFieldVariable
 import viaduct.engine.api.FromQueryFieldVariable
@@ -1071,6 +1073,15 @@ private fun MockTenantModuleDSL<Unit>.fieldWithFromFieldVariables(
                 querySelectionSet = querySelections?.let {
                     RequiredSelectionSet(it, variablesResolvers, forChecker = false)
                 },
+                argumentVariables = VariableFromArgumentDefinitions(
+                    variables.filterIsInstance<FromArgumentVariable>().associate { it.name to it.valueFromPath },
+                ),
+                objectFieldVariables = VariableFromFieldDefinitions(
+                    variables.filterIsInstance<FromObjectFieldVariable>().associate { it.name to it.valueFromPath },
+                ),
+                queryFieldVariables = VariableFromFieldDefinitions(
+                    variables.filterIsInstance<FromQueryFieldVariable>().associate { it.name to it.valueFromPath },
+                ),
                 resolverId = resolverId,
                 unbatchedResolveFn = resolveFn,
             )

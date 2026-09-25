@@ -19,6 +19,7 @@ import viaduct.engine.EngineConfiguration
 import viaduct.engine.api.EngineObjectData
 import viaduct.engine.api.EngineSchema
 import viaduct.engine.api.ExecutionInput
+import viaduct.engine.api.spi.VariableFromFieldDefinitions
 import viaduct.engine.api.FromObjectFieldVariable
 import viaduct.engine.api.RequiredSelectionSet
 import viaduct.engine.api.VariablesResolver
@@ -2452,6 +2453,7 @@ class RequiredSelectionsTest {
                         forChecker = false,
                     )
                     MockFieldUnbatchedResolverExecutor(
+                        objectFieldVariables = VariableFromFieldDefinitions(mapOf("value" to "outer.middle.node.value")),
                         objectSelectionSet = RequiredSelectionSet(
                             selections = objectSelections,
                             variablesResolvers = variablesResolvers,
@@ -2570,6 +2572,7 @@ class RequiredSelectionsTest {
                 resolverExecutor {
                     MockFieldUnbatchedResolverExecutor(
                         objectSelectionSet = declarativeObjectSelections(),
+                        objectFieldVariables = VariableFromFieldDefinitions(mapOf("vara" to "z")),
                         resolverId = resolverId,
                         unbatchedResolveFn = { _, obj, _, _, _ -> obj.fetchAs<Int>("y") },
                     )
@@ -2579,6 +2582,7 @@ class RequiredSelectionsTest {
                 resolverExecutor {
                     MockFieldUnbatchedResolverExecutor(
                         objectSelectionSet = declarativeObjectSelections(),
+                        objectFieldVariables = VariableFromFieldDefinitions(mapOf("vara" to "z")),
                         resolverId = resolverId,
                         unbatchedResolveFn = { _, obj, _, _, _ -> obj.fetchAs<Int>("y") },
                     )
@@ -2768,6 +2772,7 @@ class RequiredSelectionsTest {
                         forChecker = false,
                     )
                     MockFieldUnbatchedResolverExecutor(
+                        objectFieldVariables = VariableFromFieldDefinitions(mapOf("includeSelectedValue" to "includeSelectedValue")),
                         objectSelectionSet = RequiredSelectionSet(
                             selections = objectSelections,
                             variablesResolvers = variablesResolvers,

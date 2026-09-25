@@ -9,7 +9,6 @@ import kotlin.test.assertTrue
 import viaduct.engine.api.mocks.EngineTestModule
 import viaduct.engine.api.mocks.MockFieldBatchResolverExecutor
 import viaduct.engine.api.mocks.MockFieldUnbatchedResolverExecutor
-import viaduct.engine.api.mocks.MockVariablesResolver
 import viaduct.engine.api.mocks.createRSS
 import viaduct.engine.api.mocks.createEngineObjectData
 import viaduct.engine.api.mocks.fetchAs
@@ -211,16 +210,6 @@ class EngineTestModuleQPlanFeatureTest {
     fun `composes variable providers once per occurrence across both fragments`() {
         val factorCalls = AtomicInteger()
         val offsetCalls = AtomicInteger()
-        val factorProvider =
-            MockVariablesResolver("factor") { variables, _ ->
-                factorCalls.incrementAndGet()
-                mapOf("factor" to (variables.arguments.getValue("multiplier") as Int) * 2)
-            }
-        val offsetProvider =
-            MockVariablesResolver("offset") { variables, _ ->
-                offsetCalls.incrementAndGet()
-                mapOf("offset" to (variables.arguments.getValue("multiplier") as Int) + 1)
-            }
         EngineTestModule(
             """
             extend type Query {
@@ -237,17 +226,22 @@ class EngineTestModuleQPlanFeatureTest {
                 resolver { fn { args, _, _, _, _ -> args.getValue("x") } }
             }
             field("Query" to "total") {
-                resolverExecutor {
-                    MockFieldUnbatchedResolverExecutor(
-                        objectSelectionSet =
-                            createRSS("Query", "left(x: \$factor)", listOf(factorProvider)),
-                        querySelectionSet =
-                            createRSS("Query", "right(x: \$offset)", listOf(offsetProvider)),
-                        resolverId = resolverId,
-                        unbatchedResolveFn = { _, objectValue, queryValue, _, _ ->
-                            objectValue.get("left") as Int + queryValue.get("right") as Int
-                        },
-                    )
+                resolver {
+                    objectSelections("left(x: \$factor)") {
+                        variables("factor") { variables, _ ->
+                            factorCalls.incrementAndGet()
+                            mapOf("factor" to (variables.arguments.getValue("multiplier") as Int) * 2)
+                        }
+                    }
+                    querySelections("right(x: \$offset)") {
+                        variables("offset") { variables, _ ->
+                            offsetCalls.incrementAndGet()
+                            mapOf("offset" to (variables.arguments.getValue("multiplier") as Int) + 1)
+                        }
+                    }
+                    fn { _, objectValue, queryValue, _, _ ->
+                        objectValue.get("left") as Int + queryValue.get("right") as Int
+                    }
                 }
             }
         }.runQPlanFeatureTest {

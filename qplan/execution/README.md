@@ -45,7 +45,7 @@ Feature tests may provide a scoped executable schema distinct from the full sche
 
 `EngineTestModule.runQPlanFeatureTest` is defined in `src/testFixtures/kotlin/execution/testing/EngineTestModuleQPlanFeatureTest.kt`. It consumes the pre-dispatcher field and node executor maps exposed by `EngineTestModule`.
 
-The adapter translates field executors into qplan `FieldResolverDefinition` values. It maps source field coordinates through `SourceSchemaAdapter`, decodes object and Query required selections into the canonical schema, recovers supported variable declarations across both executor fragments, passes resolved arguments plus synchronous object and occurrence-specific Query data through a one-element `FieldResolverExecutor.Selector`, and normalizes source-shaped executor outputs before they enter qplan. Selective field executors are assembled with `selectiveFieldResolverOf`; their Resolver26 successor demand is converted to an `EngineSelectionSet` for composite outputs, while scalar outputs receive no selection set. The conversion restores qplan's lowered typename field to source `__typename` before crossing the Engine API boundary.
+The adapter translates field executors into qplan `FieldResolverDefinition` values. It maps source field coordinates through `SourceSchemaAdapter`, decodes object and Query required selections into the canonical schema, compiles explicit executor variable declarations across both fragments, passes resolved arguments plus synchronous object and occurrence-specific Query data through a one-element `FieldResolverExecutor.Selector`, and normalizes source-shaped executor outputs before they enter qplan. Selective field executors are assembled with `selectiveFieldResolverOf`; their Resolver26 successor demand is converted to an `EngineSelectionSet` for composite outputs, while scalar outputs receive no selection set. The conversion restores qplan's lowered typename field to source `__typename` before crossing the Engine API boundary.
 
 The adapter also honors `EngineConfiguration.fieldSelectivityProvider` when executor metadata itself does not declare a field selective. Other engine configuration remains production-runtime input and is ignored unless a supported adapter behavior explicitly consumes it.
 
@@ -59,15 +59,13 @@ In keeping with qplan's root-field-reference architecture, Node-valued fields re
 
 ### Required-Selection Variables
 
-`RequiredSelectionSetVariableRecovery` is the boundary that converts supported Engine API RSS variable resolvers back into qplan `VariableDeclaration` values. This intentionally reverse engineers the production compilation path rather than invoking `VariablesResolver.resolve`: [`RequiredSelectionSetSupport`](../../core/engine/api/src/main/kotlin/viaduct/engine/api/bootstrap/executionregistry/RequiredSelectionSetSupport.kt) turns execution-registry declarations into selection-set variables, [`VariablesResolver.Builder.buildOne`](../../core/engine/api/src/main/kotlin/viaduct/engine/api/VariablesResolver.kt) compiles those declarations into resolver recipes, and [`RequiredSelectionSetFactory`](../../core/tenant/runtime/src/main/kotlin/viaduct/tenant/runtime/bootstrap/RequiredSelectionSetFactory.kt) validates and installs them on each executor [`RequiredSelectionSet`](../../core/engine/api/src/main/kotlin/viaduct/engine/api/RequiredSelectionSet.kt).
+`ExecutorVariableDeclarations` consumes `FieldResolverExecutor.argumentVariables`, `objectFieldVariables`, `queryFieldVariables`, and `variablesFromFunctionProvider`. It associates names with the typed variable templates decoded across both required-selection fragments and uses the existing schema path compilers to produce `VariableDefinition.FromArgument` and `VariableDefinition.FromField` through fixture composition. Field sources retain their declared `ProviderFragment.OBJECT` or `ProviderFragment.QUERY`, even when both fragments contain identical paths. Required-selection fragments remain intact, including aliases, arguments, guards, and dependencies within variable-source paths.
 
-`FromArgument(name, path)` recovery retains the complete argument and nested input-object path. Recovery recursively unwraps production `Validated` decorators, associates each provider name with the exact variable occurrence decoded across its owning resolver's object and Query fragments, and emits `schema.fromArgument(ownerField, path)`. This preserves renamed bindings such as `$vary` sourced from argument `y`; it also prevents same-named variables owned by different resolvers from being conflated. Canonical qplan path evaluation propagates null through nullable intermediate input objects.
+The optional function provider is attached through `withVariablesProvider`, which supplies `VariableDefinition.FromProvider` for its declared names. The shared callback calls `provideVariables` directly and validates exact output names. Qplan retains ownership of invoking it once per field occurrence across both fragments. Modern Kotlin bootstrap already provides argument conversion, tenant invocation, and normalization through this direct entry point; its legacy `resolve` delegates to the same implementation.
 
-`FromFieldVariablesResolver(name, path, requiredSelectionSet)` recovery treats `path` as an alias-preserving response-key path. Because the Engine API type does not retain whether it came from `fromObjectField` or `fromQueryField`, recovery reconstructs the origin by requiring its nested RSS to equal exactly one of the executor's object or Query RSSes filtered to that path. It recursively checks nested RSS variable dependencies against both root fragments, requires repeated provider recipes to agree, and emits `schema.fromObjectField(objectFragment, path)` or `schema.fromQueryField(queryFragment, path)`. A provider that matches both fragments is rejected as ambiguous rather than guessed.
+Explicit declarations are required for every variable used by either fragment. The adapter rejects missing, unused, or duplicate declarations and never inspects nested `VariablesResolver` objects. Mock executors publish the same declaration properties as modern Kotlin executors; the mock DSL collects callback declarations when selection blocks are configured. Executors from other APIs must supply the complete declaration contract before they can run through qplan.
 
-When canonical path compilation rejects traversal through a lossy abstract type condition, recovery reports the production-facing `InvalidVariableException` with the owning coordinate and variable name. This preserves the bootstrap validation contract while retaining qplan's stricter compiled provider path internally.
-
-All disjoint no-RSS `VariablesResolver` callbacks that remain after unwrapping production `Validated` decorators are composed as the field resolver's tenant variables provider. The composed suspending function is attached directly to the qplan resolver, receives the occurrence's grounded arguments, and is invoked once even when both object and Query fragments consume its bindings. Recovery requires exact agreement between both fragments' variable occurrences and all provider names. It rejects missing, unused, duplicate, inconsistent, or ambiguous providers; nested argument paths; field paths not proven by either root RSS; and overlapping callback variable names. Legacy arbitrary callbacks with their own required selections are intentionally not recovered: the declarative executor variable SPI introduced by [treehouse PR #1116337](https://git.musta.ch/airbnb/treehouse/pull/1116337) admits declarative argument/object-field/Query-field definitions and a function provider without a provider-owned RSS, so feature tests specifically exercising callback-owned RSS behavior are not applicable to qplan.
+Canonical path compilation preserves the production-facing `InvalidVariableException` when a source path traverses a lossy type condition. Function providers with their own required selections remain unsupported by the declarative SPI.
 
 A nested `ctx.query` call is distinct from a resolver's declared Query fragment. A nested call executes a selection requested by resolver code through the owning field task, then uses `semantics.shared.materializeResult` to return response-keyed values from installed result cells, awaiting unfinished values or bindings as needed. This result projection supplies the child operation's checker so the caller's reads participate in runtime cycle rejection; runtime resolver inputs within the nested query use the same checker. A declared Query fragment supplies resolver input through Resolver26's distinct runtime `materializeResolverInput`, which can reserve symbolic cells and value promises before producers install them. Correctness replay uses shared `materializeResult` with its default no-op checker for object and Query-fragment inputs reconstructed from existing results, including Resolver26 results that retain symbolic keys.
 
@@ -111,7 +109,7 @@ The feature-test adapter currently supports:
 
 The adapter rejects or does not yet model:
 
-- Callback providers with overlapping variable names, and from-field providers whose erased production representation ambiguously matches both resolver fragments. Legacy callbacks with their own required selections are deliberately outside the target executor SPI rather than an adapter backlog item.
+- Missing or duplicate explicit variable declarations. Callbacks with their own required selections are outside the target executor SPI.
 - Batching field and node executors, including cross-occurrence coalescing and production batch scheduling.
 - Inline object values from a Node-valued field; qplan currently requires every Node value to be resolved by its node resolver.
 - Object required selections and `FromObjectField` variables on resolvers invoked as root-field-reference targets; use Query required selections with the namespace path prefixed.
@@ -122,7 +120,7 @@ The test-only adapter preserves the suspend executor SPI through the qplan resol
 
 ## Testing
 
-Tests under `src/test/kotlin/execution` exercise the GraphQL boundary, resolver semantics, completion, and the executor adapter. `EngineTestModuleQPlanFeatureTest` covers adapter-specific behavior and rejection boundaries. Ports of production Viaduct runtime feature tests live separately under `src/test/kotlin/execution/viaductfeaturetests` in the `execution.viaductfeaturetests` package.
+Tests under `src/test/kotlin/execution` exercise the GraphQL boundary, resolver semantics, completion, and the executor adapter. `EngineTestModuleQPlanFeatureTest` covers adapter-specific behavior and rejection boundaries. `ExecutorVariableDeclarationsTest` covers direct declaration compilation, source identity, path dependencies and guards, shared callback execution, and rejection of missing explicit declarations. Ports of production Viaduct runtime feature tests live separately under `src/test/kotlin/execution/viaductfeaturetests` in the `execution.viaductfeaturetests` package.
 
 ### Source-Faithful Feature-Test Migration
 
@@ -147,13 +145,13 @@ package execution.viaductfeaturetests
 
 Update both metadata lines whenever source location or test counts change. Count source-level test declarations consistently, including disabled tests, and use an ISO date. A completed migration always records equal copied and source counts; unequal counts expose unfinished legacy migration work and must not be normalized as the steady state. The current inventory and next whole-file migrations are tracked in [`viaduct-feature-test-inventory.md`](./viaduct-feature-test-inventory.md).
 
-Run the adapter, RSS-recovery tests, and every ported production feature-test file with:
+Run the adapter, declaration tests, and every ported production feature-test file with:
 
 ```shell
 ./gradlew :execution:test \
   --tests execution.EngineTestModuleQPlanFeatureTest \
   --tests 'execution.viaductfeaturetests.*' \
-  --tests execution.testing.RequiredSelectionSetVariableRecoveryTest
+  --tests execution.testing.ExecutorVariableDeclarationsTest
 ```
 
 Run the complete execution suite with `./gradlew :execution:test`, and run every qplan validation gate with `./gradlew check`.

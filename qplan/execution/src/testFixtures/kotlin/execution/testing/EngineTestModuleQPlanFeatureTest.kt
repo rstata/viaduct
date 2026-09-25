@@ -186,7 +186,6 @@ private fun EngineTestModule.qplanRegistryInputs(
     includeDefaultQueryNodeResolvers: Boolean,
 ): QPlanRegistryInputs {
     val sourceSchema = SourceSchemaAdapter(schema)
-    val variableRecovery = RequiredSelectionSetVariableRecovery(schema)
     val variableProviders = linkedMapOf<Arguments.Variable, VariableDeclaration>()
     val supplied =
         fieldResolverExecutors.associate { (coordinate, executor) ->
@@ -201,15 +200,15 @@ private fun EngineTestModule.qplanRegistryInputs(
                     .getFieldDefinition(coordinate.second)
             val objectFragment = executor.objectFragment(schema, field)
             val queryFragment = executor.queryFragment(schema, field)
-            val recoveredVariables =
-                variableRecovery.recover(
+            val variables =
+                executor.compileVariableDeclarations(
+                    schema = schema,
                     field = field,
                     objectFragment = objectFragment,
-                    objectRequiredSelectionSet = executor.objectSelectionSet,
                     queryFragment = queryFragment,
-                    queryRequiredSelectionSet = executor.querySelectionSet,
+                    context = context,
                 )
-            recoveredVariables.declarations
+            variables.declarations
                 .forEach { (variable, declaration) ->
                     require(variableProviders.put(variable, declaration) == null) {
                         "Duplicate variable provider \$${variable.variableName} for ${coordinate.render()}"
@@ -266,16 +265,8 @@ private fun EngineTestModule.qplanRegistryInputs(
                     selectionAwareFieldResolverOf(objectFragment, queryFragment, resolverFunction)
                 }
             val resolverWithVariablesProvider =
-                recoveredVariables.variablesProvider?.let { provider ->
-                    resolver.withVariablesProvider(provider.variableNames) { arguments ->
-                        provider.resolve(
-                            viaduct.engine.api.VariablesResolver.ResolveCtx(
-                                objectData = engineObjectDataOf(field.containingDef),
-                                arguments = arguments.fieldValues,
-                            ),
-                            context,
-                        )
-                    }
+                variables.provider?.let { provider ->
+                    resolver.withVariablesProvider(variables.providerNames, provider)
                 } ?: resolver
             field to resolverWithVariablesProvider
         }

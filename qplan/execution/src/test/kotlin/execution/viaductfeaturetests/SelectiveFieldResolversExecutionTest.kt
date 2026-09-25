@@ -50,6 +50,7 @@ import viaduct.engine.EngineConfiguration
 import viaduct.engine.api.EngineObjectData
 import viaduct.engine.api.EngineSelection
 import viaduct.engine.api.EngineSelectionSet
+import viaduct.engine.api.spi.VariableFromFieldDefinitions
 import viaduct.engine.api.FromObjectFieldVariable
 import viaduct.engine.api.RequiredSelectionSet
 import viaduct.engine.api.VariablesResolver
@@ -2374,6 +2375,7 @@ class SelectiveFieldResolversExecutionTest {
                             forChecker = false,
                         )
                         MockFieldUnbatchedResolverExecutor(
+                            objectFieldVariables = VariableFromFieldDefinitions(mapOf("includeFoo" to "foo.z")),
                             objectSelectionSet = RequiredSelectionSet(
                                 selections = objectSelections,
                                 variablesResolvers = variablesResolvers,
@@ -2593,6 +2595,7 @@ class SelectiveFieldResolversExecutionTest {
                             forChecker = false,
                         )
                         MockFieldUnbatchedResolverExecutor(
+                            objectFieldVariables = VariableFromFieldDefinitions(mapOf("z" to "z")),
                             objectSelectionSet = RequiredSelectionSet(
                                 selections = objectSelections,
                                 variablesResolvers = variablesResolvers,

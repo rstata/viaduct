@@ -1,0 +1,42 @@
+Resolver26 structural growth review
+Runtime revision: 98fddc20b14b1ee1345ae85a5660d8e9fda01cc3
+Working directory: /home/raymie_stata/repos/4rv/qplan
+Host: raymie-stata-codex
+JVM: Corretto 21.0.4.7.1
+Command: ./gradlew :semantics:test --tests semantics.resolver26.SuperlinearGrowthReviewProbeTest --tests semantics.resolver26.ParentConstructionDemandComplexityRegressionTest --console=plain
+The only source addition for this run was the diagnostic probe; runtime sources were unchanged.
+These are operation/representation counts, not benchmark timings.
+
+name=semantics.resolver26.SuperlinearGrowthReviewProbeTest tests=8 skipped=0 failures=0 errors=0 timestamp=2026-09-26T23:44:59.367Z
+GROWTH successor depth=5 selections=20 distinct=6
+GROWTH successor depth=10 selections=232 distinct=11
+GROWTH successor depth=15 selections=2583 distinct=16
+GROWTH successor depth=20 selections=28656 distinct=21
+GROWTH cycles edges=16 fieldHashCalls=440
+GROWTH cycles edges=32 fieldHashCalls=1648
+GROWTH cycles edges=64 fieldHashCalls=6368
+GROWTH cycles edges=128 fieldHashCalls=25024
+GROWTH hashing depth=4 distinctKeys=5 leafHashCalls=16
+GROWTH hashing depth=8 distinctKeys=9 leafHashCalls=256
+GROWTH hashing depth=12 distinctKeys=13 leafHashCalls=4096
+GROWTH hashing depth=16 distinctKeys=17 leafHashCalls=65536
+GROWTH guards depth=3 queryKeys=3 leafAlternatives=8
+GROWTH guards depth=6 queryKeys=6 leafAlternatives=64
+GROWTH guards depth=9 queryKeys=9 leafAlternatives=512
+GROWTH guards depth=12 queryKeys=12 leafAlternatives=4096
+GROWTH parent depth=5 selections=8 distinct=1
+GROWTH parent depth=10 selections=89 distinct=1
+GROWTH parent depth=15 selections=987 distinct=1
+GROWTH parent depth=20 selections=10946 distinct=1
+GROWTH symbolic depth=4 keys=12 coordinates=5
+GROWTH symbolic depth=8 keys=88 coordinates=9
+GROWTH symbolic depth=12 keys=609 coordinates=13
+GROWTH closure depth=16 keys=17 membershipChecks=187
+GROWTH closure depth=32 keys=33 membershipChecks=627
+GROWTH closure depth=64 keys=65 membershipChecks=2275
+GROWTH closure depth=128 keys=129 membershipChecks=8643
+GROWTH runtimeSuccessor depth=15 suppliedSelections=2583 boxKeys=16 applications=17
+
+name=semantics.resolver26.ParentConstructionDemandComplexityRegressionTest tests=1 skipped=0 failures=0 errors=0 timestamp=2026-09-26T23:44:58.672Z
+
+

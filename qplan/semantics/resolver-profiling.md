@@ -106,6 +106,14 @@ Update this log whenever a resolver performance investigation concludes. Add the
 
 Each entry must record the UTC date and time, host name and relevant hardware or instance configuration, Codex session ID, tested revision, profiling targets added or used, findings, changes made, and any controlled before/after result. At closeout, run the profiling-related benchmarks serially on an otherwise idle host with default parameters unless the entry explicitly records its overrides: Resolver26 overhead, `correctResolution`, and the frozen property test. The full generated-workflow benchmark is deliberately excluded because it exercises a different workload and is not a control for the profiling targets. Report every measured iteration, JMH score and error, units, work per operation, and mean time per resolution, property case, or correctness judgment. Include all emitted fixed-corpus statistics with their actual percentile labels. Do not compare results across different hosts, JVMs, benchmark parameters, or corpus revisions without calling out that difference.
 
+### 2026-09-26 23:44:58 UTC — Structural complexity review
+
+Host: `raymie-stata-codex`; one Intel Xeon Platinum 8375C socket, 32 physical cores / 64 logical CPUs; Corretto 21.0.4.7.1. Codex session: `01a0e017-50cf-7662-aa19-a1fb9578f36b`. Tested runtime revision: `98fddc20b14b1ee1345ae85a5660d8e9fda01cc3`, initially clean, with only a temporary diagnostic test added for the measured run.
+
+The [Resolver26 adversarial growth review](../resolver26-superlinear-review.md) records counted exponential growth in successor-demand forests, nonempty parent requests, inclusion alternatives, and symbolic-key hashing, plus quadratic closure/cycle-check work and the distinct-symbolic-key expansion limit. Eight diagnostic probes and the existing parent-complexity regression passed together. The [probe source and captured counts](../review/superlinear-growth/) preserve the complete source addition outside the normal test source sets. No runtime code changed.
+
+This investigation was a structural complexity review, with no profiling target, JFR recording, JMH benchmark, or controlled before/after timing comparison. The profiling benchmark closeout was not run because no throughput change is being measured or claimed; the evidence consists of deterministic representation sizes and operation counts, not timing estimates. Commands, bounds, remaining limitations, and replay instructions are in the review.
+
 ### 2026-09-04 00:22:58 UTC
 
 Host: `raymie-stata-codex`; one Intel Xeon Platinum 8375C socket, 32 physical cores / 64 vCPUs, 495 GiB RAM, no swap, and one NUMA node.

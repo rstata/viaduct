@@ -1,0 +1,42 @@
+package semantics.resolvers.resolver21
+
+import kotlinx.coroutines.coroutineScope
+import model.ObjectEngineResult
+import model.ResolverOccurrenceId
+import model.SelectionForest
+import model.schemaType
+import semantics.shared.CycleCheckState
+import semantics.shared.OEROccurrence
+import semantics.shared.SharedOperationContext
+import viaduct.engine.api.EngineObjectData
+
+/** Resolves one operation through request-root tasks and exact value promises. */
+internal class CoroutineResolve(
+    private val operation: SharedOperationContext<*>,
+    private val complete: (SelectionForest) -> SelectionForest,
+    private val cycleChecker: CycleCheckState = CycleCheckState.create(),
+) {
+    suspend fun resolve(source: EngineObjectData.Sync, selections: SelectionForest): ObjectEngineResult =
+        coroutineScope {
+            CoroutineOperationContext(operation, this, complete, cycleChecker).startResolve(
+                source = source,
+                selections = selections,
+            )
+        }
+}
+
+/** Prepares and dispatches a fresh Query root; its fields remain owned by the request scope. */
+internal fun CoroutineOperationContext.startResolve(
+    source: EngineObjectData.Sync,
+    selections: SelectionForest,
+    queryFragmentOwner: ResolverOccurrenceId? = null,
+): ObjectEngineResult {
+    val result = ObjectEngineResult.of(source.schemaType, mutable = true)
+    val orchestration =
+        CoroutineOrchestrationTask.create(
+            this@startResolve, OEROccurrence(result, emptyList(), result), source, selections,
+        )
+    queryFragmentOwner?.let { resolverObserver.onQueryFragmentPrepared(it, result) }
+    dispatcher.dispatchOrchestrator(orchestration)
+    return result
+}

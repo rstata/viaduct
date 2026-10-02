@@ -1,0 +1,68 @@
+package semantics.contract
+
+import model.Arguments
+import model.emptyFragmentOf
+import model.fragmentFrom
+import model.requireObjectField
+import model.testing.TestWorld
+import model.testing.fieldResolverOf
+import model.testing.fromObjectField
+import org.junit.jupiter.api.Test
+import kotlin.test.assertEquals
+
+/** Contract for consuming an object-fragment provider binding from a Query fragment. */
+interface QueryFragmentFromObjectPathResolverContract : ResolverContract {
+    @Test
+    fun `object fragment provider binding can be used by the query fragment`() {
+        val providerFragment =
+            "fragment ConsumerProvider on Query { provided: provider }"
+        val testWorld =
+            TestWorld.fromSDL(
+                selectiveResolvers = selectiveResolvers,
+                schemaSDL =
+                    """
+                    type Query {
+                      provider: Int!
+                      source(value: Int!): Int!
+                      consumer: Int!
+                    }
+                    """.trimIndent(),
+                fieldResolvers = { schema ->
+                    val provider = schema.requireObjectField("Query", "provider")
+                    val source = schema.requireObjectField("Query", "source")
+                    val consumer = schema.requireObjectField("Query", "consumer")
+                    mapOf(
+                        provider to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, _ -> 7 },
+                        source to
+                            fieldResolverOf(schema.emptyFragmentOf("Query")) { _, arguments ->
+                                arguments.fieldValues.getValue("value")
+                            },
+                        consumer to
+                            fieldResolverOf(
+                                objectFragment = schema.fragmentFrom(providerFragment),
+                                queryFragment =
+                                    schema.fragmentFrom(
+                                        "fragment ConsumerQuery on Query { querySide: source(value: ${'$'}providedValue) }",
+                                    ),
+                            ) { _, queryValue, _ ->
+                                queryValue.selectionValues().getValue("querySide")
+                            },
+                    )
+                },
+                variableProviders = { schema ->
+                    val consumer = schema.requireObjectField("Query", "consumer")
+                    mapOf(
+                        Arguments.Variable.of(consumer, "providedValue") to
+                            schema.fromObjectField(providerFragment, listOf("provided")),
+                    )
+                },
+            )
+        val world = testWorld.assumptions
+        val consumerKey = world.schema.contractKey("Query", "consumer")
+
+        val resolved = resolveAndValidate(world, "query { consumer }")
+
+        assertEquals(7, resolved.getCell(consumerKey).get())
+    }
+}

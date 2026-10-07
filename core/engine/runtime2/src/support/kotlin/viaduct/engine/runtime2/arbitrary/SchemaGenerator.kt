@@ -19,7 +19,6 @@ import graphql.language.UnionTypeDefinition
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.arbitrary
-import io.kotest.property.arbitrary.double
 import io.kotest.property.arbitrary.element
 import io.kotest.property.arbitrary.int
 import io.kotest.property.arbitrary.next
@@ -1885,7 +1884,7 @@ private class SchemaGenerator(
         }
     }
 
-    private fun chance(weight: Double): Boolean = Arb.double(0.0, 1.0).next(random) < weight
+    private fun chance(weight: Double): Boolean = random.chance(weight)
 
     private fun nonEmptySubset(values: List<String>): Set<String> =
         values

@@ -3,7 +3,6 @@ package viaduct.engine.runtime2.arbitrary
 import io.kotest.property.Arb
 import io.kotest.property.RandomSource
 import io.kotest.property.arbitrary.arbitrary
-import io.kotest.property.arbitrary.double
 import io.kotest.property.arbitrary.element
 import io.kotest.property.arbitrary.int
 import io.kotest.property.arbitrary.next
@@ -3086,16 +3085,7 @@ private class RegistryGenerator(
         return maxOf(nextParentDepth, nestedMaximum)
     }
 
-    private fun chance(weight: Double): Boolean = Arb.double(0.0, 1.0).next(random) < weight
-
-    private fun <T> List<T>.shuffled(random: RandomSource): List<T> {
-        val remaining = toMutableList()
-        val result = mutableListOf<T>()
-        while (remaining.isNotEmpty()) {
-            result += remaining.removeAt(Arb.int(0 until remaining.size).next(random))
-        }
-        return result
-    }
+    private fun chance(weight: Double): Boolean = random.chance(weight)
 }
 
 private data class ResolverFragmentPlans(
